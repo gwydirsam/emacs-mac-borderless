@@ -3289,7 +3289,6 @@ x_scroll_bar_create (w, top, left, width, height)
   struct frame *f = XFRAME (w->frame);
   struct scroll_bar *bar
     = ALLOCATE_PSEUDOVECTOR (struct scroll_bar, mac_control_ref, PVEC_OTHER);
-  Rect r;
 
   BLOCK_INPUT;
 
@@ -3301,8 +3300,7 @@ x_scroll_bar_create (w, top, left, width, height)
   bar->fringe_extended_p = 0;
   bar->redraw_needed_p = 0;
 
-  SetRect (&r, left, top, left + width, top + height);
-  mac_create_scroll_bar (bar, &r, false);
+  mac_create_scroll_bar (bar);
 
   /* Add bar to its frame's list of scroll bars.  */
   bar->next = FRAME_SCROLL_BARS (f);
@@ -3413,8 +3411,6 @@ XTset_vertical_scroll_bar (w, portion, whole, position)
 	}
       else
 	{
-	  Rect r;
-
 	  /* Since toolkit scroll bars are smaller than the space reserved
 	     for them on the frame, we have to clear "under" them.  */
 	  if (fringe_extended_p)
@@ -3422,16 +3418,13 @@ XTset_vertical_scroll_bar (w, portion, whole, position)
 	  else
 	    mac_clear_area (f, left, top, width, height);
 
-	  SetRect (&r, sb_left + VERTICAL_SCROLL_BAR_WIDTH_TRIM, top,
-		   sb_left + sb_width - VERTICAL_SCROLL_BAR_WIDTH_TRIM,
-		   top + height);
-	  mac_set_scroll_bar_bounds (bar, &r);
-
           /* Remember new settings.  */
           bar->left = sb_left;
           bar->top = top;
           bar->width = sb_width;
           bar->height = height;
+
+	  mac_update_scroll_bar_bounds (bar);
         }
 
       UNBLOCK_INPUT;
@@ -4067,8 +4060,6 @@ mac_handle_size_change (f, pixelwidth, pixelheight)
 	 pain in the neck, so don't try--just let the highlighting be
 	 done afresh with new size.  */
       cancel_mouse_face (f);
-
-      mac_reposition_hourglass (f);
     }
 }
 

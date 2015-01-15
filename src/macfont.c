@@ -70,8 +70,15 @@ struct macfont_info
   unsigned synthetic_italic_p : 1;
   unsigned synthetic_bold_p : 1;
   unsigned synthetic_mono_p : 1;
-  unsigned no_antialias_p : 1;
+  unsigned antialias : 2;
 };
+
+enum
+  {
+    MACFONT_ANTIALIAS_DEFAULT,
+    MACFONT_ANTIALIAS_OFF,
+    MACFONT_ANTIALIAS_ON,
+  };
 
 #define METRICS_NCOLS_PER_ROW	(128)
 
@@ -168,6 +175,22 @@ static struct
     { "unicode-sip", { 0x20000 }},
     { NULL }
   };
+
+static CGFloat macfont_antialias_threshold;
+
+void
+macfont_update_antialias_threshold ()
+{
+  int threshold;
+  Boolean valid_p;
+
+  threshold =
+    CFPreferencesGetAppIntegerValue (CFSTR ("AppleAntiAliasingThreshold"),
+				     kCFPreferencesCurrentApplication,
+				     &valid_p);
+  if (valid_p)
+    macfont_antialias_threshold = threshold;
+}
 
 static INLINE Lisp_Object
 macfont_intern_prop_cfstring (cfstring)
@@ -1814,7 +1837,7 @@ macfont_open (f, entity, pixel_size)
   macfont_info->synthetic_italic_p = 0;
   macfont_info->synthetic_bold_p = 0;
   macfont_info->synthetic_mono_p = 0;
-  macfont_info->no_antialias_p = 0;
+  macfont_info->antialias = MACFONT_ANTIALIAS_DEFAULT;
   if (!(sym_traits & MAC_FONT_ITALIC_TRAIT)
       && FONT_SLANT_NUMERIC (entity) == FONT_SLANT_SYNTHETIC_ITALIC)
     macfont_info->synthetic_italic_p = 1;
@@ -1826,23 +1849,14 @@ macfont_open (f, entity, pixel_size)
       && (XINT (AREF (entity, FONT_SPACING_INDEX))
 	  == FONT_SPACING_SYNTHETIC_MONO))
     macfont_info->synthetic_mono_p = 1;
-  if (!macfont_info->synthetic_italic_p && !macfont_info->synthetic_bold_p)
+  if (macfont_info->synthetic_italic_p || macfont_info->synthetic_bold_p)
+    macfont_info->antialias = MACFONT_ANTIALIAS_ON;
+  else
     {
       val = assq_no_quit (QCantialias, AREF (entity, FONT_EXTRA_INDEX));
       if (CONSP (val))
-	macfont_info->no_antialias_p = NILP (XCDR (val));
-      else
-	{
-	  int threshold;
-	  Boolean valid_p;
-
-	  threshold =
-	    CFPreferencesGetAppIntegerValue (CFSTR ("AppleAntiAliasingThreshold"),
-					     kCFPreferencesCurrentApplication,
-					     &valid_p);
-	  if (valid_p && size <= threshold)
-	    macfont_info->no_antialias_p = 1;
-	}
+	macfont_info->antialias =
+	  NILP (XCDR (val)) ? MACFONT_ANTIALIAS_OFF : MACFONT_ANTIALIAS_ON;
     }
 
   glyph = macfont_get_glyph_for_character (font, ' ');
@@ -2079,7 +2093,9 @@ macfont_draw (s, from, to, x, y, with_background)
 	  CGContextSetLineWidth (context, synthetic_bold_factor * font_size);
 	  CG_SET_STROKE_COLOR_WITH_GC_FOREGROUND (context, s->gc);
 	}
-      if (macfont_info->no_antialias_p)
+      if (macfont_info->antialias == MACFONT_ANTIALIAS_OFF
+	  || (macfont_info->antialias == MACFONT_ANTIALIAS_DEFAULT
+	      && font_size <= macfont_antialias_threshold))
 	CGContextSetShouldAntialias (context, false);
 
       CGContextSetFont (context, macfont_info->cgfont);

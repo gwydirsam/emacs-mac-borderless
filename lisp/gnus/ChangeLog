@@ -1,3 +1,21 @@
+2009-12-18  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* nntp.el (nntp-service-to-port): Work for service expressed with
+	numeric string; replace [:digit:] with [0-9] for XEmacs.
+
+2009-12-17  Glenn Morris  <rgm@gnu.org>
+
+	* gnus-group.el (gnus-bug-group-download-format-alist):
+	Change emacs entry to debbugs.gnu.org.  Bump :version.
+
+2009-12-13  Reiner Steib  <Reiner.Steib@gmx.de>
+
+	* mm-encode.el (mm-sign-option, mm-encrypt-option): Add :version tag.
+
+2009-12-12  Reiner Steib  <Reiner.Steib@gmx.de>
+
+	* message.el (message-info): Explain why we use `Info-goto-node'.
+
 2009-12-02  Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* message.el (message-completion-in-region): New compatibility function.
@@ -13,7 +31,7 @@
 
 	* gnus-sum.el (gnus-recenter): Use `recenter-top-bottom'
 	when it is fboundp in GNU Emacs 23.1.  Put `isearch-scroll' property
-	on `gnus-recenter'. (Bug#4698, Bug#4981)
+	on `gnus-recenter'.  (Bug#4698, Bug#4981)
 
 2009-11-24  Katsumi Yamaoka  <yamaoka@jpl.org>
 

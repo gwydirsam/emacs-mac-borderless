@@ -146,6 +146,7 @@ typedef unsigned int NSUInteger;
 - (void)storeEvent:(struct input_event *)bufp;
 - (void)setTrackingObject:(id)object andResumeSelector:(SEL)selector;
 - (int)handleQueuedNSEventsWithHoldingQuitIn:(struct input_event *)bufp;
+- (void)cancelHelpEchoForEmacsFrame:(struct frame *)f;
 - (BOOL)conflictingKeyBindingsDisabled;
 - (void)setConflictingKeyBindingsDisabled:(BOOL)flag;
 @end
@@ -188,6 +189,8 @@ typedef unsigned int NSUInteger;
 	toScreen:(NSScreen *)screen;
 @end
 
+@class EmacsView;
+
 /* Class for delegate of NSWindow and NSToolbar (see its Toolbar
    category declared later).  It also becomes that target of
    frame-dependent actions such as those from font panels.  */
@@ -197,6 +200,9 @@ typedef unsigned int NSUInteger;
   /* The Emacs frame corresponding to the NSWindow that
      EmacsFrameController object is associated with as delegate.  */
   struct frame *emacsFrame;
+
+  /* The view for the Emacs frame.  */
+  EmacsView *emacsView;
 
   /* The spinning progress indicator (corresponding to hourglass)
      shown at the upper-right corner of the window.  */
@@ -215,6 +221,14 @@ typedef unsigned int NSUInteger;
 - (struct frame *)emacsFrame;
 - (void)changeWindowManagerStateWithFlags:(WMState)flagsToSet
 				    clear:(WMState)flagsToClear;
+- (BOOL)emacsViewCanDraw;
+- (void)lockFocusOnEmacsView;
+- (void)unlockFocusOnEmacsView;
+- (void)scrollEmacsViewRect:(NSRect)aRect by:(NSSize)offset;
+- (NSPoint)convertEmacsViewPointToScreen:(NSPoint)point;
+- (NSPoint)convertEmacsViewPointFromScreen:(NSPoint)point;
+- (NSRect)convertEmacsViewRectToScreen:(NSRect)rect;
+- (NSRect)centerScanEmacsViewRect:(NSRect)rect;
 @end
 
 /* Class for Emacs view that handles drawing events only.  It is used
@@ -334,6 +348,10 @@ typedef unsigned int NSUInteger;
 - (int)inputEventModifiers;
 @end
 
+@interface EmacsFrameController (ScrollBar)
+- (void)addScrollerWithScrollBar:(struct scroll_bar *)bar;
+@end
+
 @interface EmacsToolbarItem : NSToolbarItem
 {
   /* CoreGraphics image of the item.  */
@@ -351,6 +369,7 @@ typedef unsigned int NSUInteger;
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
 - (void)setupToolBar;
 - (void)storeToolBarEvent:(id)sender;
+- (void)noteToolBarMouseMovement:(NSEvent *)event;
 @end
 
 /* Like NSFontPanel, but allows suspend/resume slider tracking.  */
@@ -375,6 +394,12 @@ typedef unsigned int NSUInteger;
 - (NSFont *)fontForFace:(int)faceId character:(int)c
 	       position:(int)pos object:(Lisp_Object)object;
 - (void)changeFont:(id)sender;
+@end
+
+@interface EmacsFrameController (EventHandling)
+- (void)noteEnterEmacsView;
+- (void)noteLeaveEmacsView;
+- (int)noteMouseMovement:(NSPoint)point;
 @end
 
 @interface EmacsFrameController (Hourglass)
@@ -407,6 +432,10 @@ typedef unsigned int NSUInteger;
 - (void)trackMenubar;
 @end
 
+@interface EmacsFrameController (Menu)
+- (void)popUpMenu:(NSMenu *)menu atLocationInEmacsView:(NSPoint)location;
+@end
+
 @interface EmacsDialogView : NSView
 - (id)initWithWidgetValue:(widget_value *)wv;
 @end
@@ -418,6 +447,10 @@ typedef unsigned int NSUInteger;
 
 @interface NSAppleEventDescriptor (Emacs)
 - (OSErr)copyDescTo:(AEDesc *)desc;
+@end
+
+@interface EmacsFrameController (DragAndDrop)
+- (void)registerEmacsViewForDraggedTypes:(NSArray *)pboardTypes;
 @end
 
 @interface EmacsController (AppleScript)

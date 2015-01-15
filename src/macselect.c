@@ -352,8 +352,11 @@ x_get_foreign_selection (selection_symbol, target_type, time_stamp)
     {
       if (EQ (target_type, QTARGETS))
 	{
-	  result = mac_get_selection_target_list (sel);
-	  result = Fvconcat (1, &result);
+	  Lisp_Object args[2];
+
+	  args[0] = list1 (QTARGETS);
+	  args[1] = mac_get_selection_target_list (sel);
+	  result = Fvconcat (2, args);
 	}
       else
 	{

@@ -1449,7 +1449,14 @@ a face or button specification."
 				   (if (image-type-available-p 'xpm)
 				       "splash.xpm"
 				     "splash.pbm"))
-				  ((image-type-available-p 'svg)
+				  ((and
+				    ;; It takes time to setup WebKit
+				    ;; for SVG images on the first
+				    ;; invocation of the Mac port.  We
+				    ;; avoid it for startup.
+				    (or (not (eq initial-window-system 'mac))
+					(string-match "About" (buffer-name)))
+				    (image-type-available-p 'svg))
 				   "splash.svg")
 				  ((image-type-available-p 'png)
 				   "splash.png")

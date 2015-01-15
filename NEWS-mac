@@ -1,3 +1,27 @@
+* emacs-23.1.91-mac-1.96 [experimental/hackers-only] (2009-12-31)
+Based on Emacs 23.1.91
+
+** Fixed bugs
+
+*** The `fullboth' frames, which don't have a title bar, are not shown
+in the window list in the Dock menu.
+
+*** Mouse highlighting is not updated on popup (de)activations.
+
+*** With `x-select-font', the first click in a list sometimes results
+in a wrong selection.
+
+*** Command line options specifying temporary preferences settings
+(e.g., -AppleDisplayScaleFactor 1.25 -AppleAntiAliasingThreshold 14),
+just as in other Cocoa applications, are regarded as if they are
+specifying filenames to edit.
+
+** Improvements
+
+*** Change of text smoothing threshold setting in the Appearance pane
+of the System Preferences is now reflected immediately.
+
+
 * emacs-23.1.90-mac-1.95 [experimental/hackers-only] (2009-12-10)
 Based on Emacs 23.1.90
 

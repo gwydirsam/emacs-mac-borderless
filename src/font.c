@@ -2993,7 +2993,7 @@ font_open_entity (f, entity, pixel_size)
   else if (CONSP (Vface_font_rescale_alist))
     scaled_pixel_size = pixel_size * font_rescale_ratio (entity);
 
-#if 0
+#ifndef HAVE_X_WINDOWS
   /* This doesn't work if you have changed hinting or any other parameter.
      We need to make a new object in every case to be sure. */
   for (objlist = AREF (entity, FONT_OBJLIST_INDEX); CONSP (objlist);
@@ -4483,15 +4483,15 @@ DEFUN ("clear-font-cache", Fclear_font_cache, Sclear_font_cache, 0, 0, 0,
 	if (driver_list->on)
 	  {
 	    Lisp_Object cache = driver_list->driver->get_cache (f);
-	    Lisp_Object val;
+	    Lisp_Object val, tmp;
 
 	    val = XCDR (cache);
 	    while (! NILP (val)
 		   && ! EQ (XCAR (XCAR (val)), driver_list->driver->type))
 	      val = XCDR (val);
 	    font_assert (! NILP (val));
-	    val = XCDR (XCAR (val));
-	    if (XINT (XCAR (val)) == 0)
+	    tmp = XCDR (XCAR (val));
+	    if (XINT (XCAR (tmp)) == 0)
 	      {
 		font_clear_cache (f, XCAR (val), driver_list->driver);
 		XSETCDR (cache, XCDR (val));

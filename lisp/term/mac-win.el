@@ -1319,14 +1319,37 @@ See also `mac-dnd-known-types'."
 
 (defun mac-handle-args (args)
   "Process the Mac-related command line options in ARGS.
-It records Mac-specific options (currently -psn_HIGH_LOW added by
-Launch Services) in `mac-startup-options' as a value for the key
-symbol `command-line' and forwards the remaining ones to
-`x-handle-args'."
-  (when (and (cadr args) (string-match "\\`-psn_" (cadr args)))
-    (push (cons 'command-line (list (cadr args))) mac-startup-options)
-    (setq args (cons (car args) (cddr args))))
-  (x-handle-args args))
+It records Mac-specific options in `mac-startup-options' as a
+value for the key symbol `command-line' after processing the
+standard ones in `x-handle-args'."
+  (setq args (x-handle-args args))
+  (let ((invocation-args args)
+	mac-specific-args)
+    (setq args nil)
+    (while (and invocation-args
+		(not (equal (car invocation-args) "--")))
+      (let ((this-switch (car invocation-args))
+	    case-fold-search)
+	(setq invocation-args (cdr invocation-args))
+	(cond ((string-match "\\`-psn_" this-switch)
+	       (push this-switch mac-specific-args))
+	      ;; Cocoa applications let you set temporary preferences
+	      ;; on the command line.  We regard option names starting
+	      ;; with a capital letter and containing at least 2
+	      ;; letters as such preference settings.
+	      ((and (string-match "\\`-[A-Z]." this-switch)
+		    invocation-args
+		    (not (string-match "\\`-" (car invocation-args))))
+	       (setq mac-specific-args
+		     (cons (car invocation-args)
+			   (cons this-switch mac-specific-args)))
+	       (setq invocation-args (cdr invocation-args)))
+	      (t
+	       (setq args (cons this-switch args))))))
+    (when mac-specific-args
+      (setq mac-specific-args (nreverse mac-specific-args))
+      (push (cons 'command-line mac-specific-args) mac-startup-options))
+    (nconc (nreverse args) invocation-args)))
 
 (defun mac-initialize-window-system ()
   "Initialize Emacs for Mac GUI frames."
@@ -1413,8 +1436,12 @@ symbol `command-line' and forwards the remaining ones to
   ;; If Emacs is invoked from the command line, the initial frame
   ;; doesn't get focused.
   (add-hook 'after-init-hook
-	    (lambda () (if (and (null (cdr (assq 'command-line
-						 mac-startup-options)))
+	    (lambda () (if (and (let ((first-option
+				       (cadr (assq 'command-line
+						   mac-startup-options))))
+				  (not (and first-option
+					    (string-match "\\`-psn_"
+							  first-option))))
 				(eq (frame-visible-p (selected-frame)) t))
 			   (x-focus-frame (selected-frame)))))
 

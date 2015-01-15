@@ -804,6 +804,12 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 
 @implementation EmacsController
 
+- (void)dealloc
+{
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [super dealloc];
+}
+
 /* Delegete Methods  */
 
 - (void)applicationWillFinishLaunching:(NSNotification *)notification
@@ -830,9 +836,36 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
   [[[(NSClassFromString (@"NSTSMInputContext")) alloc] init] release];
   install_dispatch_handler ();
 
+  macfont_update_antialias_threshold ();
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(antialiasThresholdDidChange:)
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1040
+	   name:NSAntialiasThresholdChangedNotification
+#else
+	   name:@"NSAntialiasThresholdChangedNotification"
+#endif
+	 object:nil];
+
   /* Exit from the main event loop.  */
   [NSApp stop:nil];
   [NSApp postDummyEvent];
+}
+
+- (void)antialiasThresholdDidChange:(NSNotification *)notification
+{
+  macfont_update_antialias_threshold ();
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_3)
+    {
+      NSEnumerator *enumerator = [[NSApp windows] objectEnumerator];
+      NSWindow *window;
+
+      while ((window = [enumerator nextObject]) != nil)
+	if ([window isKindOfClass:[EmacsWindow class]] && [window isVisible])
+	  [window display];
+    }
+#endif
 }
 
 - (int)getAndClearMenuItemSelection
@@ -1129,6 +1162,22 @@ emacs_windows_need_display_p (with_resize_control_p)
     }
 }
 
+- (void)cancelHelpEchoForEmacsFrame:(struct frame *)f
+{
+  /* Generate a nil HELP_EVENT to cancel a help-echo.
+     Do it only if there's something to cancel.
+     Otherwise, the startup message is cleared when the
+     mouse leaves the frame.  */
+  if (any_help_event_p)
+    {
+      Lisp_Object frame;
+
+      XSETFRAME (frame, f);
+      help_echo_string = Qnil;
+      gen_help_event (Qnil, frame, Qnil, Qnil, 0);
+    }
+}
+
 /* Work around conflicting Cocoa's text system key bindings.  */
 
 - (BOOL)conflictingKeyBindingsDisabled
@@ -1283,6 +1332,9 @@ extern void mac_save_keyboard_input_source P_ ((void));
 #define DEFAULT_NUM_COLS (80)
 #define RESIZE_CONTROL_WIDTH (15)
 #define RESIZE_CONTROL_HEIGHT (15)
+
+#define FRAME_CONTROLLER(f) \
+  ((EmacsFrameController *) [(EmacsWindow *)(FRAME_MAC_WINDOW (f)) delegate])
 
 @implementation EmacsWindow
 
@@ -1514,7 +1566,6 @@ extern void mac_save_keyboard_input_source P_ ((void));
 - (void)setupEmacsView
 {
   struct frame *f = emacsFrame;
-  EmacsView *emacsView;
 
   if (!FRAME_TOOLTIP_P (f))
     {
@@ -1532,14 +1583,11 @@ extern void mac_save_keyboard_input_source P_ ((void));
     }
   [emacsView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin
 				  | NSViewWidthSizable | NSViewHeightSizable)];
-
-  FRAME_EMACS_VIEW (f) = emacsView;
 }
 
 - (void)setupWindow
 {
   struct frame *f = emacsFrame;
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
   EmacsWindow *oldWindow = FRAME_MAC_WINDOW (f);
   Class windowClass;
   NSRect contentRect;
@@ -1634,10 +1682,6 @@ extern void mac_save_keyboard_input_source P_ ((void));
 
 - (void)dealloc
 {
-  struct frame *f = emacsFrame;
-  /* XXX: This should be changed to an instance variable.  */
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-
   [emacsView release];
   [hourglass release];
   [super dealloc];
@@ -1647,7 +1691,6 @@ extern void mac_save_keyboard_input_source P_ ((void));
 {
   struct frame *f = emacsFrame;
   XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
   EmacsWindow *window = FRAME_MAC_WINDOW (f);
   NSRect windowFrame, emacsViewFrame;
   NSSize emacsViewSizeInPixels, emacsViewSize;
@@ -1750,7 +1793,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
 	      | WM_STATE_FULLSCREEN))
     {
       NSRect frameRect = [window frame], screenRect = [[window screen] frame];
-      BOOL showResizeIndicator;
+      BOOL showsResizeIndicator;
 
       if (diff & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_FULLSCREEN))
 	{
@@ -1789,10 +1832,10 @@ extern void mac_save_keyboard_input_source P_ ((void));
       if ((newState & WM_STATE_FULLSCREEN)
 	  || ((newState & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT))
 	      == (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT)))
-	showResizeIndicator = NO;
+	showsResizeIndicator = NO;
       else
-	showResizeIndicator = YES;
-      [window setShowsResizeIndicator:showResizeIndicator];
+	showsResizeIndicator = YES;
+      [window setShowsResizeIndicator:showsResizeIndicator];
 
       frameRect = [window constrainFrameRect:frameRect toScreen:nil];
       if (!(newState & WM_STATE_FULLSCREEN))
@@ -1809,6 +1852,81 @@ extern void mac_save_keyboard_input_source P_ ((void));
     }
 }
 
+- (BOOL)emacsViewCanDraw
+{
+  return [emacsView canDraw];
+}
+
+- (void)lockFocusOnEmacsView
+{
+  [emacsView lockFocus];
+}
+
+- (void)unlockFocusOnEmacsView
+{
+  [emacsView unlockFocus];
+}
+
+- (void)scrollEmacsViewRect:(NSRect)aRect by:(NSSize)offset
+{
+  [emacsView scrollRect:aRect by:offset];
+}
+
+- (NSPoint)convertEmacsViewPointToScreen:(NSPoint)point
+{
+  point = [emacsView convertPoint:point toView:nil];
+
+  return [[emacsView window] convertBaseToScreen:point];
+}
+
+- (NSPoint)convertEmacsViewPointFromScreen:(NSPoint)point
+{
+  point = [[emacsView window] convertScreenToBase:point];
+
+  return [emacsView convertPoint:point fromView:nil];
+}
+
+- (NSRect)convertEmacsViewRectToScreen:(NSRect)rect
+{
+  rect = [emacsView convertRect:rect toView:nil];
+  rect.origin = [[emacsView window] convertBaseToScreen:rect.origin];
+
+  return rect;
+}
+
+- (NSRect)centerScanEmacsViewRect:(NSRect)rect
+{
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+  /* The behavior of -[NSView centerScanRect:] depends on whether or
+     not the binary is linked on Mac OS X 10.5 or later.  */
+  return [emacsView centerScanRect:rect];
+#else
+  NSWindow *window = [emacsView window];
+  CGFloat scaleFactor;
+
+  if ([window respondsToSelector:@selector(userSpaceScaleFactor)])
+    scaleFactor = [window userSpaceScaleFactor];
+  else
+    scaleFactor = 1.0;
+
+  if (scaleFactor != 1.0)
+    {
+      CGFloat x, y;
+
+      rect = [emacsView convertRect:rect toView:nil];
+      x = round (rect.origin.x);
+      y = round (rect.origin.y);
+      rect.size.width = round (NSMaxX (rect)) - x;
+      rect.size.height = round (NSMaxY (rect)) - y;
+      rect.origin.x = x;
+      rect.origin.y = y;
+      rect = [emacsView convertRect:rect fromView:nil];
+    }
+
+  return rect;
+#endif
+}
+
 /* Delegete Methods.  */
 
 - (void)windowDidBecomeKey:(NSNotification *)notification
@@ -1822,6 +1940,8 @@ extern void mac_save_keyboard_input_source P_ ((void));
   mac_focus_changed (activeFlag, FRAME_MAC_DISPLAY_INFO (f), f, &inev);
   if (inev.kind != NO_EVENT)
     [[NSApp delegate] storeEvent:&inev];
+
+  [self noteEnterEmacsView];
 
   [[NSApp delegate] setConflictingKeyBindingsDisabled:YES];
 
@@ -1839,6 +1959,8 @@ extern void mac_save_keyboard_input_source P_ ((void));
   if (inev.kind != NO_EVENT)
     [[NSApp delegate] storeEvent:&inev];
 
+  [self noteLeaveEmacsView];
+
   [[NSApp delegate] setConflictingKeyBindingsDisabled:NO];
 }
 
@@ -1849,9 +1971,6 @@ extern void mac_save_keyboard_input_source P_ ((void));
 
 - (void)windowDidResignMain:(NSNotification *)notification
 {
-  struct frame *f = emacsFrame;
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-
   [emacsView unmarkText];
   [[NSInputManager currentInputManager] markedTextAbandoned:emacsView];
   mac_save_keyboard_input_source ();
@@ -1957,7 +2076,6 @@ extern void mac_save_keyboard_input_source P_ ((void));
 			defaultFrame:(NSRect)defaultFrame
 {
   struct frame *f = emacsFrame;
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
   NSRect windowFrame, emacsViewFrame;
   NSSize emacsViewSizeInPixels, emacsViewSize;
   CGFloat dw, dh, dx, dy;
@@ -2232,11 +2350,11 @@ mac_get_frame_mouse (f, point)
      struct frame *f;
      Point *point;
 {
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-  NSWindow *window = [emacsView window];
-  NSPoint mouseLocation = [window mouseLocationOutsideOfEventStream];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  NSPoint mouseLocation = [NSEvent mouseLocation];
 
-  mouseLocation = [emacsView convertPoint:mouseLocation fromView:nil];
+  mouseLocation =
+    [frameController convertEmacsViewPointFromScreen:mouseLocation];
   SetPt (point, mouseLocation.x, mouseLocation.y);
 }
 
@@ -2257,13 +2375,11 @@ mac_convert_frame_point_to_global (f, x, y)
      struct frame *f;
      int *x, *y;
 {
-  NSWindow *window = FRAME_MAC_WINDOW (f);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   NSPoint point = NSMakePoint (*x, *y);
   NSRect baseScreenFrame = mac_get_base_screen_frame ();
 
-  point = [emacsView convertPoint:point toView:nil];
-  point = [window convertBaseToScreen:point];
+  point = [frameController convertEmacsViewPointToScreen:point];
   *x = point.x + NSMinX (baseScreenFrame);
   *y = - point.y + NSMaxY (baseScreenFrame);
 }
@@ -2273,41 +2389,10 @@ mac_rect_make (f, x, y, w, h)
      struct frame *f;
      CGFloat x, y, w, h;
 {
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   NSRect rect = NSMakeRect (x, y, w, h);
 
-  /* The behavior of -[NSView centerScanRect:] depends on whether or
-     not the binary is linked on Mac OS X 10.5 or later.  */
-  return NSRectToCGRect ([emacsView centerScanRect:rect]);
-#else
-  NSWindow *window = FRAME_MAC_WINDOW (f);
-  CGFloat scaleFactor;
-
-  if ([window respondsToSelector:@selector(userSpaceScaleFactor)])
-    scaleFactor = [window userSpaceScaleFactor];
-  else
-    scaleFactor = 1.0;
-
-  if (scaleFactor == 1.0)
-    return CGRectMake (x, y, w, h);
-  else
-    {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-      NSRect rect = NSMakeRect (x, y, w, h);
-
-      rect = [emacsView convertRect:rect toView:nil];
-      x = round (rect.origin.x);
-      y = round (rect.origin.y);
-      rect.size.width = round (NSMaxX (rect)) - x;
-      rect.size.height = round (NSMaxY (rect)) - y;
-      rect.origin.x = x;
-      rect.origin.y = y;
-      rect = [emacsView convertRect:rect fromView:nil];
-
-      return NSRectToCGRect (rect);
-    }
-#endif
+  return NSRectToCGRect ([frameController centerScanEmacsViewRect:rect]);
 }
 
 void
@@ -2385,11 +2470,11 @@ void
 mac_update_begin (f)
      struct frame *f;
 {
-  NSWindow *window = FRAME_MAC_WINDOW (f);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+  EmacsFrameController *frameController = [window delegate];
 
   [window disableFlushWindow];
-  [emacsView lockFocus];
+  [frameController lockFocusOnEmacsView];
   set_global_focus_view_frame (f);
 }
 
@@ -2397,11 +2482,11 @@ void
 mac_update_end (f)
      struct frame *f;
 {
-  NSWindow *window = FRAME_MAC_WINDOW (f);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+  EmacsFrameController *frameController = [window delegate];
 
   unset_global_focus_view_frame ();
-  [emacsView unlockFocus];
+  [frameController unlockFocusOnEmacsView];
   [window enableFlushWindow];
 }
 
@@ -2466,11 +2551,10 @@ mac_change_frame_window_wm_state (f, flags_to_set, flags_to_clear)
      struct frame *f;
      WMState flags_to_set, flags_to_clear;
 {
-  NSWindow *window = FRAME_MAC_WINDOW (f);
-  id delegate = [window delegate];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-  [delegate changeWindowManagerStateWithFlags:flags_to_set
-					clear:flags_to_clear];
+  [frameController changeWindowManagerStateWithFlags:flags_to_set
+					       clear:flags_to_clear];
 }
 
 
@@ -2502,9 +2586,6 @@ extern int fast_find_position P_ ((struct window *, EMACS_INT, int *, int *,
 				   int *, int *, Lisp_Object));
 extern struct glyph *x_y_to_hpos_vpos P_ ((struct window *, int, int,
 					   int *, int *, int *, int *, int *));
-
-static int note_mouse_movement P_ ((FRAME_PTR, NSPoint));
-static void mac_tool_bar_note_mouse_movement P_ ((struct frame *, NSEvent *));
 
 static int mac_get_mouse_btn P_ ((NSEvent *));
 static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
@@ -2747,20 +2828,14 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
 - (void)mouseMoved:(NSEvent *)theEvent
 {
-  struct frame *f;
+  struct frame *f = [self emacsFrame];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
   static Lisp_Object last_window;
 
-  if (dpyinfo->grabbed && last_mouse_frame
-      && FRAME_LIVE_P (last_mouse_frame))
-    f = last_mouse_frame;
-  else
-    {
-      f = [self emacsFrame];
-      if (![[self window] isKeyWindow])
-	return;
-    }
+  if (![[self window] isKeyWindow])
+    return;
 
   previous_help_echo_string = help_echo_string;
   help_echo_string = Qnil;
@@ -2800,10 +2875,10 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       last_window=window;
     }
 
-  if (!note_mouse_movement (f, point))
+  if (![frameController noteMouseMovement:point])
     help_echo_string = previous_help_echo_string;
   else
-    mac_tool_bar_note_mouse_movement (f, theEvent);
+    [frameController noteToolBarMouseMovement:theEvent];
 
   /* If the contents of the global variable help_echo_string has
      changed, generate a HELP_EVENT.  */
@@ -3280,11 +3355,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
   if (f)
     {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+      EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-      /* Convert to the screen coordinate system.  */
-      rect = [emacsView convertRect:rect toView:nil];
-      rect.origin = [[emacsView window] convertBaseToScreen:rect.origin];
+      rect = [frameController convertEmacsViewRectToScreen:rect];
     }
 
   return rect;
@@ -3297,12 +3370,12 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
   Lisp_Object window;
   enum window_part part;
   struct frame *f = [self emacsFrame];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   struct window *w;
   struct buffer *b;
   int x, y;
 
-  point = [[self window] convertScreenToBase:thePoint];
-  point = [self convertPoint:point fromView:nil];
+  point = [frameController convertEmacsViewPointFromScreen:thePoint];
   x = point.x;
   y = point.y;
   window = window_from_coordinates (f, x, y, &part, 0, 0, 1);
@@ -3436,9 +3509,9 @@ mac_begin_cg_clip (f, gc)
 
   if (global_focus_view_frame != f)
     {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+      EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-      [emacsView lockFocus];
+      [frameController lockFocusOnEmacsView];
       context = [[NSGraphicsContext currentContext] graphicsPort];
       FRAME_CG_CONTEXT (f) = context;
     }
@@ -3459,9 +3532,9 @@ mac_end_cg_clip (f)
   CGContextRestoreGState (FRAME_CG_CONTEXT (f));
   if (global_focus_view_frame != f)
     {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+      EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-      [emacsView unlockFocus];
+      [frameController unlockFocusOnEmacsView];
       FRAME_CG_CONTEXT (f) = NULL;
     }
 }
@@ -3477,15 +3550,15 @@ mac_appkit_invert_rectangle (f, x, y, width, height)
      int x, y;
      unsigned int width, height;
 {
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   CGRect rect;
   NSBitmapImageRep *bitmap;
 
-  if (![emacsView canDraw])
+  if (![frameController emacsViewCanDraw])
     return;
 
   if (global_focus_view_frame != f)
-    [emacsView lockFocus];
+    [frameController lockFocusOnEmacsView];
 
   rect = mac_rect_make (f, x, y, width, height);
   bitmap = [[NSBitmapImageRep alloc]
@@ -3517,7 +3590,7 @@ mac_appkit_invert_rectangle (f, x, y, width, height)
   [bitmap release];
 
   if (global_focus_view_frame != f)
-    [emacsView unlockFocus];
+    [frameController unlockFocusOnEmacsView];
 }
 #endif
 
@@ -3531,12 +3604,12 @@ mac_scroll_area (f, gc, src_x, src_y, width, height, dest_x, dest_y)
      unsigned int width, height;
      int dest_x, dest_y;
 {
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   NSRect rect = NSMakeRect (src_x, src_y, width, height);
   NSSize offset = NSMakeSize (dest_x - src_x, dest_y - src_y);
 
   /* Is adjustment necessary for scaling?  */
-  [emacsView scrollRect:rect by:offset];
+  [frameController scrollEmacsViewRect:rect by:offset];
 }
 
 
@@ -4063,23 +4136,13 @@ scroller_part_to_scroll_bar_part (part)
 
 @end				// EmacsView (ScrollBar)
 
-/* Create a scroll bar control for BAR.  BOUNDS and VISIBLE specifies
-   the initial geometry and visibility, respectively.  The created
-   control is stored in some members of BAR.  */
+@implementation EmacsFrameController (ScrollBar)
 
-void
-mac_create_scroll_bar (bar, bounds, visible)
-     struct scroll_bar *bar;
-     const Rect *bounds;
-     Boolean visible;
+- (void)addScrollerWithScrollBar:(struct scroll_bar *)bar
 {
   struct window *w = XWINDOW (bar->window);
-  struct frame *f = XFRAME (WINDOW_FRAME (w));
-  NSRect frame = NSMakeRect (bounds->left, bounds->top,
-			     bounds->right - bounds->left,
-			     bounds->bottom - bounds->top);
+  NSRect frame = NSMakeRect (bar->left, bar->top, bar->width, bar->height);
   EmacsScroller *scroller = [[EmacsScroller alloc] initWithFrame:frame];
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
 
   [scroller setEmacsScrollBar:bar];
   [scroller setAction:@selector(convertScrollerAction:)];
@@ -4088,6 +4151,22 @@ mac_create_scroll_bar (bar, bounds, visible)
   [emacsView addSubview:scroller];
   [scroller release];
   SET_SCROLL_BAR_SCROLLER (bar, scroller);
+}
+
+@end				// EmacsFrameController (ScrollBar)
+
+
+/* Create a scroll bar control for BAR.  The created control is stored
+   in some members of BAR.  */
+
+void
+mac_create_scroll_bar (bar)
+     struct scroll_bar *bar;
+{
+  struct frame *f = XFRAME (WINDOW_FRAME (XWINDOW (bar->window)));
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+
+  [frameController addScrollerWithScrollBar:bar];
 }
 
 /* Dispose of the scroll bar control stored in some members of
@@ -4102,18 +4181,15 @@ mac_dispose_scroll_bar (bar)
   [scroller removeFromSuperview];
 }
 
-/* Set bounds of the scroll bar BAR to BOUNDS.  */
+/* Update bounds of the scroll bar BAR.  */
 
 void
-mac_set_scroll_bar_bounds (bar, bounds)
+mac_update_scroll_bar_bounds (bar)
      struct scroll_bar *bar;
-     const Rect *bounds;
 {
   struct window *w = XWINDOW (bar->window);
   EmacsScroller *scroller = SCROLL_BAR_SCROLLER (bar);
-  NSRect frame = NSMakeRect (bounds->left, bounds->top,
-			     bounds->right - bounds->left,
-			     bounds->bottom - bounds->top);
+  NSRect frame = NSMakeRect (bar->left, bar->top, bar->width, bar->height);
 
   [scroller setFrame:frame];
   [scroller setNeedsDisplay:YES];
@@ -4327,6 +4403,51 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 #undef PROP
 }
 
+/* Report a mouse movement over toolbar to the mainstream Emacs
+   code.  */
+
+- (void)noteToolBarMouseMovement:(NSEvent *)event
+{
+  struct frame *f = emacsFrame;
+  NSWindow *window;
+  NSView *hitView;
+
+  /* Return if mouse dragged.  */
+  if ([event type] != NSMouseMoved)
+    return;
+
+  window = FRAME_MAC_WINDOW (f);
+  hitView = [[[window contentView] superview] hitTest:[event locationInWindow]];
+  if ([hitView respondsToSelector:@selector(item)])
+    {
+      id item = [hitView performSelector:@selector(item)];
+
+      if ([item isKindOfClass:[EmacsToolbarItem class]])
+	{
+#define PROP(IDX) AREF (f->tool_bar_items, i * TOOL_BAR_ITEM_NSLOTS + (IDX))
+	  NSInteger i = [item tag];
+
+	  if (i < f->n_tool_bar_items)
+	    {
+	      NSRect viewFrame = [hitView frame];
+
+	      viewFrame = [hitView convertRect:viewFrame toView:nil];
+	      viewFrame = [emacsView convertRect:viewFrame fromView:nil];
+	      SetRect (&last_mouse_glyph,
+		       NSMinX (viewFrame), NSMinY (viewFrame),
+		       NSMaxX (viewFrame), NSMaxY (viewFrame));
+
+	      help_echo_object = help_echo_window = Qnil;
+	      help_echo_pos = -1;
+	      help_echo_string = PROP (TOOL_BAR_ITEM_HELP);
+	      if (NILP (help_echo_string))
+		help_echo_string = PROP (TOOL_BAR_ITEM_CAPTION);
+	    }
+	}
+    }
+#undef PROP
+}
+
 @end				// EmacsFrameController (Toolbar)
 
 /* Whether the toolbar for the frame F is visible.  */
@@ -4507,54 +4628,6 @@ free_frame_tool_bar (f)
 	     display:YES];
 
   UNBLOCK_INPUT;
-}
-
-/* Report a mouse movement over toolbar to the mainstream Emacs
-   code.  */
-
-static void
-mac_tool_bar_note_mouse_movement (f, event)
-     struct frame *f;
-     NSEvent *event;
-{
-  NSWindow *window;
-  NSView *hitView;
-
-  /* Return if mouse dragged.  */
-  if ([event type] != NSMouseMoved)
-    return;
-
-  window = FRAME_MAC_WINDOW (f);
-  hitView = [[[window contentView] superview] hitTest:[event locationInWindow]];
-  if ([hitView respondsToSelector:@selector(item)])
-    {
-      id item = [hitView performSelector:@selector(item)];
-
-      if ([item isKindOfClass:[EmacsToolbarItem class]])
-	{
-#define PROP(IDX) AREF (f->tool_bar_items, i * TOOL_BAR_ITEM_NSLOTS + (IDX))
-	  NSInteger i = [item tag];
-
-	  if (i < f->n_tool_bar_items)
-	    {
-	      NSRect viewFrame = [hitView frame];
-	      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-
-	      viewFrame = [hitView convertRect:viewFrame toView:nil];
-	      viewFrame = [emacsView convertRect:viewFrame fromView:nil];
-	      SetRect (&last_mouse_glyph,
-		       NSMinX (viewFrame), NSMinY (viewFrame),
-		       NSMaxX (viewFrame), NSMaxY (viewFrame));
-
-	      help_echo_object = help_echo_window = Qnil;
-	      help_echo_pos = -1;
-	      help_echo_string = PROP (TOOL_BAR_ITEM_HELP);
-	      if (NILP (help_echo_string))
-		help_echo_string = PROP (TOOL_BAR_ITEM_CAPTION);
-	    }
-	}
-    }
-#undef PROP
 }
 
 
@@ -4773,8 +4846,7 @@ mac_set_font_info_for_selection (f, face_id, c, pos, object)
 {
   if (mac_font_panel_visible_p () && f)
     {
-      NSWindow *window = FRAME_MAC_WINDOW (f);
-      EmacsFrameController *frameController = [window delegate];
+      EmacsFrameController *frameController = FRAME_CONTROLLER (f);
       NSFont *font = [frameController fontForFace:face_id character:c
 					 position:pos object:object];
 
@@ -4802,6 +4874,115 @@ static void update_dragged_types P_ ((void));
 
 /* Minimum time interval between successive XTread_socket calls.  */
 #define READ_SOCKET_MIN_INTERVAL (1/60.0)
+
+@implementation EmacsFrameController (EventHandling)
+
+/* Called when an EnterNotify event would happen for an Emacs window
+   if it were on X11.  */
+
+- (void)noteEnterEmacsView
+{
+  struct frame *f = emacsFrame;
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  NSPoint mouseLocation = [NSEvent mouseLocation];
+
+  mouseLocation =
+    [frameController convertEmacsViewPointFromScreen:mouseLocation];
+  /* EnterNotify counts as mouse movement,
+     so update things that depend on mouse position.  */
+  [self noteMouseMovement:mouseLocation];
+}
+
+/* Called when a LeaveNotify event would happen for an Emacs window if
+   it were on X11.  */
+
+- (void)noteLeaveEmacsView
+{
+  struct frame *f = emacsFrame;
+  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+
+  /* This corresponds to LeaveNotify for an X11 window for an Emacs
+     frame.  */
+  if (f == dpyinfo->mouse_face_mouse_frame)
+    {
+      /* If we move outside the frame, then we're
+	 certainly no longer on any text in the
+	 frame.  */
+      clear_mouse_face (dpyinfo);
+      dpyinfo->mouse_face_mouse_frame = 0;
+      x_flush (f);
+    }
+
+  [[NSApp delegate] cancelHelpEchoForEmacsFrame:f];
+
+  /* This corresponds to EnterNotify for an X11 window for some
+     popup (from note_mouse_movement in xterm.c).  */
+  f->mouse_moved = 1;
+  note_mouse_highlight (f, -1, -1);
+  last_mouse_glyph_frame = 0;
+}
+
+/* Function to report a mouse movement to the mainstream Emacs code.
+   The input handler calls this.
+
+   We have received a mouse movement event, whose position in the view
+   coordinate is given in POINT.  If the mouse is over a different
+   glyph than it was last time, tell the mainstream emacs code by
+   setting mouse_moved.  If not, ask for another motion event, so we
+   can check again the next time it moves.  */
+
+- (int)noteMouseMovement:(NSPoint)point
+{
+  struct frame *f = emacsFrame;
+  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+  NSRect emacsViewFrame = [emacsView frame];
+  int x, y;
+
+  last_mouse_movement_time = TickCount () * (1000 / 60);  /* to milliseconds */
+
+  if (f == dpyinfo->mouse_face_mouse_frame
+      && ! (point.x >= 0 && point.x < NSMaxX (emacsViewFrame)
+	    && point.y >= 0 && point.y < NSMaxY (emacsViewFrame)))
+    {
+      /* This case corresponds to LeaveNotify in X11.  If we move
+	 outside the frame, then we're certainly no longer on any text
+	 in the frame.  */
+      clear_mouse_face (dpyinfo);
+      dpyinfo->mouse_face_mouse_frame = 0;
+      if (!dpyinfo->grabbed)
+	{
+	  struct redisplay_interface *rif = FRAME_RIF (f);
+
+	  rif->define_frame_cursor (f, f->output_data.mac->nontext_cursor);
+	}
+    }
+
+  x = point.x;
+  y = point.y;
+
+  /* Has the mouse moved off the glyph it was on at the last sighting?  */
+  if (f != last_mouse_glyph_frame
+      || x < last_mouse_glyph.left
+      || x >= last_mouse_glyph.right
+      || y < last_mouse_glyph.top
+      || y >= last_mouse_glyph.bottom)
+    {
+      f->mouse_moved = 1;
+      [emacsView lockFocus];
+      set_global_focus_view_frame (f);
+      note_mouse_highlight (f, x, y);
+      unset_global_focus_view_frame ();
+      [emacsView unlockFocus];
+      /* Remember which glyph we're now on.  */
+      remember_mouse_glyph (f, x, y, &last_mouse_glyph);
+      last_mouse_glyph_frame = f;
+      return 1;
+    }
+
+  return 0;
+}
+
+@end				// EmacsFrameController (EventHandling)
 
 /* Convert Cocoa modifier key masks to Carbon key modifiers.  */
 
@@ -4877,71 +5058,6 @@ mac_event_to_emacs_modifiers (event)
     modifiers &= ~(optionKey | cmdKey);
 
   return mac_to_emacs_modifiers (modifiers, 0);
-}
-
-/* Function to report a mouse movement to the mainstream Emacs code.
-   The input handler calls this.
-
-   We have received a mouse movement event, which is given in *event.
-   If the mouse is over a different glyph than it was last time, tell
-   the mainstream emacs code by setting mouse_moved.  If not, ask for
-   another motion event, so we can check again the next time it moves.  */
-
-static int
-note_mouse_movement (frame, point)
-     FRAME_PTR frame;
-     NSPoint point;
-{
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (frame);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (frame);
-  NSRect emacsViewFrame = [emacsView frame];
-  int x, y;
-
-  last_mouse_movement_time = TickCount () * (1000 / 60);  /* to milliseconds */
-
-  if (frame == dpyinfo->mouse_face_mouse_frame
-      && ! (point.x >= 0 && point.x < NSMaxX (emacsViewFrame)
-	    && point.y >= 0 && point.y < NSMaxY (emacsViewFrame)))
-    {
-      /* This case corresponds to LeaveNotify in X11.  If we move
-	 outside the frame, then we're certainly no longer on any text
-	 in the frame.  */
-      clear_mouse_face (dpyinfo);
-      dpyinfo->mouse_face_mouse_frame = 0;
-      if (!dpyinfo->grabbed)
-	{
-	  struct redisplay_interface *rif = FRAME_RIF (frame);
-
-	  rif->define_frame_cursor (frame,
-				    frame->output_data.mac->nontext_cursor);
-	}
-    }
-
-  x = point.x;
-  y = point.y;
-
-  /* Has the mouse moved off the glyph it was on at the last sighting?  */
-  if (frame != last_mouse_glyph_frame
-      || x < last_mouse_glyph.left
-      || x >= last_mouse_glyph.right
-      || y < last_mouse_glyph.top
-      || y >= last_mouse_glyph.bottom)
-    {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (frame);
-
-      frame->mouse_moved = 1;
-      [emacsView lockFocus];
-      set_global_focus_view_frame (frame);
-      note_mouse_highlight (frame, x, y);
-      unset_global_focus_view_frame ();
-      [emacsView unlockFocus];
-      /* Remember which glyph we're now on.  */
-      remember_mouse_glyph (frame, x, y, &last_mouse_glyph);
-      last_mouse_glyph_frame = frame;
-      return 1;
-    }
-
-  return 0;
 }
 
 /* Run the current run loop in the default mode until some input
@@ -5216,7 +5332,7 @@ XTread_socket (terminal, expected, hold_quit)
 	}
       else
 	{
-	  view = FRAME_EMACS_VIEW (f);
+	  view = emacsView;
 	  viewFrame = [view frame];
 	  indicatorFrame =
 	    NSMakeRect (NSWidth (viewFrame) - HOURGLASS_WIDTH, 0,
@@ -5246,8 +5362,7 @@ void
 mac_show_hourglass (f)
      struct frame *f;
 {
-  EmacsWindow *window = FRAME_MAC_WINDOW (f);
-  EmacsFrameController *frameController = [window delegate];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
   [frameController showHourglass:nil];
 }
@@ -5259,20 +5374,9 @@ void
 mac_hide_hourglass (f)
      struct frame *f;
 {
-  EmacsWindow *window = FRAME_MAC_WINDOW (f);
-  EmacsFrameController *frameController = [window delegate];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
   [frameController hideHourglass:nil];
-}
-
-/* Reposition the spinning progress indicator for the frame F.  Do
-   nothing it doesn't exist yet. */
-
-void
-mac_reposition_hourglass (f)
-     struct frame *f;
-{
-  /* Nothing to do.  */
 }
 
 
@@ -5628,6 +5732,7 @@ create_ok_cancel_buttons_view ()
   [okButton setAction:@selector(ok:)];
   [cancelButton setKeyEquivalent:@"\e"];
   [okButton setKeyEquivalent:@"\r"];
+  [view selectCell:okButton];
 
   return view;
 }
@@ -5660,6 +5765,10 @@ mac_font_dialog (f)
   [fontPanel setDelegate:delegate];
 
   [fontManager orderFrontFontPanel:nil];
+  /* This avoids bogus font selection by -[NSTextView
+     resignFirstResponder] inside the modal loop.  */
+  [fontPanel makeFirstResponder:accessoryView];
+
   response = [fontPanel runModal];
   if (response != NSRunAbortedResponse)
     {
@@ -5980,7 +6089,77 @@ restore_show_help_function (old_show_help_function)
     }
 }
 
+- (NSMenu *)applicationDockMenu:(NSApplication *)sender
+{
+  NSMenu *menu = [[NSMenu alloc] init];
+  NSEnumerator *enumerator = [[NSApp windows] objectEnumerator];
+  NSWindow *window;
+
+  while ((window = [enumerator nextObject]) != nil)
+    if ([window isKindOfClass:[EmacsFullscreenWindow class]]
+	&& ([window isVisible] || [window isMiniaturized]))
+      {
+	extern NSImage *_NSGetThemeImage (NSUInteger) WEAK_IMPORT_ATTRIBUTE;
+	NSMenuItem *item =
+	  [[NSMenuItem alloc] initWithTitle:[window title]
+				     action:@selector(makeKeyAndOrderFront:)
+			      keyEquivalent:@""];
+
+	[item setTarget:window];
+	if ([window isKeyWindow])
+	  [item setState:NSOnState];
+	else if ([window isMiniaturized])
+	  {
+	    NSImage *image;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+	    if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
+	      {
+		if (_NSGetThemeImage != NULL)
+		  image = _NSGetThemeImage (0x9b);
+		else
+		  image = nil;
+	      }
+	    else
+#endif
+	      image = [NSImage imageNamed:@"NSMenuItemDiamond"];
+	    if (image)
+	      {
+		[item setOnStateImage:image];
+		[item setState:NSOnState];
+	      }
+	  }
+	[menu addItem:item];
+	[item release];
+      }
+
+  return [menu autorelease];
+}
+
 @end				// EmacsController (Menu)
+
+@implementation EmacsFrameController (Menu)
+
+- (void)popUpMenu:(NSMenu *)menu atLocationInEmacsView:(NSPoint)location
+{
+  if ([menu respondsToSelector:
+	      @selector(popUpMenuPositioningItem:atLocation:inView:)])
+    [menu popUpMenuPositioningItem:nil atLocation:location inView:emacsView];
+  else
+    {
+      NSEvent *event =
+	[NSEvent mouseEventWithType:NSLeftMouseDown
+			   location:[emacsView convertPoint:location toView:nil]
+		      modifierFlags:0 timestamp:0
+		       windowNumber:[[emacsView window] windowNumber]
+			    context:[NSGraphicsContext currentContext]
+			eventNumber:0 clickCount:1 pressure:0];
+
+      [NSMenu popUpContextMenu:menu withEvent:event forView:emacsView];
+    }
+}
+
+@end				// EmacsFrameController (Menu)
 
 /* Activate the menu bar of frame F.
 
@@ -6149,33 +6328,21 @@ create_and_show_popup_menu (f, first_wv, x, y, for_click)
      int for_click;
 {
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Popup"];
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+  EmacsFrameController *focusFrameController =
+    dpyinfo->x_focus_frame ? FRAME_CONTROLLER (dpyinfo->x_focus_frame) : nil;
   int specpdl_count = SPECPDL_INDEX ();
 
   [menu setAutoenablesItems:NO];
   [menu fillWithWidgetValue:first_wv->contents];
 
   record_unwind_protect (pop_down_menu, make_save_value (menu, 0));
+  [focusFrameController noteLeaveEmacsView];
   popup_activated_flag = 1;
-  if ([menu respondsToSelector:
-	      @selector(popUpMenuPositioningItem:atLocation:inView:)])
-    [menu popUpMenuPositioningItem:nil atLocation:(NSMakePoint (x, y))
-			    inView:emacsView];
-  else
-    {
-      NSPoint location =
-	[emacsView convertPoint:(NSMakePoint (x, y)) toView:nil];
-      NSWindow *window = [emacsView window];
-      NSEvent *event =
-	[NSEvent mouseEventWithType:NSLeftMouseDown location:location
-		      modifierFlags:0 timestamp:0
-		       windowNumber:[window windowNumber]
-			    context:[NSGraphicsContext currentContext]
-			eventNumber:0 clickCount:1 pressure:0];
-
-      [NSMenu popUpContextMenu:menu withEvent:event forView:emacsView];
-    }
+  [frameController popUpMenu:menu atLocationInEmacsView:(NSMakePoint (x, y))];
   popup_activated_flag = 0;
+  [focusFrameController noteEnterEmacsView];
   unbind_to (specpdl_count, Qnil);
 
   return [[NSApp delegate] getAndClearMenuItemSelection];
@@ -7021,6 +7188,15 @@ drag_operation_to_actions (operation)
 
 @end				// EmacsView (DragAndDrop)
 
+@implementation EmacsFrameController (DragAndDrop)
+
+- (void)registerEmacsViewForDraggedTypes:(NSArray *)pboardTypes
+{
+  [emacsView registerForDraggedTypes:pboardTypes];
+}
+
+@end				// EmacsFrameController (DragAndDrop)
+
 /* Update the pasteboard types derived from the value of
    mac-dnd-known-types and register them so every Emacs view can
    accept them.  The registered types are stored in
@@ -7056,9 +7232,9 @@ update_dragged_types ()
 
       if (FRAME_MAC_P (f))
 	{
-	  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+	  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-	  [emacsView registerForDraggedTypes:array];
+	  [frameController registerEmacsViewForDraggedTypes:array];
 	}
     }
 

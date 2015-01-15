@@ -1,4 +1,9 @@
-2009-11-23  Tobias Ringström  <tobias@ringis.se> (tiny change)
+2009-12-09  David Robinow  <drobinow@gmail.com>  (tiny change)
+
+	* makefile.w32-in: Use parenthesis for macros for nmake
+	compatibility.
+
+2009-11-23  Tobias Ringström  <tobias@ringis.se>  (tiny change)
 
 	* etags.c (absolute_filename): Use memove if we have it for
 	overlapping copy.

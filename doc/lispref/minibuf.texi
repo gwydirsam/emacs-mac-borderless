@@ -769,10 +769,11 @@ This function returns a list of all possible completions of
 @var{string}.  The arguments to this function (aside from
 @var{nospace}) are the same as those of @code{try-completion}.  Also,
 this function uses @code{completion-regexp-list} in the same way that
-@code{try-completion} does.  The optional argument @var{nospace} only
-matters if @var{string} is the empty string.  In that case, if
-@var{nospace} is non-@code{nil}, completions that start with a space
-are ignored.
+@code{try-completion} does.
+
+The optional argument @var{nospace} is obsolete.  If it is
+non-@code{nil}, completions that start with a space are ignored unless
+@var{string} starts with a space.
 
 If @var{collection} is a function, it is called with three arguments:
 @var{string}, @var{predicate} and @code{t}; then @code{all-completions}
@@ -1588,13 +1589,13 @@ procedure is used for listing completions, via the
 @var{all-completions} functions.
 @end defvar
 
-  By default, @code{completion-styles-alist} contains four pre-defined
+  By default, @code{completion-styles-alist} contains five pre-defined
 completion styles: @code{basic}, a basic completion style;
 @code{partial-completion}, which does partial completion (completing
 each word in the input separately); @code{emacs22}, which performs
-completion according to the rules used in Emacs 22; and
-@code{emacs21}, which performs completion according to the rules used
-in Emacs 21.
+completion according to the rules used in Emacs 22; @code{emacs21},
+which performs completion according to the rules used in Emacs 21; and
+@code{initials}, which completes acronyms and initialisms.
 
 @node Programmed Completion
 @subsection Programmed Completion

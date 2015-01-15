@@ -1,5 +1,5 @@
 /* Localized versions of Info.plist keys */
 
 CFBundleName = "Emacs";
-CFBundleShortVersionString = "23.1.90";
-CFBundleGetInfoString = "23.1.90, Copyright (C) 2009 Free Software Foundation, Inc.";
+CFBundleShortVersionString = "23.1.91";
+CFBundleGetInfoString = "23.1.91, Copyright (C) 2009 Free Software Foundation, Inc.";

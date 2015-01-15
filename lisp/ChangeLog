@@ -1,4 +1,340 @@
+2009-12-31  Nick Roberts  <nickrob@snap.net.nz>
+
+	Further changes from EMACS_23_1_RC branch (2009-12-29 contd).
+	* term/x-win.el (x-gtk-stock-map): Map some GUD buttons.
+	* progmodes/gud.el (gud-menu-map): Add reverse-execution commands.
+
+2009-12-30  Nick Roberts  <nickrob@snap.net.nz>
+
+	Show working revision correctly for mercurial.
+	* vc-hg.el (vc-hg-working-revision): Use hg parent instead of
+	hg log as suggested by Alex Harsanyi <alexharsanyi@gmail.com>,
+
+2009-12-29  Juanma Barranquero  <lekktu@gmail.com>
+
+	Declare some functions for the byte-compiler.
+	* progmodes/gdb-ui.el (speedbar-change-initial-expansion-list)
+	(speedbar-timer-fn, speedbar-change-expand-button-char)
+	(speedbar-delete-subblock, speedbar-center-buffer-smartly): Declare.
+
+2009-12-29  Nick Roberts  <nickrob@snap.net.nz>
+
+	This changeset reverts GDB Graphical Interface to use annotations.
+	* progmodes/gdb-ui.el, progmodes/gud.el: Import from EMACS_23_1_RC.
+
+2009-12-29  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	Make vc-dir work on subdirectories of the bzr root.
+	* vc-bzr.el (vc-bzr-after-dir-status): Add new argument.  Return
+	file names relative to it.
+	(vc-bzr-dir-status, vc-bzr-dir-status-files): Pass the bzr root
+	relative directory to vc-bzr-after-dir-status.
+
+2009-12-28  Tassilo Horn  <tassilo@member.fsf.org>
+
+	* font-lock.el (font-lock-refresh-defaults): New function, which
+	can be used to let font-lock react to external changes in
+	variables like font-lock-defaults and keywords.
+	See http://thread.gmane.org/gmane.emacs.devel/118777/focus=118802
+
+2009-12-28  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* vc-rcs.el (vc-rcs-register): Fix registering a specific version.
+
+	* vc-bzr.el (vc-bzr-log-view-mode): Fix short log regexp.
+
+2009-12-28  Juanma Barranquero  <lekktu@gmail.com>
+
+	Supersede color.diff settings in git log (bug#5211).
+
+	* vc-git.el (vc-git-print-log): Pass "--no-color" to log to avoid
+	escape chars in its output when the user has color.diff set to `always'.
+	This fix works on git 1.4.2 and newer (released on 2006-08-13).
+
+2009-12-26  Kevin Ryde  <user42@zip.com.au>
+
+	* info-look.el (sh-mode): Look for coreutils new "Concept Index"
+	node.  Keep previous "Index" name to work with past coreutils too.
+
+	* man.el (man): Revise docstring a bit to show -a and -l as
+	examples.  Add -k description since support for it has otherwise
+	been a secret.  (Further to bug#3717.)
+	(Man-bgproc-sentinel): When "-k foo" produces no output show error
+	"no matches" rather than "Can't find manpage", as the latter reads
+	like -k was interpreted as a page name, which is not so.  (My
+	bug#5431.)
+
+2009-12-26  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-handle-insert-directory): Quote "'" in the
+	switches.  Check also for //SUBDIRED// line.
+
+2009-12-25  Kenichi Handa  <handa@m17n.org>
+
+	* language/indian.el (devanagari-composable-pattern): Fixed to
+	handle ZWNJ and ZWJ.  Use it in composition-function-table for
+	Devanagari.
+	(malayalam-composable-pattern): Fix previous change.
+
+2009-12-23  Vinicius Jose Latorre  <viniciusjl@ig.com.br>
+
+	* ps-print.el (ps-face-attributes): It was not returning the
+	attribute face for faces specified as string.  Reported by harven
+	<harven@free.fr>.
+	(ps-print-version): New version 7.3.5.
+
+2009-12-18  Ulf Jasper  <ulf.jasper@web.de>
+
+	* calendar/icalendar.el (icalendar--convert-tz-offset): Fixed
+	timezone names.
+	(icalendar--convert-tz-offset): Fixed the "last-day-problem".
+	(icalendar--add-diary-entry): Remove the trailing blank that
+	diary-make-entry inserts.
+
+2009-12-17  Michael Albinus  <michael.albinus@gmx.de>
+
+	Make `file-expand-wildcards' work for remote files.
+
+	* files.el (file-expand-wildcards): In case of remote files, check
+	only local file name part for wildcards.  Provide feature 'files
+	and subfeature 'remote-wildcards.  (Bug#5198)
+
+	* net/tramp.el (tramp-handle-file-remote-p): Expand file name only
+	if there is already an established connection.
+	(tramp-advice-file-expand-wildcards): Remove it.
+
+	* net/tramp-compat.el (top): Autoload `tramp-handle-file-remote-p'.
+	(tramp-advice-file-expand-wildcards): Moved from tramp.el.
+	Activate advice for older GNU Emacs versions.  (Bug#5237)
+
+2009-12-17  Juanma Barranquero  <lekktu@gmail.com>
+
+	Some doc fixes (more needed).
+
+	* find-cmd.el (find-constituents): Reflow docstring.
+	(find-cmd, find-prune, find-command): Fix typos in docstrings.
+	(find-generic): Doc fix.
+
+2009-12-17  Juri Linkov  <juri@jurta.org>
+
+	Fix regression from 23.1 to allow multiple modes in Local Variables.
+
+	* files.el (hack-local-variables-filter): While ignoring duplicates,
+	don't take `mode' into account.
+	(hack-local-variables-filter, hack-dir-local-variables): Don't
+	remove duplicate `mode' from local-variables-alist (like `eval').
+
+2009-12-17  Juri Linkov  <juri@jurta.org>
+
+	Make `dired-diff' more safe.  (Bug#5225)
+
+	* dired-aux.el (dired-diff): Signal an error when `file' equals to
+	`current' or when `file' is a directory of the `current' file.
+
+2009-12-17  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* emacs-lisp/autoload.el (batch-update-autoloads): Only exclude
+	unconditionally preloaded files.
+
+2009-12-16  Juri Linkov  <juri@jurta.org>
+
+	Revert to old 23.1 logic of using the file at the mark as default.
+	* dired-aux.el (dired-diff): Use the file at the mark as default
+	if it's not the same as the current file, and the target dir is
+	the current dir or the mark is active.  Add the current file
+	as the arg of `dired-dwim-target-defaults'.  Use the default file
+	in the prompt.  (Bug#5225)
+
+2009-12-15  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-echo-mark-marker-length): New defconst.
+	(tramp-echo-mark, tramp-echoed-echo-mark-regexp): Use it.
+	(tramp-check-for-regexp): Check also, when an echoing shell stops
+	to echo sent commands.
+
+2009-12-14  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Makefile.in: Revert last change (Bug#5191).
+
+2009-12-14  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* vc-hg.el (vc-hg-print-log): Fix argument order.
+	(vc-hg-working-revision): Make sure the command is executed in a
+	known environment so that we can parse the output.  (Bug#4417)
+
+2009-12-14  Chong Yidong  <cyd@stupidchicken.com>
+
+	* progmodes/python.el (python-symbol-completions): Remove text
+	properties from symbol string before calling python-send-receive.
+
+2009-12-14  Nick Roberts  <nickrob@snap.net.nz>
+
+	* progmodes/gdb-mi.el (gdb-frame-handler): Only set gud-lat-frame
+	when there are values for both file and line.  (Bug#5060)
+
+2009-12-14  Juri Linkov  <juri@jurta.org>
+
+	* ediff-ptch.el (ediff-context-diff-label-regexp): Don't match
+	whitespace after the file name of the first line of unified format,
+	because git-diff doesn't output whitespace and file modification time
+	after the file name.
+
+2009-12-14  David Kastrup  <dak@gnu.org>
+
+	* info.el (Info-hide-cookies-node): Before hiding a cookie,
+	check if it already has the `display' property added by
+	`Info-display-images-node', and not put the `invisible' property
+	in this case.
+
+2009-12-14  Chong Yidong  <cyd@stupidchicken.com>
+
+	* cedet/semantic/mru-bookmark.el (global-semantic-mru-bookmark-mode)
+	(semantic-mru-bookmark-mode): Doc fixes.
+
+	* cedet/semantic/db.el (semanticdb-cache-get): Use error instead
+	of assert.
+
+2009-12-13  Glenn Morris  <rgm@gnu.org>
+
+	* mail/emacsbug.el (message-sort-headers): Define for compiler.
+	(report-emacs-bug): In message-mode, sort manually before storing
+	original report text.  (Bug#5178)
+	Remove superfluous save-excursion.
+
+2009-12-12  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/dbus.el (dbus-property-handler): Filter lambda forms out
+	when responding to "GetAll" properties.
+
+2009-12-12  Chong Yidong  <cyd@stupidchicken.com>
+
+	* simple.el (compose-mail): Remove mail-setup-with-from from
+	customization checks.
+
+2009-12-12  Eli Zaretskii  <eliz@gnu.org>
+
+	* arc-mode.el (archive-rar-summarize): Support Attribute fields in
+	RAR archives created on Unix systems.
+
+2009-12-12  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* minibuffer.el (minibuffer-local-must-match-filename-map): Re-instate
+	the varalias that was accidentally removed by the 2009-11-19 change
+	(bug#5186).
+
+2009-12-12  Kenichi Handa  <handa@m17n.org>
+
+	* language/indian.el (indian-compose-regexp): New function.
+	(malayalam-composable-pattern): Fix the pattern.
+	(composition-function-table): Set malayalam-composable-pattern for
+	Malayalam characters.
+
+2009-12-11  Chong Yidong  <cyd@stupidchicken.com>
+
+	* progmodes/bug-reference.el (bug-reference-map): Bind mouse-2
+	rather than down-mouse-1, based on follow-link conventions.
+
+	* makefile.w32-in: Ensure that Lisp files in CEDET subdirectories
+	are compiled.
+
+2009-12-11  Michael McNamara  <mac@mail.brushroad.com>
+
+	* verilog-mode.el (verilog-vmm-begin-re, verilog-vmm-end-re)
+	(verilog-vmm-statement-re, verilog-ovm-statement-re)
+	(verilog-defun-level-not-generate-re, verilog-calculate-indent)
+	(verilog-leap-to-head, verilog-backward-token):
+	Fix indenting VMM macros.  Reported by Jonathan Ashbrook.
+
+2009-12-11  Wilson Snyder  <wsnyder@wsnyder.org>
+
+	* verilog-mode.el (verilog-auto-lineup, verilog-nameable-item-re):
+	Cleanup user-visible spelling and documentation errors.
+	One reported by Gary Delp.
+	(verilog-submit-bug-report): Mention bug tracking and CC co-author.
+	(verilog-read-decls): Fix AUTOWIRE with types declared in a
+	package, bug195.  Reported by Pierre-David Pfister.
+
+2009-12-11  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/cc-engine.el (safe-pos-list): Define for compiler.
+
+	* mail/emacsbug.el: No longer require sendmail.
+	Replace sendmail's `mail-text' by `rfc822-goto-eoh'.  (Bug#5174)
+	(report-emacs-bug-orig-text): Doc fix.
+	(report-emacs-bug-send-command, report-emacs-bug-send-hook):
+	New local variables, to adapt to different mail-user-agents.
+	(report-emacs-bug): Fix test for a gnu.org address.
+	Use overlays for emphasis, since font-lock defeats 'face property.
+	Pretest bugs also end up at the newsgroup these days.
+	Stop message-mode stripping text properties.
+	Set and use the new buffer-local variables.
+	(report-emacs-bug-hook): Add doc-string.
+	Remove some unnecessary save-excursions and simplify.
+	Use the appropriate hook and send-command.
+
+	* emacs-lisp/lisp-mode.el (emacs-lisp-mode-map): Standardize the
+	capitalization of some menu entries.
+
+2009-12-10  Vinicius Jose Latorre  <viniciusjl@ig.com.br>
+
+	* whitespace.el (whitespace-display-char-on): Ensure
+	`buffer-display-table' is unique when two or more windows are
+	visible.  Reported by Martin Pohlack <mp26@os.inf.tu-dresden.de>.
+	New version 12.1.
+
+2009-12-10  Eli Zaretskii  <eliz@gnu.org>
+
+	* arc-mode.el (archive-rar-summarize): Allow between 6 and 7
+	characters in the Attribute field.
+
+2009-12-10  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* vc-svn.el (vc-svn-after-dir-status): Fix regexp.  (Bug#4741)
+
+2009-12-10  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	Let loaddefs.el adjust to changes in autoload-excludes (bug#5162).
+	* emacs-lisp/autoload.el (autoload-generate-file-autoloads):
+	Disregard autoload-excludes.
+	(update-directory-autoloads): Obey autoload-excludes here instead.
+	But don't store its contents in no-autoloads and remove entries that
+	refer to excludes files.
+
+2009-12-10  Glenn Morris  <rgm@gnu.org>
+
+	* mail/feedmail.el (top-level): Move require 'mail-utils to start.
+	(expand-mail-aliases): Define for compiler.
+
+	* vc-annotate.el (log-view-vc-backend, log-view-vc-fileset):
+	Define for compiler.
+
+	* mail/emacsbug.el (report-emacs-bug): Use whichever send command is
+	appropriate for the mail-user-agent in use.
+
+2009-12-09  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-handle-insert-directory): Suppress error messages.
+
+2009-12-09  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	Fix short log parsing and fontification.
+	* vc-bzr.el (vc-bzr-log-view-mode): Match dot in revision number.
+	Fix fontification for the [merge] label.
+
+2009-12-09  Vivek Dasmohapatra  <vivek@etla.org>
+
+	Drop some properties to avoid surprises.
+	* htmlfontify.el (hfy-ignored-properties): New defcustom.
+	(hfy-fontify-buffer): Use it.
+
 2009-12-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	Minor cleanup.
+	* ffap.el (ffap-symbol-value): Replace ffap-soft-value.
+	Adjust all callers.
+	(ffap-locate-file): Remove unused arg `dir-ok' and make other
+	args compulsory.  Adjust callers.
+	(ffap-gopher-at-point): Remove unused var `name'.
 
 	Get rid of the ELCFILES abomination.
 	* Makefile.in (update-elclist, ELCFILES, compile-last): Remove.
@@ -13,9 +349,9 @@
 
 2009-12-09  Kenichi Handa  <handa@m17n.org>
 
-	* international/mule-cmds.el (ucs-names): Supply a sufficiently
-	fine ranges instead of pre-calculating accurate ranges.  Iterate
-	with bigger gc-cons-threshold.
+	* international/mule-cmds.el (ucs-names): Supply sufficiently
+	fine ranges instead of pre-calculating accurate ranges.
+	Iterate with bigger gc-cons-threshold.
 
 2009-12-08  Dan Nicolaescu  <dann@ics.uci.edu>
 
@@ -138,10 +474,10 @@
 
 2009-12-07  Dan Nicolaescu  <dann@ics.uci.edu>
 
-	* ediff-mult.el (ediff-setup-meta-map, ediff-prepare-meta-buffer): Add
-	menus to the meta mode.  (Bug#5043)
+	* ediff-mult.el (ediff-setup-meta-map, ediff-prepare-meta-buffer):
+	Add menus to the meta mode.  (Bug#5043)
 
-2009-12-07  Michael Kifer <kifer@cs.stonybrook.edu>
+2009-12-07  Michael Kifer  <kifer@cs.stonybrook.edu>
 
 	* ediff-init.el (ediff-event-key): Use event-to-character instead of
 	event-key.
@@ -202,13 +538,10 @@
 
 2009-12-06  Ulf Jasper  <ulf.jasper@web.de>
 
-	* net/newst-backend.el :
-	* net/newst-plainview.el:
-	* net/newst-reader.el:
-	* net/newst-ticker.el:
-	* net/newst-treeview.el:
-	* net/newsticker.el: Require/provide newst-... (instead of
-	newsticker-...). (Bug#5096)
+	* net/newst-backend.el, net/newst-plainview.el:
+	* net/newst-reader.el, net/newst-ticker.el:
+	* net/newst-treeview.el, net/newsticker.el:
+	Require/provide newst-... (instead of newsticker-...).  (Bug#5096)
 
 2009-12-06  Chong Yidong  <cyd@stupidchicken.com>
 
@@ -224,15 +557,14 @@
 
 2009-12-06  Ulf Jasper  <ulf.jasper@web.de>
 
-	* xml.el (xml-substitute-numeric-entities): Moved
+	* xml.el (xml-substitute-numeric-entities): Move
 	newsticker--decode-numeric-entities in newst-backend.el to
-	xml-substitute-numeric-entities in xml.el. (Bug#5008)
-
+	xml-substitute-numeric-entities in xml.el.  (Bug#5008)
 	* net/newst-backend.el (newsticker--parse-generic-feed)
 	(newsticker--parse-generic-items)
-	(newsticker--decode-numeric-entities): Moved
+	(newsticker--decode-numeric-entities): Move
 	newsticker--decode-numeric-entities in newst-backend.el to
-	xml-substitute-numeric-entities in xml.el. (Bug#5008)
+	xml-substitute-numeric-entities in xml.el.  (Bug#5008)
 
 2009-12-06  Daniel Colascione  <dan.colascione@gmail.com>
 
@@ -240,8 +572,7 @@
 
 2009-12-06  Chong Yidong  <cyd@stupidchicken.com>
 
-	* ansi-color.el (ansi-color-for-comint-mode): Add :version
-	keyword.
+	* ansi-color.el (ansi-color-for-comint-mode): Add :version keyword.
 
 2009-12-06  Roland Winkler  <Roland.Winkler@physik.uni-erlangen.de>
 
@@ -259,10 +590,10 @@
 2009-12-06  Kevin Ryde  <user42@zip.com.au>
 
 	* ffap.el (ffap-rfc-path): Make this a defcustom since
-	`ffap-rfc-directories' is also a defcustom.  (My Bug#4514.)
+	`ffap-rfc-directories' is also a defcustom.  (Bug#4514.)
 
 	* info-look.el: Add setup for apropos-mode to use emacs-lisp-mode
-	manuals, similar to existing setup for help-mode.  (My bug#3913.)
+	manuals, similar to existing setup for help-mode.  (Bug#3913.)
 
 2009-12-05  Juri Linkov  <juri@jurta.org>
 
@@ -409,7 +740,7 @@
 	(newsticker-treeview-item-menu): Added menu entries.
 	(newsticker-treeview-item-mode): New.
 
-	* net/newst-backend.el (newsticker-customize): delete other
+	* net/newst-backend.el (newsticker-customize): Delete other
 	windows.
 
 2009-12-04  Sam Steingold  <sds@gnu.org>
@@ -447,7 +778,7 @@
 
 	* progmodes/cc-mode.el (c-basic-common-init):
 	Call c-state-cache-init.
-	(c-neutralize-syntax-in-and-mark-CPP):  Rename from
+	(c-neutralize-syntax-in-and-mark-CPP): Rename from
 	c-extend-and-neutralize-syntax-in-CPP.  Mark each CPP construct by
 	placing `category' properties value 'c-cpp-delimiter at its boundaries.
 
@@ -1137,8 +1468,7 @@
 2009-11-24  Kevin Ryde  <user42@zip.com.au>
 
 	* emacs-lisp/checkdoc.el (checkdoc-proper-noun-regexp):
-	Build value with regexp-opt instead of explicit joining loop.  (My
-	Bug#4927.)
+	Build value with regexp-opt instead of explicit joining loop.  (Bug#4927)
 
 	* emacs-lisp/elint.el (elint-add-required-env): Better error message
 	when .el source file not found or other error.
@@ -1905,7 +2235,7 @@
 	* type-break.el (type-break-force-mode-line-update):
 	* time-stamp.el (time-stamp-conv-warn):
 	* terminal.el (te-set-output-log, te-more-break, te-filter)
-	(te-sentinel,terminal-emulator):
+	(te-sentinel, terminal-emulator):
 	* term.el (make-term, term-exec, term-sentinel, term-read-input-ring)
 	(term-write-input-ring, term-check-source, term-start-output-log):
 	(term-display-buffer-line, term-dynamic-list-completions):
@@ -2157,7 +2487,7 @@
 
 2009-11-11  Juri Linkov  <juri@jurta.org>
 
-	* simple.el (dired-get-filename)<declare-function>:
+	* simple.el (dired-get-filename) <declare-function>:
 	Tell the byte-compiler about dired-get-filename.
 	(shell-command): In Dired mode, get filename from the current line
 	as the default value.
@@ -2247,7 +2577,7 @@
 	`tramp-compat-delete-directory'.
 
 	* net/tramp-smb.el (tramp-smb-handle-copy-directory)
-	(tramp-smb-handle-delete-directory ): Use
+	(tramp-smb-handle-delete-directory): Use
 	`tramp-compat-copy-directory' and `tramp-compat-delete-directory'.
 
 	* net/trampver.el: Update release number.
@@ -2587,7 +2917,7 @@
 	* play/fortune.el (fortune-in-buffer):
 	* play/dissociate.el (dissociated-press):
 	* play/decipher.el (decipher-adjacency-list, decipher-display-regexp)
-	(decipher-analyze-buffer, decipher-stats-buffer,decipher-stats-buffer):
+	(decipher-analyze-buffer, decipher-stats-buffer, decipher-stats-buffer):
 	* mail/supercite.el (sc-eref-show):
 	* mail/smtpmail.el (smtpmail-send-it):
 	* mail/rmailsum.el (rmail-summary-next-labeled-message)
@@ -2768,14 +3098,14 @@
 	(ada-find-any-references, ada-make-filename-from-adaname)
 	(ada-make-body-gnatstub):
 	* obsolete/rnews.el (news-list-news-groups):
-	* obsolete/resume.el (resume-suspend-hook,resume-write-buffer-to-file):
+	* obsolete/resume.el (resume-suspend-hook, resume-write-buffer-to-file):
 	* obsolete/iso-acc.el (iso-acc-minibuf-setup):
 	* net/rcirc.el (rcirc-debug):
 	* net/newst-treeview.el (newsticker--treeview-list-add-item)
 	(newsticker--treeview-list-clear, newsticker-treeview-browse-url)
 	(newsticker--treeview-list-update-faces, newsticker-treeview-save)
 	(newsticker--treeview-item-show-text, newsticker--treeview-item-show)
-	(newsticker--treeview-tree-update-tag,newsticker--treeview-buffer-init)
+	(newsticker--treeview-tree-update-tag, newsticker--treeview-buffer-init)
 	(newsticker-treeview-show-item, newsticker--treeview-unfold-node)
 	(newsticker--treeview-list-clear-highlight)
 	(newsticker--treeview-list-update-highlight)
@@ -3360,7 +3690,7 @@
 	* emacs-lisp/checkdoc.el (checkdoc-file-comments-engine):
 	When inserting ";;; Code" put it before any ";;;###autoload" cookie on
 	the first form.  And insert a blank line after ";;; Code" since
-	that's usual style.  (My Bug#4612.)
+	that's usual style.  (Bug#4612)
 
 	* net/dns.el: Add "Keywords: comm", as per net/net-utils.el.
 
@@ -4454,7 +4784,7 @@
 	* newcomment.el (comment-indent-new-line):
 	* pgg.el (pgg-save-coding-system, pgg-encrypt-region)
 	(pgg-encrypt-symmetric-region, pgg-encrypt-symmetric)
-	(pgg-encrypt, pgg-decrypt-region, pgg-decrypt, )
+	(pgg-encrypt, pgg-decrypt-region, pgg-decrypt)
 	(pgg-sign-region, pgg-sign, pgg-verify-region, pgg-verify):
 	* recentf.el (recentf-mode):
 	* savehist.el (savehist-mode, savehist-save):
@@ -4594,7 +4924,7 @@
 	* dired.el (dired-delete-file): Call `delete-directory' with
 	RECURSIVE parameter.
 
-	* net/ange-ftp.el (ange-ftp-delete-directory ): Add optional
+	* net/ange-ftp.el (ange-ftp-delete-directory): Add optional
 	parameter RECURSIVE.  Implementation is missing.
 
 	* net/tramp.el (tramp-handle-make-directory): Flush upper
@@ -7859,7 +8189,7 @@
 	(tramp-get-debug-buffer): Change `outline-regexp' according to new
 	format.
 
-	* net/tramp-cache.el (tramp-cache-inhibit-cache ): New defvar.
+	* net/tramp-cache.el (tramp-cache-inhibit-cache): New defvar.
 	(tramp-get-file-property): Use it.
 
 	* autorevert.el (auto-revert-handler): Allow
@@ -8180,7 +8510,7 @@
 	(hack-local-variables-filter): If variable is not dir-local,
 	i.e. `dir-name' is nil, then remove it from `dir-local-variables-alist',
 	because file-local overrides dir-local.
-	(c-postprocess-file-styles)<declare-function>:
+	(c-postprocess-file-styles) <declare-function>:
 	Remove obsolete declaration.
 	(hack-dir-local-variables): Add dir-local variable/value pair to
 	`dir-local-variables-alist' and remove duplicates.  Doc fix.
@@ -8211,7 +8541,7 @@
 2009-07-18  Juri Linkov  <juri@jurta.org>
 
 	* info.el: Virtual Info keyword finder.
-	(add-to-list)<Info-virtual-files>: Add "\\`\\*Finder.*\\*\\'".
+	(add-to-list) <Info-virtual-files>: Add "\\`\\*Finder.*\\*\\'".
 	(Info-finder-file): New variable.
 	(Info-finder-find-file): New function.
 	(finder-known-keywords, finder-package-info)
@@ -9014,7 +9344,7 @@
 2009-06-25  Agustín Martín  <agustin.martin@hispalinux.es>
 
 	* textmodes/ispell.el: Add `ispell-looking-back' XEmacs
-	  compatibility function for `looking-back'.
+	compatibility function for `looking-back'.
 
 	* textmodes/flyspell.el (sgml-mode-flyspell-verify):
 	Use `ispell-looking-back'.

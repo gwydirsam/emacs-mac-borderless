@@ -231,8 +231,6 @@ struct mac_output
   /* Menubar "widget" handle.  */
   int menubar_widget;
 
-  void *emacs_view;
-
   /* Here are the Graphics Contexts for the default font.  */
   GC normal_gc;				/* Normal video */
   GC reverse_gc;			/* Reverse video */
@@ -366,7 +364,6 @@ struct mac_output
 #define FRAME_CHECK_FULLSCREEN_NEEDED_P(f) \
   ((f)->output_data.mac->check_fullscreen_needed_p)
 #define FRAME_NATIVE_TOOL_BAR_P(f) ((f)->output_data.mac->native_tool_bar_p)
-#define FRAME_EMACS_VIEW(f) ((f)->output_data.mac->emacs_view)
 
 /* This gives the mac_display_info structure for the display F is on.  */
 #define FRAME_MAC_DISPLAY_INFO(f) (&one_mac_display_info)
@@ -654,10 +651,9 @@ extern void mac_change_frame_window_wm_state P_ ((struct frame *, WMState,
 						  WMState));
 extern CGContextRef mac_begin_cg_clip P_ ((struct frame *, GC));
 extern void mac_end_cg_clip P_ ((struct frame *));
-extern void mac_create_scroll_bar P_ ((struct scroll_bar *, const Rect *,
-				       Boolean));
+extern void mac_create_scroll_bar P_ ((struct scroll_bar *));
 extern void mac_dispose_scroll_bar P_ ((struct scroll_bar *));
-extern void mac_set_scroll_bar_bounds P_ ((struct scroll_bar *, const Rect *));
+extern void mac_update_scroll_bar_bounds P_ ((struct scroll_bar *));
 extern void mac_redraw_scroll_bar P_ ((struct scroll_bar *));
 extern void x_set_toolkit_scroll_bar_thumb P_ ((struct scroll_bar *,
 						int, int, int));
@@ -670,7 +666,6 @@ extern void update_frame_tool_bar P_ ((FRAME_PTR f));
 extern void free_frame_tool_bar P_ ((FRAME_PTR f));
 extern void mac_show_hourglass P_ ((struct frame *));
 extern void mac_hide_hourglass P_ ((struct frame *));
-extern void mac_reposition_hourglass P_ ((struct frame *));
 extern Lisp_Object mac_file_dialog P_ ((Lisp_Object, Lisp_Object, Lisp_Object,
 					Lisp_Object, Lisp_Object));
 extern Lisp_Object mac_font_dialog P_ ((FRAME_PTR f));
@@ -755,6 +750,7 @@ extern void mac_end_cg_clip P_ ((struct frame *));
 					  (gc)->cg_fore_color)
 
 /* Defined in macfont.c */
+extern void macfont_update_antialias_threshold P_ ((void));
 extern void *macfont_get_nsctfont P_ ((struct font *));
 extern Lisp_Object macfont_nsctfont_to_spec P_ ((void *));
 
