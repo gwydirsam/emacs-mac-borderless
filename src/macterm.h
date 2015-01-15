@@ -583,6 +583,7 @@ extern Lisp_Object mac_event_parameters_to_lisp P_ ((EventRef, UInt32,
 						     const EventParamName *,
 						     const EventParamType *));
 extern CFStringRef cfstring_create_with_utf8_cstring P_ ((const char *));
+extern CFStringRef cfstring_create_with_string_noencode P_ ((Lisp_Object));
 extern CFStringRef cfstring_create_with_string P_ ((Lisp_Object));
 extern Lisp_Object cfdata_to_lisp P_ ((CFDataRef));
 extern Lisp_Object cfstring_to_lisp_nodecode P_ ((CFStringRef));

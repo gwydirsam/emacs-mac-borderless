@@ -2492,15 +2492,6 @@ emacs_close (fd)
   int did_retry = 0;
   register int rtnval;
 
-#ifdef HAVE_MACGUI
-  {
-    extern int mac_try_close_socket P_ ((int));
-
-    if (mac_try_close_socket (fd))
-      return 0;
-  }
-#endif
-
   while ((rtnval = close (fd)) == -1
 	 && (errno == EINTR))
     did_retry = 1;

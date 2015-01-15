@@ -1,4 +1,32 @@
-* emacs-23.1-mac-1.92 (2009-09-05)
+* emacs-23.1-mac-1.93 [experimental/hackers-only] (2009-09-27)
+
+** Fixed bugs
+
+*** Conversion between Lisp and NSPasteboard strings doesn't preserve
+NUL characters.
+
+*** Mouse face reacts even while tracking Dock menus or Stacks.
+
+*** Control-Q does not work as the quote binding in file dialogs.
+
+*** Synthetic bold does not work for bitmap-only fonts on Mac OS X
+10.6.
+
+** Improvements
+
+*** New events: wheel-left/right as in W32, and
+swipe-up/down/left/right on Mac OS X 10.5.2 and later.
+
+*** The Mac font backend driver now supports `get_variation_glyphs' on
+Mac OS X 10.5 and later.  You need some OpenType font containing a
+format 14 (Unicode Variation Sequences) subtable in its cmap table.
+
+*** Simplified `select' emulation also for Mac OS X 10.5 and earlier.
+Its design is similar to the one in the previous release with Grand
+Central Dispatch.
+
+
+* emacs-23.1-mac-1.92 [experimental/hackers-only] (2009-09-05)
 
 ** Fixed bugs
 
@@ -9,7 +37,7 @@ Reported by Benjamin Riefenstahl.
 
 *** Can't make iconified frames invisible.
 
-** Improvement
+** Improvements
 
 *** Fall back on mac-system-coding-system if script and language
 information is not available in text input events.
@@ -36,7 +64,7 @@ Apply Jason Rumney's fix for Bug#3969.
 *** Mach port right leaks due to the previous change for the warning
 "CFMessagePort: bootstrap_register(): failed".
 
-** Improvement
+** Improvements
 
 *** File and font dialogs can be closed with C-g on Mac OS X 10.5 and later.
 

@@ -46,6 +46,17 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <servers/bootstrap.h>
 #define init_process emacs_init_process
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#ifndef SELECT_USE_GCD
+#define SELECT_USE_GCD 1
+#endif
+#endif
+
+#include <sys/socket.h>
+#if !SELECT_USE_GCD
+#include <pthread.h>
+#endif
+
 /* The system script code. */
 static EMACS_INT mac_system_script_code;
 
@@ -150,7 +161,7 @@ mac_aelist_to_lisp (desc_list)
 	    desc_type = EndianU32_NtoB (desc_type);
 	    elem = Fcons (make_unibyte_string ((char *) &desc_type, 4), elem);
 	    break;
-	}
+	  }
 
       if (err == noErr || desc_list->descriptorType == typeAEList)
 	{
@@ -404,8 +415,11 @@ mac_coerce_file_name_ptr (type_code, data_ptr, data_size,
       CFDataRef data = NULL;
 
       if (type_code == typeFileURL)
-	url = CFURLCreateWithBytes (NULL, data_ptr, data_size,
-				    kCFStringEncodingUTF8, NULL);
+	{
+	  url = CFURLCreateWithBytes (NULL, data_ptr, data_size,
+				      kCFStringEncodingUTF8, NULL);
+	  err = noErr;
+	}
       else
 	{
 	  AEDesc desc;
@@ -668,14 +682,31 @@ cfstring_create_with_utf8_cstring (c_str)
 }
 
 
+/* Lisp string containing a UTF-8 byte sequence to CFString.  Unlike
+   cfstring_create_with_utf8_cstring, this function preserves NUL
+   characters.  */
+
+CFStringRef
+cfstring_create_with_string_noencode (s)
+     Lisp_Object s;
+{
+  CFStringRef string = CFStringCreateWithBytes (NULL, SDATA (s), SBYTES (s),
+						kCFStringEncodingUTF8, false);
+
+  if (string == NULL)
+    /* Failed to interpret as UTF 8.  Fall back on Mac Roman.  */
+    string = CFStringCreateWithBytes (NULL, SDATA (s), SBYTES (s),
+				      kCFStringEncodingMacRoman, false);
+
+  return string;
+}
+
 /* Lisp string to CFString.  */
 
 CFStringRef
 cfstring_create_with_string (s)
      Lisp_Object s;
 {
-  CFStringRef string = NULL;
-
   if (STRING_MULTIBYTE (s))
     {
       char *p, *end = SDATA (s) + SBYTES (s);
@@ -686,16 +717,11 @@ cfstring_create_with_string (s)
 	    s = ENCODE_UTF_8 (s);
 	    break;
 	  }
-      string = CFStringCreateWithBytes (NULL, SDATA (s), SBYTES (s),
-					kCFStringEncodingUTF8, false);
+      return cfstring_create_with_string_noencode (s);
     }
-
-  if (string == NULL)
-    /* Failed to interpret as UTF 8.  Fall back on Mac Roman.  */
-    string = CFStringCreateWithBytes (NULL, SDATA (s), SBYTES (s),
-				      kCFStringEncodingMacRoman, false);
-
-  return string;
+  else
+    return CFStringCreateWithBytes (NULL, SDATA (s), SBYTES (s),
+				    kCFStringEncodingMacRoman, false);
 }
 
 
@@ -722,21 +748,27 @@ cfstring_to_lisp_nodecode (string)
      CFStringRef string;
 {
   Lisp_Object result = Qnil;
+  CFDataRef data;
   const char *s = CFStringGetCStringPtr (string, kCFStringEncodingUTF8);
 
   if (s)
-    result = make_unibyte_string (s, strlen (s));
-  else
     {
-      CFDataRef data =
-	CFStringCreateExternalRepresentation (NULL, string,
-					      kCFStringEncodingUTF8, '?');
+      CFIndex i, length = CFStringGetLength (string);
 
-      if (data)
-	{
-	  result = cfdata_to_lisp (data);
-	  CFRelease (data);
-	}
+      for (i = 0; i < length; i++)
+	if (CFStringGetCharacterAtIndex (string, i) == 0)
+	  break;
+
+      if (i == length)
+	return make_unibyte_string (s, strlen (s));
+    }
+
+  data = CFStringCreateExternalRepresentation (NULL, string,
+					       kCFStringEncodingUTF8, '?');
+  if (data)
+    {
+      result = cfdata_to_lisp (data);
+      CFRelease (data);
     }
 
   return result;
@@ -2752,51 +2784,65 @@ mac_get_system_locale ()
 }
 
 
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-#ifndef SELECT_USE_GCD
-#define SELECT_USE_GCD 1
-#endif
-#endif
-
-/* Unlike in X11, window events in Carbon do not come from sockets.
-   So we cannot simply use `select' to monitor two kinds of inputs:
-   window events and process outputs.  We emulate such functionality
-   by regarding fd 0 as the window event channel and simultaneously
+/* Unlike in X11, window events in Carbon or Cocoa, whose event system
+   is implemented on top of Carbon, do not come from sockets.  So we
+   cannot simply use `select' to monitor two kinds of inputs: window
+   events and process outputs.  We emulate such functionality by
+   regarding fd 0 as the window event channel and simultaneously
    monitoring both kinds of input channels.  It is implemented by
    dividing into some cases:
    1. The window event channel is not involved.
       -> Use `select'.
    2. Sockets are not involved.
-      -> Use ReceiveNextEvent.
-   3. Only the window event channel and socket read/write channels are
-      involved, and timeout is not too short (greater than
-      SELECT_TIMEOUT_THRESHOLD_RUNLOOP seconds).
-      -> Create CFSocket for each socket and add it into the current
-         event RunLoop so that the current event loop gets quit when
-         the socket becomes ready.  Then mac_run_loop_run_once can
-         wait for both kinds of inputs.
-   4. Otherwise.
-      -> Periodically poll the window input channel while repeatedly
-         executing `select' with a short timeout
-         (SELECT_POLLING_PERIOD_USEC microseconds).  */
-
-#define SELECT_POLLING_PERIOD_USEC 100000
-#define SELECT_TIMEOUT_THRESHOLD_RUNLOOP 0.2
-
-/* Process ID of Emacs.  */
-static pid_t mac_emacs_pid;
+      -> Run the run loop in the main thread to wait for window events
+         (and user signals, see below).
+   3. Otherwise
+      -> Run the run loop in the main thread while calling `select' in
+         a secondary thread using either Pthreads with CFRunLoopSource
+         or Grand Central Dispatch (GCD, on Mac OS X 10.6 or later).
+         When the control returns from the `select' call, the
+         secondary thread sends a wakeup notification to the main
+         thread through either a CFSocket (for Pthreads with
+         CFRunLoopSource) or a dispatch source (for GCD).
+   For Case 2 and 3, user signals such as SIGUSR1 are also handled
+   through either a CFSocket or a dispatch source.  */
 
 static int wakeup_fds[2];
 
-#if SELECT_USE_GCD
-#include <sys/socket.h>
+static int
+read_all_from_nonblocking_fd (fd)
+     int fd;
+{
+  int rtnval;
+  char buf[64];
 
+  do
+    {
+      rtnval = read (fd, buf, sizeof (buf));
+    }
+  while (rtnval > 0 || (rtnval < 0 && errno == EINTR));
+
+  return rtnval;
+}
+
+static int
+write_one_byte_to_fd (fd)
+     int fd;
+{
+  int rtnval;
+
+  do
+    {
+      rtnval = write (fd, "", 1);
+    }
+  while (rtnval == 0 || (rtnval < 0 && errno == EINTR));
+
+  return rtnval;
+}
+
+#if SELECT_USE_GCD
 static dispatch_queue_t select_dispatch_queue;
 #else
-/* Dictionary of file descriptors vs CFSocketRef's allocated in
-   sys_select.  */
-static CFMutableDictionaryRef cfsockets_for_select;
-
 static void
 wakeup_callback (s, type, address, data, info)
      CFSocketRef s;
@@ -2805,10 +2851,7 @@ wakeup_callback (s, type, address, data, info)
      const void *data;
      void *info;
 {
-  char buf[64];
-
-  while (emacs_read (CFSocketGetNative (s), buf, sizeof (buf)) > 0)
-    ;
+  read_all_from_nonblocking_fd (CFSocketGetNative (s));
 }
 #endif
 
@@ -2818,11 +2861,7 @@ init_wakeup_fds ()
   int result, i;
   int flags;
 
-#if SELECT_USE_GCD
   result = socketpair (AF_UNIX, SOCK_STREAM, 0, wakeup_fds);
-#else
-  result = pipe (wakeup_fds);
-#endif
   if (result < 0)
     return result;
   for (i = 0; i < 2; i++)
@@ -2841,11 +2880,7 @@ init_wakeup_fds ()
     if (source == NULL)
       return -1;
     dispatch_source_set_event_handler (source, ^{
-	char buf[64];
-
-	while (emacs_read (dispatch_source_get_handle (source),
-			   buf, sizeof (buf)) > 0)
-	  ;
+	read_all_from_nonblocking_fd (dispatch_source_get_handle (source));
       });
     dispatch_resume (source);
 
@@ -2877,22 +2912,125 @@ init_wakeup_fds ()
   return 0;
 }
 
-void mac_wakeup_from_run_loop_run_once ()
+void
+mac_wakeup_from_run_loop_run_once ()
 {
-  emacs_write (wakeup_fds[1], "", 1);
+  /* This function may be called from a signal hander, so only
+     async-signal safe functions can be used here.  */
+  write_one_byte_to_fd (wakeup_fds[1]);
 }
 
 #if !SELECT_USE_GCD
+static struct
+{
+  int value;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+} select_sem = {0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
+
 static void
-socket_callback (s, type, address, data, info)
-     CFSocketRef s;
-     CFSocketCallBackType type;
-     CFDataRef address;
-     const void *data;
+select_sem_wait ()
+{
+  pthread_mutex_lock (&select_sem.mutex);
+  while (select_sem.value <= 0)
+    pthread_cond_wait (&select_sem.cond, &select_sem.mutex);
+  select_sem.value--;
+  pthread_mutex_unlock (&select_sem.mutex);
+}
+
+static void
+select_sem_signal ()
+{
+  pthread_mutex_lock (&select_sem.mutex);
+  select_sem.value++;
+  pthread_cond_signal (&select_sem.cond);
+  pthread_mutex_unlock (&select_sem.mutex);
+}
+
+static CFRunLoopSourceRef select_run_loop_source = NULL;
+static CFRunLoopRef select_run_loop = NULL;
+
+static struct
+{
+  int nfds;
+  SELECT_TYPE *rfds, *wfds, *efds;
+  EMACS_TIME *timeout;
+} select_args;
+
+static void
+select_perform (info)
      void *info;
 {
+  int qnfds = select_args.nfds;
+  SELECT_TYPE qrfds, qwfds, qefds;
+  EMACS_TIME qtimeout;
+  int r;
+
+  if (select_args.rfds)
+    qrfds = *select_args.rfds;
+  if (select_args.wfds)
+    qwfds = *select_args.wfds;
+  if (select_args.efds)
+    qefds = *select_args.efds;
+  if (select_args.timeout)
+    qtimeout = *select_args.timeout;
+
+  if (wakeup_fds[1] >= qnfds)
+    qnfds = wakeup_fds[1] + 1;
+  FD_SET (wakeup_fds[1], &qrfds);
+
+  r = select (qnfds, select_args.rfds ? &qrfds : NULL,
+	      select_args.wfds ? &qwfds : NULL,
+	      select_args.efds ? &qefds : NULL,
+	      select_args.timeout ? &qtimeout : NULL);
+  if (r < 0 || (r > 0 && !FD_ISSET (wakeup_fds[1], &qrfds)))
+    mac_wakeup_from_run_loop_run_once ();
+
+  select_sem_signal ();
 }
-#endif
+
+static void
+select_fire (nfds, rfds, wfds, efds, timeout)
+     int nfds;
+     SELECT_TYPE *rfds, *wfds, *efds;
+     EMACS_TIME *timeout;
+{
+  select_args.nfds = nfds;
+  select_args.rfds = rfds;
+  select_args.wfds = wfds;
+  select_args.efds = efds;
+  select_args.timeout = timeout;
+
+  CFRunLoopSourceSignal (select_run_loop_source);
+  CFRunLoopWakeUp (select_run_loop);
+}
+
+static void *
+select_thread_main (arg)
+     void *arg;
+{
+  CFRunLoopSourceContext context = {0, NULL, NULL, NULL, NULL, NULL, NULL,
+				    NULL, NULL, select_perform};
+
+  select_run_loop = CFRunLoopGetCurrent ();
+  select_run_loop_source = CFRunLoopSourceCreate (NULL, 0, &context);
+  CFRunLoopAddSource (select_run_loop, select_run_loop_source,
+		      kCFRunLoopDefaultMode);
+  select_sem_signal ();
+  CFRunLoopRun ();
+}
+
+static void
+select_thread_launch ()
+{
+  pthread_attr_t  attr;
+  pthread_t       thread;
+
+  pthread_attr_init (&attr);
+  pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
+  pthread_create (&thread, &attr, &select_thread_main, NULL);
+}
+#endif	/* !SELECT_USE_GCD */
 
 static int
 select_and_poll_event (nfds, rfds, wfds, efds, timeout)
@@ -2960,41 +3098,6 @@ select_and_poll_event (nfds, rfds, wfds, efds, timeout)
     return 0;
 }
 
-/* Clean up the CFSocket associated with the file descriptor FD in
-   case the same descriptor is used in other threads later.  If no
-   CFSocket is associated with FD, then return 0 without closing FD.
-   Otherwise, return 1 with closing FD.  */
-
-int
-mac_try_close_socket (fd)
-     int fd;
-{
-#if !SELECT_USE_GCD
-  if (getpid () == mac_emacs_pid && cfsockets_for_select)
-    {
-      void *key = (void *) (intptr_t) fd;
-      CFSocketRef socket =
-	(CFSocketRef) CFDictionaryGetValue (cfsockets_for_select, key);
-
-      if (socket)
-	{
-	  CFOptionFlags flags = CFSocketGetSocketFlags (socket);
-
-	  if (!(flags & kCFSocketCloseOnInvalidate))
-	    CFSocketSetSocketFlags (socket, flags | kCFSocketCloseOnInvalidate);
-	  BLOCK_INPUT;
-	  CFSocketInvalidate (socket);
-	  CFDictionaryRemoveValue (cfsockets_for_select, key);
-	  UNBLOCK_INPUT;
-
-	  return 1;
-	}
-    }
-#endif
-
-  return 0;
-}
-
 int
 sys_select (nfds, rfds, wfds, efds, timeout)
      int nfds;
@@ -3005,6 +3108,7 @@ sys_select (nfds, rfds, wfds, efds, timeout)
   int r;
   EMACS_TIME select_timeout;
   SELECT_TYPE orfds, owfds, oefds;
+  EventTimeout timeoutval;
 
   if (inhibit_window_system || noninteractive
       || nfds < 1 || rfds == NULL || !FD_ISSET (0, rfds))
@@ -3021,189 +3125,101 @@ sys_select (nfds, rfds, wfds, efds, timeout)
   if (efds)
     oefds = *efds;
   else
+    FD_ZERO (&oefds);
+
+  timeoutval = (timeout
+		? (EMACS_SECS (*timeout) * kEventDurationSecond
+		   + EMACS_USECS (*timeout) * kEventDurationMicrosecond)
+		: kEventDurationForever);
+
+  FD_SET (0, rfds);		/* sentinel */
+  do
     {
-      EventTimeout timeoutval =
-	(timeout
-	 ? (EMACS_SECS (*timeout) * kEventDurationSecond
-	    + EMACS_USECS (*timeout) * kEventDurationMicrosecond)
-	 : kEventDurationForever);
+      nfds--;
+    }
+  while (!(FD_ISSET (nfds, rfds) || (wfds && FD_ISSET (nfds, wfds))
+	   || (efds && FD_ISSET (nfds, efds))));
+  nfds++;
+  FD_CLR (0, rfds);
 
-      FD_SET (0, rfds);		/* sentinel */
-      do
-	{
-	  nfds--;
-	}
-      while (!(FD_ISSET (nfds, rfds) || (wfds && FD_ISSET (nfds, wfds))));
-      nfds++;
-      FD_CLR (0, rfds);
+  if (nfds == 1)
+    return select_and_poll_event (nfds, rfds, wfds, efds, timeout);
 
-      if (nfds == 1)
-	return select_and_poll_event (nfds, rfds, wfds, efds, timeout);
+  /* Avoid initial overhead of RunLoop setup for the case that some
+     input is already available.  */
+  EMACS_SET_SECS_USECS (select_timeout, 0, 0);
+  r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
+  if (r != 0 || timeoutval == 0.0)
+    return r;
 
-      /* Avoid initial overhead of RunLoop setup for the case that
-	 some input is already available.  */
-      EMACS_SET_SECS_USECS (select_timeout, 0, 0);
-      r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
-      if (r != 0 || timeoutval == 0.0)
-	return r;
+  *rfds = orfds;
+  if (wfds)
+    *wfds = owfds;
+  if (efds)
+    *efds = oefds;
 
-      *rfds = orfds;
-      if (wfds)
-	*wfds = owfds;
-
-#if !SELECT_USE_GCD
-      if (timeoutval > 0 && timeoutval <= SELECT_TIMEOUT_THRESHOLD_RUNLOOP)
-	goto poll_periodically;
-#endif
-
-      /* Try detect_input_pending before mac_run_loop_run_once in the
-	 same BLOCK_INPUT block, in case that some input has already
-	 been read asynchronously.  */
-      BLOCK_INPUT;
-      if (!detect_input_pending ())
-	{
+  /* Try detect_input_pending before mac_run_loop_run_once in the same
+     BLOCK_INPUT block, in case that some input has already been read
+     asynchronously.  */
+  BLOCK_INPUT;
+  if (!detect_input_pending ())
+    {
 #if SELECT_USE_GCD
+      dispatch_sync (select_dispatch_queue, ^{});
+      dispatch_async (select_dispatch_queue, ^{
+	  SELECT_TYPE qrfds = orfds, qwfds = owfds, qefds = oefds;
 	  int qnfds = nfds;
-	  SELECT_TYPE *qrfds = &orfds, *qwfds = wfds ? &owfds : NULL;
+	  int r;
 
 	  if (wakeup_fds[1] >= qnfds)
 	    qnfds = wakeup_fds[1] + 1;
-	  FD_SET (wakeup_fds[1], qrfds);
+	  FD_SET (wakeup_fds[1], &qrfds);
 
-	  dispatch_async (select_dispatch_queue, ^{
-	      int r = select (qnfds, qrfds, qwfds, NULL, timeout);
+	  r = select (qnfds, &qrfds, wfds ? &qwfds : NULL,
+		      efds ? &qefds : NULL, NULL);
+	  if (r < 0 || (r > 0 && !FD_ISSET (wakeup_fds[1], &qrfds)))
+	    mac_wakeup_from_run_loop_run_once ();
+	});
 
-	      if (r < 0 || (r > 0 && !FD_ISSET (wakeup_fds[1], qrfds)))
-		mac_wakeup_from_run_loop_run_once ();
-	    });
+      timedout_p = mac_run_loop_run_once (timeoutval);
 
-	  timedout_p = mac_run_loop_run_once (timeoutval);
-
-	  emacs_write (wakeup_fds[0], "", 1);
-	  dispatch_sync (select_dispatch_queue, ^{
-	      char buf[64];
-
-	      while (emacs_read (wakeup_fds[1], buf, sizeof (buf)) > 0)
-		;
-	    });
+      write_one_byte_to_fd (wakeup_fds[0]);
+      dispatch_async (select_dispatch_queue, ^{
+	  read_all_from_nonblocking_fd (wakeup_fds[1]);
+	});
 #else
-	  int minfd, fd;
-	  CFRunLoopRef runloop =
-	    (CFRunLoopRef) GetCFRunLoopFromEventLoop (GetCurrentEventLoop ());
-	  static CFMutableDictionaryRef sources;
+      if (select_run_loop == NULL)
+	select_thread_launch ();
 
-	  if (sources == NULL)
-	    sources =
-	      CFDictionaryCreateMutable (NULL, 0, NULL,
-					 &kCFTypeDictionaryValueCallBacks);
+      select_sem_wait ();
+      read_all_from_nonblocking_fd (wakeup_fds[1]);
+      select_fire (nfds, rfds, wfds, efds, NULL);
 
-	  if (cfsockets_for_select == NULL)
-	    cfsockets_for_select =
-	      CFDictionaryCreateMutable (NULL, 0, NULL,
-					 &kCFTypeDictionaryValueCallBacks);
+      timedout_p = mac_run_loop_run_once (timeoutval);
 
-	  for (minfd = 1; ; minfd++) /* nfds-1 works as a sentinel.  */
-	    if (FD_ISSET (minfd, rfds) || (wfds && FD_ISSET (minfd, wfds)))
-	      break;
-
-	  for (fd = minfd; fd < nfds; fd++)
-	    if (FD_ISSET (fd, rfds) || (wfds && FD_ISSET (fd, wfds)))
-	      {
-		void *key = (void *) (intptr_t) fd;
-		CFRunLoopSourceRef source =
-		  (CFRunLoopSourceRef) CFDictionaryGetValue (sources, key);
-
-		if (source == NULL || !CFRunLoopSourceIsValid (source))
-		  {
-		    CFSocketRef socket =
-		      CFSocketCreateWithNative (NULL, fd,
-						(kCFSocketReadCallBack
-						 | kCFSocketConnectCallBack),
-						socket_callback, NULL);
-
-		    if (socket == NULL)
-		      continue;
-		    CFDictionarySetValue (cfsockets_for_select, key, socket);
-		    source = CFSocketCreateRunLoopSource (NULL, socket, 0);
-		    CFRelease (socket);
-		    if (source == NULL)
-		      continue;
-		    CFDictionarySetValue (sources, key, source);
-		    CFRelease (source);
-		  }
-		CFRunLoopAddSource (runloop, source, kCFRunLoopDefaultMode);
-	      }
-
-	  timedout_p = mac_run_loop_run_once (timeoutval);
-
-	  for (fd = minfd; fd < nfds; fd++)
-	    if (FD_ISSET (fd, rfds) || (wfds && FD_ISSET (fd, wfds)))
-	      {
-		void *key = (void *) (intptr_t) fd;
-		CFRunLoopSourceRef source =
-		  (CFRunLoopSourceRef) CFDictionaryGetValue (sources, key);
-
-		CFRunLoopRemoveSource (runloop, source, kCFRunLoopDefaultMode);
-	      }
+      write_one_byte_to_fd (wakeup_fds[0]);
 #endif
-	}
-      UNBLOCK_INPUT;
-
-      if (!timedout_p)
-	{
-	  EMACS_SET_SECS_USECS (select_timeout, 0, 0);
-	  r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
-	  if (r != 0)
-	    return r;
-	  errno = EINTR;
-	  return -1;
-	}
-      else
-	{
-	  FD_ZERO (rfds);
-	  if (wfds)
-	    FD_ZERO (wfds);
-	  return 0;
-	}
     }
+  UNBLOCK_INPUT;
 
- poll_periodically:
-  {
-    EMACS_TIME end_time, now, remaining_time;
-
-    if (timeout)
-      {
-	remaining_time = *timeout;
-	EMACS_GET_TIME (now);
-	EMACS_ADD_TIME (end_time, now, remaining_time);
-      }
-
-    do
-      {
-	EMACS_SET_SECS_USECS (select_timeout, 0, SELECT_POLLING_PERIOD_USEC);
-	if (timeout && EMACS_TIME_LT (remaining_time, select_timeout))
-	  select_timeout = remaining_time;
-	r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
-	if (r != 0)
-	  return r;
-
-	*rfds = orfds;
-	if (wfds)
-	  *wfds = owfds;
-	if (efds)
-	  *efds = oefds;
-
-	if (timeout)
-	  {
-	    EMACS_GET_TIME (now);
-	    EMACS_SUB_TIME (remaining_time, end_time, now);
-	  }
-      }
-    while (!timeout || EMACS_TIME_LT (now, end_time));
-
-    EMACS_SET_SECS_USECS (select_timeout, 0, 0);
-    return select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
-  }
+  if (!timedout_p)
+    {
+      EMACS_SET_SECS_USECS (select_timeout, 0, 0);
+      r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
+      if (r != 0)
+	return r;
+      errno = EINTR;
+      return -1;
+    }
+  else
+    {
+      FD_ZERO (rfds);
+      if (wfds)
+	FD_ZERO (wfds);
+      if (efds)
+	FD_ZERO (efds);
+      return 0;
+    }
 }
 
 /* Return whether the service provider for the current application is
@@ -3223,11 +3239,8 @@ mac_service_provider_registered_p ()
       CFStringRef identifier = CFBundleGetIdentifier (bundle);
 
       if (identifier)
-	{
-	  CFStringGetCString (identifier, name, sizeof (name),
-			      kCFStringEncodingUTF8);
-	  CFRelease (identifier);
-	}
+	CFStringGetCString (identifier, name, sizeof (name),
+			    kCFStringEncodingUTF8);
     }
   strlcat (name, ".ServiceProvider", sizeof (name));
   kr = bootstrap_look_up (bootstrap_port, name, &port);
@@ -3258,8 +3271,6 @@ init_mac_osx_environment ()
   char *p, *q;
   struct stat st;
 
-  mac_emacs_pid = getpid ();
-
   /* Initialize locale related variables.  */
   mac_system_script_code = mac_get_system_script_code ();
   Vmac_system_locale = IS_DAEMON ? Qnil : mac_get_system_locale ();
@@ -3282,6 +3293,7 @@ init_mac_osx_environment ()
 
   cf_app_bundle_pathname = CFURLCopyFileSystemPath (bundleURL,
 						    kCFURLPOSIXPathStyle);
+  CFRelease (bundleURL);
   {
     Lisp_Object temp = cfstring_to_lisp_nodecode (cf_app_bundle_pathname);
 

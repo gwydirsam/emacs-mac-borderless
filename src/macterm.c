@@ -5096,9 +5096,10 @@ mac_quit_char_key_p (modifiers, key_code)
   if (char_code & ~0xff)
     return 0;
 
+  c = char_code;
   emacs_modifiers = mac_to_emacs_modifiers (mapped_modifiers, modifiers);
   if (emacs_modifiers & ctrl_modifier)
-    c = make_ctrl_char (char_code);
+    c = make_ctrl_char (c);
 
   c |= (emacs_modifiers
 	& (meta_modifier | alt_modifier

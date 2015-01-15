@@ -41,6 +41,7 @@ typedef unsigned int NSUInteger;
 
 @interface NSString (Emacs)
 + (id)stringWithLispString:(Lisp_Object)lispString;
++ (id)stringWithUTF8LispString:(Lisp_Object)lispString;
 + (id)stringWithUTF8String:(const char *)bytes fallback:(BOOL)flag;
 - (Lisp_Object)lispString;
 - (Lisp_Object)UTF8LispString;
@@ -110,12 +111,22 @@ typedef unsigned int NSUInteger;
 
   /* Selector used for resuming suspended left mouse tracking.  */
   SEL trackingResumeSelector;
+
+  /* Whether conflicting Cocoa's text system key bindings (e.g., C-q)
+     are disabled or not.  */
+  BOOL conflictingKeyBindingsDisabled;
+
+  /* Saved key bindings with or without conflicts (currently, those
+     for writing direction commands on Mac OS X 10.6).  */
+  NSDictionary *keyBindingsWithConflicts, *keyBindingsWithoutConflicts;
 }
 - (void)storeInputEvent:(id)sender;
 - (void)setMenuItemSelectionToTag:(id)sender;
 - (void)storeEvent:(struct input_event *)bufp;
 - (void)setTrackingObject:(id)object andResumeSelector:(SEL)selector;
 - (int)handleQueuedNSEventsWithHoldingQuitIn:(struct input_event *)bufp;
+- (BOOL)conflictingKeyBindingsDisabled;
+- (void)setConflictingKeyBindingsDisabled:(BOOL)flag;
 @end
 
 /* Like NSWindow, but allows suspend/resume resize control tracking.  */

@@ -1609,18 +1609,16 @@ x_set_name_internal (f, name)
 {
   if (FRAME_MAC_WINDOW (f))
     {
-      if (STRING_MULTIBYTE (name))
-	name = ENCODE_UTF_8 (name);
+      CFStringRef window_title;
 
       BLOCK_INPUT;
 
-      {
-	CFStringRef windowTitle =
-	  cfstring_create_with_utf8_cstring (SDATA (name));
-
-	mac_set_frame_window_title (f, windowTitle);
-	CFRelease (windowTitle);
-      }
+      window_title = cfstring_create_with_string (name);
+      if (window_title)
+	{
+	  mac_set_frame_window_title (f, window_title);
+	  CFRelease (window_title);
+	}
 
       UNBLOCK_INPUT;
     }

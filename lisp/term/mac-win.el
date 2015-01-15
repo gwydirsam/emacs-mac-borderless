@@ -839,7 +839,9 @@ if possible.  If there's no such frame, a new frame is created."
 		   (start (cadr selection-range))
 		   (end (nth 2 selection-range)))
 	       (if (>= line 0)
-		   (goto-line (1+ line))
+		   (progn
+		     (goto-char (point-min))
+		     (forward-line line)) ; (1- (1+ line))
 		 (if (and (>= start 0) (>= end 0))
 		     (progn (set-mark (1+ start))
 			    (goto-char (1+ end)))))))

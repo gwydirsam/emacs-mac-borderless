@@ -74,6 +74,8 @@ typedef unsigned long Time;
 
 #ifndef CGFLOAT_DEFINED
 typedef float CGFloat;
+#define CGFLOAT_MIN FLT_MIN
+#define CGFLOAT_MAX FLT_MAX
 #endif
 
 typedef void *Window;

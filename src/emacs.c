@@ -1192,7 +1192,7 @@ main (int argc, char **argv)
             argv[skip_args] = fdStr;
 
             execvp (argv[0], argv);
-            fprintf (stderr, "emacs daemon: exec failed: %d\t%d\n", errno);
+            fprintf (stderr, "emacs daemon: exec failed: %d\n", errno);
             exit (1);
           }
 

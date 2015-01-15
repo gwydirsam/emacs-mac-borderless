@@ -2696,6 +2696,7 @@ image_load_image_io (f, img, type)
       file = x_find_image_file (specified_file);
       if (!STRINGP (file))
 	{
+	  CFRelease (options);
 	  image_error ("Cannot find image file `%s'", specified_file, Qnil);
 	  return 0;
 	}
@@ -2707,7 +2708,7 @@ image_load_image_io (f, img, type)
 	  CFRelease (path);
 	  if (url)
 	    {
-	      source = CGImageSourceCreateWithURL (url, NULL);
+	      source = CGImageSourceCreateWithURL (url, options);
 	      CFRelease (url);
 	    }
 	}
@@ -2766,9 +2767,10 @@ image_load_image_io (f, img, type)
     {
       CFBooleanRef boolean;
 
-      if (CFDictionaryGetValueIfPresent (props, kCGImagePropertyHasAlpha,
-					 (const void **) &boolean))
-	has_alpha_p = CFBooleanGetValue (boolean);
+      has_alpha_p =
+	(CFDictionaryGetValueIfPresent (props, kCGImagePropertyHasAlpha,
+					(const void **) &boolean)
+	 && CFBooleanGetValue (boolean));
       if (gif_p)
 	{
 	  CFDictionaryRef dict;

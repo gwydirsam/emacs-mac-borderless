@@ -87,6 +87,11 @@ typedef CTFontSymbolicTraits FontSymbolicTraits;
 #define MAC_FONT_CASCADE_LIST_ATTRIBUTE kCTFontCascadeListAttribute
 #define MAC_FONT_CHARACTER_SET_ATTRIBUTE kCTFontCharacterSetAttribute
 #define MAC_FONT_LANGUAGES_ATTRIBUTE kCTFontLanguagesAttribute
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#define MAC_FONT_FORMAT_ATTRIBUTE kCTFontFormatAttribute
+#else
+#define MAC_FONT_FORMAT_ATTRIBUTE (CFSTR ("NSCTFontFormatAttribute"))
+#endif
 #define MAC_FONT_SYMBOLIC_TRAIT kCTFontSymbolicTrait
 #define MAC_FONT_WEIGHT_TRAIT kCTFontWeightTrait
 #define MAC_FONT_WIDTH_TRAIT kCTFontWidthTrait
@@ -96,6 +101,14 @@ enum {
   MAC_FONT_ITALIC_TRAIT = kCTFontItalicTrait,
   MAC_FONT_BOLD_TRAIT = kCTFontBoldTrait,
   MAC_FONT_MONO_SPACE_TRAIT = kCTFontMonoSpaceTrait
+};
+
+enum {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+  MAC_FONT_FORMAT_BITMAP = kCTFontFormatBitmap
+#else
+  MAC_FONT_FORMAT_BITMAP = 5
+#endif
 };
 
 #define mac_font_descriptor_create_with_attributes \
@@ -119,6 +132,8 @@ enum {
 #define mac_font_get_underline_position CTFontGetUnderlinePosition
 #define mac_font_get_underline_thickness CTFontGetUnderlineThickness
 #define mac_font_copy_graphics_font(font) CTFontCopyGraphicsFont (font, NULL)
+#define mac_font_copy_table(font, table) \
+  CTFontCopyTable (font, table, kCTFontTableOptionExcludeSynthetic)
 
 #define mac_font_create_preferred_family_for_attributes \
   mac_ctfont_create_preferred_family_for_attributes
@@ -144,6 +159,7 @@ extern const CFStringRef MAC_FONT_SIZE_ATTRIBUTE;
 extern const CFStringRef MAC_FONT_CASCADE_LIST_ATTRIBUTE;
 extern const CFStringRef MAC_FONT_CHARACTER_SET_ATTRIBUTE;
 extern const CFStringRef MAC_FONT_LANGUAGES_ATTRIBUTE;
+extern const CFStringRef MAC_FONT_FORMAT_ATTRIBUTE;
 extern const CFStringRef MAC_FONT_SYMBOLIC_TRAIT;
 extern const CFStringRef MAC_FONT_WEIGHT_TRAIT;
 extern const CFStringRef MAC_FONT_WIDTH_TRAIT;
@@ -155,6 +171,10 @@ enum {
   MAC_FONT_ITALIC_TRAIT = (1 << 0),
   MAC_FONT_BOLD_TRAIT = (1 << 1),
   MAC_FONT_MONO_SPACE_TRAIT = (1 << 10)
+};
+
+enum {
+  MAC_FONT_FORMAT_BITMAP = 5
 };
 
 extern FontDescriptorRef mac_font_descriptor_create_with_attributes P_ ((CFDictionaryRef));
@@ -179,6 +199,7 @@ extern CGFloat mac_font_get_leading P_ ((FontRef));
 extern CGFloat mac_font_get_underline_position P_ ((FontRef));
 extern CGFloat mac_font_get_underline_thickness P_ ((FontRef));
 extern CGFontRef mac_font_copy_graphics_font P_ ((FontRef));
+extern CFDataRef mac_font_copy_table P_ ((FontRef, FourCharCode));
 extern ATSUTextLayout mac_font_get_text_layout_for_text_ptr P_ ((FontRef,
 								 ConstUniCharArrayPtr,
 								 UniCharCount));

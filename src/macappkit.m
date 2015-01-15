@@ -116,6 +116,15 @@ NSRectToCGRect (nsrect)
   return [string autorelease];
 }
 
+/* Return a string created from the unibyte Lisp string in UTF 8.  */
+
++ (id)stringWithUTF8LispString:(Lisp_Object)lispString
+{
+  id string = (NSString *) cfstring_create_with_string_noencode (lispString);
+
+  return [string autorelease];
+}
+
 /* Like -[NSString stringWithUTF8String:], but fall back on Mac-Roman
    if BYTES cannot be interpreted as UTF-8 bytes and FLAG is YES. */
 
@@ -928,6 +937,81 @@ emacs_windows_need_display_p (with_resize_control_p)
     }
 }
 
+/* Work around conflicting Cocoa's text system key bindings.  */
+
+- (BOOL)conflictingKeyBindingsDisabled
+{
+  return conflictingKeyBindingsDisabled;
+}
+
+- (void)setConflictingKeyBindingsDisabled:(BOOL)flag
+{
+  id keyBindingManager;
+
+  if (flag == conflictingKeyBindingsDisabled)
+    return;
+
+  keyBindingManager = [(NSClassFromString (@"NSKeyBindingManager"))
+			performSelector:@selector(sharedKeyBindingManager)];
+  if (flag)
+    {
+      /* Disable the effect of NSQuotedKeystrokeBinding (C-q by
+	 default) and NSRepeatCountBinding (none by default but user
+	 may set it to C-u).  */
+      [keyBindingManager performSelector:@selector(setQuoteBinding:)
+			      withObject:nil];
+      [keyBindingManager performSelector:@selector(setArgumentBinding:)
+			      withObject:nil];
+      /* Remove key bindings for writing direction commands as they
+	 are intercepted by NSTextInputContext on Mac OS X 10.6.  */
+      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
+	{
+	  if (keyBindingsWithConflicts == nil)
+	    {
+	      NSArray *writingDirectionCommands =
+		[NSArray arrayWithObjects:@"insertRightToLeftSlash:",
+			 @"makeBaseWritingDirectionNatural:",
+			 @"makeBaseWritingDirectionLeftToRight:",
+			 @"makeBaseWritingDirectionRightToLeft:",
+			 @"makeTextWritingDirectionNatural:",
+			 @"makeTextWritingDirectionLeftToRight:",
+			 @"makeTextWritingDirectionRightToLeft:", nil];
+	      NSMutableDictionary *dictionary;
+	      NSEnumerator *enumerator;
+	      NSString *command;
+
+	      keyBindingsWithConflicts =
+		[[keyBindingManager dictionary] retain];
+	      dictionary = [keyBindingsWithConflicts mutableCopy];
+	      enumerator = [writingDirectionCommands objectEnumerator];
+	      while ((command = [enumerator nextObject]) != nil)
+		[dictionary removeObjectsForKeys:[dictionary
+						   allKeysForObject:command]];
+	      keyBindingsWithoutConflicts = dictionary;
+	    }
+	  [keyBindingManager setDictionary:keyBindingsWithoutConflicts];
+	}
+    }
+  else
+    {
+      NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
+
+      [keyBindingManager
+	performSelector:@selector(setQuoteBinding:)
+	     withObject:[userDefaults
+			  stringForKey:@"NSQuotedKeystrokeBinding"]];
+      [keyBindingManager
+	performSelector:@selector(setArgumentBinding:)
+	     withObject:[userDefaults
+			  stringForKey:@"NSRepeatCountBinding"]];
+      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
+	if (keyBindingsWithConflicts)
+	  [keyBindingManager setDictionary:keyBindingsWithConflicts];
+    }
+
+  conflictingKeyBindingsDisabled = flag;
+}
+
 /* Some key bindings in mac_apple_event_map are regarded as methods in
    the application delegate.  */
 
@@ -1179,6 +1263,8 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   mac_focus_changed (activeFlag, FRAME_MAC_DISPLAY_INFO (f), f, &inev);
   if (inev.kind != NO_EVENT)
     [[NSApp delegate] storeEvent:&inev];
+
+  [[NSApp delegate] setConflictingKeyBindingsDisabled:YES];
 }
 
 - (void)windowDidResignKey:(NSNotification *)aNotification
@@ -1191,6 +1277,8 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   mac_focus_changed (0, FRAME_MAC_DISPLAY_INFO (f), f, &inev);
   if (inev.kind != NO_EVENT)
     [[NSApp delegate] storeEvent:&inev];
+
+  [[NSApp delegate] setConflictingKeyBindingsDisabled:NO];
 }
 
 - (void)windowDidBecomeMain:(NSNotification *)aNotification
@@ -2011,7 +2099,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   struct frame *f = [self emacsFrame];
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-  int tool_bar_p, down_p;
+  int tool_bar_p = 0, down_p;
 
   down_p = (NSEventMaskFromType ([theEvent type]) & ANY_MOUSE_DOWN_EVENT_MASK);
 
@@ -2101,13 +2189,14 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 {
   struct frame *f = [self emacsFrame];
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+  CGFloat deltaX = [theEvent deltaX], deltaY = [theEvent deltaY];
 
   if (
 #if 0 /* We let the framework decide whether events to non-focus frame
 	 get accepted.  */
       f != mac_focus_frame (&one_mac_display_info) ||
 #endif
-      [theEvent deltaY] == 0.0f)
+      deltaX == 0 && deltaY == 0)
     return;
 
   if (point.x < 0 || point.y < 0
@@ -2117,16 +2206,25 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
   EVENT_INIT (inputEvent);
   inputEvent.arg = Qnil;
-  inputEvent.kind = WHEEL_EVENT;
+  inputEvent.kind = deltaY == 0 ? HORIZ_WHEEL_EVENT : WHEEL_EVENT;
   inputEvent.code = 0;
   inputEvent.modifiers = (mac_event_to_emacs_modifiers (theEvent)
-			  | (([theEvent deltaY] < 0)
-			     ? down_modifier : up_modifier));
+			  | (deltaY < 0 ? down_modifier
+			     : (deltaY > 0 ? up_modifier
+				: (deltaX < 0 ? down_modifier
+				   : up_modifier)))
+			  | ([theEvent type] == NSScrollWheel
+			     ? 0 : drag_modifier));
   XSETINT (inputEvent.x, point.x);
   XSETINT (inputEvent.y, point.y);
   XSETFRAME (inputEvent.frame_or_window, f);
   inputEvent.timestamp = [theEvent timestamp] * 1000;
   [self sendAction:action to:target];
+}
+
+- (void)swipeWithEvent:(NSEvent *)event
+{
+  [self scrollWheel:event];
 }
 
 - (void)mouseMoved:(NSEvent *)theEvent
@@ -2136,14 +2234,18 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
   static Lisp_Object last_window;
 
-  previous_help_echo_string = help_echo_string;
-  help_echo_string = Qnil;
-
   if (dpyinfo->grabbed && last_mouse_frame
       && FRAME_LIVE_P (last_mouse_frame))
     f = last_mouse_frame;
   else
-    f = [self emacsFrame];
+    {
+      f = [self emacsFrame];
+      if (![[self window] isKeyWindow])
+	return;
+    }
+
+  previous_help_echo_string = help_echo_string;
+  help_echo_string = Qnil;
 
   if (dpyinfo->mouse_face_hidden)
     {
@@ -2225,12 +2327,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   mapped_modifiers = mac_mapped_modifiers (modifiers, [theEvent keyCode]);
 
   if (!(mapped_modifiers
-	& ~(mac_pass_control_to_system ? controlKey : 0))
-      /* This is a workaround for the problem that Control-/ is not
-	 recognized on Mac OS X 10.6.  */
-      && !(!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
-	   && [theEvent keyCode] == 0x2C /* kVK_ANSI_Slash */
-	   && modifiers == controlKey))
+	& ~(mac_pass_control_to_system ? controlKey : 0)))
     {
       keyEventsInterpreted = YES;
       rawKeyEvent = theEvent;
@@ -2259,24 +2356,6 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 		[theEvent timestamp] * 1000, &inputEvent);
 
   [self sendAction:action to:target];
-}
-
-- (void)interpretKeyEvents:(NSArray *)eventArray
-{
-  static id keyBindingManager;
-
-  if (keyBindingManager == nil)
-    keyBindingManager = [(NSClassFromString (@"NSKeyBindingManager"))
-			  performSelector:@selector(sharedKeyBindingManager)];
-
-  /* Disable the effect of NSQuotedKeystrokeBinding (C-q by default)
-     and NSRepeatCountBinding (none by default but user may set it to
-     C-u).  Should they be restored?  */
-  [keyBindingManager performSelector:@selector(setQuoteBinding:)
-		     withObject:@""];
-  [keyBindingManager performSelector:@selector(setArgumentBinding:)
-		     withObject:@""];
-  [super interpretKeyEvents:eventArray];
 }
 
 static OSStatus
@@ -5917,15 +5996,13 @@ extern Lisp_Object Vselection_converter_alist;
   else if ([dataType isEqualToString:NSStringPboardType]
 	   || [dataType isEqualToString:NSTabularTextPboardType])
     {
-      NSString *string = [NSString stringWithUTF8String:(SDATA (lispObject))
-				   fallback:YES];
+      NSString *string = [NSString stringWithUTF8LispString:lispObject];
 
       result = [self setString:string forType:dataType];
     }
   else if ([dataType isEqualToString:NSURLPboardType])
     {
-      NSString *string = [NSString stringWithUTF8String:(SDATA (lispObject))
-				   fallback:YES];
+      NSString *string = [NSString stringWithUTF8LispString:lispObject];
       NSURL *url = [NSURL URLWithString:string];
 
       if (url)
@@ -6796,8 +6873,7 @@ handle_action_invocation (invocation)
 	    id value;
 	    Lisp_Object obj;
 
-	    keyPath = [NSString stringWithUTF8String:(SDATA (XCAR (rest)))
-				fallback:YES];
+	    keyPath = [NSString stringWithUTF8LispString:(XCAR (rest))];
 
 	    NS_DURING
 	      value = [sender valueForKeyPath:keyPath];
@@ -6906,6 +6982,7 @@ mac_appkit_do_applescript (script, result)
 #define FONT_CASCADE_LIST_ATTRIBUTE (@"NSCTFontCascadeListAttribute")
 #define FONT_CHARACTER_SET_ATTRIBUTE (@"NSCTFontCharacterSetAttribute")
 #define FONT_LANGUAGES_ATTRIBUTE (@"NSCTFontLanguagesAttribute")
+#define FONT_FORMAT_ATTRIBUTE (@"NSCTFontFormatAttribute")
 #define FONT_SYMBOLIC_TRAIT (@"NSCTFontSymbolicTrait")
 #define FONT_WEIGHT_TRAIT (@"NSCTFontWeightTrait")
 #define FONT_WIDTH_TRAIT (@"NSCTFontProportionTrait")
@@ -6918,6 +6995,7 @@ const CFStringRef MAC_FONT_SIZE_ATTRIBUTE = (CFStringRef) FONT_SIZE_ATTRIBUTE;
 const CFStringRef MAC_FONT_CASCADE_LIST_ATTRIBUTE = (CFStringRef) FONT_CASCADE_LIST_ATTRIBUTE;
 const CFStringRef MAC_FONT_CHARACTER_SET_ATTRIBUTE = (CFStringRef) FONT_CHARACTER_SET_ATTRIBUTE;
 const CFStringRef MAC_FONT_LANGUAGES_ATTRIBUTE = (CFStringRef) FONT_LANGUAGES_ATTRIBUTE;
+const CFStringRef MAC_FONT_FORMAT_ATTRIBUTE = (CFStringRef) FONT_FORMAT_ATTRIBUTE;
 const CFStringRef MAC_FONT_SYMBOLIC_TRAIT = (CFStringRef) FONT_SYMBOLIC_TRAIT;
 const CFStringRef MAC_FONT_WEIGHT_TRAIT = (CFStringRef) FONT_WEIGHT_TRAIT;
 const CFStringRef MAC_FONT_WIDTH_TRAIT = (CFStringRef) FONT_WIDTH_TRAIT;
@@ -7874,6 +7952,44 @@ mac_font_copy_graphics_font (font)
 				     kATSOptionFlagsDefault);
 
     return CGFontCreateWithPlatformFont (&atsfont);
+  }
+}
+
+CFDataRef
+mac_font_copy_table (font, table)
+     FontRef font;
+     FourCharCode table;
+{
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return CTFontCopyTable ((CTFontRef) font, table,
+			    kCTFontTableOptionExcludeSynthetic);
+#endif
+  {
+    OSStatus err;
+    CFMutableDataRef result = NULL;
+    ByteCount size;
+    ATSFontRef atsfont =
+      ATSFontFindFromPostScriptName ((CFStringRef) [(NSFont *)font fontName],
+				     kATSOptionFlagsDefault);
+
+    /* This is not useful for getting a UVS subtable as it returns a
+       synthetic cmap table.  */
+    err = ATSFontGetTable (atsfont, table, 0, 0, NULL, &size);
+    if (err == noErr)
+      result = CFDataCreateMutable (NULL, size);
+    if (result)
+      {
+	err = ATSFontGetTable (atsfont, table, 0, size,
+			       CFDataGetMutableBytePtr (result), &size);
+	if (err != noErr)
+	  {
+	    CFRelease (result);
+	    result = NULL;
+	  }
+      }
+
+    return result;
   }
 }
 
