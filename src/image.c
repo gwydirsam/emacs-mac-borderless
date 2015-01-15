@@ -2663,9 +2663,10 @@ image_load_image_io (f, img, type)
   XImagePtr ximg = NULL;
   CGContextRef context;
   CGRect rectangle;
-  int has_alpha_p, gif_p;
+  int has_alpha_p, gif_p, tiff_p;
 
   gif_p = UTTypeEqual (type, kUTTypeGIF);
+  tiff_p = UTTypeEqual (type, kUTTypeTIFF);
 
   keys[0] = kCGImageSourceTypeIdentifierHint;
   values[0] = (CFTypeRef) type;
@@ -2735,14 +2736,14 @@ image_load_image_io (f, img, type)
 	  EMACS_INT ino = 0;
 
 	  count = CGImageSourceGetCount (source);
-	  if (gif_p)
+	  if (gif_p || tiff_p)
 	    {
 	      Lisp_Object image = image_spec_value (img->spec, QCindex, NULL);
 
 	      if (INTEGERP (image))
 		ino = XFASTINT (image);
 	    }
-	  if (ino >= 0 && ino < count)
+	  if (ino < count)
 	    {
 	      props = CGImageSourceCopyPropertiesAtIndex (source, ino, NULL);
 	      if (props)
@@ -2874,11 +2875,11 @@ image_load_image_io (f, img, type)
 				      Fcons (build_string ("NETSCAPE2.0"),
 					     img->data.lisp_val));
 	}
-      if (count > 1)
-	img->data.lisp_val = Fcons (Qcount,
-				    Fcons (make_number (count),
-					   img->data.lisp_val));
     }
+  if ((gif_p || tiff_p) && count > 1)
+    img->data.lisp_val = Fcons (Qcount,
+				Fcons (make_number (count),
+				       img->data.lisp_val));
 
   /* Maybe fill in the background field while we have ximg handy. */
   if (NILP (image_spec_value (img->spec, QCbackground, NULL)))
@@ -2928,6 +2929,7 @@ image_load_qt_1 (f, img, type, fss, dh)
   ComponentResult err;
   GraphicsImportComponent gi;
   Rect rect;
+  unsigned long count;
   int width, height;
   ImageDescriptionHandle desc_handle;
   short draw_all_pixels;
@@ -2964,6 +2966,36 @@ image_load_qt_1 (f, img, type, fss, dh)
 	  goto error;
 	}
     }
+  if (type == kQTFileTypeTIFF)
+    {
+      Lisp_Object image;
+
+      err = GraphicsImportGetImageCount (gi, &count);
+      if (err != noErr)
+	{
+	  image_error ("Can't get image count in image `%s'", img->spec, Qnil);
+	  goto error;
+	}
+      image = image_spec_value (img->spec, QCindex, NULL);
+      if (INTEGERP (image))
+	{
+	  EMACS_INT ino = XFASTINT (image);
+
+	  if (ino >= count)
+	    {
+	      image_error ("Invalid image number `%s' in image `%s'",
+			   image, img->spec);
+	      goto error;
+	    }
+	  err = GraphicsImportSetImageIndex (gi, ino + 1);
+	  if (err != noErr)
+	    {
+	      image_error ("Can't set image index `%s' in image `%s'",
+			   image, img->spec);
+	      goto error;
+	    }
+	}
+    }
   err = GraphicsImportGetImageDescription (gi, &desc_handle);
   if (err != noErr || desc_handle == NULL)
     {
@@ -2993,8 +3025,8 @@ image_load_qt_1 (f, img, type, fss, dh)
   if (draw_all_pixels != graphicsImporterDrawsAllPixels)
     {
       specified_bg = image_spec_value (img->spec, QCbackground, NULL);
-      if (!STRINGP (specified_bg) ||
-	  !mac_defined_color (f, SDATA (specified_bg), &color, 0))
+      if (!STRINGP (specified_bg)
+	  || !mac_defined_color (f, SDATA (specified_bg), &color, 0))
 	{
 	  color.pixel = FRAME_BACKGROUND_PIXEL (f);
 	  color.red = RED16_FROM_ULONG (color.pixel);
@@ -3023,6 +3055,11 @@ image_load_qt_1 (f, img, type, fss, dh)
   GraphicsImportSetGWorld (gi, ximg, NULL);
   GraphicsImportDraw (gi);
   CloseComponent (gi);
+
+  if (type == kQTFileTypeTIFF && count > 1)
+    img->data.lisp_val = Fcons (Qcount,
+				Fcons (make_number (count),
+				       img->data.lisp_val));
 
   /* Maybe fill in the background field while we have ximg handy. */
   if (NILP (image_spec_value (img->spec, QCbackground, NULL)))
@@ -3138,12 +3175,10 @@ image_load_quartz2d (f, img, png_p)
     source = CGDataProviderCreateWithData (NULL, SDATA (specified_data),
 					   SBYTES (specified_data), NULL);
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   if (png_p)
     image = CGImageCreateWithPNGDataProvider (source, NULL, false,
 					      kCGRenderingIntentDefault);
   else
-#endif
     image = CGImageCreateWithJPEGDataProvider (source, NULL, false,
 					       kCGRenderingIntentDefault);
 
@@ -3168,8 +3203,8 @@ image_load_quartz2d (f, img, png_p)
   if (png_p)
     {
       specified_bg = image_spec_value (img->spec, QCbackground, NULL);
-      if (!STRINGP (specified_bg) ||
-	  !mac_defined_color (f, SDATA (specified_bg), &color, 0))
+      if (!STRINGP (specified_bg)
+	  || !mac_defined_color (f, SDATA (specified_bg), &color, 0))
 	{
 	  color.pixel = FRAME_BACKGROUND_PIXEL (f);
 	  color.red = RED16_FROM_ULONG (color.pixel);
@@ -6994,10 +7029,8 @@ png_load (f, img)
 {
 #if USE_MAC_IMAGE_IO
   return image_load_image_io (f, img, kUTTypePNG);
-#elif MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-  return image_load_quartz2d (f, img, 1);
 #else
-  return image_load_quicktime (f, img, kQTFileTypePNG);
+  return image_load_quartz2d (f, img, 1);
 #endif
 }
 #endif  /* HAVE_MACGUI */
@@ -8584,7 +8617,7 @@ gif_load (f, img)
       if (err == noErr)
 	/* no file name.  "" below should actually be "\p", but we
 	   avoid pascal string literals.  */
-	err = PtrAndHand ("", dref, 1); 
+	err = PtrAndHand ("", dref, 1);
       if (err == noErr)
 	err = PtrAndHand (file_type_atom, dref, sizeof (long) * 3);
       if (err != noErr)

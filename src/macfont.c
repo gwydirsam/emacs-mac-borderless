@@ -1,5 +1,5 @@
 /* Font driver on Mac OS.
-   Copyright (C) 2009 YAMAMOTO Mitsuharu
+   Copyright (C) 2009  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -48,8 +48,7 @@ static CTLineRef mac_ctfont_create_line_with_string_and_font P_ ((CFStringRef,
 Lisp_Object Qmac_fd;
 #endif
 #if USE_NS_FONT_MANAGER
-/* Core Text emulation by NSFontManager, for Mac OS X 10.2 and
-   10.3. */
+/* Core Text emulation by NSFontManager, for Mac OS X 10.2 - 10.3. */
 Lisp_Object Qmac_fm;
 #endif
 
@@ -235,10 +234,15 @@ macfont_store_descriptor_attributes (desc, spec_or_entity)
       num = CFDictionaryGetValue (dict, MAC_FONT_SYMBOLIC_TRAIT);
       if (num)
 	{
+	  SInt64 sym_traits_val;
 	  FontSymbolicTraits sym_traits;
 	  int spacing;
 
-	  CFNumberGetValue (num, kCFNumberSInt32Type, &sym_traits);
+	  /* Getting symbolic traits with kCFNumberSInt32Type is lossy
+	     on Mac OS 10.6 when the value is greater than or equal to
+	     1 << 31.  */
+	  CFNumberGetValue (num, kCFNumberSInt64Type, &sym_traits_val);
+	  sym_traits = (FontSymbolicTraits) sym_traits_val;
 	  spacing = (sym_traits & MAC_FONT_MONO_SPACE_TRAIT
 		     ? FONT_SPACING_MONO : FONT_SPACING_PROPORTIONAL);
 	  ASET (spec_or_entity, FONT_SPACING_INDEX, make_number (spacing));
@@ -278,9 +282,13 @@ macfont_descriptor_entity (desc, extra, synth_sym_traits)
   if (dict)
     {
       CFNumberRef num = CFDictionaryGetValue (dict, MAC_FONT_SYMBOLIC_TRAIT);
+      SInt64 sym_traits_val;
 
       if (num)
-	CFNumberGetValue (num, kCFNumberSInt32Type, &sym_traits);
+	{
+	  CFNumberGetValue (num, kCFNumberSInt64Type, &sym_traits_val);
+	  sym_traits = (FontSymbolicTraits) sym_traits_val;
+	}
       CFRelease (dict);
     }
   if (EQ (AREF (entity, FONT_SIZE_INDEX), make_number (0)))
@@ -1357,8 +1365,9 @@ macfont_list (frame, spec)
 	{
 	  FontDescriptorRef desc = CFArrayGetValueAtIndex (descs, j);
 	  CFDictionaryRef dict;
-	  FontSymbolicTraits sym_traits;
 	  CFNumberRef num;
+	  SInt64 sym_traits_val;
+	  FontSymbolicTraits sym_traits;
 
 	  dict = mac_font_descriptor_copy_attribute (desc,
 						     MAC_FONT_TRAITS_ATTRIBUTE);
@@ -1368,9 +1377,10 @@ macfont_list (frame, spec)
 	  num = CFDictionaryGetValue (dict, MAC_FONT_SYMBOLIC_TRAIT);
 	  CFRelease (dict);
 	  if (num == NULL
-	      || !CFNumberGetValue (num, kCFNumberSInt32Type, &sym_traits))
+	      || !CFNumberGetValue (num, kCFNumberSInt64Type, &sym_traits_val))
 	    continue;
 
+	  sym_traits = (FontSymbolicTraits) sym_traits_val;
 	  if (spacing >= 0
 	      && !(synth_sym_traits & MAC_FONT_MONO_SPACE_TRAIT)
 	      && (((sym_traits & MAC_FONT_MONO_SPACE_TRAIT) != 0)
@@ -2026,8 +2036,7 @@ mac_ctfont_create_line_with_string_and_font (string, macfont)
      CFStringRef string;
      CTFontRef macfont;
 {
-  CFStringRef keys[] = {kCTFontAttributeName,
-			kCTKernAttributeName};
+  CFStringRef keys[] = {kCTFontAttributeName, kCTKernAttributeName};
   CFTypeRef values[] = {NULL, NULL};
   CFDictionaryRef attributes = NULL;
   CFAttributedStringRef attr_string = NULL;
@@ -2112,6 +2121,7 @@ mac_ctfont_shape (font, string, glyph_layouts, glyph_len)
 		  comp_offset = offset;
 		}
 
+	      glyph_layouts[i].string_index = index;
 	      CTRunGetGlyphs (ctrun, range, &glyph_layouts[i].glyph_id);
 
 	      CTRunGetPositions (ctrun, range, &position);
@@ -2201,6 +2211,8 @@ macfont_shape (lgstring)
   if (used == 0)
     return Qnil;
 
+  BLOCK_INPUT;
+
   for (i = 0; i < used; i++)
     {
       Lisp_Object lglyph = LGSTRING_GLYPH (lgstring, i);
@@ -2227,15 +2239,13 @@ macfont_shape (lgstring)
 	to--;
       LGLYPH_SET_TO (lglyph, to - 1);
 
-      if (from != to - 1)
-	LGLYPH_SET_CHAR (lglyph, 0);
-      else if (gl->comp_range.length == 1)
-	LGLYPH_SET_CHAR (lglyph, unichars[gl->comp_range.location]);
+      if (unichars[gl->string_index] >= 0xD800
+	  && unichars[gl->string_index] < 0xDC00)
+	LGLYPH_SET_CHAR (lglyph, (((unichars[gl->string_index] - 0xD800) << 10)
+				  + (unichars[gl->string_index + 1] - 0xDC00)
+				  + 0x10000));
       else
-	LGLYPH_SET_CHAR (lglyph,
-			 (((unichars[gl->comp_range.location] - 0xD800) << 10)
-			  + (unichars[gl->comp_range.location + 1] - 0xDC00)
-			  + 0x10000));
+	LGLYPH_SET_CHAR (lglyph, unichars[gl->string_index]);
 
       LGLYPH_SET_CODE (lglyph, gl->glyph_id);
 
@@ -2260,6 +2270,8 @@ macfont_shape (lgstring)
 	  LGLYPH_SET_ADJUSTMENT (lglyph, vec);
 	}
     }
+
+  UNBLOCK_INPUT;
 
   return make_number (used);
 }

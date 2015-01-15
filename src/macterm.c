@@ -1,7 +1,7 @@
 /* Implementation of GUI terminal on the Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
                  2008  Free Software Foundation, Inc.
-   Copyright (C) 2009 YAMAMOTO Mitsuharu
+   Copyright (C) 2009  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -715,8 +715,7 @@ mac_change_gc (gc, mask, xgcv)
 /* Mac replacement for XCreateGC.  */
 
 GC
-mac_create_gc (d, mask, xgcv)
-     void *d;
+mac_create_gc (mask, xgcv)
      unsigned long mask;
      XGCValues *xgcv;
 {
@@ -917,7 +916,7 @@ x_set_frame_alpha (f)
   else if (0.0 <= alpha && alpha < alpha_min && alpha_min <= 1.0)
     alpha = alpha_min;
 
-  mac_set_window_alpha (FRAME_MAC_WINDOW (f), alpha);
+  mac_set_frame_window_alpha (f, alpha);
 }
 
 
@@ -3631,7 +3630,7 @@ mac_move_window_with_gravity (f, win_gravity, left, top)
       break;
     }
 
-  mac_move_window (FRAME_MAC_WINDOW (f), left, top, false);
+  mac_move_frame_window (f, left, top, false);
 }
 
 void
@@ -4124,7 +4123,7 @@ x_set_offset (f, xoff, yoff, change_gravity)
   BLOCK_INPUT;
   x_wm_set_size_hint (f, (long) 0, 0);
 
-  mac_move_window_structure (FRAME_MAC_WINDOW (f), f->left_pos, f->top_pos);
+  mac_move_frame_window_structure (f, f->left_pos, f->top_pos);
   /* If the title bar is completely outside the screen, adjust the
      position. */
   UNBLOCK_INPUT;
@@ -4157,7 +4156,7 @@ x_set_window_size (f, change_gravity, cols, rows)
   f->win_gravity = NorthWestGravity;
   x_wm_set_size_hint (f, (long) 0, 0);
 
-  mac_size_window (FRAME_MAC_WINDOW (f), pixelwidth, pixelheight, 0);
+  mac_size_frame_window (f, pixelwidth, pixelheight, 0);
 
   if (!NILP (tip_frame) && f == XFRAME (tip_frame))
     mac_handle_size_change (f, pixelwidth, pixelheight);
@@ -4243,7 +4242,7 @@ x_raise_frame (f)
   if (f->async_visible)
     {
       BLOCK_INPUT;
-      mac_bring_window_to_front (FRAME_MAC_WINDOW (f));
+      mac_bring_frame_window_to_front (f);
       UNBLOCK_INPUT;
     }
 }
@@ -4257,7 +4256,7 @@ x_lower_frame (f)
   if (f->async_visible)
     {
       BLOCK_INPUT;
-      mac_send_window_behind (FRAME_MAC_WINDOW (f), NULL);
+      mac_send_frame_window_behind (f);
       UNBLOCK_INPUT;
     }
 }
@@ -4279,13 +4278,12 @@ void
 mac_handle_visibility_change (f)
      struct frame *f;
 {
-  Window wp = FRAME_MAC_WINDOW (f);
   int visible = 0, iconified = 0;
   struct input_event buf;
 
-  if (mac_is_window_visible (wp))
+  if (mac_is_frame_window_visible (f))
     {
-      if (mac_is_window_collapsed (wp))
+      if (mac_is_frame_window_collapsed (f))
 	iconified = 1;
       else
 	visible = 1;
@@ -4351,8 +4349,8 @@ x_make_frame_visible (f)
 
       f->output_data.mac->asked_for_visible = 1;
 
-      mac_collapse_window (FRAME_MAC_WINDOW (f), false);
-      mac_show_window (FRAME_MAC_WINDOW (f));
+      mac_collapse_frame_window (f, false);
+      mac_show_frame_window (f);
     }
 
   XFlush (FRAME_MAC_DISPLAY (f));
@@ -4428,7 +4426,7 @@ x_make_frame_invisible (f)
      by hand again (they have already done that once for this window.)  */
   x_wm_set_size_hint (f, (long) 0, 1);
 
-  mac_hide_window (FRAME_MAC_WINDOW (f));
+  mac_hide_frame_window (f);
 
   UNBLOCK_INPUT;
 
@@ -4460,9 +4458,9 @@ x_iconify_frame (f)
   FRAME_SAMPLE_VISIBILITY (f);
 
   if (! FRAME_VISIBLE_P (f))
-    mac_show_window (FRAME_MAC_WINDOW (f));
+    mac_show_frame_window (f);
 
-  err = mac_collapse_window (FRAME_MAC_WINDOW (f), true);
+  err = mac_collapse_frame_window (f, true);
 
   UNBLOCK_INPUT;
 
@@ -4480,7 +4478,6 @@ x_free_frame_resources (f)
      struct frame *f;
 {
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  Window wp = FRAME_MAC_WINDOW (f);
 
   BLOCK_INPUT;
 
@@ -4510,10 +4507,6 @@ x_free_frame_resources (f)
     }
 
   mac_dispose_frame_window (f);
-  if (wp == tip_window)
-    /* Neither WaitNextEvent nor ReceiveNextEvent receives `window
-       closed' event.  So we reset tip_window here.  */
-    tip_window = NULL;
 
   free_frame_menubar (f);
 
@@ -4679,7 +4672,7 @@ int mac_screen_config_changed = 0;
 
 /* Apple Events */
 Lisp_Object Qtext_input;
-Lisp_Object Vmac_ts_active_input_overlay, Vmac_ts_active_input_buf;
+Lisp_Object Vmac_ts_active_input_overlay;
 static Lisp_Object Vmac_ts_script_language_on_focus;
 static Lisp_Object saved_ts_script_language_on_focus;
 static ScriptLanguageRecord saved_ts_language;
@@ -5773,8 +5766,6 @@ syms_of_macterm ()
   Qmac_action_key_paths = intern ("mac-action-key-paths");
   staticpro (&Qmac_action_key_paths);
 
-  Fprovide (intern ("mac-carbon"), Qnil);
-
   staticpro (&Qreverse);
   Qreverse = intern ("reverse");
 
@@ -5868,11 +5859,6 @@ button will be mouse-3.  */);
   DEFVAR_LISP ("mac-ts-active-input-overlay", &Vmac_ts_active_input_overlay,
     doc: /* Overlay used to display Mac TSM active input area.  */);
   Vmac_ts_active_input_overlay = Qnil;
-
-  DEFVAR_LISP ("mac-ts-active-input-buf", &Vmac_ts_active_input_buf,
-    doc: /* Byte sequence of the current Mac TSM active input area.  */);
-  /* `empty_string' is not ready yet on Mac OS Classic.  */
-  Vmac_ts_active_input_buf = build_string ("");
 
   DEFVAR_LISP ("mac-ts-script-language-on-focus", &Vmac_ts_script_language_on_focus,
     doc: /* *How to change Mac TSM script/language when a frame gets focus.

@@ -1,3 +1,24 @@
+* emacs-23.1-mac-1.91 [experimental/hackers-only] (2009-08-29)
+
+** Fixed bugs
+
+*** Doesn't build on Mac OS X 10.6.
+
+*** Multi-page TIFF images are not supported.
+I thought they were, but I actually added the code to another working
+tree and forgot to merge it in the previous version.
+
+*** "Visit New File" shows a wrong dialog.
+Apply Jason Rumney's fix for Bug#3969.
+
+*** Mach port right leaks due to the previous change for the warning
+"CFMessagePort: bootstrap_register(): failed".
+
+** Improvement
+
+*** File and font dialogs can be closed with C-g on Mac OS X 10.5 and later.
+
+
 * emacs-23.1-mac-1.90 [experimental/hackers-only] (2009-08-03)
 Based on Emacs 23.1.  Rename from "Carbon+AppKit port" to "Mac port".
 Drop support for Mac OS X 10.1 and earlier.

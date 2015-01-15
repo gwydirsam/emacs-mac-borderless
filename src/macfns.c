@@ -1,7 +1,7 @@
 /* Graphical user interface functions for Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
                  2008  Free Software Foundation, Inc.
-   Copyright (C) 2009 YAMAMOTO Mitsuharu
+   Copyright (C) 2009  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -1585,7 +1585,7 @@ x_set_tool_bar_lines (f, value, oldval)
       FRAME_EXTERNAL_TOOL_BAR (f) = 1;
       BLOCK_INPUT;
       if (FRAME_MAC_P (f)
-	  && !mac_is_window_toolbar_visible (FRAME_MAC_WINDOW (f)))
+	  && !mac_is_frame_window_toolbar_visible (f))
 	/* Make sure next redisplay shows the tool bar.  */
 	XWINDOW (FRAME_SELECTED_WINDOW (f))->update_mode_line = Qt;
       UNBLOCK_INPUT;
@@ -1618,7 +1618,7 @@ x_set_name_internal (f, name)
 	CFStringRef windowTitle =
 	  cfstring_create_with_utf8_cstring (SDATA (name));
 
-	mac_set_window_title (FRAME_MAC_WINDOW (f), windowTitle);
+	mac_set_frame_window_title (f, windowTitle);
 	CFRelease (windowTitle);
       }
 
@@ -1782,8 +1782,7 @@ mac_update_title_bar (f, save_match_data)
 	  && (modified_p != !NILP (w->last_had_star))))
     {
       BLOCK_INPUT;
-      mac_set_window_modified (FRAME_MAC_WINDOW (f),
-			       !MINI_WINDOW_P (w) && modified_p);
+      mac_set_frame_window_modified (f, !MINI_WINDOW_P (w) && modified_p);
       mac_update_proxy_icon (f);
       UNBLOCK_INPUT;
     }
@@ -2520,15 +2519,14 @@ FRAME nil means use the selected frame.  */)
   if (err == noErr)
     if (!front_p)
       {
-	if (mac_front_non_floating_window () == FRAME_MAC_WINDOW (f))
+	if (mac_is_frame_window_front (f))
 	  SetFrontProcessWithOptions (&current_psn,
 				      kSetFrontProcessFrontWindowOnly);
 	else
 	  SetFrontProcess (&current_psn);
       }
 
-  mac_activate_window (mac_active_non_floating_window (), false);
-  mac_activate_window (FRAME_MAC_WINDOW (f), true);
+  mac_activate_frame_window (f);
   UNBLOCK_INPUT;
 
   return Qnil;
@@ -3195,8 +3193,7 @@ show_hourglass (timer)
 	{
 	  struct frame *f = XFRAME (frame);
 
-	  if (FRAME_LIVE_P (f) && FRAME_MAC_P (f)
-	      && FRAME_MAC_WINDOW (f) != tip_window)
+	  if (FRAME_LIVE_P (f) && FRAME_MAC_P (f) && !EQ (frame, tip_frame))
 	    mac_show_hourglass (f);
 	}
 
@@ -3249,7 +3246,6 @@ Lisp_Object tip_frame;
    fires.  */
 
 Lisp_Object tip_timer;
-Window tip_window;
 
 /* If non-nil, a vector of 3 elements containing the last args
    with which x-show-tip was called.  See there.  */
@@ -3269,10 +3265,7 @@ unwind_create_tip_frame (frame)
 
   deleted = unwind_create_frame (frame);
   if (EQ (deleted, Qt))
-    {
-      tip_window = NULL;
-      tip_frame = Qnil;
-    }
+    tip_frame = Qnil;
 
   return deleted;
 }
@@ -3434,10 +3427,7 @@ x_create_tip_frame (dpyinfo, parms, text)
   mac_create_frame_window (f, 1);
 
   if (FRAME_MAC_WINDOW (f))
-    {
-      mac_set_frame_window_background (f, FRAME_BACKGROUND_PIXEL (f));
-      tip_window = FRAME_MAC_WINDOW (f);
-    }
+    mac_set_frame_window_background (f, FRAME_BACKGROUND_PIXEL (f));
 
   UNBLOCK_INPUT;
 
@@ -3657,7 +3647,7 @@ Text larger than the specified size is clipped.  */)
 	  BLOCK_INPUT;
 	  compute_tip_xy (f, parms, dx, dy, FRAME_PIXEL_WIDTH (f),
 			  FRAME_PIXEL_HEIGHT (f), &root_x, &root_y);
-	  mac_move_window (FRAME_MAC_WINDOW (f), root_x, root_y, false);
+	  mac_move_frame_window (f, root_x, root_y, false);
 	  UNBLOCK_INPUT;
 	  goto start_timer;
 	}
@@ -3759,10 +3749,10 @@ Text larger than the specified size is clipped.  */)
   compute_tip_xy (f, parms, dx, dy, width, height, &root_x, &root_y);
 
   BLOCK_INPUT;
-  mac_move_window (FRAME_MAC_WINDOW (f), root_x, root_y, false);
-  mac_size_window (FRAME_MAC_WINDOW (f), width, height, true);
-  mac_show_window (FRAME_MAC_WINDOW (f));
-  mac_bring_window_to_front (FRAME_MAC_WINDOW (f));
+  mac_move_frame_window (f, root_x, root_y, false);
+  mac_size_frame_window (f, width, height, true);
+  mac_show_frame_window (f);
+  mac_bring_frame_window_to_front (f);
   UNBLOCK_INPUT;
 
   FRAME_PIXEL_WIDTH (f) = width;
@@ -4048,6 +4038,8 @@ PIXEL_SIZE field of the name, font finding mechanism gets faster for
 such a font.  This is especially effective for such large fonts as
 Chinese, Japanese, and Korean.  */);
   Vx_pixel_size_width_font_regexp = Qnil;
+
+  Fprovide (intern ("mac"), Qnil);
 
   DEFVAR_LISP ("mac-carbon-version-string", &Vmac_carbon_version_string,
     doc: /* Version info for Carbon API.  */);

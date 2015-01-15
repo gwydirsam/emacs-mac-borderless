@@ -1,7 +1,7 @@
 /* Display module for Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004,
                  2005, 2006, 2007, 2008 Free Software Foundation, Inc.
-   Copyright (C) 2009 YAMAMOTO Mitsuharu
+   Copyright (C) 2009  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -429,54 +429,6 @@ struct scroll_bar {
    scroll_bar.  */
 #define SET_SCROLL_BAR_SCROLLER(ptr, ref) ((ptr)->mac_control_ref = (ref))
 
-/* Return the inside width of a vertical scroll bar, given the outside
-   width.  */
-#define VERTICAL_SCROLL_BAR_INSIDE_WIDTH(f, width) \
-  ((width) \
-   - VERTICAL_SCROLL_BAR_LEFT_BORDER \
-   - VERTICAL_SCROLL_BAR_RIGHT_BORDER \
-   - VERTICAL_SCROLL_BAR_WIDTH_TRIM * 2)
-
-/* Return the length of the rectangle within which the top of the
-   handle must stay.  This isn't equivalent to the inside height,
-   because the scroll bar handle has a minimum height.
-
-   This is the real range of motion for the scroll bar, so when we're
-   scaling buffer positions to scroll bar positions, we use this, not
-   VERTICAL_SCROLL_BAR_INSIDE_HEIGHT.  */
-#define VERTICAL_SCROLL_BAR_TOP_RANGE(f,height) \
-  (VERTICAL_SCROLL_BAR_INSIDE_HEIGHT (f, height) \
-   - VERTICAL_SCROLL_BAR_MIN_HANDLE - UP_AND_DOWN_ARROWS)
-
-/* Return the inside height of vertical scroll bar, given the outside
-   height.  See VERTICAL_SCROLL_BAR_TOP_RANGE too.  */
-#define VERTICAL_SCROLL_BAR_INSIDE_HEIGHT(f,height) \
-  ((height) - VERTICAL_SCROLL_BAR_TOP_BORDER \
-   - VERTICAL_SCROLL_BAR_BOTTOM_BORDER)
-
-
-/* Border widths for scroll bars.
-
-   Scroll bar windows don't have any borders; their border width is
-   set to zero, and we redraw borders ourselves.  This makes the code
-   a bit cleaner, since we don't have to convert between outside width
-   (used when relating to the rest of the screen) and inside width
-   (used when sizing and drawing the scroll bar window itself).
-
-   The handle moves up and down/back and forth in a rectangle inset
-   from the edges of the scroll bar.  These are widths by which we
-   inset the handle boundaries from the scroll bar edges.  */
-#define VERTICAL_SCROLL_BAR_LEFT_BORDER (0)
-#define VERTICAL_SCROLL_BAR_RIGHT_BORDER (0)
-#define VERTICAL_SCROLL_BAR_TOP_BORDER (0)
-#define VERTICAL_SCROLL_BAR_BOTTOM_BORDER (0)
-
-/* Minimum lengths for scroll bar handles, in pixels.  */
-#define VERTICAL_SCROLL_BAR_MIN_HANDLE (16)
-
-/* Combined length of up and down arrow boxes in scroll bars, in pixels.  */
-#define UP_AND_DOWN_ARROWS (32)
-
 /* Trimming off a few pixels from each side prevents
    text from glomming up against the scroll bar */
 #define VERTICAL_SCROLL_BAR_WIDTH_TRIM (0)
@@ -505,11 +457,6 @@ enum {
 /* Keywords for Apple event attributes */
 enum {
   KEY_EMACS_SUSPENSION_ID_ATTR	= 'esId' /* typeUInt32 */
-};
-
-/* Carbon event parameter names.  */
-enum {
-  EVENT_PARAM_TEXT_INPUT_SEQUENCE_NUMBER = 'tsSn' /* typeUInt32 */
 };
 
 /* Some constants that are not defined in older versions.  */
@@ -580,14 +527,13 @@ extern Pixmap mac_create_pixmap_from_bitmap_data P_ ((Window, char *,
 						      unsigned long,
 						      unsigned int));
 extern void mac_free_pixmap P_ ((Pixmap));
-extern GC mac_create_gc P_ ((void *, unsigned long, XGCValues *));
+extern GC mac_create_gc P_ ((unsigned long, XGCValues *));
 extern void mac_free_gc P_ ((GC));
 extern void mac_set_foreground P_ ((GC, unsigned long));
 extern void mac_set_background P_ ((GC, unsigned long));
 extern void mac_draw_line_to_pixmap P_ ((Pixmap, GC, int, int, int, int));
 extern void mac_clear_area P_ ((struct frame *, int, int,
 				unsigned int, unsigned int));
-extern OSStatus mac_post_mouse_moved_event P_ ((void));
 extern int mac_quit_char_key_p P_ ((UInt32, UInt32));
 #define x_display_pixel_height(dpyinfo)	((dpyinfo)->height)
 #define x_display_pixel_width(dpyinfo)	((dpyinfo)->width)
@@ -597,7 +543,7 @@ extern int mac_quit_char_key_p P_ ((UInt32, UInt32));
   mac_create_pixmap_from_bitmap_data (w, data, width, height, fg, bg, depth)
 #define XFreePixmap(display, pixmap)	mac_free_pixmap (pixmap)
 #define XChangeGC(display, gc, mask, xgcv)	mac_change_gc (gc, mask, xgcv)
-#define XCreateGC(display, d, mask, xgcv)	mac_create_gc (d, mask, xgcv)
+#define XCreateGC(display, d, mask, xgcv)	mac_create_gc (mask, xgcv)
 #define XFreeGC(display, gc)	mac_free_gc (gc)
 #define XGetGCValues(display, gc, mask, xgcv)	\
   mac_get_gc_values (gc, mask, xgcv)
@@ -605,9 +551,6 @@ extern int mac_quit_char_key_p P_ ((UInt32, UInt32));
 #define XSetBackground(display, gc, color)	mac_set_background (gc, color)
 #define XDrawLine(display, p, gc, x1, y1, x2, y2)	\
   mac_draw_line_to_pixmap (p, gc, x1, y1, x2, y2)
-
-#define FONT_TYPE_FOR_UNIBYTE(font, ch) 0
-#define FONT_TYPE_FOR_MULTIBYTE(font, ch) 0
 
 #if USE_MAC_IMAGE_IO
 extern CGColorSpaceRef mac_cg_color_space_rgb;
@@ -633,7 +576,6 @@ extern Lisp_Object x_get_focus_frame P_ ((struct frame *));
 
 /* Defined in mac.c.  */
 
-extern void mac_clear_font_name_table P_ ((void));
 extern Lisp_Object mac_aedesc_to_lisp P_ ((const AEDesc *));
 extern OSErr mac_ae_put_lisp P_ ((AEDescList *, UInt32, Lisp_Object));
 extern OSErr create_apple_event P_ ((AEEventClass, AEEventID, AppleEvent *));

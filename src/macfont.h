@@ -1,5 +1,5 @@
 /* Interface definition for Mac font backend.
-   Copyright (C) 2009 YAMAMOTO Mitsuharu
+   Copyright (C) 2009  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -44,8 +44,7 @@ extern Lisp_Object Qmac_ct;
 extern Lisp_Object Qmac_fd;
 #endif
 #if USE_NS_FONT_MANAGER
-/* Core Text emulation by NSFontManager, for Mac OS X 10.2 and
-   10.3. */
+/* Core Text emulation by NSFontManager, for Mac OS X 10.2 - 10.3. */
 extern Lisp_Object Qmac_fm;
 #endif
 
@@ -53,9 +52,14 @@ extern Lisp_Object Qmac_fm;
    information for each glyph.  */
 struct mac_glyph_layout
 {
-  /* Range of indices of the characters composed into this glyph.  The
+  /* Range of indices of the characters composed into the group of
+     glyphs that share the cursor position with this glyph.  The
      members `location' and `length' are in UTF-16 indices.  */
   CFRange comp_range;
+
+  /* UTF-16 index in the source string for the first character
+     associated with this glyph.  */
+  CFIndex string_index;
 
   /* Horizontal and vertical adjustments of glyph position.  The
      coordinate space is that of Core Text.  So, the `baseline_delta'

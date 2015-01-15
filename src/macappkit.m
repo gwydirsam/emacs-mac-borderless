@@ -1,5 +1,5 @@
 /* Functions for GUI implemented with Cocoa AppKit on the Mac OS.
-   Copyright (C) 2008, 2009 YAMAMOTO Mitsuharu
+   Copyright (C) 2008, 2009  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -1318,110 +1318,120 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 /* Window Manager function replacements.  */
 
 void
-mac_set_window_title (window, string)
-     Window window;
+mac_set_frame_window_title (f, string)
+     struct frame *f;
      CFStringRef string;
 {
-  [(NSWindow *)window setTitle:((NSString *) string)];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  [window setTitle:((NSString *) string)];
 }
 
 void
-mac_set_window_modified (window, modified)
-     Window window;
+mac_set_frame_window_modified (f, modified)
+     struct frame *f;
      Boolean modified;
 {
-  [(NSWindow *)window setDocumentEdited:modified];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  [window setDocumentEdited:modified];
 }
 
 Boolean
-mac_is_window_visible (window)
-     Window window;
+mac_is_frame_window_visible (f)
+     struct frame *f;
 {
-  return [(NSWindow *)window isVisible];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  return [window isVisible];
 }
 
 Boolean
-mac_is_window_collapsed (window)
-     Window window;
+mac_is_frame_window_collapsed (f)
+     struct frame *f;
 {
-  return [(NSWindow *)window isMiniaturized];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  return [window isMiniaturized];
 }
 
 void
-mac_bring_window_to_front (window)
-     Window window;
+mac_bring_frame_window_to_front (f)
+     struct frame *f;
 {
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+
   if (![NSApp isHidden])
-    [(NSWindow *)window orderFront:nil];
+    [window orderFront:nil];
   else
-    [(EmacsWindow *)window setNeedsOrderFrontOnUnhide:YES];
+    [window setNeedsOrderFrontOnUnhide:YES];
 }
 
 void
-mac_send_window_behind (window, behind_window)
-     Window window, behind_window;
+mac_send_frame_window_behind (f)
+     struct frame *f;
 {
-  NSInteger otherWindowNumber = [(NSWindow *)behind_window windowNumber];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
 
-  [(NSWindow *)window orderWindow:NSWindowBelow relativeTo:otherWindowNumber];
+  [window orderWindow:NSWindowBelow relativeTo:0];
 }
 
 void
-mac_hide_window (window)
-     Window window;
+mac_hide_frame_window (f)
+     struct frame *f;
 {
-  [(NSWindow *)window orderOut:nil];
-  [(EmacsWindow *)window setNeedsOrderFrontOnUnhide:NO];
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+
+  [window orderOut:nil];
+  [window setNeedsOrderFrontOnUnhide:NO];
 }
 
 void
-mac_show_window (window)
-     Window window;
+mac_show_frame_window (f)
+     struct frame *f;
 {
-  if (![(NSWindow *)window isVisible])
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  if (![window isVisible])
     {
-      mac_bring_window_to_front (window);
-      [(NSWindow *)window makeKeyWindow];
+      mac_bring_frame_window_to_front (f);
+      [window makeKeyWindow];
     }
 }
 
 OSStatus
-mac_collapse_window (window, collapse)
-     Window window;
+mac_collapse_frame_window (f, collapse)
+     struct frame *f;
      Boolean collapse;
 {
-  if (collapse && ![(NSWindow *)window isMiniaturized])
-    [(NSWindow *)window miniaturize:nil];
-  else if (!collapse && [(NSWindow *)window isMiniaturized])
-    [(NSWindow *)window deminiaturize:nil];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  if (collapse && ![window isMiniaturized])
+    [window miniaturize:nil];
+  else if (!collapse && [window isMiniaturized])
+    [window deminiaturize:nil];
 
   return noErr;
 }
 
-Window
-mac_front_non_floating_window ()
+Boolean
+mac_is_frame_window_front (f)
+     struct frame *f;
 {
+  NSWindow *window = FRAME_MAC_WINDOW (f);
   NSArray *orderedWindows = [NSApp orderedWindows];
 
-  if ([orderedWindows count] > 0)
-    return [orderedWindows objectAtIndex:0];
-  else
-    return nil;
-}
-
-Window
-mac_active_non_floating_window ()
-{
-  return [NSApp mainWindow];
+  return ([orderedWindows count] > 0
+	  && [orderedWindows objectAtIndex:0] == window);
 }
 
 void
-mac_activate_window (window, activate)
-     Window window;
-     Boolean activate;
+mac_activate_frame_window (f)
+     struct frame *f;
 {
-  if (activate)
-    [(NSWindow *)window makeKeyWindow];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  [window makeKeyWindow];
 }
 
 static NSRect
@@ -1436,26 +1446,28 @@ mac_get_base_screen_frame ()
 }
 
 OSStatus
-mac_move_window_structure (window, h, v)
-     Window window;
+mac_move_frame_window_structure (f, h, v)
+     struct frame *f;
      short h, v;
 {
+  NSWindow *window = FRAME_MAC_WINDOW (f);
   NSRect baseScreenFrame = mac_get_base_screen_frame ();
   NSPoint topLeft = NSMakePoint (h + NSMinX (baseScreenFrame),
 				 -v + NSMaxY (baseScreenFrame));
 
-  [(NSWindow *)window setFrameTopLeftPoint:topLeft];
+  [window setFrameTopLeftPoint:topLeft];
 
   return noErr;
 }
 
 void
-mac_move_window (window, h, v, front)
-     Window window;
+mac_move_frame_window (f, h, v, front)
+     struct frame *f;
      short h, v;
      Boolean front;
 {
-  NSView *contentView = [(NSWindow *)window contentView];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+  NSView *contentView = [window contentView];
   NSRect contentViewFrame, baseScreenFrame;
   NSPoint windowFrameOrigin;
 
@@ -1466,15 +1478,16 @@ mac_move_window (window, h, v, front)
   windowFrameOrigin.y = (-(v + NSMaxY (contentViewFrame))
 			 + NSMaxY (baseScreenFrame));
 
-  [(NSWindow *)window setFrameOrigin:windowFrameOrigin];
+  [window setFrameOrigin:windowFrameOrigin];
 }
 
 void
-mac_size_window (window, w, h, update)
-     Window window;
+mac_size_frame_window (f, w, h, update)
+     struct frame *f;
      short w, h;
      Boolean update;
 {
+  NSWindow *window = FRAME_MAC_WINDOW (f);
   NSView *contentView;
   NSRect contentViewFrame, windowFrame;
   NSSize oldSizeInPixels, newSizeInPixels;
@@ -1483,27 +1496,29 @@ mac_size_window (window, w, h, update)
   /* W and H are dimensions in user space coordinates; they are not
      the same as those in device space coordinates if scaling is in
      effect.  */
-  contentView = [(NSWindow *)window contentView];
+  contentView = [window contentView];
   contentViewFrame = [contentView frame];
   oldSizeInPixels = [contentView convertSize:contentViewFrame.size toView:nil];
   newSizeInPixels = [contentView convertSize:(NSMakeSize (w, h)) toView:nil];
   dw = newSizeInPixels.width - oldSizeInPixels.width;
   dh = newSizeInPixels.height - oldSizeInPixels.height;
 
-  windowFrame = [(NSWindow *)window frame];
+  windowFrame = [window frame];
   windowFrame.origin.y -= dh;
   windowFrame.size.width += dw;
   windowFrame.size.height += dh;
 
-  [(NSWindow *)window setFrame:windowFrame display:update];
+  [window setFrame:windowFrame display:update];
 }
 
 OSStatus
-mac_set_window_alpha (window, alpha)
-     Window window;
+mac_set_frame_window_alpha (f, alpha)
+     struct frame *f;
      CGFloat alpha;
 {
-  [(NSWindow *)window setAlphaValue:alpha];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+  [window setAlphaValue:alpha];
 
   return noErr;
 }
@@ -1766,7 +1781,7 @@ mac_create_frame_window (f, tooltip_p)
     }
 
   if (f->size_hint_flags & (USPosition | PPosition))
-    mac_move_window_structure (window, f->left_pos, f->top_pos);
+    mac_move_frame_window_structure (f, f->left_pos, f->top_pos);
   else
     {
       if (mainWindow == nil)
@@ -1852,7 +1867,9 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
 - (struct frame *)emacsFrame
 {
-  return [[[self window] delegate] emacsFrame];
+  EmacsFrameController *frameController = [[self window] delegate];
+
+  return [frameController emacsFrame];
 }
 
 - (void)drawRect:(NSRect)aRect
@@ -2166,7 +2183,12 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   mapped_modifiers = mac_mapped_modifiers (modifiers, [theEvent keyCode]);
 
   if (!(mapped_modifiers
-	& ~(mac_pass_control_to_system ? controlKey : 0)))
+	& ~(mac_pass_control_to_system ? controlKey : 0))
+      /* This is a workaround for the problem that Control-/ is not
+	 recognized on Mac OS X 10.6.  */
+      && !(!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
+	   && [theEvent keyCode] == 0x2C /* kVK_ANSI_Slash */
+	   && modifiers == controlKey))
     {
       keyEventsInterpreted = YES;
       rawKeyEvent = theEvent;
@@ -3099,7 +3121,12 @@ extern Time last_mouse_movement_time;
 	tooSmall = YES;
     }
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+  [self setDoubleValue:0];
+  [self setKnobProportion:0];
+#else
   [self setFloatValue:0 knobProportion:0];
+#endif
   [self setEnabled:YES];
   knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
   KnobRect = [self rectForPart:NSScrollerKnob];
@@ -3117,7 +3144,12 @@ extern Time last_mouse_movement_time;
   if (!tooSmall)
     {
       [self setEnabled:enabled];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+      [self setDoubleValue:floatValue];
+      [self setKnobProportion:knobProportion];
+#else
       [self setFloatValue:floatValue knobProportion:knobProportion];
+#endif
     }
   else
     {
@@ -3433,7 +3465,12 @@ x_set_toolkit_scroll_bar_thumb (bar, portion, position, whole)
       floatValue = top / (knobSlotSpan - size);
       knobProportion = size / knobSlotSpan;
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+      [scroller setDoubleValue:floatValue];
+      [scroller setKnobProportion:knobProportion];
+#else
       [scroller setFloatValue:floatValue knobProportion:knobProportion];
+#endif
       [scroller setEnabled:YES];
     }
 
@@ -3559,13 +3596,14 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
 @end				// EmacsFrameController (Toolbar)
 
-/* Whether the toolbar for the window WINDOW is visible.  */
+/* Whether the toolbar for the frame F is visible.  */
 
 Boolean
-mac_is_window_toolbar_visible (window)
-     Window window;
+mac_is_frame_window_toolbar_visible (f)
+     struct frame *f;
 {
-  NSToolbar *toolbar = [(NSWindow *)window toolbar];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+  NSToolbar *toolbar = [window toolbar];
 
   return [toolbar isVisible];
 }
@@ -4034,8 +4072,9 @@ mac_set_font_info_for_selection (f, face_id, c, pos, object)
   if (mac_font_panel_visible_p () && f)
     {
       NSWindow *window = FRAME_MAC_WINDOW (f);
-      NSFont *font = [[window delegate] fontForFace:face_id character:c
-					position:pos object:object];
+      EmacsFrameController *frameController = [window delegate];
+      NSFont *font = [frameController fontForFace:face_id character:c
+					 position:pos object:object];
 
       [[NSFontManager sharedFontManager] setSelectedFont:font isMultiple:NO];
     }
@@ -4798,8 +4837,8 @@ create_ok_cancel_buttons_view ()
   frame = NSMakeRect (0, 0, cellSize.width * 2, cellSize.height);
   view = [[NSMatrix alloc] initWithFrame:frame
 				    mode:NSTrackModeMatrix
-				    prototype:prototype
-				    numberOfRows:1 numberOfColumns:2];
+			       prototype:prototype
+			    numberOfRows:1 numberOfColumns:2];
   [prototype release];
   cancelButton = [view cellAtRow:0 column:0];
   okButton = [view cellAtRow:0 column:1];
@@ -5034,6 +5073,7 @@ static void update_services_menu_types P_ ((void));
   else if ([theEvent type] == NSKeyDown)
     {
       NSUInteger flags = [theEvent modifierFlags];
+      UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
 
       flags &= ANY_KEY_MODIFIER_FLAGS_MASK;
 
@@ -5052,6 +5092,10 @@ static void update_services_menu_types P_ ((void));
 	  if (action)
 	    return [NSApp sendAction:action to:nil from:nil];
 	}
+
+      if ([[theEvent charactersIgnoringModifiers] length] == 1
+	  && mac_quit_char_key_p (modifiers, [theEvent keyCode]))
+	return [NSApp sendAction:@selector(cancel:) to:nil from:nil];
     }
 
   return NO;
@@ -7824,6 +7868,7 @@ mac_font_shape (font, string, glyph_layouts, glyph_len)
 	  gl->comp_range.location = compRange.location;
 	  gl->comp_range.length = compRange.length;
 	  gl->glyph_id = [layoutManager glyphAtIndex:glyphIndex];
+	  gl->string_index = characterIndex;
 
 	  location = [layoutManager locationForGlyphAtIndex:glyphIndex];
 	  gl->advance_delta = location.x - totalAdvance;

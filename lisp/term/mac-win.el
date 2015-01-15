@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
 ;;   2008  Free Software Foundation, Inc.
-;; Copyright (C) 2009 YAMAMOTO Mitsuharu
+;; Copyright (C) 2009  YAMAMOTO Mitsuharu
 
 ;; Author: Andrew Choi <akochoi@mac.com>
 ;;	YAMAMOTO Mitsuharu <mituharu@math.s.chiba-u.ac.jp>
@@ -81,7 +81,6 @@
 (defvar mac-system-script-code)
 (defvar mac-apple-event-map)
 (defvar mac-ts-active-input-overlay)
-(defvar mac-ts-active-input-buf)
 
 
 ;;
@@ -766,19 +765,6 @@ in `selection-converter-alist', which see."
   (or (cdr (mac-ae-parameter ae nil "TEXT"))
       (error "No text in Apple event.")))
 
-(defun mac-ae-frame (ae &optional keyword type)
-  (let ((bytes (cdr (mac-ae-parameter ae keyword type))))
-    (if (or (null bytes) (/= (length bytes) 4))
-	(error "No window reference in Apple event.")
-      (let ((window-id (mac-coerce-ae-data "long" bytes "TEXT"))
-	    (rest (frame-list))
-	    frame)
-	(while (and (null frame) rest)
-	  (if (string= (frame-parameter (car rest) 'window-id) window-id)
-	      (setq frame (car rest)))
-	  (setq rest (cdr rest)))
-	frame))))
-
 (defun mac-ae-script-language (ae keyword)
 ;; struct WritingCode {
 ;;   ScriptCode          theScriptCode;
@@ -788,38 +774,6 @@ in `selection-converter-alist', which see."
     (and bytes
 	 (cons (mac-bytes-to-integer bytes 0 2)
 	       (mac-bytes-to-integer bytes 2 4)))))
-
-(defun mac-bytes-to-text-range (bytes &optional from to)
-;; struct TextRange {
-;;   long                fStart;
-;;   long                fEnd;
-;;   short               fHiliteStyle;
-;; };
-  (or from (setq from 0))
-  (or to (setq to (length bytes)))
-  (and (= (- to from) (+ 4 4 2))
-       (list (mac-bytes-to-integer bytes from (+ from 4))
-	     (mac-bytes-to-integer bytes (+ from 4) (+ from 8))
-	     (mac-bytes-to-integer bytes (+ from 8) to))))
-
-(defun mac-ae-text-range-array (ae keyword)
-;; struct TextRangeArray {
-;;   short               fNumOfRanges;
-;;   TextRange           fRange[1];
-;; };
-  (let* ((bytes (cdr (mac-ae-parameter ae keyword "tray")))
-	 (len (length bytes))
-	 nranges result)
-    (when (and bytes (>= len 2)
-	       (progn
-		 (setq nranges (mac-bytes-to-integer bytes 0 2))
-		 (= len (+ 2 (* nranges 10)))))
-      (setq result (make-vector nranges nil))
-      (dotimes (i nranges)
-	(aset result i
-	      (mac-bytes-to-text-range bytes (+ (* i 10) 2)
-				       (+ (* i 10) 12)))))
-    result))
 
 (defconst mac-keyboard-modifier-mask-alist
   (mapcar

@@ -1,7 +1,7 @@
 1. What's this?
 
 This is "Mac port" addition to GNU Emacs 23.1.  This provides a native
-GUI support for Mac OS X 10.2 - 10.5.  Note that Emacs 23.1 already
+GUI support for Mac OS X 10.2 - 10.6.  Note that Emacs 23.1 already
 contains the official GUI support via the NS (Cocoa) port.  So if it
 is good enough for you, then you don't need to try this.
 
@@ -66,7 +66,7 @@ The Mac port is a descendant of the following ports for Mac OS X.
       the Emacs mailer will set up a draft buffer when you click a
       mailto: link in a Web browser.
 
-    - DictionaryService support (10.4 and later)
+    - DictionaryService support (10.4 and 10.5)
       You can look up a word under the mouse pointer in the selected
       window by typing Command-Control-D.
 
@@ -87,7 +87,7 @@ The Mac port is a descendant of the following ports for Mac OS X.
       Scaling works in Framework-Scaled Mode as opposed to (blurry)
       Magnified Mode for the Carbon port.
 
-    - 64-bit (10.5)
+    - 64-bit (10.5 and later)
       You can build and run a 64-bit binary with GUI support by
       specifying CC='gcc -m64' on configure.
 
