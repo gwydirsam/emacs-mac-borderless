@@ -50,6 +50,11 @@ typedef unsigned int NSUInteger;
 + (NSFont *)fontWithFace:(struct face *)face;
 @end
 
+@interface NSEvent (Emacs)
+- (NSEvent *)mouseEventByChangingType:(NSEventType)type
+		          andLocation:(NSPoint)location;
+@end
+
 @interface NSAttributedString (Emacs)
 - (Lisp_Object)UTF16LispString;
 @end
@@ -93,11 +98,36 @@ typedef unsigned int NSUInteger;
 
   /* The frame on which a HELP_EVENT occurs.  */
   struct frame *emacsHelpFrame;
+
+  /* Non-nil means left mouse tracking has been suspended by this
+     object.  */
+  id trackingObject;
+
+  /* Selector used for resuming suspended left mouse tracking.  */
+  SEL trackingResumeSelector;
 }
 - (void)storeInputEvent:(id)sender;
 - (void)setMenuItemSelectionToTag:(id)sender;
 - (void)storeEvent:(struct input_event *)bufp;
+- (void)setTrackingObject:(id)object andResumeSelector:(SEL)selector;
 - (int)handleQueuedNSEventsWithHoldingQuitIn:(struct input_event *)bufp;
+@end
+
+/* Like NSWindow, but allows suspend/resume resize control tracking.  */
+
+@interface EmacsWindow : NSWindow
+{
+  /* Left mouse up event used for suspending resize control
+     tracking.  */
+  NSEvent *mouseUpEvent;
+
+  /* Offset of mouse position for the event that initiated mouse
+     tracking.  */
+  NSPoint resizeTrackingOffset;
+}
+- (NSRect)resizeControlFrame;
+- (void)suspendResizeTracking:(NSEvent *)event;
+- (void)resumeResizeTracking;
 @end
 
 /* Class for delegate of NSWindow and NSToolbar (see its Toolbar
@@ -256,6 +286,21 @@ typedef unsigned int NSUInteger;
 #endif	/* USE_MAC_TOOLBAR */
 
 #if USE_MAC_FONT_PANEL
+
+/* Like NSFontPanel, but allows suspend/resume slider tracking.  */
+
+@interface EmacsFontPanel : NSFontPanel
+{
+  /* Left mouse up event used for suspending slider tracking.  */
+  NSEvent *mouseUpEvent;
+
+  /* Slider being tracked.  */
+  NSSlider *trackedSlider;
+}
+- (void)suspendSliderTracking:(NSEvent *)event;
+- (void)resumeSliderTracking;
+@end
+
 @interface EmacsController (FontPanel)
 - (void)fontPanelWillClose:(NSNotification *)aNotification;
 @end
@@ -274,7 +319,7 @@ typedef unsigned int NSUInteger;
 
 @interface NSMenu (Emacs)
 - (NSMenuItem *)addItemWithWidgetValue:(widget_value *)wv;
-- (void)fillWithWidgetValue:(widget_value *)wv;
+- (void)fillWithWidgetValue:(widget_value *)first_wv;
 @end
 
 @interface EmacsMenu : NSMenu
@@ -296,3 +341,40 @@ typedef unsigned int NSUInteger;
 @interface NSAppleEventDescriptor (Emacs)
 - (OSErr)copyDescTo:(AEDesc *)desc;
 @end
+
+@interface EmacsController (AppleScript)
+- (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
+@end
+
+/* Some methods that are not declared in older versions.  Should be
+   used with some runtime check such as `respondsToSelector:'. */
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1040
+@interface NSWindow (AvailableOn1040AndLater)
+- (CGFloat)userSpaceScaleFactor;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1020
+@interface NSWindow (AvailableOn1020AndLater)
+- (void)setIgnoresMouseEvents:(BOOL)flag;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
+@interface NSView (AvailableOn1030AndLater)
+- (void)getRectsBeingDrawn:(const NSRect **)rects count:(NSInteger *)count;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
+@interface NSSavePanel (AvailableOn1030AndLater)
+- (void)setNameFieldLabel:(NSString *)label;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
+@interface NSMenu (AvailableOn1030AndLater)
+- (void)setDelegate:(id)anObject;
+@end
+#endif

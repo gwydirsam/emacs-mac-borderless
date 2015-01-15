@@ -4609,7 +4609,10 @@ CODE must be a 4-character string.  Return non-nil if successful.  */)
    Macintosh - Interapplication Communications: Scripting
    Components.  */
 
-static long
+#if !USE_APPKIT
+static
+#endif
+long
 do_applescript (script, result)
      Lisp_Object script, *result;
 {
@@ -4672,7 +4675,15 @@ component.  */)
   CHECK_STRING (script);
 
   BLOCK_INPUT;
+#if USE_APPKIT
+  {
+    extern long mac_appkit_do_applescript P_ ((Lisp_Object, Lisp_Object *));
+
+    status = mac_appkit_do_applescript (script, &result);
+  }
+#else
   status = do_applescript (script, &result);
+#endif
   UNBLOCK_INPUT;
   if (status == 0)
     return result;
@@ -5460,8 +5471,11 @@ sys_select (nfds, rfds, wfds, efds, timeout)
       if (!timedout_p)
 	{
 	  EMACS_SET_SECS_USECS (select_timeout, 0, 0);
-	  return select_and_poll_event (nfds, rfds, wfds, efds,
-					&select_timeout);
+	  r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
+	  if (r != 0)
+	    return r;
+	  errno = EINTR;
+	  return -1;
 	}
       else
 	{

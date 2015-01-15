@@ -71,6 +71,26 @@ enum {
    | CFOBJECT_TO_LISP_DONT_DECODE_STRING			\
    | CFOBJECT_TO_LISP_DONT_DECODE_DICTIONARY_KEY)
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+INLINE NSRect
+NSRectFromCGRect (cgrect)
+     CGRect cgrect;
+{
+  union _ {NSRect ns; CGRect cg;};
+
+  return ((union _ *) &cgrect)->ns;
+}
+
+INLINE CGRect
+NSRectToCGRect (nsrect)
+     NSRect nsrect;
+{
+  union _ {NSRect ns; CGRect cg;};
+
+  return ((union _ *) &nsrect)->cg;
+}
+#endif
+
 @implementation NSData (Emacs)
 
 /* Return a unibyte Lisp string.  */
@@ -136,7 +156,7 @@ enum {
 
 @implementation NSFont (Emacs)
 
-/* Create a font object for the specified FACE.  */
+/* Return an NSFont object for the specified FACE.  */
 
 + (NSFont *)fontWithFace:(struct face *)face
 {
@@ -215,6 +235,20 @@ enum {
 
 @end				// NSFont (Emacs)
 
+@implementation NSEvent (Emacs)
+
+- (NSEvent *)mouseEventByChangingType:(NSEventType)type
+			  andLocation:(NSPoint)location
+{
+  return [NSEvent mouseEventWithType:type location:location
+		  modifierFlags:[self modifierFlags] timestamp:[self timestamp]
+		  windowNumber:[self windowNumber] context:[self context]
+		  eventNumber:[self eventNumber] clickCount:[self clickCount]
+		  pressure:[self pressure]];
+}
+
+@end				// NSEvent (Emacs)
+
 @implementation NSAttributedString (Emacs)
 
 /* Return a unibyte Lisp string with text properties, in UTF 16
@@ -252,11 +286,11 @@ enum {
   return result;
 }
 
-@end
+@end				// NSAttributedString (Emacs)
 
 @implementation NSImage (Emacs)
 
-/* Creates an image object from a Quartz 2D image.  */
+/* Create an image object from a Quartz 2D image.  */
 
 + (id)imageWithCGImage:(CGImageRef)cgImage
 {
@@ -267,7 +301,7 @@ enum {
 
   [image lockFocus];
   context = [[NSGraphicsContext currentContext] graphicsPort];
-  CGContextDrawImage (context, *((CGRect *) &rect), cgImage);
+  CGContextDrawImage (context, NSRectToCGRect (rect), cgImage);
   [image unlockFocus];
 
   return [image autorelease];
@@ -618,6 +652,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification
 {
   [EmacsPosingWindow setup];
+  [NSFontManager setFontPanelFactory:[EmacsFontPanel class]];
   init_menu_bar ();
   init_apple_event_handler ();
 }
@@ -656,6 +691,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 
 /* Event handling  */
 
+static EventRef peek_next_event P_ ((void));
 static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 
 /* Store BUFP to kbd_buffer.  */
@@ -672,6 +708,17 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
       kbd_buffer_store_event_hold (bufp, hold_quit);
       count++;
     }
+}
+
+- (void)setTrackingObject:(id)object andResumeSelector:(SEL)selector
+{
+  if (trackingObject != object)
+    {
+      [trackingObject release];
+      trackingObject = [object retain];
+    }
+
+  trackingResumeSelector = selector;
 }
 
 /* Handle the NSEvent EVENT.  */
@@ -776,7 +823,23 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 	  NSEvent *event;
 	  NSUInteger mask;
 
-	  if (dpyinfo->saved_menu_event == NULL)
+	  if (trackingObject)
+	    {
+	      NSEvent *event =
+		[NSApp nextEventMatchingMask:
+			 (NSLeftMouseDraggedMask|NSLeftMouseUpMask)
+		       untilDate:expiration
+		       inMode:NSDefaultRunLoopMode dequeue:NO];
+
+	      if (event)
+		{
+		  if ([event type] == NSLeftMouseDragged)
+		    [trackingObject performSelector:trackingResumeSelector];
+		  [self setTrackingObject:nil
+			andResumeSelector:@selector(dummy)];
+		}
+	    }
+	  else if (dpyinfo->saved_menu_event == NULL)
 	    {
 	      EventRef menu_event = peek_if_next_event_activates_menu_bar ();
 
@@ -795,8 +858,8 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 		}
 	    }
 
-	  mask = (dpyinfo->saved_menu_event == NULL ? NSAnyEventMask
-		  : (NSAnyEventMask & ~ANY_MOUSE_EVENT_MASK));
+	  mask = (trackingObject == nil || dpyinfo->saved_menu_event == NULL
+		  ? NSAnyEventMask : (NSAnyEventMask & ~ANY_MOUSE_EVENT_MASK));
 	  event = [NSApp nextEventMatchingMask:mask untilDate:expiration
 			 inMode:NSDefaultRunLoopMode dequeue:YES];
 
@@ -832,6 +895,38 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
       [invocation getReturnValue:&result];
 
       return result;
+    }
+}
+
+static BOOL
+emacs_windows_need_display_p ()
+{
+  Lisp_Object tail, frame;
+
+  FOR_EACH_FRAME (tail, frame)
+    {
+      struct frame *f = XFRAME (frame);
+
+      if (FRAME_MAC_P (f))
+	{
+	  NSWindow *window = FRAME_MAC_WINDOW (f);
+
+	  if ([window viewsNeedDisplay])
+	    return YES;
+	}
+    }
+
+  return NO;
+}
+
+- (void)processDeferredReadSocket:(NSTimer *)theTimer
+{
+  if (![NSApp isRunning])
+    {
+      if (peek_next_event () || emacs_windows_need_display_p ())
+	[NSApp postDummyEvent];
+      else
+	x_flush (NULL);
     }
 }
 
@@ -917,6 +1012,78 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 #define DEFAULT_NUM_COLS (80)
 #define RESIZE_CONTROL_WIDTH (15)
 #define RESIZE_CONTROL_HEIGHT (15)
+
+@implementation EmacsWindow
+
+- (NSRect)resizeControlFrame
+{
+  NSRect frame = [self frame];
+  CGFloat scaleFactor;
+
+  if ([self respondsToSelector:@selector(userSpaceScaleFactor)])
+    scaleFactor = [self userSpaceScaleFactor];
+  else
+    scaleFactor = 1.0;
+
+  if (scaleFactor == 1.0)
+    return NSMakeRect (NSWidth (frame) - RESIZE_CONTROL_WIDTH, 0,
+		       RESIZE_CONTROL_WIDTH, RESIZE_CONTROL_HEIGHT);
+  else
+    {
+      CGFloat width, height;
+
+      width = round (RESIZE_CONTROL_WIDTH * scaleFactor);
+      height = round (RESIZE_CONTROL_HEIGHT * scaleFactor);
+
+      return NSMakeRect (NSWidth (frame) - width, 0, width, height);
+    }
+}
+
+- (void)setupResizeTracking:(NSEvent *)event
+{
+  NSRect resizeControlFrame = [self resizeControlFrame];
+  NSPoint location = [event locationInWindow];
+
+  resizeTrackingOffset = NSMakePoint (location.x - NSMinX (resizeControlFrame),
+				      location.y - NSMinY (resizeControlFrame));
+}
+
+- (void)suspendResizeTracking:(NSEvent *)event
+{
+  mouseUpEvent = [[event mouseEventByChangingType:NSLeftMouseUp
+			 andLocation:[event locationInWindow]] retain];
+  [NSApp postEvent:mouseUpEvent atStart:YES];
+  /* Use notification?  */
+  [[NSApp delegate] setTrackingObject:self
+		    andResumeSelector:@selector(resumeResizeTracking)];
+}
+
+- (void)resumeResizeTracking
+{
+  NSRect resizeControlFrame = [self resizeControlFrame];
+  NSPoint location =
+    NSMakePoint (NSMinX (resizeControlFrame) + resizeTrackingOffset.x,
+		 NSMinY (resizeControlFrame) + resizeTrackingOffset.y);
+  NSEvent *mouseDownEvent =
+    [mouseUpEvent mouseEventByChangingType:NSLeftMouseDown
+		  andLocation:location];
+
+  [mouseUpEvent release];
+  mouseUpEvent = nil;
+  [NSApp postEvent:mouseDownEvent atStart:YES];
+}
+
+- (void)sendEvent:(NSEvent *)event
+{
+  if ([event type] == NSLeftMouseDown
+      && NSMouseInRect ([event locationInWindow],
+			[self resizeControlFrame], NO))
+    [self setupResizeTracking:event];
+
+  [super sendEvent:event];
+}
+
+@end				// EmacsWindow
 
 @implementation EmacsFrameController
 
@@ -1027,11 +1194,19 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 		    toSize:(NSSize)proposedFrameSize
 {
   struct frame *f = emacsFrame;
+  NSEvent *currentEvent = [NSApp currentEvent];
   XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
   EmacsView *emacsView = FRAME_EMACS_VIEW (f);
   NSRect windowFrame, emacsViewFrame;
   NSSize emacsViewSizeInPixels, emacsViewSize;
   CGFloat dw, dh;
+
+  if ([currentEvent type] == NSLeftMouseDragged)
+    {
+      EmacsWindow *window = (EmacsWindow *) sender;
+
+      [window suspendResizeTracking:currentEvent];
+    }
 
   windowFrame = [sender frame];
   if (size_hints == NULL)
@@ -1159,8 +1334,7 @@ void
 mac_send_window_behind (window, behind_window)
      Window window, behind_window;
 {
-  NSInteger otherWindowNumber =
-    behind_window ? [(NSWindow *)behind_window windowNumber] : 0;
+  NSInteger otherWindowNumber = [(NSWindow *)behind_window windowNumber];
 
   [(NSWindow *)window orderWindow:NSWindowBelow relativeTo:otherWindowNumber];
 }
@@ -1224,7 +1398,7 @@ mac_get_base_screen_frame ()
 {
   NSArray *screens = [NSScreen screens];
 
-  if (screens && [screens count] > 0)
+  if ([screens count] > 0)
     return [[screens objectAtIndex:0] frame];
   else
     return [[NSScreen mainScreen] frame];
@@ -1381,11 +1555,9 @@ mac_rect_make (f, x, y, w, h)
   NSWindow *window = FRAME_MAC_WINDOW (f);
   CGFloat scaleFactor;
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
   if ([window respondsToSelector:@selector(userSpaceScaleFactor)])
     scaleFactor = [window userSpaceScaleFactor];
   else
-#endif
     scaleFactor = 1.0;
 
   if (scaleFactor == 1.0)
@@ -1404,7 +1576,7 @@ mac_rect_make (f, x, y, w, h)
       rect.origin.y = y;
       rect = [emacsView convertRect:rect fromView:nil];
 
-      return *((CGRect *) &rect);
+      return NSRectToCGRect (rect);
     }
 }
 
@@ -1417,7 +1589,7 @@ mac_update_proxy_icon (f)
   NSWindow *window = FRAME_MAC_WINDOW (f);
   NSString *old = [window representedFilename], *new;
 
-  if ((old == nil || [old length] == 0) && !STRINGP (file_name))
+  if ([old length] == 0 && !STRINGP (file_name))
     return;
 
   if (!STRINGP (file_name))
@@ -1517,18 +1689,14 @@ mac_frame_up_to_date (f)
   /* Redraw the resize control.  */
   if (NILP (tip_frame) || XFRAME (tip_frame) != f)
     {
-      NSWindow *window = FRAME_MAC_WINDOW (f);
-      NSView *contentView;
-      NSRect contentViewFrame, rect;
+      EmacsWindow *window = FRAME_MAC_WINDOW (f);
+      NSView *frameView;
+      NSRect rect;
 
       BLOCK_INPUT;
-
-      contentView = [window contentView];
-      contentViewFrame = [contentView frame];
-      rect = NSMakeRect (NSWidth (contentViewFrame) - RESIZE_CONTROL_WIDTH,
-			 0, RESIZE_CONTROL_WIDTH, RESIZE_CONTROL_HEIGHT);
-      [contentView setNeedsDisplayInRect:rect];
-
+      frameView = [[window contentView] superview];
+      rect = [frameView convertRect:[window resizeControlFrame] fromView:nil];
+      [frameView setNeedsDisplayInRect:rect];
       UNBLOCK_INPUT;
     }
 }
@@ -1558,15 +1726,15 @@ mac_create_frame_window (f, tooltip_p)
     }
   else
     {
-      contentRect = NSMakeRect (0, 0, 1, 1);
+      contentRect = NSMakeRect (0, 0, 100, 100);
       windowStyle = NSBorderlessWindowMask;
       deferCreation = NO;
     }
 
-  window = [[NSWindow alloc] initWithContentRect:contentRect
-			     styleMask:windowStyle
-			     backing:NSBackingStoreBuffered
-			     defer:deferCreation];
+  window = [[EmacsWindow alloc] initWithContentRect:contentRect
+				styleMask:windowStyle
+				backing:NSBackingStoreBuffered
+				defer:deferCreation];
   FRAME_MAC_WINDOW (f) = window;
   [window setDelegate:[[EmacsFrameController alloc] initWithEmacsFrame:f]];
 
@@ -1575,10 +1743,11 @@ mac_create_frame_window (f, tooltip_p)
     [window setAcceptsMouseMovedEvents:YES];
   else
     {
+      [window setAutodisplay:NO];
       [window setHasShadow:YES];
       [window setLevel:NSScreenSaverWindowLevel];
       if ([window respondsToSelector:@selector(setIgnoresMouseEvents:)])
-	objc_msgSend (window, @selector(setIgnoresMouseEvents:), YES);
+	[window setIgnoresMouseEvents:YES];
     }
 
   if (f->size_hint_flags & (USPosition | PPosition))
@@ -1671,9 +1840,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
 - (struct frame *)emacsFrame
 {
-  NSWindow *window = [self window];
-
-  return window ? [[window delegate] emacsFrame] : NULL;
+  return [[[self window] delegate] emacsFrame];
 }
 
 - (void)drawRect:(NSRect)aRect
@@ -1691,7 +1858,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       const NSRect *rects;
       int i, count;
 
-      objc_msgSend (self, @selector(getRectsBeingDrawn:count:), &rects, &count);
+      [self getRectsBeingDrawn:&rects count:&count];
       SetRectRgn (new_region, NSMinX (*rects), NSMinY (*rects),
 		  NSMaxX (*rects), NSMaxY (*rects));
       if (count > 1)
@@ -2013,11 +2180,6 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
   [NSCursor setHiddenUntilMouseMoves:YES];
 
-  EVENT_INIT (inputEvent);
-  inputEvent.arg = Qnil;
-  inputEvent.timestamp = [theEvent timestamp] * 1000;
-  XSETFRAME (inputEvent.frame_or_window, f);
-
   /* If mouse-highlight is an integer, input clears out mouse
      highlighting.  */
   if (!dpyinfo->mouse_face_hidden && INTEGERP (Vmouse_highlight)
@@ -2049,6 +2211,11 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
     char_code = [characters characterAtIndex:0];
   else
     char_code = 0;
+
+  EVENT_INIT (inputEvent);
+  inputEvent.arg = Qnil;
+  inputEvent.timestamp = [theEvent timestamp] * 1000;
+  XSETFRAME (inputEvent.frame_or_window, f);
 
   do_keystroke (([theEvent isARepeat] ? autoKey : keyDown),
 		char_code, [theEvent keyCode], modifiers,
@@ -2237,7 +2404,11 @@ get_text_input_script_language (slrec)
 - (BOOL)hasMarkedText
 {
   /* The cast below is just for determining the return type.  The
-     object `markedText' might be of class NSAttributedString.  */
+     object `markedText' might be of class NSAttributedString.
+
+     Strictly speaking, `markedText != nil &&' is not necessary
+     because message to nil is defined to return 0 as NSUInteger, but
+     we keep this as markedText is likely to be nil in most cases.  */
   return markedText != nil && [(NSString *)markedText length] != 0;
 }
 
@@ -2518,10 +2689,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 - (void)viewFrameDidChange:(NSNotification *)aNotification
 {
-  struct frame *f = [self emacsFrame];
-
   if (![self inLiveResize])
     {
+      struct frame *f = [self emacsFrame];
       NSRect frameRect = [self frame];
 
       mac_handle_size_change (f, NSWidth (frameRect), NSHeight (frameRect));
@@ -2634,7 +2804,7 @@ mac_appkit_invert_rectangle (f, x, y, width, height)
 
   rect = mac_rect_make (f, x, y, width, height);
   bitmap = [[NSBitmapImageRep alloc]
-	     initWithFocusedViewRect:*((NSRect *) &rect)];
+	     initWithFocusedViewRect:(NSRectFromCGRect (rect))];
   if (bitmap && ![bitmap isPlanar] && [bitmap samplesPerPixel] == 3)
     {
       unsigned char *data = [bitmap bitmapData];
@@ -3366,7 +3536,7 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 {
   NSToolbarItem *item = nil;
 
-  if ([itemIdentifier isEqual:TOOLBAR_ICON_ITEM_IDENTIFIER])
+  if ([itemIdentifier isEqualToString:TOOLBAR_ICON_ITEM_IDENTIFIER])
     {
       item = [[[EmacsToolbarItem alloc] initWithItemIdentifier:itemIdentifier]
 	       autorelease];
@@ -3432,7 +3602,7 @@ mac_is_window_toolbar_visible (window)
 {
   NSToolbar *toolbar = [(NSWindow *)window toolbar];
 
-  return toolbar && [toolbar isVisible];
+  return [toolbar isVisible];
 }
 
 /* Update the tool bar for frame F.  Add new buttons and remove old.  */
@@ -3619,11 +3789,11 @@ mac_tool_bar_note_mouse_movement (f, event)
 
   window = FRAME_MAC_WINDOW (f);
   hitView = [[[window contentView] superview] hitTest:[event locationInWindow]];
-  if (hitView && [hitView respondsToSelector:@selector(item)])
+  if ([hitView respondsToSelector:@selector(item)])
     {
       id item = [hitView performSelector:@selector(item)];
 
-      if (item && [item isKindOfClass:[EmacsToolbarItem class]])
+      if ([item isKindOfClass:[EmacsToolbarItem class]])
 	{
 #define PROP(IDX) AREF (f->tool_bar_items, i * TOOL_BAR_ITEM_NSLOTS + (IDX))
 	  NSInteger i = [item tag];
@@ -3763,6 +3933,60 @@ enum {
 };
 #endif
 
+@implementation EmacsFontPanel
+
+- (void)suspendSliderTracking:(NSEvent *)event
+{
+  mouseUpEvent = [[event mouseEventByChangingType:NSLeftMouseUp
+			 andLocation:[event locationInWindow]] retain];
+  [NSApp postEvent:mouseUpEvent atStart:YES];
+  /* Use notification?  */
+  [[NSApp delegate] setTrackingObject:self
+		    andResumeSelector:@selector(resumeSliderTracking)];
+}
+
+- (void)resumeSliderTracking
+{
+  NSPoint location = [mouseUpEvent locationInWindow];
+  NSRect trackRect;
+  NSEvent *mouseDownEvent;
+
+  trackRect = [trackedSlider convertRect:[[trackedSlider cell] trackRect]
+			     toView:nil];
+  if (location.x < NSMinX (trackRect))
+    location.x = NSMinX (trackRect);
+  else if (location.x >= NSMaxX (trackRect))
+    location.x = NSMaxX (trackRect) - 1;
+  if (location.y <= NSMinY (trackRect))
+    location.y = NSMinY (trackRect) + 1;
+  else if (location.y > NSMaxY (trackRect))
+    location.y = NSMaxY (trackRect);
+
+  mouseDownEvent = [mouseUpEvent mouseEventByChangingType:NSLeftMouseDown
+				 andLocation:location];
+  [mouseUpEvent release];
+  mouseUpEvent = nil;
+  [NSApp postEvent:mouseDownEvent atStart:YES];
+}
+
+- (void)sendEvent:(NSEvent *)event
+{
+  if ([event type] == NSLeftMouseDown)
+    {
+      NSView *contentView = [self contentView], *hitView;
+
+      hitView = [contentView hitTest:[[contentView superview]
+				       convertPoint:[event locationInWindow]
+				       fromView:nil]];
+      if ([hitView isKindOfClass:[NSSlider class]])
+	trackedSlider = (NSSlider *) hitView;
+    }
+
+  [super sendEvent:event];
+}
+
+@end				// EmacsFontPanel
+
 @implementation EmacsController (FontPanel)
 
 /* Called when the font panel is about to close.  */
@@ -3825,9 +4049,17 @@ enum {
 					 typeFMFontStyle,
 #endif	/* !__LP64__ */
 					 typeFMFontSize};
+  NSEvent *currentEvent = [NSApp currentEvent];
   NSFont *oldFont = [self fontForFace:DEFAULT_FACE_ID character:0];
   NSFont *newFont = [sender convertFont:oldFont];
   EventRef event;
+
+  if ([currentEvent type] == NSLeftMouseDragged)
+    {
+      EmacsFontPanel *fontPanel = (EmacsFontPanel *) [sender fontPanel:NO];
+
+      [fontPanel suspendSliderTracking:currentEvent];
+    }
 
   err = CreateEvent (NULL, kEventClassFont, kEventFontSelection, 0,
 		     kEventAttributeNone, &event);
@@ -3876,7 +4108,7 @@ enum {
 
 /* Hide unused features in font panels.  */
 
-- (unsigned int)validModesForFontPanel:(NSFontPanel *)fontPanel
+- (NSUInteger)validModesForFontPanel:(NSFontPanel *)fontPanel
 {
   /* Underline, Strikethrough, TextColor, DocumentColor, and Shadow
      are not used in font panels.  */
@@ -3894,7 +4126,7 @@ mac_font_panel_visible_p ()
 {
   NSFontPanel *fontPanel = [[NSFontManager sharedFontManager] fontPanel:NO];
 
-  return fontPanel && [fontPanel isVisible];
+  return [fontPanel isVisible];
 }
 
 /* Toggle visiblity of the font panel.  */
@@ -3959,6 +4191,9 @@ static void update_dragged_types P_ ((void));
    MENU_BAR_ACTIVATE_EVENT is not processed: e.g., "M-! sleep 30 RET
    -> try to activate menu bar -> C-g".  */
 #define SAVE_MENU_EVENT_TIMEOUT	5
+
+/* Minimum time interval between successive XTread_socket calls.  */
+#define READ_SOCKET_MIN_INTERVAL (1/60.0)
 
 /* Convert Cocoa modifier key masks to Carbon key modifiers.  */
 
@@ -4056,21 +4291,55 @@ mac_run_loop_run_once (timeout)
   return [expiration timeIntervalSinceNow] <= 0;
 }
 
+/* Return next event in the main queue if it exists.  Otherwise return
+   NULL.  */
+
+static EventRef
+peek_next_event ()
+{
+  EventRef event;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+  if (AcquireFirstMatchingEventInQueue != NULL)
+#endif
+    {
+      event = AcquireFirstMatchingEventInQueue (GetCurrentEventQueue (), 0,
+						NULL, kEventQueueOptionsNone);
+      if (event)
+	ReleaseEvent (event);
+    }
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+  else			/* AcquireFirstMatchingEventInQueue == NULL */
+#endif
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1030  */
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+    {
+      OSStatus err;
+
+      err = ReceiveNextEvent (0, NULL, kEventDurationNoWait,
+			      kEventLeaveInQueue, &event);
+      if (err != noErr)
+	event = NULL;
+    }
+#endif
+
+  return event;
+}
+
 /* Return next event in the main queue if it exists and is a mouse
    down on the menu bar.  Otherwise return NULL.  */
 
 static EventRef
 peek_if_next_event_activates_menu_bar ()
 {
-  OSStatus err;
-  EventRef event;
+  EventRef event = peek_next_event ();
 
-  err = ReceiveNextEvent (0, NULL, kEventDurationNoWait,
-			  kEventLeaveInQueue, &event);
-  if (err == noErr
+  if (event
       && GetEventClass (event) == kEventClassMouse
       && GetEventKind (event) == kEventMouseDown)
     {
+      OSStatus err;
       HIPoint point;
 
       err = GetEventParameter (event, kEventParamMouseLocation,
@@ -4119,6 +4388,9 @@ XTread_socket (sd, expected, hold_quit)
   int count;
   struct mac_display_info *dpyinfo = &one_mac_display_info;
   NSAutoreleasePool *pool;
+  static NSDate *lastCallDate;
+  static NSTimer *timer;
+  NSTimeInterval timeInterval;
 
   if (interrupt_input_blocked)
     {
@@ -4136,57 +4408,90 @@ XTread_socket (sd, expected, hold_quit)
 
   pool = [[NSAutoreleasePool alloc] init];
 
-  /* Maybe these should be done at some redisplay timing.  */
-  update_apple_event_handler ();
-  update_dragged_types ();
-
-  if (dpyinfo->saved_menu_event
-      && (GetEventTime (dpyinfo->saved_menu_event) + SAVE_MENU_EVENT_TIMEOUT
-	  <= GetCurrentEventTime ()))
+  if (lastCallDate &&
+      (timeInterval = - [lastCallDate timeIntervalSinceNow],
+       timeInterval < READ_SOCKET_MIN_INTERVAL))
     {
-      ReleaseEvent (dpyinfo->saved_menu_event);
-      dpyinfo->saved_menu_event = NULL;
+      if (![timer isValid])
+	{
+	  [timer release];
+	  timeInterval = READ_SOCKET_MIN_INTERVAL - timeInterval;
+	  timer = [[NSTimer scheduledTimerWithTimeInterval:timeInterval
+			    target:[NSApp delegate]
+			    selector:@selector(processDeferredReadSocket:)
+			    userInfo:nil repeats:NO] retain];
+	}
+      count = 0;
     }
-
-  count = [[NSApp delegate] handleQueuedNSEventsWithHoldingQuitIn:hold_quit];
-
-  /* If the focus was just given to an autoraising frame,
-     raise it now.  */
-  /* ??? This ought to be able to handle more than one such frame.  */
-  if (pending_autoraise_frame)
+  else
     {
-      x_raise_frame (pending_autoraise_frame);
-      pending_autoraise_frame = 0;
-    }
+      [lastCallDate release];
+      lastCallDate = [[NSDate alloc] init];
 
-  if (mac_screen_config_changed)
-    {
-      mac_get_screen_info (dpyinfo);
-      mac_screen_config_changed = 0;
-    }
+      /* Maybe these should be done at some redisplay timing.  */
+      update_apple_event_handler ();
+      update_dragged_types ();
 
-  x_flush (NULL);
+      if (dpyinfo->saved_menu_event
+	  && (GetEventTime (dpyinfo->saved_menu_event) + SAVE_MENU_EVENT_TIMEOUT
+	      <= GetCurrentEventTime ()))
+	{
+	  ReleaseEvent (dpyinfo->saved_menu_event);
+	  dpyinfo->saved_menu_event = NULL;
+	}
 
-  /* Check which frames are still visible.  We do this here because
-     there doesn't seem to be any direct notification that the
-     visibility of a window has changed (at least, not in all cases.
-     Or are there any counterparts of kEventWindowShown/Hidden?).  */
-  {
-    Lisp_Object tail, frame;
+      count =
+	[[NSApp delegate] handleQueuedNSEventsWithHoldingQuitIn:hold_quit];
 
-    FOR_EACH_FRAME (tail, frame)
+      /* If the focus was just given to an autoraising frame,
+	 raise it now.  */
+      /* ??? This ought to be able to handle more than one such frame.  */
+      if (pending_autoraise_frame)
+	{
+	  x_raise_frame (pending_autoraise_frame);
+	  pending_autoraise_frame = 0;
+	}
+
+      if (mac_screen_config_changed)
+	{
+	  mac_get_screen_info (dpyinfo);
+	  mac_screen_config_changed = 0;
+	}
+
+      x_flush (NULL);
+
+      /* Check which frames are still visible.  We do this here
+	 because there doesn't seem to be any direct notification that
+	 the visibility of a window has changed (at least, not in all
+	 cases.  Or are there any counterparts of
+	 kEventWindowShown/Hidden?).  */
       {
-	struct frame *f = XFRAME (frame);
+	Lisp_Object tail, frame;
 
-	/* The tooltip has been drawn already.  Avoid the
-	   SET_FRAME_GARBAGED in mac_handle_visibility_change.  */
-	if (EQ (frame, tip_frame))
-	  continue;
+	FOR_EACH_FRAME (tail, frame)
+	  {
+	    struct frame *f = XFRAME (frame);
 
-	if (FRAME_MAC_P (f))
-	  mac_handle_visibility_change (f);
+	    /* The tooltip has been drawn already.  Avoid the
+	       SET_FRAME_GARBAGED in mac_handle_visibility_change.  */
+	    if (EQ (frame, tip_frame))
+	      continue;
+
+	    if (FRAME_MAC_P (f))
+	      {
+		mac_handle_visibility_change (f);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+		if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4)
+		  {
+		    NSWindow *window = FRAME_MAC_WINDOW (f);
+
+		    [window setViewsNeedDisplay:NO];
+		  }
+#endif
+	      }
+	  }
       }
-  }
+    }
 
   [pool release];
 
@@ -4317,14 +4622,21 @@ mac_reposition_hourglass (f)
     }
 }
 
-@end
+/* Simulate kNavDontConfirmReplacement.  */
+
+- (BOOL)_overwriteExistingFileCheck:(id)fp8
+{
+  return YES;
+}
+
+@end				// EmacsSavePanel
 
 @implementation EmacsOpenPanel
 
 /* Like the original runModalForTypes:, but run the application event
    loop if not.  */
 
-- (int)runModalForTypes:(NSArray *)fileTypes
+- (NSInteger)runModalForTypes:(NSArray *)fileTypes
 {
   if ([NSApp isRunning])
     return [super runModalForTypes:fileTypes];
@@ -4333,7 +4645,7 @@ mac_reposition_hourglass (f)
       NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
       NSInvocation *invocation =
 	[NSInvocation invocationWithMethodSignature:signature];
-      int response;
+      NSInteger response;
 
       [invocation setTarget:self];
       [invocation setSelector:_cmd];
@@ -4378,7 +4690,7 @@ mac_reposition_hourglass (f)
     }
 }
 
-@end
+@end				// EmacsOpenPanel
 
 /* The actual implementation of Fx_file_dialog.  */
 
@@ -4418,14 +4730,13 @@ mac_file_dialog (prompt, dir, default_filename, mustmatch, only_dir_p)
   if (NILP (only_dir_p) && NILP (mustmatch))
     {
       /* This is a save dialog */
-      /* How can we simulate kNavDontConfirmReplacement? */
       NSSavePanel *savePanel = [EmacsSavePanel savePanel];
       NSInteger response;
 
       [savePanel setTitle:[NSString stringWithLispString:prompt]];
       [savePanel setPrompt:@"OK"];
       if ([savePanel respondsToSelector:@selector(setNameFieldLabel:)])
-	objc_msgSend (savePanel, @selector(setNameFieldLabel:), @"Enter Name:");
+	[savePanel setNameFieldLabel:@"Enter Name:"];
 
       if (directory)
 	response = [savePanel runModalForDirectory:directory
@@ -4480,7 +4791,7 @@ extern void find_and_call_menu_selection P_ ((FRAME_PTR, int, Lisp_Object,
 					      void *));
 extern void set_frame_menubar P_ ((FRAME_PTR, int, int));
 
-static void update_services_menu_types P_ (());
+static void update_services_menu_types P_ ((void));
 
 @implementation NSMenu (Emacs)
 
@@ -4503,11 +4814,11 @@ static void update_services_menu_types P_ (());
       NSData *data;
 
       if (wv->key != NULL)
-	itemName = [NSString stringWithFormat:@"%@ %@", itemName,
+	itemName = [NSString stringWithFormat:@"%@\t%@", itemName,
 			     [NSString stringWithUTF8String:wv->key
 				       fallback:YES]];
 
-      item = (NSMenuItem *) [self addItemWithTitle:(NSString *)itemName
+      item = (NSMenuItem *) [self addItemWithTitle:itemName
 				  action:@selector(setMenuItemSelectionToTag:)
 				  keyEquivalent:@""];
 
@@ -4536,9 +4847,44 @@ static void update_services_menu_types P_ (());
 /* Create menu trees defined by WV and add them to the end of the
    receiver.  */
 
-- (void)fillWithWidgetValue:(widget_value *)wv
+- (void)fillWithWidgetValue:(widget_value *)first_wv
 {
-  for (; wv != NULL; wv = wv->next)
+  widget_value *wv;
+  NSFont *menuFont = [NSFont menuFontOfSize:0];
+  NSDictionary *attributes =
+    [NSDictionary dictionaryWithObject:menuFont forKey:NSFontAttributeName];
+  NSSize spaceSize = [@" " sizeWithAttributes:attributes];
+  CGFloat maxTabStop = 0;
+
+  for (wv = first_wv; wv != NULL; wv = wv->next)
+    if (!name_is_separator (wv->name) && wv->key)
+      {
+	NSString *itemName =
+	  [NSString stringWithUTF8String:wv->name fallback:YES];
+	NSSize size = [[itemName stringByAppendingString:@"\t"]
+			sizeWithAttributes:attributes];
+
+	if (maxTabStop < size.width)
+	  maxTabStop = size.width;
+      }
+
+  for (wv = first_wv; wv != NULL; wv = wv->next)
+    if (!name_is_separator (wv->name) && wv->key)
+      {
+	NSString *itemName =
+	  [NSString stringWithUTF8String:wv->name fallback:YES];
+	NSSize nameSize = [itemName sizeWithAttributes:attributes];
+	int name_len = strlen (wv->name);
+	int pad_len = ceil ((maxTabStop - nameSize.width) / spaceSize.width);
+	Lisp_Object name;
+
+	name = make_uninit_string (name_len + pad_len);
+	strcpy (SDATA (name), wv->name);
+	memset (SDATA (name) + name_len, ' ', pad_len);
+	wv->name = SDATA (name);
+      }
+
+  for (wv = first_wv; wv != NULL; wv = wv->next)
     {
       NSMenuItem *item = [self addItemWithWidgetValue:wv];
 
@@ -4554,7 +4900,7 @@ static void update_services_menu_types P_ (());
     }
 
   if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4))
-    objc_msgSend (self, @selector(setDelegate:), [NSApp delegate]);
+    [self setDelegate:[NSApp delegate]];
 }
 
 @end				// NSMenu (Emacs)
@@ -4601,7 +4947,7 @@ static void update_services_menu_types P_ (());
   if (window == nil)
     window = FRAME_MAC_WINDOW (SELECTED_FRAME ());
   firstResponder = [window firstResponder];
-  if (firstResponder && [firstResponder isMemberOfClass:[EmacsView class]])
+  if ([firstResponder isMemberOfClass:[EmacsView class]])
     {
       [firstResponder keyDown:theEvent];
 
@@ -5793,7 +6139,7 @@ drag_operation_to_actions (operation)
   return YES;
 }
 
-@end
+@end				// EmacsView (DragAndDrop)
 
 /* Update the pasteboard types derived from the value of
    mac-dnd-known-types and register them so every Emacs view can
@@ -5866,7 +6212,7 @@ extern Lisp_Object Qservice, Qpaste, Qperform;
   NSPasteboard *pboard;
   NSArray *array;
 
-  if (sendType == nil || [sendType length] == 0
+  if ([sendType length] == 0
       || (!NILP (Fx_selection_owner_p (Vmac_service_selection))
 	  && (mac_get_selection_from_symbol (Vmac_service_selection, 0,
 					     (Selection *) &pboard) == noErr)
@@ -5877,7 +6223,7 @@ extern Lisp_Object Qservice, Qpaste, Qperform;
       Lisp_Object rest;
       NSString *dataType;
 
-      if (returnType == nil || [returnType length] == 0)
+      if ([returnType length] == 0)
 	return self;
 
       for (rest = Vselection_converter_alist; CONSP (rest);
@@ -5996,7 +6342,7 @@ copy_pasteboard_to_service_selection (pboard)
 {
 }
 
-@end				//  NSMethodSignature (Emacs)
+@end				// NSMethodSignature (Emacs)
 
 static BOOL
 is_services_handler_selector (selector)
@@ -6224,8 +6570,7 @@ handle_action_invocation (invocation)
 	{
 	  id delegate = [[sender window] delegate];
 
-	  if (delegate
-	      && [delegate isKindOfClass:[EmacsFrameController class]])
+	  if ([delegate isKindOfClass:[EmacsFrameController class]])
 	    {
 	      Lisp_Object frame;
 
@@ -6245,4 +6590,46 @@ handle_action_invocation (invocation)
 	     mac_focus_frame (&one_mac_display_info));
   inev.arg = Fcons (build_string ("aevt"), arg);
   [[NSApp delegate] storeEvent:&inev];
+}
+
+
+/***********************************************************************
+			 AppleScript support
+***********************************************************************/
+
+extern long do_applescript P_ ((Lisp_Object, Lisp_Object *));
+
+@implementation EmacsController (AppleScript)
+
+- (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result
+{
+  if ([NSApp isRunning])
+    return do_applescript (script, result);
+  else
+    {
+      NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
+      NSInvocation *invocation =
+	[NSInvocation invocationWithMethodSignature:signature];
+      long osaerror;
+
+      [invocation setTarget:self];
+      [invocation setSelector:_cmd];
+      [invocation setArgument:&script atIndex:2];
+      [invocation setArgument:&result atIndex:3];
+
+      [NSApp runTemporarilyWithInvocation:invocation];
+
+      [invocation getReturnValue:&osaerror];
+
+      return osaerror;
+    }
+}
+
+@end				// EmacsController (OSA)
+
+long
+mac_appkit_do_applescript (script, result)
+     Lisp_Object script, *result;
+{
+  return [[NSApp delegate] doAppleScript:script result:result];
 }

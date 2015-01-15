@@ -309,7 +309,11 @@ Boston, MA 02110-1301, USA.  */
    Mac OS X 10.2.  So if ./configure detects it, set the command-line
    option to use it.  */
 #ifdef HAVE_LIBNCURSES
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+#define LIBS_TERMCAP -lncurses.5
+#else
 #define LIBS_TERMCAP -lncurses
+#endif
 /* This prevents crashes when running Emacs in Terminal.app under
    10.2.  */
 #define TERMINFO

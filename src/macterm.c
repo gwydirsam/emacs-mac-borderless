@@ -3438,7 +3438,7 @@ x_draw_relief_rect (f, left_x, top_y, right_x, bottom_y, width,
 {
 #if USE_APPKIT
   GC top_left_gc, bottom_right_gc;
-  
+
   if (raised_p)
     {
       top_left_gc = f->output_data.mac->white_relief.gc;
@@ -3925,12 +3925,15 @@ x_draw_glyph_string (s)
      S can draw into it.  This makes S->next use XDrawString instead
      of XDrawImageString.  */
   if (s->next && s->right_overhang && !s->for_overlaps
+      && s->next->first_glyph->type != IMAGE_GLYPH
       && s->next->hl != DRAW_CURSOR)
     {
-      xassert (s->next->img == NULL);
       x_set_glyph_string_gc (s->next);
       x_set_glyph_string_clipping (s->next);
-      x_draw_glyph_string_background (s->next, 1);
+      if (s->next->first_glyph->type == STRETCH_GLYPH)
+	x_draw_stretch_glyph_string (s->next);
+      else
+	x_draw_glyph_string_background (s->next, 1);
     }
 
   /* Set up S->gc, set clipping and draw S.  */

@@ -1,0 +1,40 @@
+* emacs-22.3-appkit-1.1 (2008-11-27)
+
+** Fixed bugs
+
+*** 64-bit binary doesn't work with AquaSKK Japanese input method.
+
+*** Tooltip contents are chopped off if the fractional part of the
+scaling factor is greater than or equal to 0.5.
+
+*** Crash with tooltip autodisplay that happens when its contents are
+not yet ready.
+
+*** (do-applescript "choose file") -> cancel -> hang on 10.5.
+
+*** With asynchronous subprocesses, the "[Complete, but not unique]"
+message shown by C-x C-f / TAB TAB will disappear on key release.
+(Both Carbon and Carbon+Appkit)
+
+*** Crash with tabbar.el (not specific to the Carbon(+AppKit) port).
+http://emacsbugs.donarmstrong.com/cgi-bin/bugreport.cgi?bug=1337
+
+** Improvements
+
+*** Execution of flyspell-small-region is no longer too slow.
+
+*** The "Visit New File" dialog no longer confirms replacement if an
+existing file is specified (only on 10.3 and later).
+
+*** Update display while the resize control (or the slider in the font
+panel) is being dragged.
+
+*** Align key bindings shown in a menu.
+
+*** Explicitly link with libncurses.5 if MACOSX_DEPLOYMENT_TARGET <
+1040 to avoid runtime link error when running on the versions without
+/usr/lib/libncurses.5.4.dylib.
+
+
+* emacs-22.3-appkit-1.0 (2008-09-07)
+Initial release
