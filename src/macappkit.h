@@ -48,6 +48,10 @@ typedef unsigned int NSUInteger;
 @protocol NSMenuDelegate <NSObject> @end
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@protocol NSTextInputClient @end
+#endif
+
 @interface NSData (Emacs)
 - (Lisp_Object)lispString;
 @end
@@ -131,6 +135,10 @@ typedef unsigned int NSUInteger;
 
   /* Selector used for resuming suspended left mouse tracking.  */
   SEL trackingResumeSelector;
+
+  /* Whether a service provider for Emacs is registered as of
+     applicationWillFinishLaunching: or not.  */
+  BOOL serviceProviderRegistered;
 
   /* Whether conflicting Cocoa's text system key bindings (e.g., C-q)
      are disabled or not.  */
@@ -243,7 +251,7 @@ typedef unsigned int NSUInteger;
 /* Class for Emacs view that also handles input events.  Used by
    ordinary frames.  */
 
-@interface EmacsView : EmacsTipView <NSTextInput>
+@interface EmacsView : EmacsTipView <NSTextInput, NSTextInputClient>
 {
   /* Target object to which the EmacsView object sends actions.  */
   id target;

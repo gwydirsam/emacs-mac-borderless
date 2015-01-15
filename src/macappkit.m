@@ -829,6 +829,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 {
   [EmacsPosingWindow setup];
   [NSFontManager setFontPanelFactory:[EmacsFontPanel class]];
+  serviceProviderRegistered = mac_service_provider_registered_p ();
   init_menu_bar ();
   init_apple_event_handler ();
 }
@@ -840,7 +841,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
      speaking, there's a race condition, but it is not critical
      anyway.  Unfortunately, Mac OS X 10.4 still displays warnings at
      -[NSApplication setServicesMenu:] or the first event loop.  */
-  if (!mac_service_provider_registered_p ())
+  if (!serviceProviderRegistered)
     [NSApp setServicesProvider:self];
 
   install_dispatch_handler ();
@@ -2646,6 +2647,19 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
 @implementation EmacsView
 
++ (void)initialize
+{
+  if (self == [EmacsView class])
+    {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+      NSDictionary *appDefaults =
+	[NSDictionary dictionaryWithObject:@"NO"
+				    forKey:@"AppleMomentumScrollSupported"];
+
+      [defaults registerDefaults:appDefaults];
+    }
+}
+
 - (id)initWithFrame:(NSRect)frameRect
 {
   self = [super initWithFrame:frameRect];
@@ -2997,7 +3011,7 @@ get_text_input_script_language (slrec)
   return err;
 }
 
-- (void)insertText:(id)aString
+- (void)insertText:(id)aString replacementRange:(NSRange)replacementRange;
 {
   OSStatus err;
   struct frame *f = [self emacsFrame];
@@ -3061,6 +3075,13 @@ get_text_input_script_language (slrec)
 			  Fcons (build_string ("intl"), arg)));
     }
 
+  if (!NSEqualRanges (replacementRange, NSMakeRange (NSNotFound, 0)))
+    arg = Fcons (Fcons (build_string ("replacementRange"),
+			Fcons (build_string ("Lisp"),
+			       Fcons (make_number (replacementRange.location),
+				      make_number (replacementRange.length)))),
+		 arg);
+
   inputEvent.kind = MAC_APPLE_EVENT;
   inputEvent.x = Qtext_input;
   inputEvent.y = Qinsert_text;
@@ -3084,12 +3105,44 @@ get_text_input_script_language (slrec)
     }
 }
 
+- (void)insertText:(id)aString
+{
+  NSRange replacementRange = NSMakeRange (NSNotFound, 0);
+
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4
+      && [aString isKindOfClass:[NSAttributedString class]])
+    {
+      NSString *rangeString =
+	[aString attribute:@"NSTextInputReplacementRangeAttributeName"
+		   atIndex:0 effectiveRange:NULL];
+
+      if (rangeString)
+	{
+	  NSRange attributesRange;
+	  NSRange aStringRange =
+	    NSMakeRange (0, [(NSAttributedString *)aString length]);
+	  NSDictionary *attributes = [aString attributesAtIndex:0
+					  longestEffectiveRange:&attributesRange
+							inRange:aStringRange];
+
+	  if (NSEqualRanges (attributesRange, aStringRange)
+	      && [attributes count] == 1)
+	    aString = [aString string];
+
+	  replacementRange = NSRangeFromString (rangeString);
+	}
+    }
+
+  [self insertText:aString replacementRange:replacementRange];
+}
+
 - (void)doCommandBySelector:(SEL)aSelector
 {
   keyEventsInterpreted = NO;
 }
 
-- (void)setMarkedText:(id)aString selectedRange:(NSRange)selRange
+- (void)setMarkedText:(id)aString selectedRange:(NSRange)selectedRange
+     replacementRange:(NSRange)replacementRange;
 {
   OSStatus err;
   struct frame *f = [self emacsFrame];
@@ -3107,10 +3160,18 @@ get_text_input_script_language (slrec)
 			  Fcons (build_string ("intl"), arg)));
     }
 
+  if (!NSEqualRanges (replacementRange, NSMakeRange (NSNotFound, 0)))
+    arg = Fcons (Fcons (build_string ("replacementRange"),
+			Fcons (build_string ("Lisp"),
+			       Fcons (make_number (replacementRange.location),
+				      make_number (replacementRange.length)))),
+		 arg);
+
   arg = Fcons (Fcons (build_string ("selectedRange"),
 		      Fcons (build_string ("Lisp"),
-			     Fcons (make_number (selRange.location),
-				    make_number (selRange.length)))), arg);
+			     Fcons (make_number (selectedRange.location),
+				    make_number (selectedRange.length)))),
+	       arg);
 
   EVENT_INIT (inputEvent);
   inputEvent.kind = MAC_APPLE_EVENT;
@@ -3124,6 +3185,25 @@ get_text_input_script_language (slrec)
   inputEvent.timestamp = [[NSApp currentEvent] timestamp] * 1000;
   XSETFRAME (inputEvent.frame_or_window, f);
   [self sendAction:action to:target];
+}
+
+- (void)setMarkedText:(id)aString selectedRange:(NSRange)selRange
+{
+  NSRange replacementRange = NSMakeRange (NSNotFound, 0);
+
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4
+      && [aString isKindOfClass:[NSAttributedString class]])
+    {
+      NSString *rangeString =
+	[aString attribute:@"NSTextInputReplacementRangeAttributeName"
+		   atIndex:0 effectiveRange:NULL];
+
+      if (rangeString)
+	replacementRange = NSRangeFromString (rangeString);
+    }
+
+  [self setMarkedText:aString selectedRange:selRange
+     replacementRange:replacementRange];
 }
 
 - (void)unmarkText
@@ -3157,16 +3237,17 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 						       EMACS_INT, EMACS_INT,
 						       UniChar *));
 
-- (NSAttributedString *)attributedSubstringFromRange:(NSRange)theRange
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)aRange
+						actualRange:(NSRangePointer)actualRange;
 {
   NSRange markedRange = [self markedRange];
   NSAttributedString *result = nil;
 
   if ([self hasMarkedText]
-      && NSEqualRanges (NSUnionRange (markedRange, theRange), markedRange))
+      && NSEqualRanges (NSUnionRange (markedRange, aRange), markedRange))
     {
-      NSRange range = NSMakeRange (theRange.location - markedRange.location,
-				   theRange.length);
+      NSRange range = NSMakeRange (aRange.location - markedRange.location,
+				   aRange.length);
 
       if ([markedText isKindOfClass:[NSAttributedString class]])
 	result = [markedText attributedSubstringFromRange:range];
@@ -3177,6 +3258,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  result = [[[NSAttributedString alloc] initWithString:string]
 		     autorelease];
 	}
+
+      if (actualRange)
+	*actualRange = aRange;
     }
   else if (poll_suppress_count != 0 || NILP (Vinhibit_quit))
     {
@@ -3193,9 +3277,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  EMACS_INT start, end, begv = BUF_BEGV (b), zv = BUF_ZV (b);
 
 	  /* The documentation says "An implementation of this method
-	     should be prepared for theRange to be out-of-bounds".  */
-	  start = begv + theRange.location;
-	  end = start + theRange.length;
+	     should be prepared for aRange to be out-of-bounds".  */
+	  start = begv + aRange.location;
+	  end = start + aRange.length;
 	  if (start < begv)
 	    start = begv;
 	  else if (start > zv)
@@ -3207,7 +3291,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 	  if (start < end)
 	    {
-	      int length = end - start;
+	      NSUInteger length = end - start;
 	      unichar *characters = xmalloc (length * sizeof (unichar));
 
 	      if (mac_store_buffer_text_to_unicode_chars (b, start, end,
@@ -3226,20 +3310,18 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 		    {
 		      NSFont *font = nil;
 		      int hpos, vpos, x, y;
+		      struct glyph_row *row;
+		      struct glyph *glyph;
 
-		      if (fast_find_position (w, start + i, &hpos, &vpos,
-					      &x, &y, Qnil))
-			{
-			  struct glyph_row *row = MATRIX_ROW (w->current_matrix,
-							      vpos);
-			  struct glyph *glyph = row->glyphs[TEXT_AREA] + hpos;
-
-			  if (glyph->type == CHAR_GLYPH
-			      && !glyph->glyph_not_available_p)
-			    font = [NSFont fontWithFace:(FACE_FROM_ID
-							 (f, glyph->face_id))];
-			}
-
+		      fast_find_position (w, start + i, &hpos, &vpos,
+					  &x, &y, Qnil);
+		      row = MATRIX_ROW (w->current_matrix, vpos);
+		      glyph = row->glyphs[TEXT_AREA] + hpos;
+		      if (glyph->charpos == start + i
+			  && glyph->type == CHAR_GLYPH
+			  && !glyph->glyph_not_available_p)
+			font = [NSFont fontWithFace:(FACE_FROM_ID
+						     (f, glyph->face_id))];
 		      if (font == nil)
 			font = [NSFont fontWithFace:(FACE_FROM_ID
 						     (f, DEFAULT_FACE_ID))];
@@ -3249,6 +3331,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 		    }
 		  [attributedString endEditing];
 		  result = attributedString;
+
+		  if (actualRange)
+		    *actualRange = NSMakeRange (start - begv, length);
 		}
 	      xfree (characters);
 	    }
@@ -3256,6 +3341,11 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
     }
 
   return result;
+}
+
+- (NSAttributedString *)attributedSubstringFromRange:(NSRange)theRange
+{
+  return [self attributedSubstringForProposedRange:theRange actualRange:NULL];
 }
 
 - (NSRange)markedRange
@@ -3266,7 +3356,8 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
     return NSMakeRange (NSNotFound, 0);
 
   if (OVERLAYP (Vmac_ts_active_input_overlay)
-      && !NILP (Foverlay_get (Vmac_ts_active_input_overlay, Qbefore_string)))
+      && !NILP (Foverlay_get (Vmac_ts_active_input_overlay, Qbefore_string))
+      && !NILP (Fmarker_buffer (OVERLAY_START (Vmac_ts_active_input_overlay))))
     location = (marker_position (OVERLAY_START (Vmac_ts_active_input_overlay))
 		- BEGV);
 
@@ -3284,7 +3375,8 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
   return result;
 }
 
-- (NSRect)firstRectForCharacterRange:(NSRange)theRange
+- (NSRect)firstRectForCharacterRange:(NSRange)aRange
+			 actualRange:(NSRangePointer)actualRange;
 {
   NSRect rect = NSZeroRect;
   struct frame *f = NULL;
@@ -3294,9 +3386,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
   int hpos, vpos, x, y, h;
   NSRange markedRange = [self markedRange];
 
-  if (theRange.location >= NSNotFound
+  if (aRange.location >= NSNotFound
       || ([self hasMarkedText]
-	  && NSEqualRanges (NSUnionRange (markedRange, theRange), markedRange)))
+	  && NSEqualRanges (NSUnionRange (markedRange, aRange), markedRange)))
     {
       /* Probably asking the location of the marked text.  Strictly
 	 speaking, it is impossible to get the correct one in general
@@ -3332,6 +3424,8 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  get_phys_cursor_geometry (w, row, glyph, &x, &y, &h);
 
 	  rect = NSMakeRect (x, y, w->phys_cursor_width, h);
+	  if (actualRange)
+	    *actualRange = aRange;
 	}
     }
   else
@@ -3348,20 +3442,42 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  && XINT (w->last_modified) == BUF_MODIFF (b)
 	  && XINT (w->last_overlay_modified) == BUF_OVERLAY_MODIFF (b))
 	{
-	  EMACS_INT charpos = theRange.location + BUF_BEGV (b);
+	  EMACS_INT charpos = BUF_BEGV (b) + aRange.location;
+	  struct glyph *end;
+	  int width = 0;
 
-	  if (fast_find_position (w, charpos, &hpos, &vpos, &x, &y, Qnil))
+	  fast_find_position (w, charpos, &hpos, &vpos, &x, &y, Qnil);
+	  row = MATRIX_ROW (w->current_matrix, vpos);
+	  glyph = row->glyphs[TEXT_AREA] + hpos;
+	  if (charpos < glyph->charpos
+	      && glyph->charpos < charpos + aRange.length)
 	    {
-	      row = MATRIX_ROW (w->current_matrix, vpos);
-	      glyph = row->glyphs[TEXT_AREA] + hpos;
-
-	      rect = NSMakeRect (WINDOW_TEXT_TO_FRAME_PIXEL_X (w, x),
-				 WINDOW_TO_FRAME_PIXEL_Y (w, y),
-				 theRange.length == 0 ? 0 : glyph->pixel_width,
-				 row->visible_height);
+	      aRange.location += glyph->charpos - charpos;
+	      aRange.length -= glyph->charpos - charpos;
+	      charpos = glyph->charpos;
 	    }
+	  end = row->glyphs[TEXT_AREA] + row->used[TEXT_AREA];
+
+	  while (glyph < end
+		 && !INTEGERP (glyph->object)
+		 && (!BUFFERP (glyph->object)
+		     || glyph->charpos < charpos + aRange.length))
+	    {
+	      width += glyph->pixel_width;
+	      ++glyph;
+	    }
+
+	  rect = NSMakeRect (WINDOW_TEXT_TO_FRAME_PIXEL_X (w, x),
+			     WINDOW_TO_FRAME_PIXEL_Y (w, y),
+			     width, row->height);
+	  if (actualRange)
+	    *actualRange = NSMakeRange (aRange.location,
+					glyph->charpos - charpos);
 	}
     }
+
+  if (actualRange && NSEqualRects (rect, NSZeroRect))
+    *actualRange = NSMakeRange (NSNotFound, 0);
 
   if (f)
     {
@@ -3371,6 +3487,11 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
     }
 
   return rect;
+}
+
+- (NSRect)firstRectForCharacterRange:(NSRange)theRange
+{
+  return [self firstRectForCharacterRange:theRange actualRange:NULL];
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)thePoint
@@ -3420,7 +3541,11 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 - (NSArray *)validAttributesForMarkedText
 {
-  return nil;
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4)
+    return [NSArray
+	     arrayWithObject:@"NSTextInputReplacementRangeAttributeName"];
+  else
+    return nil;
 }
 
 - (NSString *)string
@@ -7599,9 +7724,10 @@ handle_services_invocation (invocation)
 				   typeCFStringRef, sizeof (CFStringRef),
 				   &name);
 	  if (err == noErr)
-	    err = SetEventParameter (event, kEventParamServiceUserData,
-				     typeCFStringRef, sizeof (CFStringRef),
-				     &userData);
+	    if (userData)
+	      err = SetEventParameter (event, kEventParamServiceUserData,
+				       typeCFStringRef, sizeof (CFStringRef),
+				       &userData);
 	  if (err == noErr)
 	    err = mac_store_event_ref_as_apple_event (0, 0, Qservice,
 						      Qperform, event,

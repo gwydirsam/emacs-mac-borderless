@@ -1,3 +1,29 @@
+* emacs-23.1.94-mac-1.99 [experimental/hackers-only] (2010-03-11)
+Based on Emacs 23.1.94
+
+** Fixed bugs
+
+*** Dictionary popped up with Command-Control-D is misplaced when a
+word in a partially-visible line is looked up.
+
+*** Drag-n-dropping a file into a Message buffer opens the file
+instead of adding it as an attachment.  Reported by Leo.
+
+*** Crash when a text is drag-n-dropped into the Dock icon.
+Reported by Leo.
+
+*** Not registered as a service provider on Mac OS X 10.4 and earlier,
+even if there is no other instance of running Emacs.
+
+*** Modifier mapping for the `fn' key does not work with the `A' key.
+
+** Improvements
+
+*** Reverse conversion in Kotoeri works even without selection.
+Hitting Eisu/Kana key on JIS keyboard (or Control-Shift-;/J/K on US
+keyboard) twice also works.
+
+
 * emacs-23.1.93-mac-1.98 [experimental/hackers-only] (2010-02-27)
 Based on Emacs 23.1.93
 

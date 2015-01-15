@@ -1022,6 +1022,7 @@ the echo area or in a buffer where the cursor is not displayed."
   (let* ((ae (mac-event-ae event))
 	 (text (cdr (mac-ae-parameter ae)))
 	 (selected-range (cdr (mac-ae-parameter ae "selectedRange")))
+	 (replacement-range (cdr (mac-ae-parameter ae "replacementRange")))
 	 (script-language (mac-ae-script-language ae "tssl"))
 	 (coding (and script-language
 		      (or (cdr (assq (car script-language)
@@ -1088,12 +1089,21 @@ the echo area or in a buffer where the cursor is not displayed."
 			(point))
 		      (current-buffer))
 	(overlay-put mac-ts-active-input-overlay 'before-string
-		     active-input-string)))))
+		     active-input-string)
+	(if replacement-range
+	    (condition-case nil
+		;; Strictly speaking, the replacement range can be out
+		;; of sync.
+		(delete-region (+ (point-min) (car replacement-range))
+			       (+ (point-min) (car replacement-range)
+				  (cdr replacement-range)))
+	      (error nil)))))))
 
 (defun mac-text-input-insert-text (event)
   (interactive "e")
   (let* ((ae (mac-event-ae event))
 	 (text (cdr (mac-ae-parameter ae)))
+	 (replacement-range (cdr (mac-ae-parameter ae "replacementRange")))
 	 (script-language (mac-ae-script-language ae "tssl"))
 	 (coding (and script-language
 		      (or (cdr (assq (car script-language)
@@ -1115,6 +1125,14 @@ the echo area or in a buffer where the cursor is not displayed."
 				      '(mac-ts-active-input-string nil)
 				      msg)
 	      (message "%s" msg))))))
+    (if replacement-range
+	(condition-case nil
+	    ;; Strictly speaking, the replacement range can be out of
+	    ;; sync.
+	    (delete-region (+ (point-min) (car replacement-range))
+			   (+ (point-min) (car replacement-range)
+			      (cdr replacement-range)))
+	  (error nil)))
     (mac-unread-string (mac-utxt-to-string text coding))))
 
 (define-key mac-apple-event-map [text-input set-marked-text]
@@ -1271,7 +1289,7 @@ See also `mac-dnd-known-types'."
 
 (defun mac-dnd-handle-pasteboard-filenames (window action data)
   (dolist (file-url (mac-pasteboard-filenames-to-file-urls data))
-    (dnd-handle-one-url window action file-url)))
+    (dnd-handle-one-url window action (dnd-get-local-file-uri file-url))))
 
 (defun mac-dnd-insert-TIFF (window action data)
   (dnd-insert-text window action (mac-TIFF-to-string data)))

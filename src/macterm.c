@@ -4924,7 +4924,8 @@ mac_mapped_modifiers (modifiers, key_code)
      if that key can be entered without the `fn' key on laptops.  */
   if (modifiers & kEventKeyModifierFnMask
       && key_code <= 0x7f
-      && fn_keycode_to_keycode_table[key_code] == key_code)
+      && fn_keycode_to_keycode_table[key_code] == key_code
+      && key_code != 0)		/* kVK_ANSI_A */
     modifiers &= ~kEventKeyModifierFnMask;
 
   return mapped_modifiers_all & modifiers;
