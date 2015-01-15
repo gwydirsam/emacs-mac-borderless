@@ -42,11 +42,14 @@ typedef unsigned int NSUInteger;
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
-@protocol NSApplicationDelegate <NSObject> @end
-@protocol NSWindowDelegate <NSObject> @end
-@protocol NSToolbarDelegate <NSObject> @end
-@protocol NSMenuDelegate <NSObject> @end
-@protocol NSUserInterfaceItemSearching <NSObject> @end
+/* If we add `<NSObject>' here as documented, the 64-bit binary
+   compiled on Mac OS X 10.5 fails in startup at -[EmacsController
+   methodSignatureForSelector:] when executed on Mac OS X 10.6.  */
+@protocol NSApplicationDelegate @end
+@protocol NSWindowDelegate @end
+@protocol NSToolbarDelegate @end
+@protocol NSMenuDelegate @end
+@protocol NSUserInterfaceItemSearching @end
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
@@ -583,6 +586,9 @@ typedef NSUInteger NSApplicationPresentationOptions;
 
 @interface NSApplication (AvailableOn1060AndLater)
 - (void)setPresentationOptions:(NSApplicationPresentationOptions)newOptions;
+- (void)registerUserInterfaceItemSearchHandler:(id<NSUserInterfaceItemSearching>)handler;
+- (BOOL)searchString:(NSString *)searchString inUserInterfaceItemString:(NSString *)stringToSearch
+	 searchRange:(NSRange)searchRange foundRange:(NSRange *)foundRange;
 @end
 #endif
 

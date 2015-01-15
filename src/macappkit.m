@@ -871,13 +871,11 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 #endif
 	 object:nil];
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
   if ([NSApp respondsToSelector:@selector(registerUserInterfaceItemSearchHandler:)])
     {
       [NSApp registerUserInterfaceItemSearchHandler:self];
       Vmac_help_topics = Qnil;
     }
-#endif
 
   /* Exit from the main event loop.  */
   [NSApp stop:nil];
@@ -6454,13 +6452,16 @@ restore_show_help_function (old_show_help_function)
   return [menu autorelease];
 }
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
 /* Methods for the NSUserInterfaceItemSearching protocol.  */
 
 /* This might be called from a non-main thread.  */
 - (void)searchForItemsWithSearchString:(NSString *)searchString
 			   resultLimit:(NSInteger)resultLimit
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
 		    matchedItemHandler:(void (^)(NSArray *items))handleMatchedItems
+#else
+		    matchedItemHandler:(id)handleMatchedItems
+#endif
 {
   NSMutableArray *items = [NSMutableArray arrayWithCapacity:resultLimit];
   Lisp_Object rest;
@@ -6481,7 +6482,19 @@ restore_show_help_function (old_show_help_function)
 	  }
       }
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
   handleMatchedItems (items);
+#else
+  {
+    struct handler_block {
+      void *isa;
+      int flags, reserved;
+      void (*invoke) (struct handler_block *, NSArray *);
+    } *block = (struct handler_block *) handleMatchedItems;
+
+    block->invoke (block, items);
+  }
+#endif
 }
 
 - (NSArray *)localizedTitlesForItem:(id)item
@@ -6504,7 +6517,6 @@ restore_show_help_function (old_show_help_function)
 		 to:nil from:self];
   searchStringForAllHelpTopics = nil;
 }
-#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1060 */
 
 @end				// EmacsController (Menu)
 

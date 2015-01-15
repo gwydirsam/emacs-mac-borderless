@@ -2280,26 +2280,41 @@ do_applescript (script, result)
   AEDesc script_desc, result_desc, error_desc, *desc = NULL;
   OSErr error;
   OSAError osaerror;
+  DescType desc_type;
 
   *result = Qnil;
 
   if (!as_scripting_component)
     initialize_applescript();
 
-  error = AECreateDesc (typeChar, SDATA (script), SBYTES (script),
+  if (STRING_MULTIBYTE (script))
+    {
+      desc_type = typeUnicodeText;
+      script = code_convert_string_norecord (script,
+#ifdef WORDS_BIG_ENDIAN
+					     intern ("utf-16be"),
+#else
+					     intern ("utf-16le"),
+#endif
+					     1);
+    }
+  else
+    desc_type = typeChar;
+
+  error = AECreateDesc (desc_type, SDATA (script), SBYTES (script),
 			&script_desc);
   if (error)
     return error;
 
   osaerror = OSADoScript (as_scripting_component, &script_desc, kOSANullScript,
-			  typeChar, kOSAModeNull, &result_desc);
+			  desc_type, kOSAModeNull, &result_desc);
 
   if (osaerror == noErr)
     /* success: retrieve resulting script value */
     desc = &result_desc;
   else if (osaerror == errOSAScriptError)
     /* error executing AppleScript: retrieve error message */
-    if (!OSAScriptError (as_scripting_component, kOSAErrorMessage, typeChar,
+    if (!OSAScriptError (as_scripting_component, kOSAErrorMessage, desc_type,
 			 &error_desc))
       desc = &error_desc;
 
@@ -2307,6 +2322,14 @@ do_applescript (script, result)
     {
       *result = make_uninit_string (AEGetDescDataSize (desc));
       AEGetDescData (desc, SDATA (*result), SBYTES (*result));
+      if (desc_type == typeUnicodeText)
+	*result = code_convert_string_norecord (*result,
+#ifdef WORDS_BIG_ENDIAN
+						intern ("utf-16be"),
+#else
+						intern ("utf-16le"),
+#endif
+						0);
       AEDisposeDesc (desc);
     }
 
@@ -2321,7 +2344,18 @@ DEFUN ("do-applescript", Fdo_applescript, Sdo_applescript, 1, 1, 0,
 If compilation and execution are successful, the resulting script
 value is returned as a string.  Otherwise the function aborts and
 displays the error message returned by the AppleScript scripting
-component.  */)
+component.
+
+If SCRIPT is a multibyte string, it is regarded as a Unicode text.
+Otherwise, SCRIPT is regarded as a byte sequence in a Mac traditional
+encoding specified by `mac-system-script-code', just as in Emacs 22.
+Note that a unibyte ASCII-only SCRIPT does not always have the same
+meaning as the multibyte counterpart.  For example, `\\x5c' in a
+unibyte SCRIPT is interpreted as a yen sign when the value of
+`mac-system-script-code' is 1 (smJapanese), but the same character in
+a multibyte SCRIPT is interpreted as a reverse solidus.  You may want
+to apply `string-to-multibyte' to the script if it is given as an
+ASCII-only string literal.  */)
     (script)
     Lisp_Object script;
 {

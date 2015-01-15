@@ -1174,8 +1174,10 @@ modifiers, it changes the global tool-bar visibility setting."
 
 ;;; Spotlight for Help (Mac OS X 10.6 and later, experimental)
 
-(eval-when-compile
-  (require 'info))
+(declare-function info-initialize "info" ())
+(declare-function Info-find-file "info" (filename &optional noerror))
+(declare-function Info-toc-build "info" (file))
+(declare-function Info-virtual-index "info" (topic))
 
 (defvar mac-help-topics)
 

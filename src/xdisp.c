@@ -9578,7 +9578,8 @@ prepare_menu_bars ()
 #endif
 #endif
 #ifdef HAVE_NS
-          if (windows_or_buffers_changed)
+          if (windows_or_buffers_changed
+	      && FRAME_NS_P (f))
             ns_set_doc_edited (f, Fbuffer_modified_p
 			       (XWINDOW (f->selected_window)->buffer));
 #endif
