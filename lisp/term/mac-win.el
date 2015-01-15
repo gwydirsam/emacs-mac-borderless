@@ -1008,9 +1008,10 @@ the echo area or in a buffer where the cursor is not displayed."
 	 (text (cdr (mac-ae-parameter ae)))
 	 (selected-range (cdr (mac-ae-parameter ae "selectedRange")))
 	 (script-language (mac-ae-script-language ae "tssl"))
-	 (coding (or (cdr (assq (car script-language)
-				mac-script-code-coding-systems))
-		     'mac-roman)))
+	 (coding (and script-language
+		      (or (cdr (assq (car script-language)
+				     mac-script-code-coding-systems))
+			  'mac-roman))))
     (let ((use-echo-area
 	   (or isearch-mode
 	       (and cursor-in-echo-area (current-message))
@@ -1073,9 +1074,10 @@ the echo area or in a buffer where the cursor is not displayed."
   (let* ((ae (mac-event-ae event))
 	 (text (cdr (mac-ae-parameter ae)))
 	 (script-language (mac-ae-script-language ae "tssl"))
-	 (coding (or (cdr (assq (car script-language)
-				mac-script-code-coding-systems))
-		     'mac-roman)))
+	 (coding (and script-language
+		      (or (cdr (assq (car script-language)
+				     mac-script-code-coding-systems))
+			  'mac-roman))))
     (overlay-put mac-ts-active-input-overlay 'before-string nil)
     (let ((msg (current-message))
 	  message-log-max)

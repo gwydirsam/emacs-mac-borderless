@@ -15,8 +15,11 @@ is good enough for you, then you don't need to try this.
   distribution basis, until the version gets to 2.0.
 
   Also, if you find a bug, then please try to reproduce it with some
-  official builds such as X11 or NS (Cocoa) and report it using M-x
-  report-emacs-bug as such.
+  official builds such as X11 or NS (Cocoa).  If it turns out to be
+  specific to the Mac port, then please report it to
+  "mituharu+bug-gnu-emacs-mac@math.s.chiba-u.ac.jp".  Otherwise (i.e.,
+  it is also reproducible with official ones), report it using M-x
+  report-emacs-bug *USING THE OFFICIAL BUILD* as such.
 
 The Mac port is a descendant of the following ports for Mac OS X.
 
@@ -66,7 +69,7 @@ The Mac port is a descendant of the following ports for Mac OS X.
       the Emacs mailer will set up a draft buffer when you click a
       mailto: link in a Web browser.
 
-    - DictionaryService support (10.4 and 10.5)
+    - DictionaryService support (10.4 and later)
       You can look up a word under the mouse pointer in the selected
       window by typing Command-Control-D.
 
@@ -89,7 +92,8 @@ The Mac port is a descendant of the following ports for Mac OS X.
 
     - 64-bit (10.5 and later)
       You can build and run a 64-bit binary with GUI support by
-      specifying CC='gcc -m64' on configure.
+      specifying CC='gcc -arch x86_64' or CC='gcc -arch ppc64' on
+      configure.
 
     - Some minor visual enhancements
       * Aligned key bindings in menus

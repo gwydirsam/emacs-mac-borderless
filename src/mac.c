@@ -2752,6 +2752,12 @@ mac_get_system_locale ()
 }
 
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#ifndef SELECT_USE_GCD
+#define SELECT_USE_GCD 1
+#endif
+#endif
+
 /* Unlike in X11, window events in Carbon do not come from sockets.
    So we cannot simply use `select' to monitor two kinds of inputs:
    window events and process outputs.  We emulate such functionality
@@ -2777,14 +2783,19 @@ mac_get_system_locale ()
 #define SELECT_POLLING_PERIOD_USEC 100000
 #define SELECT_TIMEOUT_THRESHOLD_RUNLOOP 0.2
 
-/* Dictionary of file descriptors vs CFSocketRef's allocated in
-   sys_select.  */
-static CFMutableDictionaryRef cfsockets_for_select;
-
 /* Process ID of Emacs.  */
 static pid_t mac_emacs_pid;
 
 static int wakeup_fds[2];
+
+#if SELECT_USE_GCD
+#include <sys/socket.h>
+
+static dispatch_queue_t select_dispatch_queue;
+#else
+/* Dictionary of file descriptors vs CFSocketRef's allocated in
+   sys_select.  */
+static CFMutableDictionaryRef cfsockets_for_select;
 
 static void
 wakeup_callback (s, type, address, data, info)
@@ -2799,16 +2810,19 @@ wakeup_callback (s, type, address, data, info)
   while (emacs_read (CFSocketGetNative (s), buf, sizeof (buf)) > 0)
     ;
 }
+#endif
 
 int
 init_wakeup_fds ()
 {
   int result, i;
   int flags;
-  CFSocketRef socket;
-  CFRunLoopSourceRef source;
 
+#if SELECT_USE_GCD
+  result = socketpair (AF_UNIX, SOCK_STREAM, 0, wakeup_fds);
+#else
   result = pipe (wakeup_fds);
+#endif
   if (result < 0)
     return result;
   for (i = 0; i < 2; i++)
@@ -2818,19 +2832,48 @@ init_wakeup_fds ()
       if (result < 0)
 	return result;
     }
-  socket = CFSocketCreateWithNative (NULL, wakeup_fds[0],
-				     kCFSocketReadCallBack,
-				     wakeup_callback, NULL);
-  if (socket == NULL)
-    return -1;
-  source = CFSocketCreateRunLoopSource (NULL, socket, 0);
-  CFRelease (socket);
-  if (source == NULL)
-    return -1;
-  CFRunLoopAddSource ((CFRunLoopRef)
-		      GetCFRunLoopFromEventLoop (GetCurrentEventLoop ()),
-		      source, kCFRunLoopDefaultMode);
-  CFRelease (source);
+#if SELECT_USE_GCD
+  {
+    dispatch_source_t source;
+
+    source = dispatch_source_create (DISPATCH_SOURCE_TYPE_READ, wakeup_fds[0],
+				     0, dispatch_get_main_queue ());
+    if (source == NULL)
+      return -1;
+    dispatch_source_set_event_handler (source, ^{
+	char buf[64];
+
+	while (emacs_read (dispatch_source_get_handle (source),
+			   buf, sizeof (buf)) > 0)
+	  ;
+      });
+    dispatch_resume (source);
+
+    select_dispatch_queue = dispatch_queue_create ("org.gnu.Emacs.select",
+						   NULL);
+    if (select_dispatch_queue == NULL)
+      return -1;
+  }
+#else
+  {
+    CFSocketRef socket;
+    CFRunLoopSourceRef source;
+
+    socket = CFSocketCreateWithNative (NULL, wakeup_fds[0],
+				       kCFSocketReadCallBack,
+				       wakeup_callback, NULL);
+    if (socket == NULL)
+      return -1;
+    source = CFSocketCreateRunLoopSource (NULL, socket, 0);
+    CFRelease (socket);
+    if (source == NULL)
+      return -1;
+    CFRunLoopAddSource ((CFRunLoopRef)
+			GetCFRunLoopFromEventLoop (GetCurrentEventLoop ()),
+			source, kCFRunLoopDefaultMode);
+    CFRelease (source);
+  }
+#endif
   return 0;
 }
 
@@ -2839,6 +2882,7 @@ void mac_wakeup_from_run_loop_run_once ()
   emacs_write (wakeup_fds[1], "", 1);
 }
 
+#if !SELECT_USE_GCD
 static void
 socket_callback (s, type, address, data, info)
      CFSocketRef s;
@@ -2848,6 +2892,7 @@ socket_callback (s, type, address, data, info)
      void *info;
 {
 }
+#endif
 
 static int
 select_and_poll_event (nfds, rfds, wfds, efds, timeout)
@@ -2924,6 +2969,7 @@ int
 mac_try_close_socket (fd)
      int fd;
 {
+#if !SELECT_USE_GCD
   if (getpid () == mac_emacs_pid && cfsockets_for_select)
     {
       void *key = (void *) (intptr_t) fd;
@@ -2944,6 +2990,7 @@ mac_try_close_socket (fd)
 	  return 1;
 	}
     }
+#endif
 
   return 0;
 }
@@ -3004,8 +3051,10 @@ sys_select (nfds, rfds, wfds, efds, timeout)
       if (wfds)
 	*wfds = owfds;
 
+#if !SELECT_USE_GCD
       if (timeoutval > 0 && timeoutval <= SELECT_TIMEOUT_THRESHOLD_RUNLOOP)
 	goto poll_periodically;
+#endif
 
       /* Try detect_input_pending before mac_run_loop_run_once in the
 	 same BLOCK_INPUT block, in case that some input has already
@@ -3013,6 +3062,31 @@ sys_select (nfds, rfds, wfds, efds, timeout)
       BLOCK_INPUT;
       if (!detect_input_pending ())
 	{
+#if SELECT_USE_GCD
+	  int qnfds = nfds;
+	  SELECT_TYPE *qrfds = &orfds, *qwfds = wfds ? &owfds : NULL;
+
+	  if (wakeup_fds[1] >= qnfds)
+	    qnfds = wakeup_fds[1] + 1;
+	  FD_SET (wakeup_fds[1], qrfds);
+
+	  dispatch_async (select_dispatch_queue, ^{
+	      int r = select (qnfds, qrfds, qwfds, NULL, timeout);
+
+	      if (r < 0 || (r > 0 && !FD_ISSET (wakeup_fds[1], qrfds)))
+		mac_wakeup_from_run_loop_run_once ();
+	    });
+
+	  timedout_p = mac_run_loop_run_once (timeoutval);
+
+	  emacs_write (wakeup_fds[0], "", 1);
+	  dispatch_sync (select_dispatch_queue, ^{
+	      char buf[64];
+
+	      while (emacs_read (wakeup_fds[1], buf, sizeof (buf)) > 0)
+		;
+	    });
+#else
 	  int minfd, fd;
 	  CFRunLoopRef runloop =
 	    (CFRunLoopRef) GetCFRunLoopFromEventLoop (GetCurrentEventLoop ());
@@ -3071,6 +3145,7 @@ sys_select (nfds, rfds, wfds, efds, timeout)
 
 		CFRunLoopRemoveSource (runloop, source, kCFRunLoopDefaultMode);
 	      }
+#endif
 	}
       UNBLOCK_INPUT;
 

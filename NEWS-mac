@@ -1,3 +1,25 @@
+* emacs-23.1-mac-1.92 (2009-09-05)
+
+** Fixed bugs
+
+*** Command-Control-D doesn't pop up dictionary on Mac OS X 10.6.
+
+*** Iconified frames aren't considered visible.
+Reported by Benjamin Riefenstahl.
+
+*** Can't make iconified frames invisible.
+
+** Improvement
+
+*** Fall back on mac-system-coding-system if script and language
+information is not available in text input events.
+
+*** New implementation for the `select' emulation using Grand Central
+Dispatch instead of CFSocket.  It is enabled by default if built for
+Mac OS X 10.6.  If you find it unstable/problematic, then you can turn
+it off by compiling with "-DSELECT_USE_GCD=0".
+
+
 * emacs-23.1-mac-1.91 [experimental/hackers-only] (2009-08-29)
 
 ** Fixed bugs

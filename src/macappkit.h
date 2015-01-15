@@ -66,7 +66,11 @@ typedef unsigned int NSUInteger;
 
 @interface NSApplication (Emacs)
 - (void)postDummyEvent;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+- (void)runTemporarilyWithBlock:(void (^)(void))block;
+#else
 - (void)runTemporarilyWithInvocation:(NSInvocation *)invocation;
+#endif
 @end
 
 @interface EmacsApplication : NSApplication
@@ -436,5 +440,12 @@ typedef unsigned int NSUInteger;
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
 @interface NSMenu (AvailableOn1030AndLater)
 - (void)setDelegate:(id)anObject;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+@interface NSMenu (AvailableOn1060AndLater)
+- (BOOL)popUpMenuPositioningItem:(NSMenuItem *)item
+		      atLocation:(NSPoint)location inView:(NSView *)view;
 @end
 #endif
