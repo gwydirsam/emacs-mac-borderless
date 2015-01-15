@@ -1088,6 +1088,7 @@ Currently the `mailto' scheme is supported."
 ;;; ODB Editor Suite
 (defvar mac-odb-received-apple-events nil
   "List of received Apple Events containing ODB Editor Suite parameters.")
+(put 'mac-odb-received-apple-events 'permanent-local t)
 
 (defun mac-odb-setup-buffer (apple-event)
   (when (or (mac-ae-parameter apple-event "FSnd") ; keyFileSender
@@ -1473,6 +1474,18 @@ modifiers, it changes the global tool-bar visibility setting."
  'mac-handle-show-all-help-topics)
 (put 'show-all-help-topics 'mac-action-key-paths
      '("searchStringForAllHelpTopics"))
+
+;;; Frame events
+(defun mac-handle-modify-frame-parameters-event (event)
+  "Modify frame parameters according to EVENT."
+  (interactive "e")
+  (let ((ae (mac-event-ae event)))
+    (let ((frame (cdr (mac-ae-parameter ae 'frame)))
+	  (alist (cdr (mac-ae-parameter ae 'alist))))
+      (modify-frame-parameters frame alist))))
+
+(define-key mac-apple-event-map [frame modify-frame-parameters]
+ 'mac-handle-modify-frame-parameters-event)
 
 ;;; Accessibility
 (defun mac-ax-set-selected-text-range (event)
@@ -2053,25 +2066,59 @@ as base.")
   :type '(cons number number)
   :group 'mac)
 
+(defcustom mac-text-scale-standard-width 80
+  "Number of columns window occupies in standard buffer text scaling.
+On Mac OS X 10.7 and later, you can change buffer text scaling to
+the standard state by double-tapping either a touch-sensitive
+mouse with one finger or a trackpad with two fingers if the
+buffer is previously unscaled.  In this standard buffer text
+scaling state, the default font is scaled so at least this number
+of columns can be shown in the tapped window."
+  :type 'integer
+  :group 'mac)
+
 (defun mac-magnify-text-scale (event)
   "Magnify the height of the default face in the buffer where EVENT happened.
 The actual magnification is performed by `text-scale-mode'."
   (interactive "e")
   (require 'face-remap)
-  (with-selected-window (posn-window (event-start event))
-    (let ((magnification (car (nth 3 event)))
-	  (level
-	   (round (log mac-text-scale-magnification text-scale-mode-step))))
-      (if (/= level text-scale-mode-amount)
+  (let ((original-selected-window (selected-window)))
+    (with-selected-window (posn-window (event-start event))
+      (let ((magnification (car (nth 3 event)))
+	    (level
+	     (round (log mac-text-scale-magnification text-scale-mode-step))))
+	(if (= magnification 0.0)
+	    ;; This is double-tapping a mouse with a finger or
+	    ;; double-tapping a trackpad with two fingers on Mac OS X
+	    ;; 10.7
+	    (if (/= level 0)
+		(setq mac-text-scale-magnification 1.0)
+	      (setq mac-text-scale-magnification
+		    (expt text-scale-mode-step
+			  (floor (log (/ (window-width)
+					 (float mac-text-scale-standard-width))
+				      text-scale-mode-step)))))
+	  (if (/= level text-scale-mode-amount)
+	      (setq mac-text-scale-magnification
+		    (expt text-scale-mode-step text-scale-mode-amount)))
 	  (setq mac-text-scale-magnification
-		(expt text-scale-mode-step text-scale-mode-amount)))
-      (setq mac-text-scale-magnification
-	    (min (max (* mac-text-scale-magnification (+ 1.0 magnification))
-		      (car mac-text-scale-magnification-range))
-		 (cdr mac-text-scale-magnification-range)))
-      (setq level
-	    (round (log mac-text-scale-magnification text-scale-mode-step)))
-      (text-scale-set level))))
+		(* mac-text-scale-magnification (+ 1.0 magnification))))
+	(setq mac-text-scale-magnification
+	      (min (max mac-text-scale-magnification
+			(car mac-text-scale-magnification-range))
+		   (cdr mac-text-scale-magnification-range)))
+	(setq level
+	      (round (log mac-text-scale-magnification text-scale-mode-step)))
+	(if (/= level text-scale-mode-amount)
+	    (let ((inc (if (< level text-scale-mode-amount) -1 1)))
+	      (unwind-protect
+		  (while (and (not (input-pending-p))
+			      (/= text-scale-mode-amount level))
+		    (text-scale-increase inc)
+		    (with-selected-window original-selected-window
+		      (sit-for 0.017)))
+		(if (/= text-scale-mode-amount level)
+		    (text-scale-set level)))))))))
 
 (defun mac-mouse-turn-on-fullscreen (event)
   "Turn on fullscreen in response to the mouse event EVENT."

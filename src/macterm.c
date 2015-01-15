@@ -3913,10 +3913,29 @@ mac_define_frame_cursor (f, cursor)
      struct frame *f;
      Cursor cursor;
 {
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+  if (mac_tracking_area_works_with_cursor_rects_invalidation_p ())
+#endif
+    {
+      if (f->output_data.mac->current_cursor != cursor)
+	{
+	  f->output_data.mac->current_cursor = cursor;
+	  mac_invalidate_frame_cursor_rects (f);
+	}
+    }
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+    {
+      struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
 
-  if (dpyinfo->x_focus_frame == f)
-    SetThemeCursor (cursor);
+      if (dpyinfo->x_focus_frame == f)
+	SetThemeCursor (cursor);
+    }
+#endif
 }
 
 
@@ -4168,14 +4187,6 @@ static void
 XTfullscreen_hook (f)
      FRAME_PTR f;
 {
-  Lisp_Object tool_bar_lines = get_frame_param (f, Qtool_bar_lines);
-
-  if (INTEGERP (tool_bar_lines) && XINT (tool_bar_lines) > 0)
-    x_set_tool_bar_lines (f, make_number (0), tool_bar_lines);
-  FRAME_NATIVE_TOOL_BAR_P (f) = (f->want_fullscreen == FULLSCREEN_BOTH);
-  if (INTEGERP (tool_bar_lines) && XINT (tool_bar_lines) > 0)
-    x_set_tool_bar_lines (f, tool_bar_lines, make_number (0));
-
   FRAME_CHECK_FULLSCREEN_NEEDED_P (f) = 1;
   if (f->async_visible)
     {
@@ -4202,6 +4213,9 @@ x_check_fullscreen (f)
     case FULLSCREEN_BOTH:
       flags_to_set = WM_STATE_FULLSCREEN;
       break;
+    case FULLSCREEN_DEDICATED_DESKTOP:
+      flags_to_set = (WM_STATE_FULLSCREEN | WM_STATE_DEDICATED_DESKTOP);
+      break;
     case FULLSCREEN_WIDTH:
       flags_to_set = WM_STATE_MAXIMIZED_HORZ;
       break;
@@ -4215,11 +4229,13 @@ x_check_fullscreen (f)
 
   flags_to_clear = (flags_to_set ^ (WM_STATE_MAXIMIZED_HORZ
 				    | WM_STATE_MAXIMIZED_VERT
-				    | WM_STATE_FULLSCREEN));
-  mac_change_frame_window_wm_state (f, flags_to_set, flags_to_clear);
+				    | WM_STATE_FULLSCREEN
+				    | WM_STATE_DEDICATED_DESKTOP));
 
   f->want_fullscreen = FULLSCREEN_NONE;
   FRAME_CHECK_FULLSCREEN_NEEDED_P (f) = 0;
+
+  mac_change_frame_window_wm_state (f, flags_to_set, flags_to_clear);
 }
 
 /* Call this to change the size of frame F's x-window.
@@ -5763,48 +5779,13 @@ init_dm_notification_handler ()
   return err;
 }
 
-void
-mac_get_screen_info (dpyinfo)
-     struct mac_display_info *dpyinfo;
-{
-  /* HasDepth returns true if it is possible to have a 32 bit display,
-     but this may not be what is actually used.  Mac OSX can do better.  */
-  dpyinfo->color_p = CGDisplaySamplesPerPixel (kCGDirectMainDisplay) > 1;
-  dpyinfo->n_planes = CGDisplayBitsPerPixel (kCGDirectMainDisplay);
-  {
-    CGDisplayErr err;
-    CGDisplayCount ndisps;
-    CGDirectDisplayID *displays;
-
-    err = CGGetActiveDisplayList (0, NULL, &ndisps);
-    if (err == noErr)
-      {
-	displays = alloca (sizeof (CGDirectDisplayID) * ndisps);
-	err = CGGetActiveDisplayList (ndisps, displays, &ndisps);
-      }
-    if (err == noErr)
-      {
-	CGRect bounds = CGRectZero;
-
-	while (ndisps-- > 0)
-	  bounds = CGRectUnion (bounds, CGDisplayBounds (displays[ndisps]));
-	dpyinfo->height = CGRectGetHeight (bounds);
-	dpyinfo->width = CGRectGetWidth (bounds);
-      }
-    else
-      {
-	dpyinfo->height = CGDisplayPixelsHigh (kCGDirectMainDisplay);
-	dpyinfo->width = CGDisplayPixelsWide (kCGDirectMainDisplay);
-      }
-  }
-}
-
 
 /***********************************************************************
 			    Initialization
  ***********************************************************************/
 
 static int mac_initialized = 0;
+extern void mac_get_screen_info P_ ((struct mac_display_info *));
 
 static XrmDatabase
 mac_make_rdb (xrm_option)

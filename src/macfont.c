@@ -1704,8 +1704,26 @@ macfont_list (frame, spec)
       if (! pat_desc)
 	goto err;
 
-      descs = mac_font_descriptor_create_matching_font_descriptors (pat_desc,
-								    NULL);
+      /* CTFontDescriptorCreateMatchingFontDescriptors on Mac OS X
+	 10.7 returns NULL if pat_desc represents the LastResort font.
+	 So we use CTFontDescriptorCreateMatchingFontDescriptor (no
+	 trailing "s") for such a font.  */
+      if (CFStringCompare (family_name, CFSTR ("LastResort"), 0)
+	  != kCFCompareEqualTo)
+	descs = mac_font_descriptor_create_matching_font_descriptors (pat_desc,
+								      NULL);
+      else
+	{
+	  FontDescriptorRef lr_desc =
+	    mac_font_descriptor_create_matching_font_descriptor (pat_desc,
+								 NULL);
+	  if (lr_desc)
+	    {
+	      descs = CFArrayCreate (NULL, (const void **) &lr_desc, 1,
+				     &kCFTypeArrayCallBacks);
+	      CFRelease (lr_desc);
+	    }
+	}
       CFRelease (pat_desc);
       if (! descs)
 	goto err;
@@ -2274,37 +2292,27 @@ macfont_draw (s, from, to, x, y, with_background)
       CGContextSetTextPosition (context, x + advance_delta, -y);
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+      if (macfont_info->color_bitmap_p
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
-      if (CTFontDrawGlyphs != NULL)
+	  && CTFontDrawGlyphs != NULL
 #endif
+	  )
 	{
-	  if (macfont_info->color_bitmap_p)
+	  if (len > 0)
 	    {
-	      if (len > 0)
-		{
-		  CGPoint *positions = alloca (sizeof (CGPoint) * len);
+	      CGPoint *positions = alloca (sizeof (CGPoint) * len);
 
-		  positions[0] = CGPointZero;
-		  for (i = 1; i < len; i++)
-		    {
-		      positions[i].x = positions[i-1].x + advances[i-1].width;
-		      positions[i].y = positions[i-1].y + advances[i-1].height;
-		    }
-		  CTFontDrawGlyphs (macfont, glyphs, positions, len, context);
+	      positions[0] = CGPointZero;
+	      for (i = 1; i < len; i++)
+		{
+		  positions[i].x = positions[i-1].x + advances[i-1].width;
+		  positions[i].y = positions[i-1].y + advances[i-1].height;
 		}
-	    }
-	  else
-	    {
-	      CGContextSetFont (context, macfont_info->cgfont);
-	      CGContextSetFontSize (context, font_size);
-	      CGContextShowGlyphsWithAdvances (context, glyphs, advances, len);
+	      CTFontDrawGlyphs (macfont, glyphs, positions, len, context);
 	    }
 	}
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
-      else			/* CTFontDrawGlyphs == NULL */
-#endif
+      else
 #endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1070 */
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
 	{
 	  CGContextSetFont (context, macfont_info->cgfont);
 	  CGContextSetFontSize (context, font_size);
@@ -2312,7 +2320,6 @@ macfont_draw (s, from, to, x, y, with_background)
 	     even in Mac OS X 10.2.  */
 	  CGContextShowGlyphsWithAdvances (context, glyphs, advances, len);
 	}
-#endif
     }
 
   mac_end_cg_clip (f);

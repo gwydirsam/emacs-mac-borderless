@@ -3314,7 +3314,13 @@ x_set_fullscreen (f, new_value, old_value)
 {
   if (NILP (new_value))
     f->want_fullscreen = FULLSCREEN_NONE;
+#ifdef HAVE_MACGUI
+  else if (EQ (new_value, Qfullscreen))
+    f->want_fullscreen = FULLSCREEN_DEDICATED_DESKTOP;
+  else if (EQ (new_value, Qfullboth))
+#else
   else if (EQ (new_value, Qfullboth) || EQ (new_value, Qfullscreen))
+#endif
     f->want_fullscreen = FULLSCREEN_BOTH;
   else if (EQ (new_value, Qfullwidth))
     f->want_fullscreen = FULLSCREEN_WIDTH;

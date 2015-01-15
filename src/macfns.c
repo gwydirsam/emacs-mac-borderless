@@ -1551,6 +1551,15 @@ x_set_menu_bar_lines (f, value, oldval)
     /* Make sure next redisplay shows the menu bar.  */
     XWINDOW (FRAME_SELECTED_WINDOW (f))->update_mode_line = Qt;
   adjust_glyphs (f);
+
+  /* We don't use this value for controlling visibility of the menu
+     bar.  But use it as a hint for window collection behavior.  */
+  BLOCK_INPUT;
+  if (INTEGERP (value) && XINT (value) > 0)
+    mac_change_frame_window_wm_state (f, 0, WM_STATE_NO_MENUBAR);
+  else
+    mac_change_frame_window_wm_state (f, WM_STATE_NO_MENUBAR, 0);
+  UNBLOCK_INPUT;
 }
 
 
@@ -2036,6 +2045,8 @@ mac_window (f)
     x_set_name (f, name, explicit);
   }
 
+  f->output_data.mac->current_cursor = f->output_data.mac->text_cursor;
+
   UNBLOCK_INPUT;
 
   if (FRAME_MAC_WINDOW (f) == 0)
@@ -2424,8 +2435,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
      happen.  */
   init_frame_faces (f);
 
-  x_default_parameter (f, parms, Qmenu_bar_lines, make_number (1),
-		       "menuBar", "MenuBar", RES_TYPE_BOOLEAN_NUMBER);
   x_default_parameter (f, parms, Qtool_bar_lines, make_number (1),
 		       "toolBar", "ToolBar", RES_TYPE_NUMBER);
   x_default_parameter (f, parms, Qbuffer_predicate, Qnil,
@@ -2449,6 +2458,13 @@ This function is an internal primitive--use `make-frame' instead.  */)
   /* Now consider the frame official.  */
   FRAME_MAC_DISPLAY_INFO (f)->reference_count++;
   Vframe_list = Fcons (frame, Vframe_list);
+
+  /* We need to do this after creating the window, so that the window
+     collection behavior can be changed according to this value.  On
+     Mac, the menu bar is always external.  So x_figure_window_size
+     above is not affected.  */
+  x_default_parameter (f, parms, Qmenu_bar_lines, make_number (1),
+		       "menuBar", "MenuBar", RES_TYPE_BOOLEAN_NUMBER);
 
   /* We need to do this after creating the window, so that the
      icon-creation functions can say whose icon they're describing.  */

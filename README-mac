@@ -88,9 +88,11 @@ The Mac port is a descendant of the following ports for Mac OS X.
     The Mac port also inherits the features of the Carbon+AppKit port
     including the following:
 
-    - Resolution independence (10.4 and later, 10.5 recommended)
+    - Resolution independence (10.4 - 10.6, 10.5 recommended)
       Scaling works in Framework-Scaled Mode as opposed to (blurry)
       Magnified Mode for the Carbon port.
+      Note: this type of resolution independence is deprecated on Mac
+      OS X 10.7.
 
     - 64-bit (10.5 and later)
       You can build and run a 64-bit binary with GUI support by

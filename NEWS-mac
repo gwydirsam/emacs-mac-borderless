@@ -1,4 +1,41 @@
+* emacs-23.3a-mac-1.9994 [experimental/hackers-only] (2011-08-06)
+
+** Fixed bugs
+
+*** SVG display by WebKit is disabled on 64-bit executables.
+
+*** The "Special Characters ..." item in the "Edit" menu doesn't
+appear in non-English locales.
+
+*** LastResort font is not shown on Mac OS X 10.7.
+
+*** Pointer shape around the edges/corners becomes the pointing arrow
+rather than the resizing arrows on Mac OS X 10.7 when mouse moved.
+
+** Improvements
+
+*** Support for the full screen mode introduced in Mac OS X 10.7.
+Now `fullscreen' and `fullboth' values for the `fullscreen' frame
+parameter have different meanings on Mac OS X 10.7: the former means a
+new system-wide full screen mode with a dedicated desktop (or Space),
+and the latter means the existing fullscreen feature.
+
+Known issues: the menu bar does not appear with Control-F2 or
+Command-Shift-/, and the tool bar is shown when mouse is moved to the
+top even when tool-bar-mode is turned off.  I think these are bugs
+(already reported to Apple), and I'd like to see if the situation
+is changed with some future OS updates rather than tweaking with some
+workarounds.
+
+*** On Mac OS X 10.7, double-tapping either a touch-sensitive mouse
+with one finger or a trackpad with two fingers changes the buffer text
+scaling to unscaled if previously scaled.  And if previously unscaled,
+then the buffer text is scaled so the default font occupies at least
+`mac-text-scale-standard-width' columns in the tapped window.
+
+
 * emacs-23.3-mac-1.9993 [experimental/hackers-only] (2011-07-23)
+http://lists.gnu.org/archive/html/emacs-devel/2011-07/msg00906.html
 
 ** Fixed bugs
 

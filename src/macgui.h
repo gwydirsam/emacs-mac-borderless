@@ -248,6 +248,14 @@ enum
   WM_STATE_DEMANDS_ATTENTION	= 1 << 11
 };
 
+/* These are not derived from X11 EWMH window state hints, but used
+   like them.  */
+enum
+{
+  WM_STATE_NO_MENUBAR		= 1 << 12,
+  WM_STATE_DEDICATED_DESKTOP	= 1 << 13
+};
+
 typedef uint32_t WMState;
 
 typedef struct {

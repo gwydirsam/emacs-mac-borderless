@@ -282,6 +282,7 @@ struct mac_output
   Cursor hand_cursor;
   Cursor hourglass_cursor;
   Cursor horizontal_drag_cursor;
+  Cursor current_cursor;
 #if 0
   /* Window whose cursor is hourglass_cursor.  This window is temporarily
      mapped to display a hourglass-cursor.  */
@@ -697,6 +698,9 @@ extern Lisp_Object mac_dnd_default_known_types P_ ((void));
 
 extern void *mac_alloc_autorelease_pool P_ ((void));
 extern void mac_release_autorelease_pool P_ ((void *));
+
+extern int mac_tracking_area_works_with_cursor_rects_invalidation_p P_ ((void));
+extern void mac_invalidate_frame_cursor_rects P_ ((struct frame *f));
 
 extern CGContextRef mac_begin_cg_clip P_ ((struct frame *, GC));
 extern void mac_end_cg_clip P_ ((struct frame *));

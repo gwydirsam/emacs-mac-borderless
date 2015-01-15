@@ -259,6 +259,18 @@ typedef unsigned int NSUInteger;
   /* The last window frame before maximize/fullscreen.  The position
      is relative to the top left corner of the screen.  */
   NSRect savedFrame;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+  /* Window manager state after the full screen transition.  */
+  WMState fullScreenTargetState;
+
+  /* Pointer to the Lisp symbol that is set as `fullscreen' frame
+     parameter after the full screen transition.  */
+  Lisp_Object *fullscreenFrameParameterAfterTransition;
+
+  /* Window used for the full screen transition.  */
+  NSWindow *fullScreenTransitionWindow;
+#endif
 }
 - (id)initWithEmacsFrame:(struct frame *)emacsFrame;
 - (void)setupEmacsView;
@@ -266,7 +278,6 @@ typedef unsigned int NSUInteger;
 - (struct frame *)emacsFrame;
 - (void)changeWindowManagerStateWithFlags:(WMState)flagsToSet
 				    clear:(WMState)flagsToClear;
-- (void)adjustOverlayWindowFrame;
 - (BOOL)emacsViewCanDraw;
 - (void)lockFocusOnEmacsView;
 - (void)unlockFocusOnEmacsView;
@@ -275,6 +286,7 @@ typedef unsigned int NSUInteger;
 - (NSPoint)convertEmacsViewPointFromScreen:(NSPoint)point;
 - (NSRect)convertEmacsViewRectToScreen:(NSRect)rect;
 - (NSRect)centerScanEmacsViewRect:(NSRect)rect;
+- (void)invalidateCursorRectsForEmacsView;
 @end
 
 /* Class for Emacs view that handles drawing events only.  It is used
@@ -340,6 +352,7 @@ typedef unsigned int NSUInteger;
 }
 - (void)setHighlighted:(BOOL)flag;
 - (void)setShowsResizeIndicator:(BOOL)flag;
+- (void)adjustWindowFrame;
 @end
 
 /* Class for scroller that doesn't do modal mouse tracking.  */
@@ -539,11 +552,14 @@ typedef unsigned int NSUInteger;
 - (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
 @end
 
-#if USE_MAC_IMAGE_IO
 @interface NSView (Emacs)
+- (NSImage *)imageInsideRect:(NSRect)rect;
+#if USE_MAC_IMAGE_IO
 - (XImagePtr)createXImageFromRect:(NSRect)rect backgroundColor:(NSColor *)color;
+#endif
 @end
 
+#if USE_MAC_IMAGE_IO
 /* Class for SVG frame load delegate.  */
 @interface EmacsSVGLoader : NSObject
 {
@@ -653,16 +669,25 @@ enum {
   NSApplicationPresentationDisableProcessSwitching	= 1 << 5,
   NSApplicationPresentationDisableForceQuit		= 1 << 6,
   NSApplicationPresentationDisableSessionTermination	= 1 << 7,
-  NSApplicationPresentationDisableHideApplication	= 1 << 8
+  NSApplicationPresentationDisableHideApplication	= 1 << 8,
+  NSApplicationPresentationDisableMenuBarTransparency	= 1 << 9
 };
 typedef NSUInteger NSApplicationPresentationOptions;
 
 @interface NSApplication (AvailableOn1060AndLater)
 - (void)setPresentationOptions:(NSApplicationPresentationOptions)newOptions;
+- (NSApplicationPresentationOptions)presentationOptions;
 - (void)registerUserInterfaceItemSearchHandler:(id<NSUserInterfaceItemSearching>)handler;
 - (BOOL)searchString:(NSString *)searchString inUserInterfaceItemString:(NSString *)stringToSearch
 	 searchRange:(NSRange)searchRange foundRange:(NSRange *)foundRange;
 @end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+enum {
+  NSApplicationPresentationFullScreen			= 1 << 10,
+  NSApplicationPresentationAutoHideToolbar		= 1 << 11
+};
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1040
@@ -682,6 +707,34 @@ typedef NSUInteger NSWindowCollectionBehavior;
 @interface NSWindow (AvailableOn1050AndLater)
 - (NSWindowCollectionBehavior)collectionBehavior;
 - (void)setCollectionBehavior:(NSWindowCollectionBehavior)behavior;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+enum {
+  NSWindowCollectionBehaviorFullScreenPrimary	= 1 << 7,
+  NSWindowCollectionBehaviorFullScreenAuxiliary	= 1 << 8
+};
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+enum {
+  NSWindowAnimationBehaviorDefault		= 0,
+  NSWindowAnimationBehaviorNone			= 2,
+  NSWindowAnimationBehaviorDocumentWindow	= 3,
+  NSWindowAnimationBehaviorUtilityWindow	= 4,
+  NSWindowAnimationBehaviorAlertPanel		= 5
+};
+typedef NSInteger NSWindowAnimationBehavior;
+
+enum {
+  NSFullScreenWindowMask = 1 << 14
+};
+
+@interface NSWindow (AvailableOn1070AndLater)
+- (NSWindowAnimationBehavior)animationBehavior;
+- (void)setAnimationBehavior:(NSWindowAnimationBehavior)newAnimationBehavior;
+- (void)toggleFullScreen:(id)sender;
 @end
 #endif
 
@@ -750,4 +803,13 @@ typedef NSUInteger NSEventPhase;
 - (id)accessibilityAttributeValue:(NSString *)attribute
 		     forParameter:(id)parameter;
 @end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+@interface NSAnimationContext (AvailableOn1070AndLater)
++ (void)runAnimationGroup:(void (^)(NSAnimationContext *context))changes
+        completionHandler:(void (^)(void))completionHandler;
+@end
+#endif
 #endif
