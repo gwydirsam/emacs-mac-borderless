@@ -255,25 +255,13 @@ typedef struct {
     unsigned width, height;
 } XRectangle;
 
-#define NativeRectangle Rect
+#define NativeRectangle XRectangle
 
-#define CONVERT_TO_XRECT(xr,nr)			\
-  ((xr).x = (nr).left,				\
-   (xr).y = (nr).top,				\
-   (xr).width = ((nr).right - (nr).left),	\
-   (xr).height = ((nr).bottom - (nr).top))
-
-#define CONVERT_FROM_XRECT(xr,nr)		\
-  ((nr).left = (xr).x,				\
-   (nr).top = (xr).y,				\
-   (nr).right = ((xr).x + (xr).width),		\
-   (nr).bottom = ((xr).y + (xr).height))
-
-#define STORE_NATIVE_RECT(nr,x,y,width,height)	\
-  ((nr).left = (x),				\
-   (nr).top = (y),				\
-   (nr).right = ((nr).left + (width)),		\
-   (nr).bottom = ((nr).top + (height)))
+#define STORE_NATIVE_RECT(nr,rx,ry,rwidth,rheight)	\
+  ((nr).x = (rx),					\
+   (nr).y = (ry),					\
+   (nr).width = (rwidth),				\
+   (nr).height = (rheight))
 
 enum {
   CFOBJECT_TO_LISP_WITH_TAG			= 1 << 0,

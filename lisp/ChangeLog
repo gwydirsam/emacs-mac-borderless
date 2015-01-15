@@ -1,3 +1,483 @@
+2010-02-27  Jeremy Whitlock  <jcscoobyrs@gmail.com>  (tiny change)
+
+	* progmodes/python.el (python-pdbtrack-stack-entry-regexp): Allow
+	the characters _<> in the stack entry (Bug#5653).
+
+2010-02-26  Kenichi Handa  <handa@m17n.org>
+
+	* language/burmese.el: Fix entries in composition-function-table.
+	(myanmar-composable-pattern): New variable.
+
+	* international/fontset.el (setup-default-fontset): Add an entry
+	for myanmar.
+
+	* international/characters.el (script-list): Add Myanmar
+	Extended-A.
+
+2010-02-26  Glenn Morris  <rgm@gnu.org>
+
+	* custom.el (custom-initialize-delay): Doc fix.
+
+	* mail/sendmail.el (send-mail-function): Autoload the call
+	to custom-initialize-delay, not otherwise preserved in loaddefs.el.
+
+2010-02-25  Alan Mackenzie  <acm@muc.de>
+
+	* progmodes/cc-engine.el (c-clear-<-pair-props)
+	(c-clear->-pair-props): Correct to wipe category text props, not
+	syntax-table ones.
+
+	* progmodes/cc-mode.el (c-after-change): Remove any hard
+	syntax-table properties for <, > which, e.g., C-y has
+	inopportunely converted from category properties.
+
+2010-02-24  Chong Yidong  <cyd@stupidchicken.com>
+
+	* files.el (hack-local-variables-filter): For eval forms, also
+	check safe-local-variable-p (Bug#5636).
+
+2010-02-24  Eduard Wiebe  <usenet@pusto.de>
+
+	* javascript.el (wisent-javascript-jv-expand-tag): Avoid c(ad)ddr
+	and use c(ad)r of cddr (Bug#5640).
+
+2010-02-22  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-do-copy-or-rename-file-out-of-band): Protect
+	setting the modes by `ignore-errors'.  It might fail, for example
+	if the file is not owned by the user but the group.
+	(tramp-handle-write-region): Ensure, that `tmpfile' is always readable.
+
+2010-02-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* files.el (directory-listing-before-filename-regexp): Use
+	stricter matching for iso-style dates, to avoid false matches with
+	date-like filenames (Bug#5597).
+
+	* htmlfontify.el (htmlfontify): Doc fix.
+
+	* eshell/eshell.el (eshell): Doc fix.
+
+	* startup.el (fancy-about-screen): In mode-line, apply
+	mode-line-buffer-id face only to the buffer name (Bug#5613).
+
+2010-02-20  Kevin Ryde  <user42@zip.com.au>
+
+	* progmodes/compile.el (compilation-error-regexp-alist-alist): In
+	`watcom' anchor regexp to start of line, to avoid slowness
+	(Bug#5599).
+
+2010-02-20  Eli Zaretskii  <eliz@gnu.org>
+
+	* subr.el (remove-yank-excluded-properties): Explain in a comment
+	why `category' property is removed.
+
+2010-02-19  Chong Yidong  <cyd@stupidchicken.com>
+
+	* isearch.el (isearch-update-post-hook, isearch-update): Revert
+	2010-02-17 change.
+
+2010-02-19  Ulf Jasper  <ulf.jasper@web.de>
+
+	* calendar/icalendar.el (icalendar--convert-ordinary-to-ical)
+	(icalendar--convert-weekly-to-ical)
+	(icalendar--convert-yearly-to-ical)
+	(icalendar--convert-block-to-ical)
+	(icalendar--convert-cyclic-to-ical)
+	(icalendar--convert-anniversary-to-ical): Take care of time
+	specifications where hour has 1-digit only (Bug#5549).
+
+2010-02-19  Nick Roberts  <nickrob@snap.net.nz>
+
+	* progmodes/gdb-ui.el (gdb-assembler-handler): Accommodate change
+	of disassemble output in GDB 7.1.
+
+2010-02-19  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/f90.el (f90-electric-insert): Give it a delete-selection
+	property.  (Bug#5593)
+
+2010-02-18  Sam Steingold  <sds@gnu.org>
+
+	* vc-cvs.el (vc-cvs-merge-news): Yet another fix of message parsing.
+
+2010-02-18  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	Use abbreviated file names in bookmarks (bug#5591).
+	* bookmark.el (bookmark-maybe-load-default-file): Remove redundant
+	calls to expand-file-name.
+	(bookmark-relocate): Use abbreviated file names in bookmarks.
+	(bookmark-load): Use abbreviated file names in messages.
+
+2010-02-18  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-handle-directory-files): When FULL, do not
+	expand "." and "..".  Reported by Thierry Volpiatto
+	<thierry.volpiatto@gmail.com>.
+
+2010-02-18  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-handle-insert-file-contents): Set always the
+	permissions of the temporary file to "0600".  In case the remote
+	file has no read permissions for the owner, there might be
+	problems otherwise.  Reported by Ole Laursen <olau@iola.dk>.
+
+22010-02-18  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-lisp/authors.el (authors-renamed-files-alist):
+	Add entries for INSTALL.CVS.
+
+2010-02-17  Mark A. Hershberger  <mah@everybody.org>
+
+	* vc-bzr.el: fix typo in Known Bugs section.
+
+	* isearch.el (isearch-update-post-hook): New hook
+	(isearch-update): Use the new hook.
+
+2010-02-16  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-do-copy-or-rename-file-out-of-band):
+	Fix errors in copying directories.
+	(tramp-handle-add-name-to-file, tramp-handle-copy-directory)
+	(tramp-do-copy-or-rename-file, tramp-handle-delete-directory)
+	(tramp-handle-delete-file)
+	(tramp-handle-dired-recursive-delete-directory)
+	(tramp-handle-write-region): Flush also the cache for the upper
+	directory.
+
+2010-02-16  Chong Yidong  <cyd@stupidchicken.com>
+
+	* simple.el (save-interprogram-paste-before-kill): Doc fix.
+
+	* cus-edit.el (hardware): Doc fix.
+
+	* man.el (man): Add to external custom group.
+
+	* delim-col.el (columns): Move to wp custom group.
+
+	* doc-view.el (doc-view): Add to data custom group.
+
+	* cedet/data-debug.el (data-debug): Move to extensions group.
+
+	* cedet/ede.el (ede):
+	* cedet/srecode.el (srecode):
+	* cedet/semantic.el (semantic): Put in tools and extensions group.
+
+	* nxml/nxml-mode.el (nxml-faces): Remove from font-lock-faces group.
+
+	* textmodes/flyspell.el (flyspell-word): Obey the offset specified
+	by ispell-parse-output (Bug#5575).
+
+2010-02-16  Kenichi Handa  <handa@m17n.org>
+
+	* international/ja-dic-cnv.el (iso-2022-7bit-short): Delete it.
+	(skkdic-convert-okuri-ari): Ignore lines starting with '>'.
+	(skkdic-convert): Use `euc-japan' coding system for writing.
+
+2010-02-16  Glenn Morris  <rgm@gnu.org>
+
+	* textmodes/tex-mode.el (tex-bibtex-file): Expand the result of
+	tex-main-file before using it.  (Bug#5562)
+
+2010-02-15  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/advice.el (ad-compile-function): Suppress byte-compiler
+	warnings, since it is annoying for the user to see them each time he
+	runs the code.
+
+2010-02-15  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-process-actions, tramp-read-passwd):
+	* net/tramp-gvfs.el (tramp-gvfs-maybe-open-connection): Use VEC
+	instead of PROC for caching "first-password-request".  Otherwise,
+	new processes would not profit from passwords already entered.
+
+	* net/tramp-cache.el (tramp-dump-connection-properties):
+	Don't save "first-password-request" property.
+
+2010-02-14  Juanma Barranquero  <lekktu@gmail.com>
+
+	* outline.el (outline-head-from-level):
+	* simple.el (with-wrapper-hook):
+	* cedet/ede.el (ede-run-target, project-delete-target)
+	(project-dist-files, ede-name, ede-documentation, ede-parent-project)
+	(ede-adebug-project, ede-adebug-project-parent)
+	(ede-adebug-project-root):
+	* emacs-lisp/elint.el (elint-extra-errors, elint-current-buffer)
+	(elint-defun, elint-buffer-env, elint-top-form-logged)
+	(elint-unbound-variable):
+	* textmodes/reftex-toc.el (reftex-toc-newhead-from-alist):
+	Fix typos in docstrings.
+
+2010-02-14  Michael Albinus  <michael.albinus@gmx.de>
+
+	* files.el (insert-directory): When WILDCARD-REGEXP and
+	FULL-DIRECTORY-P are nil, insert the file entry instead of the
+	whole directory.  (Bug#5551)
+
+	* net/ange-ftp.el (ange-ftp-insert-directory): Insert "  " for
+	dired's alignment sanity.  (Bug#5516)
+
+2010-02-14  Juri Linkov  <juri@jurta.org>
+
+	* man.el (Man-fontify-manpage, Man-cleanup-manpage):
+	Remove remaining ^H with their preceding chars.  (Bug#5566)
+
+2010-02-13  Glenn Morris  <rgm@gnu.org>
+
+	* simple.el (transpose-subr): Give it a doc-string.
+
+	* textmodes/paragraphs.el (transpose-paragraphs, transpose-sentences):
+	Doc fixes.
+
+2010-02-12  Juri Linkov  <juri@jurta.org>
+
+	* arc-mode.el (archive-unique-fname): Make directories for nested
+	archives.  (Bug#5540)
+
+2010-02-12  Juri Linkov  <juri@jurta.org>
+
+	* ffap.el (dired-at-point): Fix docstring.  (Bug#5565)
+
+2010-02-11  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* subr.el (copy-overlay): Handle deleted overlays.
+
+	* man.el (Man-completion-table): Don't signal an error if we can't run
+	manual-program (bug#4056).
+
+2010-02-10  Juanma Barranquero  <lekktu@gmail.com>
+
+	* textmodes/artist.el (artist-mt): Fix typos in docstring.
+
+2010-02-10  Thierry Volpiatto  <thierry.volpiatto@gmail.com>
+
+	* info.el (Info-bookmark-jump): Simplify.
+
+	* bookmark.el (bookmark-handle-bookmark): Catch the right error.
+	(bookmark-default-handler): Accept new bookmark field `buffer'.
+
+2010-02-10  Chong Yidong  <cyd@stupidchicken.com>
+
+	* iswitchb.el (iswitchb-completions): Revert last change.
+
+2010-02-10  Michael Albinus  <michael.albinus@gmx.de>
+
+	* ls-lisp.el (ls-lisp-insert-directory): When WILDCARD-REGEXP and
+	FULL-DIRECTORY-P are nil, and FILE is absolute, expand it.
+	This prevents file names like "~/" being listed literally.
+
+2010-02-10  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* term/xterm.el (xterm-maybe-set-dark-background-mode):
+	Remove dead code.  (Bug#5546)
+
+2010-02-09  Chong Yidong  <cyd@stupidchicken.com>
+
+	* eshell/em-ls.el (eshell-ls-applicable): Frob file attributes
+	correctly (Bug#5548).
+
+2010-02-08  Jose E. Marchesi  <jemarch@gnu.org>
+
+	* progmodes/ada-mode.el (ada-in-numeric-literal-p): New function.
+	(ada-adjust-case): Don't adjust case in hexadecimal number literals.
+
+2010-02-08  Kenichi Handa  <handa@m17n.org>
+
+	* international/mule-util.el (with-coding-priority): Add autoload
+	cookie for putting `lisp-indent-function'.
+
+2010-02-07  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/f90.el (f90-font-lock-keywords-1, f90-font-lock-keywords-2):
+	Move F2003 named interfaces from keywords-2 to keywords-1, and
+	use function-name-face rather than constant-face.
+	Simplify "abstract interface" regexp.
+
+2010-02-07  Chong Yidong  <cyd@stupidchicken.com>
+
+	* eshell/esh-util.el (eshell-file-attributes): New optional arg
+	ID-FORMAT.  Pass it to `file-attributes'.
+
+	* eshell/em-ls.el (eshell-do-ls): Use it (Bug#5528).
+
+2010-02-07  sj  <prime.wizard+emacs@gmail.com>  (tiny change)
+
+	* faces.el (set-face-attribute): Allow calling
+	internal-set-lisp-face-attribute with 'unspecified family and
+	foundry argument (Bug#5536).
+
+2010-02-07  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/f90.el (f90-font-lock-keywords-2)
+	(f90-looking-at-type-like, f90-looking-at-program-block-end):
+	Handle F2003 named interfaces.
+
+2010-02-06  Chong Yidong  <cyd@stupidchicken.com>
+
+	* progmodes/cc-mode.el (c-common-init): Bind temporary variables
+	beg and end before calling c-get-state-before-change-functions.
+
+2010-02-06  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* vc-bzr.el (vc-bzr-dir-extra-headers): Disable the pending merges header.
+
+2010-02-05  Juri Linkov  <juri@jurta.org>
+
+	* doc-view.el (doc-view-mode):
+	* image-mode.el (image-mode): Put property mode-class=special.
+	(Bug#4896)
+
+2010-02-05  Mark A. Hershberger  <mah@everybody.org>
+
+	* vc-svn.el (vc-svn-revision-table): New function.
+
+2010-02-05  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/ange-ftp.el (ange-ftp-insert-directory):
+	* net/tramp-imap.el (tramp-imap-handle-insert-directory):
+	* net/tramp-smb.el (tramp-smb-handle-insert-directory):
+	Handle also directories.  (Bug#5478)
+
+2010-02-05  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/f90.el (f90-font-lock-keywords-2): Fix `enum'.
+
+2010-02-05  Chong Yidong  <cyd@stupidchicken.com>
+
+	* startup.el (command-line-1): Convert options beginning with a
+	single dash as well (Bug#5519).
+
+2010-02-05  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	Make `initials' completion work for /hh -> /home/horn again (bug#5524).
+	* minibuffer.el (completion-initials-expand): Only check the presence
+	of delims *within* the boundaries, since otherwise the / delim is
+	always found for files.
+
+	Fix up various corner case problems.
+	* doc-view.el (doc-view-last-page-number): New function.
+	(doc-view-mode, doc-view-last-page, doc-view-goto-page): Use it.
+	(doc-view-goto-page): Avoid inf-loops when the conversion fails.
+	(doc-view-kill-proc): Avoid inf-loop in freak cases.
+	(doc-view-reconvert-doc): Use the new recursive delete-directory.
+	(doc-view-convert-current-doc): Don't create the resolution.el file
+	here any more.
+	(doc-view-pdf/ps->png): Do it here instead.
+	(doc-view-already-converted-p): Check that resolution.el is present.
+	(doc-view-pdf->png): Don't rely on doc-view-pdf/ps->png for the few
+	windows that are not yet showing images.
+
+2010-02-04  Alan Mackenzie  <acm@muc.de>
+
+	Change strategy for marking < and > as template delimiters: mark
+	them strictly in matching pairs.
+
+	* cc-mode.el (c-before-change):
+	Use c-get-state-before-change-functions.
+	(c-common-init): Adapt to use
+	c-get-state-before-change-functions (note plural).
+
+	* cc-langs.el (c-no-parens-syntax-table): New syntax table, used
+	for searching syntactically for matching <s and >s.
+	(c-get-state-before-change-functions): New language variable (note
+	the plural) which supersedes c-get-state-before-change-function.
+
+	* cc-engine.el (c-clear-<-pair-props, c-clear->-pair-props)
+	(c-clear-<>-pair-props, c-clear-<-pair-props-if-match-after)
+	(c-clear->-pair-props-if-match-before)
+	(c-before-change-check-<>-operators): New functions.
+	(c-after-change-check-<>-operators): Use macro
+	c-unmark-<->-as-paren.
+
+	* cc-defs.el (c-search-backward-char-property): New macro.
+
+	* cc-cmds.el (c-electric-lt-gt): Do not set text properties on <
+	and > any more.  (These will be handled by font locking.)
+
+2010-02-04  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dired.el (dired-revert): If DIRED-DIRECTORY is a cons cell, call
+	`dired-uncache' for every elemnt which is an absolute file name.
+
+	* net/tramp.el (tramp-handle-dired-uncache): When DIR is not a
+	directory, handle its directory component.
+	(tramp-handle-file-remote-p): Let-bind `tramp-verbose' to 3; this
+	function is called permanently and creates noise, otherwise.
+
+	* net/tramp-imap.el (tramp-imap-handle-insert-directory):
+	* net/tramp-smb.el (tramp-smb-handle-insert-directory):
+	Handle the case, FILENAME is not in `default-directory'.  (Bug#5478)
+
+2010-02-04  David Burger  <dburger@google.com>  (tiny change)
+
+	* macros.el (apply-macro-to-region-lines):
+	Minor simplification.  (Bug#5485)
+
+2010-02-04  Glenn Morris  <rgm@gnu.org>
+
+	* mail/rmail.el (rmail-show-message-1): Handle malformed
+	quoted-printable text.  (Bug#5441)
+
+	* mail/mail-utils.el (mail-unquote-printable-region): Doc fix.
+
+	* simple.el (visual-line-mode): Capitalize lighter.
+
+2010-02-03  John Wiegley  <jwiegley@gmail.com>
+
+	* iswitchb.el (iswitchb-completions): Add bookmark files to the
+	list of files considered for "virtual buffer" completions.
+
+2010-02-03  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/ange-ftp.el (ange-ftp-insert-directory): Parse directory
+	also in case of (and (not full) (not wildcard)). This is needed,
+	when dired is called with a list of files, which are not in
+	`default-directory'.  (Bug#5478)
+
+2010-02-03  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* vc-hooks.el (vc-path): Make it an obsolete var, rather than function.
+
+2010-02-02  Juri Linkov  <juri@jurta.org>
+
+	* textmodes/ispell.el (ispell-message-text-end): Remove final newline
+	from unidiff to allow function-line after @@.
+
+2010-02-02  Juri Linkov  <juri@jurta.org>
+
+	* ediff-util.el (ediff-file-checked-in-p): Replace '(nil CVS) by
+	'(RCS SCCS) with inverted condition.
+
+2010-02-02  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/ange-ftp.el (ange-ftp-skip-msgs): Ignore all ""^500 .*AUTH"
+	messages.
+
+2010-02-01  Juri Linkov  <juri@jurta.org>
+
+	* arc-mode.el (archive-zip-extract): Use `member-ignore-case' to
+	compare with "pkunzip" and "pkzip" instead of only "pkzip".
+	In the `archive-extract-by-stdout' branch use `shell-quote-argument'
+	only when (car archive-zip-extract) is "unzip".  (Bug#5475)
+
+2010-02-01  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* doc-view.el (doc-view-new-window-function): Be a bit more defensive.
+	(doc-view-revert-buffer): New command.
+	(doc-view-mode-map): Use it.
+
+2010-02-01  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* vc-bzr.el (vc-bzr-dir-extra-headers): Add a header when a
+	pending merge is detected.
+
+2010-01-31  Juri Linkov  <juri@jurta.org>
+
+	* progmodes/grep.el (zrgrep): Call `grep-compute-defaults' at the
+	beginning of interactive spec like all other grep commands do.
+	Put "all" in front of "gz".  (Bug#5260)
+
 2010-01-29  Dan Nicolaescu  <dann@ics.uci.edu>
 
 	* vc-bzr.el (vc-bzr-after-dir-status): Match another renaming indicator.
@@ -81,10 +561,9 @@
 
 2010-01-25  Mark A. Hershberger  <mah@everybody.org>
 
-	* progmodes/python.el: Replace reference to obsolete
-	c-subward-mode.
+	* progmodes/python.el: Replace reference to obsolete c-subword-mode.
 
-	* vc-bzr.el: (vc-bzr-revision-table) New function.
+	* vc-bzr.el (vc-bzr-revision-table): New function.
 
 2010-01-25  Eric Hanchrow  <eric.hanchrow@gmail.com>  (tiny change)
 
@@ -117,7 +596,7 @@
 
 2010-01-23  Stephen Leake  <stephen_leake@member.fsf.org>
 
-        * progmodes/ada-mode.el (ada-in-paramlist-p): Pragma syntax
+	* progmodes/ada-mode.el (ada-in-paramlist-p): Pragma syntax
 	is the same as subprogram call, not declaration.  (Bug#5435).
 
 2010-01-23  Michael Albinus  <michael.albinus@gmx.de>
@@ -174,7 +653,7 @@
 
 2010-01-18  Stephen Leake  <stephen_leake@member.fsf.org>
 
-	* lisp/progmodes/ada-mode.el: Fix bug#5400.
+	* progmodes/ada-mode.el: Fix bug#5400.
 	(ada-matching-decl-start-re): Move into ada-goto-decl-start.
 	(ada-goto-decl-start): Rename from ada-goto-matching-decl-start; callers
 	changed.  Delete RECURSIVE parameter; never used.  Improve doc string.
@@ -1034,7 +1513,7 @@
 
 2009-12-11  Michael McNamara  <mac@mail.brushroad.com>
 
-	* verilog-mode.el (verilog-vmm-begin-re, verilog-vmm-end-re)
+	* progmodes/verilog-mode.el (verilog-vmm-begin-re, verilog-vmm-end-re)
 	(verilog-vmm-statement-re, verilog-ovm-statement-re)
 	(verilog-defun-level-not-generate-re, verilog-calculate-indent)
 	(verilog-leap-to-head, verilog-backward-token):
@@ -1042,9 +1521,9 @@
 
 2009-12-11  Wilson Snyder  <wsnyder@wsnyder.org>
 
-	* verilog-mode.el (verilog-auto-lineup, verilog-nameable-item-re):
-	Cleanup user-visible spelling and documentation errors.
-	One reported by Gary Delp.
+	* progmodes/verilog-mode.el (verilog-auto-lineup)
+	(verilog-nameable-item-re): Cleanup user-visible spelling and
+	documentation errors.  One reported by Gary Delp.
 	(verilog-submit-bug-report): Mention bug tracking and CC co-author.
 	(verilog-read-decls): Fix AUTOWIRE with types declared in a
 	package, bug195.  Reported by Pierre-David Pfister.
@@ -2088,7 +2567,7 @@
 
 2009-11-26  Michael McNamara  <mac@mail.brushroad.com>
 
-	* verilog-mode.el (verilog-at-struct-p): Support "signed" and
+	* progmodes/verilog-mode.el (verilog-at-struct-p): Support "signed" and
 	"unsigned" structs.
 
 	(verilog-leap-to-head, verilog-backward-token): Handle "disable
@@ -2096,9 +2575,10 @@
 
 2009-11-26  Wilson Snyder  <wsnyder@wsnyder.org>
 
-	* verilog-mode.el (verilog-auto-insert-lisp, verilog-delete-auto)
-	(verilog-delete-empty-auto-pair, verilog-library-filenames):
-	Fix AUTOINSERTLISP to support insert-file.  Reported by Clay Douglass.
+	* progmodes/verilog-mode.el (verilog-auto-insert-lisp)
+	(verilog-delete-auto, verilog-delete-empty-auto-pair)
+	(verilog-library-filenames): Fix AUTOINSERTLISP to support insert-file.
+	Reported by Clay Douglass.
 
 	(verilog-auto-inst, verilog-auto-star-safe)
 	(verilog-delete-auto-star-implicit, verilog-read-sub-decls):
@@ -3490,7 +3970,7 @@
 
 2009-11-05  Wilson Snyder  <wsnyder@wsnyder.org>
 
-	* verilog-mode.el (verilog-getopt-file, verilog-set-define):
+	* progmodes/verilog-mode.el (verilog-getopt-file, verilog-set-define):
 	Remove extra save-excursions and make-variable-buffer-local's.
 	Suggested by Stefan Monnier.
 
@@ -3512,12 +3992,12 @@
 	(verilog-read-decls): Fix AUTOREG not detecting "assign {a,b}".
 	Reported by Wade Smith.
 
-	(verilog-batch-execute-func) Comment on function usage.
+	(verilog-batch-execute-func): Comment on function usage.
 
 2009-11-05  Michael McNamara  <mac@mail.brushroad.com>
 
-	* verilog-mode.el (verilog-label-re): Fix regular expression for
-	labels.
+	* progmodes/verilog-mode.el (verilog-label-re): Fix regular expression
+	for labels.
 
 	(verilog-label-re, verilog-calc-1): Support proper indent of named
 	asserts.
@@ -4169,7 +4649,7 @@
 	(tramp-handle-file-truename): Use it.
 	(tramp-handle-file-exists-p): Check file-attributes cache, assume
 	file exists if cache value present.
-	(tramp-check-cached-permissions) New defun.
+	(tramp-check-cached-permissions): New defun.
 	(tramp-handle-file-readable-p): Use it.
 	(tramp-handle-file-writable-p): Likewise.
 	(tramp-handle-file-executable-p): Likewise.
@@ -4400,7 +4880,7 @@
 	from `rfn-eshadow-update-overlay-hook' when unloading.
 	(tramp-methods): Add `tramp-copy-keep-tmpfile' for "rsync" and
 	"rsyncc".  Adjust doc string.
-	(tramp-temp-buffer-file-name) New buffer-local defvar.
+	(tramp-temp-buffer-file-name): New buffer-local defvar.
 	(tramp-handle-insert-file-contents, tramp-handle-write-region):
 	Keep temporary file when indicated by method ("rsync" and
 	"rsyncc").
@@ -7812,7 +8292,7 @@
 	Don't modify last-coding-system-used by accident.
 	(tramp-completion-file-name-handler): Apply the checks here,
 	instead during registration.
-	(tramp-register-file-name-handlers) Renamed from
+	(tramp-register-file-name-handlers): Renamed from
 	`tramp-register-file-name-handler'.  Register both
 	`tramp-file-name-handler' and `tramp-completion-file-name-handler'.
 	(tramp-register-completion-file-name-handler): Remove.  (Bug#4260)
@@ -9721,9 +10201,9 @@
 
 2009-07-06  Michael McNamara  <mac@mail.brushroad.com>
 
-	* verilog-mode.el (verilog-error-regexp-emacs-alist): Coded custom
-	representation of verilog error regular expressions to work with
-	Emacs-22's new format.
+	* progmodes/verilog-mode.el (verilog-error-regexp-emacs-alist):
+	Coded custom representation of verilog error regular expressions
+	to work with Emacs-22's new format.
 	(verilog-error-regexp-xemacs-alist): Coded custom representation
 	of verilog error regular expressions to work with XEmacs format.
 	(verilog-error-regexp-add-xemacs): Hook routine to install verilog
@@ -9794,7 +10274,7 @@
 
 2009-07-03  Jay Belanger  <jay.p.belanger@gmail.com>
 
-	* calc-math.el (math-use-emacs-fn): Make sure that the number is
+	* calc/calc-math.el (math-use-emacs-fn): Make sure that the number is
 	formatted correctly.
 
 2009-07-02  Juri Linkov  <juri@jurta.org>
@@ -9906,7 +10386,7 @@
 
 	* net/tramp.el (tramp-do-copy-or-rename-file-directly):
 	Handle also the 'rename case, when setting file modes.  (Bug#3712)
-	(tramp-default-file-modes) Remove execute permissions.
+	(tramp-default-file-modes): Remove execute permissions.
 
 	* net/tramp-gvfs.el (tramp-gvfs-methods): Add "synce" method.
 	(top): Add a default for "synce" in `tramp-default-user-alist'.
@@ -9931,7 +10411,7 @@
 
 	* language/chinese.el ("Chinese-GB", "Chinese-BIG5")
 	("Chinese-CNS", "Chinese-EUC-TW", "Chinese-GBK"): Add a
-	setup-funcion to make char-widht-table suitable for respective
+	setup-function to make char-width-table suitable for respective
 	environments, and an exit-function to cancel that.
 
 	* language/japan-util.el (setup-japanese-environment-internal):
@@ -9960,7 +10440,7 @@
 
 2009-06-28  Michael McNamara  <mac@mail.brushroad.com>
 
-	* verilog-mode.el (verilog-beg-of-statement)
+	* progmodes/verilog-mode.el (verilog-beg-of-statement)
 	(verilog-endcomment-reason-re): Support unique case and priority case.
 	(verilog-basic-complete-re): Support localparam lineup.
 	(verilog-beg-of-statement-1): Fix for robustness, unique case.
@@ -9991,7 +10471,7 @@
 	to support safe execution at almost anyline.
 	(verilog-calc-1): Properly support indenting deep inside generate
 	blocks.
-	(verilog-init-font) Remove definition & use of verilog-init-font,
+	(verilog-init-font): Remove definition & use of verilog-init-font,
 	as it is redundant with font-lock-defaults.
 	(verilog-mode): Alter the definition of verilog-font-lock-defaults
 	to avoid circular calls if syntax-ppss is a function (as is the
@@ -10005,7 +10485,7 @@
 	(verilog-defun-level-not-generate-re, verilog-defun-level-re)
 	(verilog-defun-level-generate-only-re): Really fix the defun-list
 	compilation issue.
-	(verilog-calc-1) (verilog-beg-of-statement): Enhance support for
+	(verilog-calc-1, verilog-beg-of-statement): Enhance support for
 	coverpoint, constraint and cross statements.
 	(verilog-defun-level-list, verilog-generate-defun-level-list)
 	(verilog-all-defun-level-list): Redo these specifications - it is
@@ -10025,7 +10505,7 @@
 
 2009-06-28  Wilson Snyder  <wsnyder@wsnyder.org>
 
-	* verilog-mode.el (verilog-auto-arg, verilog-auto-arg-sort):
+	* progmodes/verilog-mode.el (verilog-auto-arg, verilog-auto-arg-sort):
 	Allow sorting AUTOARG lists.  Suggested by Andrea Fedeli.
 	(verilog-read-sub-decls-line): Fix AUTOWIRE signals getting lost
 	in concatenations.  Reported by Yishay Belkind.

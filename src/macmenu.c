@@ -241,6 +241,31 @@ for instance using the window manager, then this produces a quit and
 }
 
 
+DEFUN ("x-menu-bar-open-internal", Fx_menu_bar_open_internal, Sx_menu_bar_open_internal, 0, 1, "i",
+       doc: /* Start key navigation of the menu bar in FRAME.
+This initially opens the first menu bar item and you can then navigate with the
+arrow keys, select a menu entry with the return key or cancel with the
+escape key.  If FRAME has no menu bar this function does nothing.
+
+If FRAME is nil or not given, use the selected frame.  */)
+     (frame)
+     Lisp_Object frame;
+{
+  int selection;
+  FRAME_PTR f = check_x_frame (frame);
+
+  set_frame_menubar (f, 0, 1);
+  BLOCK_INPUT;
+  selection = mac_activate_menubar (f);
+  UNBLOCK_INPUT;
+
+  if (selection)
+    find_and_call_menu_selection (f, f->menu_bar_items_used, f->menu_bar_vector,
+				  (void *) (intptr_t) selection);
+
+  return Qnil;
+}
+
 /* Activate the menu bar of frame F.
    This is called from keyboard.c when it gets the
    MENU_BAR_ACTIVATE_EVENT out of the Emacs event queue.
@@ -1044,6 +1069,11 @@ syms_of_macmenu ()
   staticpro (&Qdebug_on_next_call);
 
   defsubr (&Smenu_or_popup_active_p);
+
+  defsubr (&Sx_menu_bar_open_internal);
+  Ffset (intern_c_string ("accelerate-menu"),
+	 intern_c_string (Sx_menu_bar_open_internal.symbol_name));
+
 #ifdef HAVE_MENUS
   defsubr (&Sx_popup_dialog);
 #endif

@@ -1,3 +1,28 @@
+* emacs-23.1.93-mac-1.98 [experimental/hackers-only] (2010-02-27)
+Based on Emacs 23.1.93
+
+** Fixed bugs
+
+*** Menu selection via search field in the Help menu doesn't work on
+Mac OS X 10.6.
+Note: this seems to be still unstable on Mac OS X 10.5.8, crashing at
+the function TestMenuSystemAttributes in the HIToolbox framework.
+I've experienced similar crashes even with Safari on that version.
+
+*** The function `menu-bar-open' does not activate the menu bar.
+
+*** Menu bar does not get updated after Command-H -> Dock icon click
+on Mac OS X 10.5.
+
+** Improvements
+
+*** Scroll bars are excluded from flashed area for visible bell in a
+consistent way.
+
+*** Several keyboard shortcuts (notably those for Keyboard Navigation)
+listed in System Preferences now work.
+
+
 * emacs-23.1.92-mac-1.97 [experimental/hackers-only] (2010-01-30)
 Based on Emacs 23.1.92
 

@@ -178,6 +178,7 @@ typedef unsigned int NSUInteger;
 - (BOOL)needsOrderFrontOnUnhide;
 - (void)setNeedsOrderFrontOnUnhide:(BOOL)flag;
 - (void)updateApplicationPresentationOptions;
+- (void)showMenuBar;
 @end
 
 @interface EmacsFullscreenWindow : EmacsWindow
@@ -305,7 +306,7 @@ typedef unsigned int NSUInteger;
 
 /* Just for avoiding warnings about undocumented methods in NSScroller.  */
 
-@interface NSScroller (Emacs)
+@interface NSScroller (Undocumented)
 - (void)drawArrow:(NSUInteger)position highlightPart:(NSInteger)part;
 @end
 
@@ -428,8 +429,12 @@ typedef unsigned int NSUInteger;
 @interface EmacsMenu : NSMenu
 @end
 
+@interface NSEvent (Undocumented)
+- (EventRef)_eventRef;
+@end
+
 @interface EmacsController (Menu) <NSMenuDelegate>
-- (void)trackMenubar;
+- (void)trackMenuBar;
 @end
 
 @interface EmacsFrameController (Menu)

@@ -1633,8 +1633,10 @@ splash screen in another window."
       (select-frame frame)
       (switch-to-buffer "*About GNU Emacs*")
       (setq buffer-undo-list t
-	    mode-line-format (propertize "---- %b %-"
-					 'face 'mode-line-buffer-id))
+	    mode-line-format
+	    (concat "----"
+		    (propertize "%b" 'face 'mode-line-buffer-id)
+		    "%-"))
       (let ((inhibit-read-only t))
 	(erase-buffer)
 	(if pure-space-overflow
@@ -2110,7 +2112,7 @@ A fancy display is used on graphic displays, normal otherwise."
 	      (when (string-match "\\`\\(--[^=]*\\)=" argi)
 		(setq argval (substring argi (match-end 0))
 		      argi (match-string 1 argi)))
-	      (when (string-match "\\`--." orig-argi)
+	      (when (string-match "\\`--?[^-]" orig-argi)
 		(setq completion (try-completion argi longopts))
 		(if (eq completion t)
 		    (setq argi (substring argi 1))

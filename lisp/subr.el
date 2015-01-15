@@ -2232,10 +2232,14 @@ If MESSAGE is nil, instructions to type EXIT-CHAR are displayed there."
 
 (defun copy-overlay (o)
   "Return a copy of overlay O."
-  (let ((o1 (make-overlay (overlay-start o) (overlay-end o)
-			  ;; FIXME: there's no easy way to find the
-			  ;; insertion-type of the two markers.
-			  (overlay-buffer o)))
+  (let ((o1 (if (overlay-buffer o)
+                (make-overlay (overlay-start o) (overlay-end o)
+                              ;; FIXME: there's no easy way to find the
+                              ;; insertion-type of the two markers.
+                              (overlay-buffer o))
+              (let ((o1 (make-overlay (point-min) (point-min))))
+                (delete-overlay o1)
+                o1)))
 	(props (overlay-properties o)))
     (while props
       (overlay-put o1 (pop props) (pop props)))
@@ -2438,7 +2442,11 @@ Otherwise, return nil."
   "Remove `yank-excluded-properties' between START and END positions.
 Replaces `category' properties with their defined properties."
   (let ((inhibit-read-only t))
-    ;; Replace any `category' property with the properties it stands for.
+    ;; Replace any `category' property with the properties it stands
+    ;; for.  This is to remove `mouse-face' properties that are placed
+    ;; on categories in *Help* buffers' buttons.  See
+    ;; http://lists.gnu.org/archive/html/emacs-devel/2002-04/msg00648.html
+    ;; for the details.
     (unless (memq yank-excluded-properties '(t nil))
       (save-excursion
 	(goto-char start)

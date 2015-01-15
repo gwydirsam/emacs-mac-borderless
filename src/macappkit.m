@@ -379,19 +379,19 @@ static IMP impClose, impOrderOut;
   if (method_getImplementation != NULL)
 #endif
     {
-      Method methodClose =
-	class_getInstanceMethod ([NSWindow class], @selector(close));
-      Method methodOrderOut =
-	class_getInstanceMethod ([NSWindow class], @selector(orderOut:));
       Method methodCloseNew =
 	class_getInstanceMethod ([self class], @selector(close));
       Method methodOrderOutNew =
 	class_getInstanceMethod ([self class], @selector(orderOut:));
       IMP impCloseNew = method_getImplementation (methodCloseNew);
       IMP impOrderOutNew = method_getImplementation (methodOrderOutNew);
+      const char *typeCloseNew = method_getTypeEncoding (methodCloseNew);
+      const char *typeOrderOutNew = method_getTypeEncoding (methodOrderOutNew);
 
-      impClose = method_setImplementation (methodClose, impCloseNew);
-      impOrderOut = method_setImplementation (methodOrderOut, impOrderOutNew);
+      impClose = class_replaceMethod ([NSWindow class], @selector(close),
+				      impCloseNew, typeCloseNew);
+      impOrderOut = class_replaceMethod ([NSWindow class], @selector(orderOut:),
+					 impOrderOutNew, typeOrderOutNew);
     }
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
   else				/* method_getImplementation == NULL */
@@ -555,12 +555,20 @@ install_dispatch_handler ()
 {
   OSStatus err = noErr;
 
-  if (err == noErr)
+  /* If this is installed to the event dispatcher on Mac OS X 10.6,
+     then keyboard navigation of the search field in the Help menu
+     stops working.  Note that getting the script-language record in
+     this way still works on 32-bit binary, but we abandon it.  */
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
     {
       static const EventTypeSpec specs[] =
 	{{kEventClassTextInput, kEventTextInputUpdateActiveInputArea},
 	 {kEventClassTextInput, kEventTextInputUnicodeForKeyEvent}};
 
+      /* Dummy object creation/destruction so +[NSTSMInputContext
+	 initialize] can install a handler to the event dispatcher
+	 target before install_dispatch_handler does that.  */
+      [[[(NSClassFromString (@"NSTSMInputContext")) alloc] init] release];
       err = InstallEventHandler (GetEventDispatcherTarget (),
 				 mac_handle_text_input_event,
 				 GetEventTypeCount (specs), specs, NULL, NULL);
@@ -683,8 +691,8 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
     [super setPresentationOptions:newOptions];
   else
     {
-      SystemUIMode mode;
-      SystemUIOptions options = kNilOptions;
+      SystemUIMode mode, current_mode;
+      SystemUIOptions options = kNilOptions, current_options;
       NSString *message = nil;
 
       switch (newOptions & (NSApplicationPresentationAutoHideDock
@@ -794,7 +802,12 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 	  options |= kUIOptionDisableHide;
 #endif
 
-      SetSystemUIMode (mode, options);
+      /* If SetSystemUIMode is called unconditionally, then the menu
+	 bar does not get updated after Command-H -> Dock icon click
+	 on Mac OS X 10.5.  */
+      GetSystemUIMode (&current_mode, &current_options);
+      if (mode != current_mode || options != current_options)
+	SetSystemUIMode (mode, options);
     }
 }
 #endif
@@ -830,10 +843,6 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
   if (!mac_service_provider_registered_p ())
     [NSApp setServicesProvider:self];
 
-  /* Dummy object creation/destruction so +[NSTSMInputContext
-     initialize] can install a handler to the event dispatcher target
-     before install_dispatch_handler does that.  */
-  [[[(NSClassFromString (@"NSTSMInputContext")) alloc] init] release];
   install_dispatch_handler ();
 
   macfont_update_antialias_threshold ();
@@ -1078,7 +1087,7 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 		}
 	    }
 
-	  mask = (trackingObject == nil || dpyinfo->saved_menu_event == NULL
+	  mask = (trackingObject == nil && dpyinfo->saved_menu_event == NULL
 		  ? NSAnyEventMask : (NSAnyEventMask & ~ANY_MOUSE_EVENT_MASK));
 	  event = [NSApp nextEventMatchingMask:mask untilDate:expiration
 			 inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -1491,6 +1500,11 @@ extern void mac_save_keyboard_input_source P_ ((void));
   [NSApp setPresentationOptions:NSApplicationPresentationDefault];
 }
 
+- (void)showMenuBar
+{
+  /* The menu bar is already shown.  */
+}
+
 - (void)zoom:(id)sender
 {
   id delegate = [self delegate];
@@ -1543,6 +1557,12 @@ extern void mac_save_keyboard_input_source P_ ((void));
   else
     options = NSApplicationPresentationDefault;
   [NSApp setPresentationOptions:options];
+}
+
+- (void)showMenuBar
+{
+  if ([[self screen] isEqual:[[NSScreen screens] objectAtIndex:0]])
+    [NSApp setPresentationOptions:NSApplicationPresentationAutoHideDock];
 }
 
 @end				// EmacsFullscreenWindow
@@ -2332,17 +2352,16 @@ mac_set_frame_window_alpha (f, alpha)
 void
 mac_get_window_structure_bounds (f, bounds)
      struct frame *f;
-     Rect *bounds;
+     NativeRectangle *bounds;
 {
   NSWindow *window = FRAME_MAC_WINDOW (f);
   NSRect baseScreenFrame = mac_get_base_screen_frame ();
   NSRect windowFrame = [window frame];
 
-  SetRect (bounds,
-	   NSMinX (windowFrame) + NSMinX (baseScreenFrame),
-	   - NSMaxY (windowFrame) + NSMaxY (baseScreenFrame),
-	   NSMaxX (windowFrame) + NSMinX (baseScreenFrame),
-	   - NSMinY (windowFrame) + NSMaxY (baseScreenFrame));
+  STORE_NATIVE_RECT (*bounds,
+		     NSMinX (windowFrame) + NSMinX (baseScreenFrame),
+		     - NSMaxY (windowFrame) + NSMaxY (baseScreenFrame),
+		     NSWidth (windowFrame), NSHeight (windowFrame));
 }
 
 void
@@ -2567,7 +2586,7 @@ extern Lisp_Object Vmac_ts_active_input_overlay;
 extern Lisp_Object Qbefore_string;
 extern Lisp_Object Qtext_input, Qinsert_text, Qset_marked_text;
 extern int mac_wheel_button_is_mouse_2;
-extern Rect last_mouse_glyph;
+extern NativeRectangle last_mouse_glyph;
 extern FRAME_PTR last_mouse_glyph_frame;
 
 #ifdef __STDC__
@@ -2955,7 +2974,7 @@ static OSStatus
 get_text_input_script_language (slrec)
      ScriptLanguageRecord *slrec;
 {
-  OSStatus err = noErr;
+  OSStatus err = eventParameterNotFoundErr;
 
   if (current_text_input_event)
     {
@@ -2973,15 +2992,6 @@ get_text_input_script_language (slrec)
 				 kEventParamTextInputSendSLRec,
 				 typeIntlWritingCode, NULL,
 				 sizeof (ScriptLanguageRecord), NULL, slrec);
-    }
-  else
-    {
-      slrec->fScript = GetScriptManagerVariable (smKeyScript);
-#if __LP64__
-      slrec->fLanguage = kTextLanguageDontCare;
-#else
-      slrec->fLanguage = GetScriptVariable (slrec->fScript, smScriptLang);
-#endif
     }
 
   return err;
@@ -4433,9 +4443,9 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
 	      viewFrame = [hitView convertRect:viewFrame toView:nil];
 	      viewFrame = [emacsView convertRect:viewFrame fromView:nil];
-	      SetRect (&last_mouse_glyph,
-		       NSMinX (viewFrame), NSMinY (viewFrame),
-		       NSMaxX (viewFrame), NSMaxY (viewFrame));
+	      STORE_NATIVE_RECT (last_mouse_glyph,
+				 NSMinX (viewFrame), NSMinY (viewFrame),
+				 NSWidth (viewFrame), NSHeight (viewFrame));
 
 	      help_echo_object = help_echo_window = Qnil;
 	      help_echo_pos = -1;
@@ -4962,10 +4972,10 @@ static void update_dragged_types P_ ((void));
 
   /* Has the mouse moved off the glyph it was on at the last sighting?  */
   if (f != last_mouse_glyph_frame
-      || x < last_mouse_glyph.left
-      || x >= last_mouse_glyph.right
-      || y < last_mouse_glyph.top
-      || y >= last_mouse_glyph.bottom)
+      || x < last_mouse_glyph.x
+      || x >= last_mouse_glyph.x + last_mouse_glyph.width
+      || y < last_mouse_glyph.y
+      || y >= last_mouse_glyph.y + last_mouse_glyph.height)
     {
       f->mouse_moved = 1;
       [emacsView lockFocus];
@@ -5795,6 +5805,7 @@ extern int popup_activated_flag;
 extern int name_is_separator P_ ((const char *));
 
 static void update_services_menu_types P_ ((void));
+static void mac_fake_menu_bar_click P_ ((EventPriority));
 
 @implementation NSMenu (Emacs)
 
@@ -5952,13 +5963,32 @@ static void update_services_menu_types P_ ((void));
   firstResponder = [window firstResponder];
   if ([firstResponder isMemberOfClass:[EmacsView class]])
     {
-      /* This condition is a workaround for the problem that
-	 Command-Control-D does not pop up dictionary on Mac OS X
-	 10.6.  */
-      if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5
-	  || !([theEvent keyCode] == 0x02 /* kVK_ANSI_D */
-	       && (([theEvent modifierFlags] & ANY_KEY_MODIFIER_FLAGS_MASK)
-		   == (NSCommandKeyMask | NSControlKeyMask))))
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+      extern Boolean _IsSymbolicHotKeyEvent P_ ((EventRef, UInt32 *, Boolean *)) AVAILABLE_MAC_OS_X_VERSION_10_3_AND_LATER;
+      UInt32 code;
+      Boolean isEnabled;
+
+      if (
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+	  _IsSymbolicHotKeyEvent != NULL &&
+#endif
+	  _IsSymbolicHotKeyEvent ([theEvent _eventRef], &code, &isEnabled)
+	  && isEnabled)
+	{
+	  switch (code)
+	    {
+	    case 7:		/* Move focus to the menu bar */
+	      mac_fake_menu_bar_click (kEventPriorityStandard);
+	      return YES;
+	      break;
+
+	    case 98:	 /* Show Help menu, Mac OS X 10.5 and later */
+	      [(EmacsWindow *)window showMenuBar];
+	      break;
+	    }
+	}
+      else
+#endif
 	{
 	  /* Note: this is not necessary for binaries built on Mac OS
 	     X 10.5 because -[NSWindow sendEvent:] now sends keyDown:
@@ -6045,40 +6075,55 @@ restore_show_help_function (old_show_help_function)
    we can't pop down an error dialog caused by a Service invocation,
    for example.  */
 
-- (void)trackMenubar
+- (void)trackMenuBar
 {
   if ([NSApp isRunning])
     {
       /* Mac OS X 10.2 doesn't regard untilDate:nil as polling.  */
       NSDate *expiration = [NSDate distantPast];
+      NSWindow *window;
 
       while (1)
 	{
 	  NSEvent *event = [NSApp nextEventMatchingMask:NSAnyEventMask
 				  untilDate:expiration
 				  inMode:NSDefaultRunLoopMode dequeue:YES];
+	  NSDate *limitDate;
 
 	  if (event == nil)
 	    {
 	      /* There can be a pending mouse down event on the menu
-		 bar at least on 10.5 with Command-Shift-/ -> search
-		 with keyword -> select.  */
-	      if (peek_if_next_event_activates_menu_bar () == NULL)
-		break;
+		 bar at least on Mac OS X 10.5 with Command-Shift-/ ->
+		 search with keyword -> select.  Also, some
+		 kEventClassMenu event is still pending on Mac OS X
+		 10.6 when selecting menu item via search field on the
+		 Help menu.  */
+	      if (peek_next_event ())
+		continue;
 	    }
-	  else if (NSEventMaskFromType ([event type]) & ANY_MOUSE_EVENT_MASK)
-	    [NSApp sendEvent:event];
 	  else
 	    {
-	      [NSApp postEvent:event atStart:YES];
-	      break;
+	      [NSApp sendEvent:event];
+	      continue;
 	    }
+
+	  /* This seems to be necessary for selecting menu item via
+	     search field in the Help menu on Mac OS X 10.6.  */
+	  limitDate = [[NSRunLoop currentRunLoop]
+			limitDateForMode:NSDefaultRunLoopMode];
+	  if (limitDate == nil
+	      || [limitDate timeIntervalSinceNow] > 0)
+	    break;
 	}
+
+      window = [NSApp keyWindow];
+      if ([window isKindOfClass:[EmacsWindow class]])
+	[(EmacsWindow *)window updateApplicationPresentationOptions];
     }
   else
     {
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-      [NSApp runTemporarilyWithBlock:^{[self trackMenubar];}];
+      [NSApp runTemporarilyWithBlock:^{[self trackMenuBar];}];
 #else
       NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
       NSInvocation *invocation =
@@ -6176,18 +6221,20 @@ mac_activate_menubar (f)
      FRAME_PTR f;
 {
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  EventRef menu_event = dpyinfo->saved_menu_event;
-
-  if (menu_event == NULL)
-    return;
-
-  dpyinfo->saved_menu_event = NULL;
+  EventRef menu_event;
 
   update_services_menu_types ();
+  menu_event = dpyinfo->saved_menu_event;
+  if (menu_event)
+    {
+      dpyinfo->saved_menu_event = NULL;
+      PostEventToQueue (GetMainEventQueue (), menu_event, kEventPriorityHigh);
+      ReleaseEvent (menu_event);
+    }
+  else
+    mac_fake_menu_bar_click (kEventPriorityHigh);
   popup_activated_flag = 1;
-  PostEventToQueue (GetMainEventQueue (), menu_event, kEventPriorityHigh);
-  ReleaseEvent (menu_event);
-  [[NSApp delegate] trackMenubar];
+  [[NSApp delegate] trackMenuBar];
   popup_activated_flag = 0;
 
   return [[NSApp delegate] getAndClearMenuItemSelection];
@@ -6252,12 +6299,12 @@ mac_fill_menubar (wv, deep_p)
      widget_value *wv;
      int deep_p;
 {
-  NSMenu *mainMenu = [NSApp mainMenu];
+  NSMenu *newMenu, *mainMenu = [NSApp mainMenu];
   NSInteger index, nitems = [mainMenu numberOfItems];
+  int needs_update_p = deep_p;
 
-  if (deep_p)
-    while (nitems > 1)
-      [mainMenu removeItemAtIndex:--nitems];
+  newMenu = [[EmacsMenu alloc] init];
+  [newMenu setAutoenablesItems:NO];
 
   for (index = 1; wv != NULL; wv = wv->next, index++)
     {
@@ -6266,27 +6313,24 @@ mac_fill_menubar (wv, deep_p)
 						    kCFStringEncodingMacRoman));
       NSMenu *submenu;
 
-      if (index < nitems)
+      if (!needs_update_p)
 	{
-	  submenu = [[mainMenu itemAtIndex:index] submenu];
-
-	  if (submenu && [submenu numberOfItems] == 0
-	      && [title isEqualToString:[submenu title]])
-	    {
-	      [title release];
-	      continue;
-	    }
+	  if (index >= nitems)
+	    needs_update_p = 1;
 	  else
-	    while (nitems > index)
-	      [mainMenu removeItemAtIndex:--nitems];
+	    {
+	      submenu = [[mainMenu itemAtIndex:index] submenu];
+	      if (!(submenu && [title isEqualToString:[submenu title]]))
+		needs_update_p = 1;
+	    }
 	}
 
       submenu = [[NSMenu alloc] initWithTitle:title];
       [submenu setAutoenablesItems:NO];
 
-      [mainMenu setSubmenu:submenu
-		forItem:[mainMenu addItemWithTitle:title action:nil
-				  keyEquivalent:@""]];
+      [newMenu setSubmenu:submenu
+		  forItem:[newMenu addItemWithTitle:title action:nil
+				      keyEquivalent:@""]];
       [title release];
 
       if (wv->contents)
@@ -6295,8 +6339,70 @@ mac_fill_menubar (wv, deep_p)
       [submenu release];
     }
 
-  while (nitems > index)
-    [mainMenu removeItemAtIndex:--nitems];
+  if (!needs_update_p && index != nitems)
+    needs_update_p = 1;
+
+  if (needs_update_p)
+    {
+      NSMenuItem *appleMenuItem = [[mainMenu itemAtIndex:0] retain];
+
+      [mainMenu removeItem:appleMenuItem];
+      [newMenu insertItem:appleMenuItem atIndex:0];
+      [appleMenuItem release];
+
+      [NSApp setMainMenu:newMenu];
+    }
+
+  [newMenu release];
+}
+
+static void
+mac_fake_menu_bar_click (priority)
+     EventPriority priority;
+{
+  OSStatus err = noErr;
+  const EventKind kinds[] = {kEventMouseDown, kEventMouseUp};
+  int i;
+  NSWindow *window = [NSApp keyWindow];
+
+  if ([window isKindOfClass:[EmacsWindow class]])
+    [(EmacsWindow *)window showMenuBar];
+
+  /* CopyEventAs is not available on Mac OS X 10.2.  */
+  for (i = 0; i < 2; i++)
+    {
+      EventRef event;
+
+      if (err == noErr)
+	err = CreateEvent (NULL, kEventClassMouse, kinds[i], 0,
+			   kEventAttributeNone, &event);
+      if (err == noErr)
+	{
+	  const Point point = {0, 10}; /* vertical, horizontal */
+	  const UInt32 modifiers = 0, count = 1;
+	  const EventMouseButton button = kEventMouseButtonPrimary;
+	  const struct {
+	    EventParamName name;
+	    EventParamType type;
+	    ByteCount size;
+	    const void *data;
+	  } params[] = {
+	    {kEventParamMouseLocation, typeQDPoint, sizeof (Point), &point},
+	    {kEventParamKeyModifiers, typeUInt32, sizeof (UInt32), &modifiers},
+	    {kEventParamMouseButton, typeMouseButton,
+	     sizeof (EventMouseButton), &button},
+	    {kEventParamClickCount, typeUInt32, sizeof (UInt32), &count}};
+	  int j;
+
+	  for (j = 0; j < sizeof (params) / sizeof (params[0]); j++)
+	    if (err == noErr)
+	      err = SetEventParameter (event, params[j].name, params[j].type,
+				       params[j].size, params[j].data);
+	  if (err == noErr)
+	    err = PostEventToQueue (GetMainEventQueue (), event, priority);
+	  ReleaseEvent (event);
+	}
+    }
 }
 
 static Lisp_Object
@@ -7111,6 +7217,9 @@ update_apple_event_handler ()
 static void
 init_apple_event_handler ()
 {
+  /* Force NSScriptSuiteRegistry to initialize here so our custom
+     handlers may not be overwritten by lazy initialization.  */
+  [NSScriptSuiteRegistry sharedScriptSuiteRegistry];
   registered_apple_event_specs = [[NSMutableSet alloc] initWithCapacity:0];
   update_apple_event_handler ();
   atexit (cleanup_all_suspended_apple_events);

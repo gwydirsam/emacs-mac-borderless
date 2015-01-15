@@ -1315,6 +1315,18 @@ See also `mac-dnd-known-types'."
       (if (and (not (memq 'generic actions)) (memq 'copy actions))
 	  (setq action 'copy))
       (mac-dnd-drop-data event (selected-frame) window data type action))))
+
+
+(declare-function accelerate-menu "macmenu.c" (&optional frame) t)
+
+(defun mac-menu-bar-open (&optional frame)
+  "Open the menu bar if `menu-bar-mode' is on, otherwise call `tmm-menubar'."
+  (interactive "i")
+  (if (and menu-bar-mode
+	   (fboundp 'accelerate-menu))
+      (accelerate-menu frame)
+    (tmm-menubar)))
+
 
 ;;; Window system initialization.
 

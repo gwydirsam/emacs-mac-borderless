@@ -634,7 +634,8 @@ extern void free_frame_menubar P_ ((struct frame *));
 
 extern void mac_alert_sound_play P_ ((void));
 extern OSStatus install_application_handler P_ ((void));
-extern void mac_get_window_structure_bounds P_ ((struct frame *, Rect *));
+extern void mac_get_window_structure_bounds P_ ((struct frame *,
+						 NativeRectangle *));
 extern void mac_get_frame_mouse P_ ((struct frame *, Point *));
 extern void mac_convert_frame_point_to_global P_ ((struct frame *, int *,
 						   int *));

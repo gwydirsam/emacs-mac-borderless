@@ -1408,8 +1408,9 @@ filesystem tree, not (expand-file-name ".."  dirname).  */)
    bugs _are_ found, it might be of interest to look at the old code and
    see what did it do in the relevant situation.
 
-   Don't remove this code: it's true that it will be accessible via CVS,
-   but a few years from deletion, people will forget it is there.  */
+   Don't remove this code: it's true that it will be accessible
+   from the repository, but a few years from deletion, people will
+   forget it is there.  */
 
 /* Changed this DEFUN to a DEAFUN, so as not to confuse `make-docfile'.  */
 DEAFUN ("expand-file-name", Fexpand_file_name, Sexpand_file_name, 1, 2, 0,
@@ -2300,7 +2301,12 @@ This is what happens in interactive use with M-x.  */)
 
 	  count = SPECPDL_INDEX ();
 	  specbind (Qdelete_by_moving_to_trash, Qnil);
-	  if (!NILP (Ffile_directory_p (file)))
+
+	  if (!NILP (Ffile_directory_p (file))
+#ifdef S_IFLNK
+	      && NILP (symlink_target)
+#endif
+	      )
 	    call2 (Qdelete_directory, file, Qt);
 	  else
 	    Fdelete_file (file);

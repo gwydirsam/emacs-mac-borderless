@@ -124,7 +124,7 @@ struct frame *pending_autoraise_frame;
 
 /* Where the mouse was last time we reported a mouse event.  */
 
-Rect last_mouse_glyph;
+NativeRectangle last_mouse_glyph;
 FRAME_PTR last_mouse_glyph_frame;
 
 /* The scroll bar in which the last X motion event occurred.
@@ -690,6 +690,38 @@ mac_invert_rectangle (f, x, y, width, height)
 #endif
 }
 
+/* Invert rectangles RECTANGLES[0], ..., RECTANGLES[N-1] in the frame F,
+   excluding scroll bar area.  */
+
+static void
+mac_invert_rectangles (f, rectangles, n)
+     struct frame *f;
+     NativeRectangle *rectangles;
+     int n;
+{
+  int i;
+
+  for (i = 0; i < n; i++)
+    mac_invert_rectangle (f, rectangles[i].x, rectangles[i].y,
+			  rectangles[i].width, rectangles[i].height);
+  if (FRAME_HAS_VERTICAL_SCROLL_BARS (f))
+    {
+      Lisp_Object bar;
+
+      for (bar = FRAME_SCROLL_BARS (f); !NILP (bar);
+	   bar = XSCROLL_BAR (bar)->next)
+	{
+	  struct scroll_bar *b = XSCROLL_BAR (bar);
+	  NativeRectangle bar_rect, r;
+
+	  STORE_NATIVE_RECT (bar_rect, b->left, b->top, b->width, b->height);
+	  for (i = 0; i < n; i++)
+	    if (x_intersect_rectangles (rectangles + i, &bar_rect, &r))
+	      mac_invert_rectangle (f, r.x, r.y, r.width, r.height);
+	}
+    }
+}
+
 
 /* Mac replacement for XCopyArea: used only for scrolling.  */
 
@@ -853,7 +885,7 @@ static void
 mac_set_clip_rectangles (f, gc, rectangles, n)
      struct frame *f;
      GC gc;
-     Rect *rectangles;
+     NativeRectangle *rectangles;
      int n;
 {
   int i;
@@ -863,11 +895,10 @@ mac_set_clip_rectangles (f, gc, rectangles, n)
   gc->n_clip_rects = n;
   for (i = 0; i < n; i++)
     {
-      Rect *rect = rectangles + i;
+      NativeRectangle *rect = rectangles + i;
 
-      gc->clip_rects[i] = mac_rect_make (f, rect->left, rect->top,
-					 rect->right - rect->left,
-					 rect->bottom - rect->top);
+      gc->clip_rects[i] = mac_rect_make (f, rect->x, rect->y,
+					 rect->width, rect->height);
     }
 }
 
@@ -1380,9 +1411,9 @@ static void x_clear_glyph_string_rect P_ ((struct glyph_string *, int,
 					   int, int, int));
 static void x_draw_relief_rect P_ ((struct frame *, int, int, int, int,
 				    int, int, int, int, int, int,
-				    Rect *));
+				    NativeRectangle *));
 static void x_draw_box_rect P_ ((struct glyph_string *, int, int, int, int,
-				 int, int, int, Rect *));
+				 int, int, int, NativeRectangle *));
 
 #if GLYPH_DEBUG
 static void x_check_font P_ ((struct frame *, struct font *));
@@ -1556,7 +1587,7 @@ static INLINE void
 x_set_glyph_string_clipping (s)
      struct glyph_string *s;
 {
-  Rect *r = s->clip;
+  NativeRectangle *r = s->clip;
   int n = get_glyph_string_clip_rects (s, r, MAX_CLIP_RECTS);
 
   mac_set_clip_rectangles (s->f, s->gc, r, n);
@@ -1572,7 +1603,7 @@ static void
 x_set_glyph_string_clipping_exactly (src, dst)
      struct glyph_string *src, *dst;
 {
-  Rect r;
+  NativeRectangle r;
 
   STORE_NATIVE_RECT (r, src->x, src->y, src->width, src->height);
   dst->clip[0] = r;
@@ -2028,7 +2059,7 @@ x_draw_relief_rect (f, left_x, top_y, right_x, bottom_y, width,
      struct frame *f;
      int left_x, top_y, right_x, bottom_y, width;
      int top_p, bot_p, left_p, right_p, raised_p;
-     Rect *clip_rect;
+     NativeRectangle *clip_rect;
 {
   GC top_left_gc, bottom_right_gc;
 
@@ -2089,7 +2120,7 @@ x_draw_box_rect (s, left_x, top_y, right_x, bottom_y, width,
 		 left_p, right_p, clip_rect)
      struct glyph_string *s;
      int left_x, top_y, right_x, bottom_y, width, left_p, right_p;
-     Rect *clip_rect;
+     NativeRectangle *clip_rect;
 {
   XGCValues xgcv;
 
@@ -2129,7 +2160,7 @@ x_draw_glyph_string_box (s)
   int width, left_x, right_x, top_y, bottom_y, last_x, raised_p;
   int left_p, right_p;
   struct glyph *last_glyph;
-  Rect clip_rect;
+  NativeRectangle clip_rect;
 
   last_x = ((s->row->full_width_p && !s->w->pseudo_window_p)
 	    ? WINDOW_RIGHT_EDGE_X (s->w)
@@ -2234,7 +2265,7 @@ x_draw_image_relief (s)
      struct glyph_string *s;
 {
   int x0, y0, x1, y1, thick, raised_p;
-  Rect r;
+  NativeRectangle r;
   int x = s->x;
   int y = s->ybase - image_ascent (s->img, s->face, &s->slice);
 
@@ -2395,7 +2426,7 @@ x_draw_stretch_glyph_string (s)
 	{
 	  int y = s->y;
 	  int w = background_width - width, h = s->height;
-	  Rect r;
+	  NativeRectangle r;
 	  GC gc;
 
 	  x += width;
@@ -2795,9 +2826,11 @@ XTflash (f)
   int flash_height = FRAME_LINE_HEIGHT (f);
   /* These will be the left and right margins of the rectangles.  */
   int flash_left = FRAME_INTERNAL_BORDER_WIDTH (f);
-  int flash_right = FRAME_PIXEL_WIDTH (f) - FRAME_INTERNAL_BORDER_WIDTH (f);
-
+  int flash_right = (FRAME_TEXT_COLS_TO_PIXEL_WIDTH (f, FRAME_COLS (f))
+		     - FRAME_INTERNAL_BORDER_WIDTH (f));
   int width;
+  NativeRectangle rects[2];
+  int nrects;
 
   /* Don't flash the area between a scroll bar and the frame
      edge it is next to.  */
@@ -2817,24 +2850,29 @@ XTflash (f)
 
   width = flash_right - flash_left;
 
-  BLOCK_INPUT;
-
-  /* If window is tall, flash top and bottom line.  */
   if (height > 3 * FRAME_LINE_HEIGHT (f))
     {
-      mac_invert_rectangle (f, flash_left,
-			    (FRAME_INTERNAL_BORDER_WIDTH (f)
-			     + FRAME_TOOL_BAR_LINES (f) * FRAME_LINE_HEIGHT (f)),
-			    width, flash_height);
-      mac_invert_rectangle (f, flash_left,
-			    (height - flash_height
-			     - FRAME_INTERNAL_BORDER_WIDTH (f)),
-			    width, flash_height);
+      /* If window is tall, flash top and bottom line.  */
+      STORE_NATIVE_RECT (rects[0],
+			 flash_left, (FRAME_INTERNAL_BORDER_WIDTH (f)
+				      + FRAME_TOP_MARGIN_HEIGHT (f)),
+			 width, flash_height);
+      rects[1] = rects[0];
+      rects[1].y = height - flash_height - FRAME_INTERNAL_BORDER_WIDTH (f);
+      nrects = 2;
     }
   else
-    /* If it is short, flash it all.  */
-    mac_invert_rectangle (f, flash_left, FRAME_INTERNAL_BORDER_WIDTH (f),
-			  width, height - 2 * FRAME_INTERNAL_BORDER_WIDTH (f));
+    {
+      /* If it is short, flash it all.  */
+      STORE_NATIVE_RECT (rects[0],
+			 flash_left, FRAME_INTERNAL_BORDER_WIDTH (f),
+			 width, height - 2 * FRAME_INTERNAL_BORDER_WIDTH (f));
+      nrects = 1;
+    }
+
+  BLOCK_INPUT;
+
+  mac_invert_rectangles (f, rects, nrects);
 
   x_flush (f);
 
@@ -2870,22 +2908,7 @@ XTflash (f)
       }
   }
 
-  /* If window is tall, flash top and bottom line.  */
-  if (height > 3 * FRAME_LINE_HEIGHT (f))
-    {
-      mac_invert_rectangle (f, flash_left,
-			    (FRAME_INTERNAL_BORDER_WIDTH (f)
-			     + FRAME_TOOL_BAR_LINES (f) * FRAME_LINE_HEIGHT (f)),
-			    width, flash_height);
-      mac_invert_rectangle (f, flash_left,
-			    (height - flash_height
-			     - FRAME_INTERNAL_BORDER_WIDTH (f)),
-			    width, flash_height);
-    }
-  else
-    /* If it is short, flash it all.  */
-    mac_invert_rectangle (f, flash_left, FRAME_INTERNAL_BORDER_WIDTH (f),
-			  width, height - 2 * FRAME_INTERNAL_BORDER_WIDTH (f));
+  mac_invert_rectangles (f, rects, nrects);
 
   x_flush (f);
 
@@ -3577,7 +3600,7 @@ mac_move_window_to_gravity_reference_point (f, win_gravity, x, y)
      int win_gravity;
      short x, y;
 {
-  Rect bounds;
+  NativeRectangle bounds;
   short left, top;
 
   mac_get_window_structure_bounds (f, &bounds);
@@ -3593,13 +3616,13 @@ mac_move_window_to_gravity_reference_point (f, win_gravity, x, y)
     case NorthGravity:
     case CenterGravity:
     case SouthGravity:
-      left = x - (bounds.right - bounds.left) / 2;
+      left = x - bounds.width / 2;
       break;
 
     case NorthEastGravity:
     case EastGravity:
     case SouthEastGravity:
-      left = x - (bounds.right - bounds.left);
+      left = x - bounds.width;
       break;
     }
 
@@ -3614,13 +3637,13 @@ mac_move_window_to_gravity_reference_point (f, win_gravity, x, y)
     case WestGravity:
     case CenterGravity:
     case EastGravity:
-      top = y - (bounds.bottom - bounds.top) / 2;
+      top = y - bounds.height / 2;
       break;
 
     case SouthWestGravity:
     case SouthGravity:
     case SouthEastGravity:
-      top = y - (bounds.bottom - bounds.top);
+      top = y - bounds.height;
       break;
     }
 
@@ -3633,7 +3656,7 @@ mac_get_window_gravity_reference_point (f, win_gravity, x, y)
      int win_gravity;
      short *x, *y;
 {
-  Rect bounds;
+  NativeRectangle bounds;
 
   mac_get_window_structure_bounds (f, &bounds);
 
@@ -3642,19 +3665,19 @@ mac_get_window_gravity_reference_point (f, win_gravity, x, y)
     case NorthWestGravity:
     case WestGravity:
     case SouthWestGravity:
-      *x = bounds.left;
+      *x = bounds.x;
       break;
 
     case NorthGravity:
     case CenterGravity:
     case SouthGravity:
-      *x = bounds.left + (bounds.right - bounds.left) / 2;
+      *x = bounds.x + bounds.width / 2;
       break;
 
     case NorthEastGravity:
     case EastGravity:
     case SouthEastGravity:
-      *x = bounds.right;
+      *x = bounds.x + bounds.width;
       break;
     }
 
@@ -3663,19 +3686,19 @@ mac_get_window_gravity_reference_point (f, win_gravity, x, y)
     case NorthWestGravity:
     case NorthGravity:
     case NorthEastGravity:
-      *y = bounds.top;
+      *y = bounds.y;
       break;
 
     case WestGravity:
     case CenterGravity:
     case EastGravity:
-      *y = bounds.top + (bounds.bottom - bounds.top) / 2;
+      *y = bounds.y + bounds.height / 2;
       break;
 
     case SouthWestGravity:
     case SouthGravity:
     case SouthEastGravity:
-      *y = bounds.bottom;
+      *y = bounds.y + bounds.height;
       break;
     }
 }
@@ -3718,16 +3741,16 @@ x_clip_to_row (w, row, area, gc)
      GC gc;
 {
   struct frame *f = XFRAME (WINDOW_FRAME (w));
-  Rect clip_rect;
+  NativeRectangle clip_rect;
   int window_x, window_y, window_width;
 
   window_box (w, area, &window_x, &window_y, &window_width, 0);
 
-  clip_rect.left = window_x;
-  clip_rect.top = WINDOW_TO_FRAME_PIXEL_Y (w, row->y);
-  clip_rect.top = max (clip_rect.top, window_y);
-  clip_rect.right = clip_rect.left + window_width;
-  clip_rect.bottom = clip_rect.top + row->visible_height;
+  clip_rect.x = window_x;
+  clip_rect.y = WINDOW_TO_FRAME_PIXEL_Y (w, row->y);
+  clip_rect.y = max (clip_rect.y, window_y);
+  clip_rect.width = window_width;
+  clip_rect.height = row->visible_height;
 
   mac_set_clip_rectangles (f, gc, &clip_rect, 1);
 }
@@ -4056,7 +4079,7 @@ x_calc_absolute_position (f)
      struct frame *f;
 {
   int flags = f->size_hint_flags;
-  Rect bounds;
+  NativeRectangle bounds;
 
   /* We have nothing to do if the current position
      is already for the top-left corner.  */
@@ -4073,11 +4096,11 @@ x_calc_absolute_position (f)
      position that fits on the screen.  */
   if (flags & XNegative)
     f->left_pos += (x_display_pixel_width (FRAME_MAC_DISPLAY_INFO (f))
-		    - (bounds.right - bounds.left));
+		    - bounds.width);
 
   if (flags & YNegative)
     f->top_pos += (x_display_pixel_height (FRAME_MAC_DISPLAY_INFO (f))
-		   - (bounds.bottom - bounds.top));
+		   - bounds.height);
 
   /* The left_pos and top_pos
      are now relative to the top and left screen edges,

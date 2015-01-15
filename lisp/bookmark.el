@@ -958,14 +958,14 @@ it to the name of the bookmark currently being set, advancing
            (and
             ;; Possibly the old bookmark file, "~/.emacs-bkmrks", needs
             ;; to be renamed.
-            (file-exists-p (expand-file-name bookmark-old-default-file))
-            (not (file-exists-p (expand-file-name bookmark-default-file)))
-            (rename-file (expand-file-name bookmark-old-default-file)
-                         (expand-file-name bookmark-default-file)))
+            (file-exists-p bookmark-old-default-file)
+            (not (file-exists-p bookmark-default-file))
+            (rename-file bookmark-old-default-file
+                         bookmark-default-file))
            ;; return t so the `and' will continue...
            t)
 
-       (file-readable-p (expand-file-name bookmark-default-file))
+       (file-readable-p bookmark-default-file)
        (bookmark-load bookmark-default-file t t)
        (setq bookmarks-already-loaded t)))
 
@@ -1068,7 +1068,7 @@ that file no longer exists, then offer interactively to relocate BOOKMARK."
       (funcall (or (bookmark-get-handler bookmark)
                    'bookmark-default-handler)
                (bookmark-get-bookmark bookmark))
-    (file-error
+    (bookmark-error-no-filename         ;file-error
      ;; We were unable to find the marked file, so ask if user wants to
      ;; relocate the bookmark, else remind them to consider deletion.
      (when (stringp bookmark)
@@ -1116,24 +1116,28 @@ that file no longer exists, then offer interactively to relocate BOOKMARK."
 BMK-RECORD is a bookmark record, not a bookmark name (i.e., not a string).
 Changes current buffer and point and returns nil, or signals a `file-error'."
   (let ((file          (bookmark-get-filename bmk-record))
+	(buf           (bookmark-prop-get bmk-record 'buffer))
         (forward-str   (bookmark-get-front-context-string bmk-record))
         (behind-str    (bookmark-get-rear-context-string bmk-record))
         (place         (bookmark-get-position bmk-record)))
-    (if (not file)
-        (signal 'bookmark-error-no-filename (list 'stringp file))
-      (set-buffer (find-file-noselect file))
-      (if place (goto-char place))
-      ;; Go searching forward first.  Then, if forward-str exists and
-      ;; was found in the file, we can search backward for behind-str.
-      ;; Rationale is that if text was inserted between the two in the
-      ;; file, it's better to be put before it so you can read it,
-      ;; rather than after and remain perhaps unaware of the changes.
-      (if forward-str
-          (if (search-forward forward-str (point-max) t)
-              (goto-char (match-beginning 0))))
-      (if behind-str
-          (if (search-backward behind-str (point-min) t)
-              (goto-char (match-end 0)))))
+    (set-buffer
+     (cond
+      ((and file (file-readable-p file) (not (buffer-live-p buf)))
+       (find-file-noselect file))
+      ;; No file found.  See if buffer BUF have been created.
+      ((and buf (get-buffer buf)))
+      (t ;; If not, raise error.
+       (signal 'bookmark-error-no-filename (list 'stringp file)))))
+    (if place (goto-char place))
+    ;; Go searching forward first.  Then, if forward-str exists and
+    ;; was found in the file, we can search backward for behind-str.
+    ;; Rationale is that if text was inserted between the two in the
+    ;; file, it's better to be put before it so you can read it,
+    ;; rather than after and remain perhaps unaware of the changes.
+    (when (and forward-str (search-forward forward-str (point-max) t))
+      (goto-char (match-beginning 0)))
+    (when (and behind-str (search-backward behind-str (point-min) t))
+      (goto-char (match-end 0)))
     nil))
 
 ;;;###autoload
@@ -1148,10 +1152,11 @@ after a bookmark was set in it."
   (bookmark-maybe-historicize-string bookmark)
   (bookmark-maybe-load-default-file)
   (let* ((bmrk-filename (bookmark-get-filename bookmark))
-         (newloc (expand-file-name
-                  (read-file-name
-                   (format "Relocate %s to: " bookmark)
-                   (file-name-directory bmrk-filename)))))
+         (newloc (abbreviate-file-name
+                  (expand-file-name
+                   (read-file-name
+                    (format "Relocate %s to: " bookmark)
+                    (file-name-directory bmrk-filename))))))
     (bookmark-set-filename bookmark newloc)
     (setq bookmark-alist-modification-count
           (1+ bookmark-alist-modification-count))
@@ -1428,7 +1433,7 @@ method buffers use to resolve name collisions."
           ;;but there's no better default, and
           ;;I guess it's better than none at all.
           "~/" bookmark-default-file 'confirm)))
-  (setq file (expand-file-name file))
+  (setq file (abbreviate-file-name (expand-file-name file)))
   (if (not (file-readable-p file))
       (error "Cannot read bookmark file %s" file)
     (if (null no-msg)
@@ -1449,7 +1454,8 @@ method buffers use to resolve name collisions."
                 (setq bookmark-alist-modification-count
                       (1+ bookmark-alist-modification-count)))
               (if (string-equal
-                   (expand-file-name bookmark-default-file)
+                   (abbreviate-file-name
+                    (expand-file-name bookmark-default-file))
                    file)
                   (setq bookmarks-already-loaded t))
               (bookmark-bmenu-surreptitiously-rebuild-list))

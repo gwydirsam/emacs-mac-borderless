@@ -208,12 +208,12 @@ x_real_positions (f, xptr, yptr)
      FRAME_PTR f;
      int *xptr, *yptr;
 {
-  Rect bounds;
+  NativeRectangle bounds;
 
   mac_get_window_structure_bounds (f, &bounds);
 
-  *xptr = bounds.left;
-  *yptr = bounds.top;
+  *xptr = bounds.x;
+  *yptr = bounds.y;
 }
 
 

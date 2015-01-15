@@ -50,7 +50,7 @@ extern Lisp_Object Qnormal, Qbold, Qitalic, Qcondensed, Qexpanded;
 static Lisp_Object Vns_reg_to_script;
 static Lisp_Object Qapple, Qroman, Qmedium;
 extern Lisp_Object Qappend;
-extern int ns_antialias_text;
+extern Lisp_Object ns_antialias_text;
 extern float ns_antialias_threshold;
 extern int ns_tmp_flags;
 extern struct nsfont_info *ns_tmp_font;
@@ -844,8 +844,10 @@ nsfont_open (FRAME_PTR f, Lisp_Object font_entity, int pixel_size)
     /* max bounds */
     font_info->max_bounds.ascent =
       lrint (hshrink * [sfont ascender] + expand * hd/2);
+    /* [sfont descender] is usually negative.  Use floor to avoid
+       clipping descenders. */
     font_info->max_bounds.descent =
-      -lrint (hshrink* [sfont descender] - expand*hd/2);
+      -lrint (floor(hshrink* [sfont descender] - expand*hd/2));
     font_info->height =
       font_info->max_bounds.ascent + font_info->max_bounds.descent;
     font_info->max_bounds.width = lrint (font_info->width);
@@ -880,8 +882,8 @@ nsfont_open (FRAME_PTR f, Lisp_Object font_entity, int pixel_size)
 #endif
 
     /* set up metrics portion of font struct */
-    font->ascent = [sfont ascender];
-    font->descent = -[sfont descender];
+    font->ascent = lrint([sfont ascender]);
+    font->descent = -lrint(floor([sfont descender]));
     font->min_width = ns_char_width(sfont, '|');
     font->space_width = lrint (ns_char_width (sfont, ' '));
     font->average_width = lrint (font_info->width);
@@ -1229,7 +1231,7 @@ nsfont_draw (struct glyph_string *s, int from, int to, int x, int y,
 
     CGContextSetFont (gcontext, font->cgfont);
     CGContextSetFontSize (gcontext, font->size);
-    if (ns_antialias_text == Qnil || font->size <= ns_antialias_threshold)
+    if (NILP (ns_antialias_text) || font->size <= ns_antialias_threshold)
       CGContextSetShouldAntialias (gcontext, 0);
     else
       CGContextSetShouldAntialias (gcontext, 1);
