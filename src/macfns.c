@@ -1687,10 +1687,12 @@ x_set_tool_bar_lines (f, value, oldval)
   if (nlines)
     {
       FRAME_EXTERNAL_TOOL_BAR (f) = 1;
+      BLOCK_INPUT;
       if (FRAME_MAC_P (f)
 	  && !mac_is_window_toolbar_visible (FRAME_MAC_WINDOW (f)))
 	/* Make sure next redisplay shows the tool bar.  */
 	XWINDOW (FRAME_SELECTED_WINDOW (f))->update_mode_line = Qt;
+      UNBLOCK_INPUT;
     }
   else
     {
@@ -1928,8 +1930,7 @@ mac_set_font (f, arg, oldval)
   {
     Lisp_Object focus_frame = x_get_focus_frame (f);
 
-    if ((NILP (focus_frame) && f == SELECTED_FRAME ())
-	|| XFRAME (focus_frame) == f)
+    if (f == (FRAMEP (focus_frame) ? XFRAME (focus_frame) : SELECTED_FRAME ()))
       {
 	BLOCK_INPUT;
 	mac_set_font_info_for_selection (f, DEFAULT_FACE_ID, 0);

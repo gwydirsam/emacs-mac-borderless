@@ -64,14 +64,13 @@ except for the following two aspects:
     QuickDraw Text, which is incompatible with Framework-Scaled Mode,
     by adding "-DUSE_QUICKDRAW=0" to CFLAGS on compilation.
 
-  * 64-bit (10.5, MAY CRASH, see below)
+  * 64-bit (10.5, MAY CRASH on 10.5.6 or earlier, see below)
     You can build and run a 64-bit binary with GUI support by
     specifying CC='gcc -m64' on configure.
-    !! Caution !! The resulting binary will crash when you try to
-    display particular characters such as combining diacritics.  This
-    is due to a bug in 64-bit ATSUI.  Apple says it won't be fixed but
-    maybe you can vote for the fix of this bug
-    (rdar://problem/5578675) at the Apple Bug Reporter.
+    !! Caution !! On Mac OS X 10.5.6 or earlier, the resulting binary
+    will crash when you try to display particular characters such as
+    combining diacritics.  This is due to a bug in 64-bit ATSUI
+    (rdar://problem/5578675), and it was fixed in Mac OS X 10.5.7.
 
 Although they are minor, some visual enhancements can be found in the
 Carbon+AppKit port:

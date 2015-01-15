@@ -1162,7 +1162,7 @@ correspoinding TextEncodingBase value."
        (make-vector 32 nil)
        ;; mac-symbol (32..126) -> emacs-mule mapping
        [?\  ?\! ?\$,1x (B ?\# ?\$,1x#(B ?\% ?\& ?\$,1x-(B ?\( ?\) ?\$,1x7(B ?\+ ?\, ?\$,1x2(B ?\. ?\/
-	?\0 ?\1 ?\2 ?\3 ?\4 ?\5 ?\6 ?\7 ?\8 ?\9 ?\: ?\; ?\< ?\= ?\> ?\?
+	?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?\: ?\; ?\< ?\= ?\> ?\?
 	?\$,1xe(B ?\$,1&q(B ?\$,1&r(B ?\$,1''(B ?\$,1&t(B ?\$,1&u(B ?\$,1'&(B ?\$,1&s(B ?\$,1&w(B ?\$,1&y(B ?\$,1'Q(B ?\$,1&z(B ?\$,1&{(B ?\$,1&|(B ?\$,1&}(B ?\$,1&(B
 	?\$,1' (B ?\$,1&x(B ?\$,1'!(B ?\$,1'#(B ?\$,1'$(B ?\$,1'%(B ?\$,1'B(B ?\$,1')(B ?\$,1&~(B ?\$,1'((B ?\$,1&v(B ?\[ ?\$,1xT(B ?\] ?\$,1ye(B ?\_
 	?\$,3bE(B ?\$,1'1(B ?\$,1'2(B ?\$,1'G(B ?\$,1'4(B ?\$,1'5(B ?\$,1'F(B ?\$,1'3(B ?\$,1'7(B ?\$,1'9(B ?\$,1'U(B ?\$,1':(B ?\$,1';(B ?\$,1'<(B ?\$,1'=(B ?\$,1'?(B
@@ -1260,20 +1260,25 @@ correspoinding TextEncodingBase value."
 	  (and (eq system-type 'darwin)
 	       (eq (coding-system-base coding-system) 'japanese-shift-jis)
 	       mac-text-encoding-mac-japanese-basic-variant))
-	 (str (and (fboundp 'mac-code-convert-string)
-		   (mac-code-convert-string data nil
-					    (or encoding coding-system)))))
-    (when str
-      (setq str (decode-coding-string str coding-system))
-      (if (eq encoding mac-text-encoding-mac-japanese-basic-variant)
-	  ;; Does it contain Apple one-byte extensions other than
-	  ;; reverse solidus?
-	  (if (string-match "[\xa0\xfd-\xff]" str)
-	      (setq str nil)
-	    ;; ASCII-only?
-	    (unless (mac-code-convert-string data nil mac-text-encoding-ascii)
-	      (subst-char-in-string ?\x5c ?\(J\(B str t)
-	      (subst-char-in-string ?\x80 ?\\ str t)))))
+	 (str (let (bytes data1)
+		(and (fboundp 'mac-code-convert-string)
+		     (setq bytes (mac-code-convert-string
+				  data nil (or encoding coding-system)))
+		     ;; Check if round-trip conversion gives the same
+		     ;; result.
+		     (setq data1 (mac-code-convert-string
+				  bytes (or encoding coding-system) nil))
+		     (string= data1 data)
+		     (decode-coding-string bytes coding-system)))))
+    (if (and str (eq encoding mac-text-encoding-mac-japanese-basic-variant))
+	;; Does it contain Apple one-byte extensions other than
+	;; reverse solidus?
+	(if (string-match "[\xa0\xfd-\xff]" str)
+	    (setq str nil)
+	  ;; ASCII-only?
+	  (unless (mac-code-convert-string data nil mac-text-encoding-ascii)
+	    (subst-char-in-string ?\x5c ?\(J\(B str t)
+	    (subst-char-in-string ?\x80 ?\\ str t))))
     (or str
 	(decode-coding-string data
 			      (if (eq (byteorder) ?B) 'utf-16be 'utf-16le)))))
@@ -1343,20 +1348,24 @@ correspoinding TextEncodingBase value."
   (let* ((encoding
 	  (and (eq (coding-system-base coding-system) 'japanese-shift-jis)
 	       mac-text-encoding-mac-japanese-basic-variant))
-	 (str (mac-code-convert-string data 'utf-8
-				       (or encoding coding-system))))
-    (when str
-      (setq str (decode-coding-string str coding-system))
-      (if (eq encoding mac-text-encoding-mac-japanese-basic-variant)
-	  ;; Does it contain Apple one-byte extensions other than
-	  ;; reverse solidus?
-	  (if (string-match "[\xa0\xfd-\xff]" str)
-	      (setq str nil)
-	    ;; ASCII-only?
-	    (unless (mac-code-convert-string data
-					     'utf-8 mac-text-encoding-ascii)
-	      (subst-char-in-string ?\x5c ?\(J\(B str t)
-	      (subst-char-in-string ?\x80 ?\\ str t)))))
+	 (str (let (bytes data1)
+		(and (setq bytes (mac-code-convert-string
+				  data 'utf-8 (or encoding coding-system)))
+		     ;; Check if round-trip conversion gives the same
+		     ;; result.
+		     (setq data1 (mac-code-convert-string
+				  bytes (or encoding coding-system) 'utf-8))
+		     (string= data1 data)
+		     (decode-coding-string bytes coding-system)))))
+    (if (and str (eq encoding mac-text-encoding-mac-japanese-basic-variant))
+	;; Does it contain Apple one-byte extensions other than
+	;; reverse solidus?
+	(if (string-match "[\xa0\xfd-\xff]" str)
+	    (setq str nil)
+	  ;; ASCII-only?
+	  (unless (mac-code-convert-string data 'utf-8 mac-text-encoding-ascii)
+	    (subst-char-in-string ?\x5c ?\(J\(B str t)
+	    (subst-char-in-string ?\x80 ?\\ str t))))
     (or str (decode-coding-string data 'utf-8))))
 
 (defun mac-string-to-pasteboard-string (string &optional coding-system)
@@ -2994,6 +3003,12 @@ ascii:-*-Monaco-*-*-*-*-12-*-*-*-*-*-mac-roman")
 ;; fonts with both truetype and bitmap representations but no italic
 ;; or bold bitmap versions will not display these variants correctly.
 (setq scalable-fonts-allowed t)
+
+;; If Emacs is invoked from the command line, the initial frame
+;; doesn't get focused.
+(add-hook 'after-init-hook
+	  (lambda () (if (eq (frame-visible-p (selected-frame)) t)
+			 (x-focus-frame (selected-frame)))))
 
 ;; arch-tag: 71dfcd14-cde8-4d66-b05c-85ec94fb23a6
 ;;; mac-win.el ends here

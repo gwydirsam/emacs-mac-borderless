@@ -1373,15 +1373,19 @@ init_fringe_bitmap (which, fb, once_p)
 	}
 #endif /* HAVE_X_WINDOWS */
 
-#if defined (MAC_OS) && defined (WORDS_BIG_ENDIAN)
+#ifdef MAC_OS
       unsigned short *bits = fb->bits;
       int j;
       for (j = 0; j < fb->height; j++)
 	{
 	  unsigned short b = *bits;
-	  *bits++ = ((b >> 8) & 0xff) | ((b & 0xff) << 8);
+	  b <<= (16 - fb->width);
+#ifndef WORDS_BIG_ENDIAN
+	  b = ((b >> 8) | (b << 8));
+#endif
+	  *bits++ = b;
 	}
-#endif /* MAC_OS && WORDS_BIG_ENDIAN */
+#endif
     }
 
   if (!once_p)

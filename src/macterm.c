@@ -5858,7 +5858,8 @@ x_set_window_size (f, change_gravity, cols, rows)
   if (f->output_data.mac->internal_border_width
       != FRAME_INTERNAL_BORDER_WIDTH (f))
     {
-      mac_clear_window (f);
+      if (f->async_visible)
+	mac_clear_window (f);
       f->output_data.mac->internal_border_width
 	= FRAME_INTERNAL_BORDER_WIDTH (f);
     }
@@ -9753,15 +9754,6 @@ mac_initialize ()
 
 #if !USE_APPKIT
   mac_toolbox_initialize ();
-#endif
-
-#ifdef MAC_OSX
-  if (!inhibit_window_system)
-    {
-      static const ProcessSerialNumber psn = {0, kCurrentProcess};
-
-      SetFrontProcess (&psn);
-    }
 #endif
 #endif
 

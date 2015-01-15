@@ -127,12 +127,18 @@ typedef unsigned int NSUInteger;
 
   /* Whether window's resize control needs display.  */
   BOOL resizeControlNeedsDisplay;
+
+  /* Whether the window should be made visible when the application
+     gets unhidden next time.  */
+  BOOL needsOrderFrontOnUnhide;
 }
 - (void)suspendResizeTracking:(NSEvent *)event;
 - (void)resumeResizeTracking;
 - (BOOL)resizeControlNeedsDisplay;
 - (void)setResizeControlNeedsDisplay:(BOOL)flag;
 - (void)displayResizeControlIfNeeded;
+- (BOOL)needsOrderFrontOnUnhide;
+- (void)setNeedsOrderFrontOnUnhide:(BOOL)flag;
 @end
 
 /* Class for delegate of NSWindow and NSToolbar (see its Toolbar

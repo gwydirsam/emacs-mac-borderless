@@ -77,7 +77,7 @@ Boston, MA 02110-1301, USA.  */
 #define FRAME_OUTER_TO_INNER_DIFF_X(f) ((f)->x_pixels_diff)
 #define FRAME_OUTER_TO_INNER_DIFF_Y(f) ((f)->y_pixels_diff)
 
-#define mac_window_to_frame(wp) (((mac_output *) GetWRefCon (wp))->mFP)
+#define mac_window_to_frame(wp) (((struct mac_output *) GetWRefCon (wp))->mFP)
 
 void
 mac_alert_sound_play ()
@@ -2982,11 +2982,11 @@ void
 free_frame_tool_bar (f)
      FRAME_PTR f;
 {
+  BLOCK_INPUT;
   if (IsWindowToolbarVisible (FRAME_MAC_WINDOW (f)))
     {
       struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
 
-      BLOCK_INPUT;
       ShowHideWindowToolbar (FRAME_MAC_WINDOW (f), false,
 			     (NILP (find_symbol_value
 				    (intern ("frame-notice-user-settings")))
@@ -2994,8 +2994,8 @@ free_frame_tool_bar (f)
       /* Mac OS X 10.3 does not issue kEventWindowBoundsChanged events
 	 on toolbar visibility change.  */
       mac_handle_origin_change (f);
-      UNBLOCK_INPUT;
     }
+  UNBLOCK_INPUT;
 }
 
 /* Report a mouse movement over toolbar to the mainstream Emacs

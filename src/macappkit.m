@@ -1016,6 +1016,31 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 
 @implementation EmacsWindow
 
+- (id)initWithContentRect:(NSRect)contentRect
+		styleMask:(NSUInteger)windowStyle
+		  backing:(NSBackingStoreType)bufferingType
+		    defer:(BOOL)deferCreation
+{
+  self = [super initWithContentRect:contentRect styleMask:windowStyle
+			    backing:bufferingType defer:deferCreation];
+  if (self == nil)
+    return nil;
+
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+    selector:@selector(applicationDidUnhide:)
+    name:NSApplicationDidUnhideNotification
+    object:NSApp];
+
+  return self;
+}
+
+- (void)dealloc
+{
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [super dealloc];
+}
+
 - (NSRect)resizeControlFrame
 {
   NSRect frame = [self frame];
@@ -1104,6 +1129,25 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 
       [frameView displayRect:rect];
       resizeControlNeedsDisplay = NO;
+    }
+}
+
+- (BOOL)needsOrderFrontOnUnhide;
+{
+  return needsOrderFrontOnUnhide;
+}
+
+- (void)setNeedsOrderFrontOnUnhide:(BOOL)flag
+{
+  needsOrderFrontOnUnhide = flag;
+}
+
+- (void)applicationDidUnhide:(NSNotification *)aNotification
+{
+  if (needsOrderFrontOnUnhide)
+    {
+      [self orderFront:nil];
+      needsOrderFrontOnUnhide = NO;
     }
 }
 
@@ -1351,7 +1395,10 @@ void
 mac_bring_window_to_front (window)
      Window window;
 {
-  [(NSWindow *)window orderFront:nil];
+  if (![NSApp isHidden])
+    [(NSWindow *)window orderFront:nil];
+  else
+    [(EmacsWindow *)window setNeedsOrderFrontOnUnhide:YES];
 }
 
 void
@@ -1368,6 +1415,7 @@ mac_hide_window (window)
      Window window;
 {
   [(NSWindow *)window orderOut:nil];
+  [(EmacsWindow *)window setNeedsOrderFrontOnUnhide:NO];
 }
 
 void
@@ -1375,7 +1423,10 @@ mac_show_window (window)
      Window window;
 {
   if (![(NSWindow *)window isVisible])
-    [(NSWindow *)window makeKeyAndOrderFront:nil];
+    {
+      mac_bring_window_to_front (window);
+      [(NSWindow *)window makeKeyWindow];
+    }
 }
 
 OSStatus
@@ -1868,7 +1919,9 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   int width = NSWidth (aRect), height = NSHeight (aRect);
 #if USE_QUICKDRAW
   RgnHandle saved_clip_region = NewRgn (), new_region = NewRgn ();
+  GrafPtr saved_port;
 
+  GetPort (&saved_port);
   SetPort ([self qdPort]);
   GetClip (saved_clip_region);
   if ([self respondsToSelector:@selector(getRectsBeingDrawn:count:)])
@@ -1907,6 +1960,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   SetPort ([self qdPort]);
   SetClip (saved_clip_region);
   DisposeRgn (saved_clip_region);
+  SetPort (saved_port);
 #endif
 }
 
@@ -2798,6 +2852,7 @@ mac_end_cg_clip (f)
 
 #if USE_QUICKDRAW
 static RgnHandle saved_port_clip_region = NULL;
+static GrafPtr saved_port = NULL;
 
 void
 mac_begin_clip (f, gc)
@@ -2807,6 +2862,12 @@ mac_begin_clip (f, gc)
   static RgnHandle new_region = NULL;
   EmacsView *emacsView = FRAME_EMACS_VIEW (f);
 
+  if (![emacsView canDraw])
+    {
+      xassert (gc == NULL);
+      return;
+    }
+
   if (saved_port_clip_region == NULL)
     saved_port_clip_region = NewRgn ();
   if (new_region == NULL)
@@ -2814,6 +2875,7 @@ mac_begin_clip (f, gc)
 
   if (global_focus_view_frame != f)
     [emacsView lockFocus];
+  GetPort (&saved_port);
   SetPort ([emacsView qdPort]);
   if (gc && gc->n_clip_rects)
     {
@@ -2828,8 +2890,12 @@ mac_end_clip (f, gc)
      struct frame *f;
      GC gc;
 {
+  if (saved_port == NULL)
+    return;
   if (gc && gc->n_clip_rects)
     SetClip (saved_port_clip_region);
+  SetPort (saved_port);
+  saved_port = NULL;
   if (global_focus_view_frame != f)
     {
       EmacsView *emacsView = FRAME_EMACS_VIEW (f);

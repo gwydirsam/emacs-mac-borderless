@@ -240,7 +240,11 @@ struct mac_output
   /* Menubar "widget" handle.  */
   int menubar_widget;
 
+#if USE_APPKIT
+  void *emacs_view;
+#else
   FRAME_PTR mFP;		/* points back to the frame struct */
+#endif
 
   /* Here are the Graphics Contexts for the default font.  */
   GC normal_gc;				/* Normal video */
@@ -359,13 +363,7 @@ struct mac_output
   /* Quartz 2D graphics context.  */
   CGContextRef cg_context;
 #endif
-
-#if USE_APPKIT
-  void *emacs_view;
-#endif
 };
-
-typedef struct mac_output mac_output;
 
 /* Return the X output data for frame F.  */
 #define FRAME_X_OUTPUT(f) ((f)->output_data.mac)

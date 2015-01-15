@@ -1,3 +1,29 @@
+* emacs-22.3-appkit-1.4 (2009-06-27)
+
+** Fixed bugs
+
+*** Fringe bitmap display is incorrect if its width is not 8.
+
+*** Crash when calculating Quickdraw font metrics in an invisible frame.
+
+*** Crash when changing internal-border-width of an invisible frame.
+
+*** Assertion failure in mac_set_font.
+
+*** "Hide" in Login Items does not work. 
+
+*** (mac-pasteboard-string-to-string "\342\204\246" 'mac-roman) gives
+GREEK CAPITAL LETTER OMEGA instead of OHM SIGN (likewise for
+mac-utxt-to-string).
+
+*** mac-symbol -> emacs-mule mapping is represented wrong for #x30 - #x37.
+
+** Improvements
+
+*** Conversion between CFNumber and Lisp objects now uses Lisp strings
+for integers that don't fit in the Lisp float range.
+
+
 * emacs-22.3-appkit-1.3 (2009-03-27)
 
 ** Fixed bugs

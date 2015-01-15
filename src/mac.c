@@ -1068,7 +1068,7 @@ cfstring_to_lisp_utf_16 (string)
 }
 
 
-/* CFNumber to a lisp integer or a lisp float.  */
+/* CFNumber to a lisp integer, float, or string in decimal.  */
 
 Lisp_Object
 cfnumber_to_lisp (number)
@@ -1087,9 +1087,18 @@ cfnumber_to_lisp (number)
   if (CFNumberGetValue (number, emacs_int_type, &int_val)
       && !FIXNUM_OVERFLOW_P (int_val))
     result = make_number (int_val);
+  else if (CFNumberGetValue (number, kCFNumberDoubleType, &float_val))
+    result = make_float (float_val);
   else
-    if (CFNumberGetValue (number, kCFNumberDoubleType, &float_val))
-      result = make_float (float_val);
+    {
+      CFStringRef string = CFStringCreateWithFormat (NULL, NULL,
+						     CFSTR ("%@"), number);
+      if (string)
+	{
+	  result = cfstring_to_lisp_nodecode (string);
+	  CFRelease (string);
+	}
+    }
   return result;
 }
 
@@ -1356,6 +1365,16 @@ cfproperty_list_create_with_lisp_data (obj)
 	  else if (FLOATP (data))
 	    result = CFNumberCreate (NULL, kCFNumberDoubleType,
 				     &XFLOAT_DATA (data));
+	  else if (STRINGP (data))
+	    {
+#if !defined (MAC_OSX) || MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
+	      SInt64 value = strtoll (SDATA (data), NULL, 0);
+#else
+	      SInt64 value = strtoq (SDATA (data), NULL, 0);
+#endif
+
+	      result = CFNumberCreate (NULL, kCFNumberSInt64Type, &value);
+	    }
 	}
       else if (EQ (type, Qboolean))
 	{
@@ -4791,7 +4810,7 @@ corresponding Lisp object as follows:
   Core Foundation    Lisp                           Tag
   ------------------------------------------------------------
   CFString           Multibyte string               string
-  CFNumber           Integer or float               number
+  CFNumber           Integer, float, or string      number
   CFBoolean          Symbol (t or nil)              boolean
   CFDate             List of three integers         date
                        (cf. `current-time')
