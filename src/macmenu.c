@@ -847,6 +847,17 @@ static const char * button_names [] = {
   "button6", "button7", "button8", "button9", "button10" };
 
 static Lisp_Object
+cleanup_widget_value_tree (Lisp_Object arg)
+{
+  struct Lisp_Save_Value *p = XSAVE_VALUE (arg);
+  widget_value *wv = p->pointer;
+
+  free_menubar_widget_value_tree (wv);
+
+  return Qnil;
+}
+
+static Lisp_Object
 mac_dialog_show (f, keymaps, title, header, error_name)
      FRAME_PTR f;
      int keymaps;
@@ -862,6 +873,8 @@ mac_dialog_show (f, keymaps, title, header, error_name)
   int left_count = 0;
   /* 1 means we've seen the boundary between left-hand elts and right-hand.  */
   int boundary_seen = 0;
+
+  int specpdl_count = SPECPDL_INDEX ();
 
   if (! FRAME_MAC_P (f))
     abort ();
@@ -974,11 +987,15 @@ mac_dialog_show (f, keymaps, title, header, error_name)
     first_wv = wv;
   }
 
+  /* Make sure to free the widget_value objects we used to specify the
+     contents even with longjmp.  */
+  record_unwind_protect (cleanup_widget_value_tree,
+			 make_save_value (first_wv, 0));
+
   /* Actually create and show the dialog.  */
   selection = create_and_show_dialog (f, first_wv);
 
-  /* Free the widget_value objects we used to specify the contents.  */
-  free_menubar_widget_value_tree (first_wv);
+  unbind_to (specpdl_count, Qnil);
 
   /* Find the selected item, and its pane, to return
      the proper value.  */

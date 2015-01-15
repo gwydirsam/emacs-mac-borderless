@@ -45,6 +45,20 @@ typedef int NSInteger;
 typedef unsigned int NSUInteger;
 #endif
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#ifndef USE_ARC
+#if defined (SYNC_INPUT) && defined (__clang__) && __has_feature (objc_arc)
+#define USE_ARC 1
+#endif
+#endif
+
+#if !USE_ARC
+#define __unsafe_unretained
+#endif
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
 /* If we add `<NSObject>' here as documented, the 64-bit binary
    compiled on Mac OS X 10.5 fails in startup at -[EmacsController
@@ -185,6 +199,8 @@ typedef unsigned int NSUInteger;
 - (BOOL)conflictingKeyBindingsDisabled;
 - (void)setConflictingKeyBindingsDisabled:(BOOL)flag;
 - (void)flushWindow:(NSWindow *)window force:(BOOL)flag;
+- (void)updatePresentationOptions;
+- (void)showMenuBar;
 @end
 
 /* Like NSWindow, but allows suspend/resume resize control tracking.  */
@@ -281,10 +297,8 @@ typedef unsigned int NSUInteger;
 - (void)setupEmacsView;
 - (void)setupWindow;
 - (struct frame *)emacsFrame;
-- (void)updateApplicationPresentationOptions;
-- (void)showMenuBar;
-- (void)changeWindowManagerStateWithFlags:(WMState)flagsToSet
-				    clear:(WMState)flagsToClear;
+- (WMState)windowManagerState;
+- (void)setWindowManagerState:(WMState)newState;
 - (BOOL)emacsViewCanDraw;
 - (void)lockFocusOnEmacsView;
 - (void)unlockFocusOnEmacsView;
@@ -310,7 +324,7 @@ typedef unsigned int NSUInteger;
 @interface EmacsView : EmacsTipView <NSTextInput, NSTextInputClient>
 {
   /* Target object to which the EmacsView object sends actions.  */
-  id target;
+  __unsafe_unretained id target;
 
   /* Message selector of the action the EmacsView object sends.  */
   SEL action;
@@ -472,7 +486,7 @@ typedef unsigned int NSUInteger;
   NSEvent *mouseUpEvent;
 
   /* Slider being tracked.  */
-  NSSlider *trackedSlider;
+  __unsafe_unretained NSSlider *trackedSlider;
 }
 - (void)suspendSliderTracking:(NSEvent *)event;
 - (void)resumeSliderTracking;
@@ -657,6 +671,12 @@ typedef unsigned int NSUInteger;
    used with some runtime check such as `respondsToSelector:'. */
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@interface NSNumber (AvailableOn1050AndLater)
++ (NSNumber *)numberWithInteger:(NSInteger)value;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
 @interface NSBitmapImageRep (AvailableOn1050AndLater)
 - (id)initWithCGImage:(CGImageRef)cgImage;
 @end
@@ -715,8 +735,11 @@ typedef NSUInteger NSWindowCollectionBehavior;
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+typedef NSUInteger NSWindowNumberListOptions;
+
 @interface NSWindow (AvailableOn1060AndLater)
 - (void)setStyleMask:(NSUInteger)styleMask;
++ (NSArray *)windowNumbersWithOptions:(NSWindowNumberListOptions)options;
 @end
 #endif
 

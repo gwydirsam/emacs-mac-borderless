@@ -5558,7 +5558,8 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
 	{
 	  OSStatus status;
 	  UInt16 key_action = action - keyDown;
-	  UInt32 modifier_key_state = (modifiers & ~mapped_modifiers) >> 8;
+	  UInt32 modifier_key_state =
+	    (modifiers & ~mapped_modifiers & ~alphaLock) >> 8;
 	  UInt32 keyboard_type = LMGetKbdType ();
 	  SInt32 dead_key_state = 0;
 	  UniChar code;
@@ -5586,7 +5587,7 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
 	     like C-% so mask off shift here also.  */
 	  /* Mask off modifier keys that are mapped to some Emacs
 	     modifiers.  */
-	  int new_modifiers = modifiers & ~mapped_modifiers;
+	  int new_modifiers = modifiers & ~mapped_modifiers & ~alphaLock;
 	  /* set high byte of keycode to modifier high byte*/
 	  int new_key_code = key_code | new_modifiers;
 	  Ptr kchr_ptr = (Ptr) GetScriptManagerVariable (smKCHRCache);

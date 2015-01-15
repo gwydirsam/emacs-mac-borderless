@@ -1,4 +1,38 @@
+* emacs-23.3a-mac-1.9996 [experimental/hackers-only] (2011-10-27)
+
+** Fixed bugs
+
+*** The cursor is sometimes unerased.  This bug is not
+platform-specific, but happens more frequently on Mac OS X 10.7.
+Apply a fix for Bug#9415.
+
+*** Crash when a separator is displayed in the tool bar on Mac OS X
+10.7.
+
+*** Can't toggle tool bar visibility for maximized frames on Mac OS X
+10.7.
+
+*** While executing AppleScript, pressing the down arrow key is
+misinterpreted as `C-_' (usually bound to the undo command).
+Reported by Leo.
+
+*** Memory leak by y-or-n-p-with-timeout with GUI (Bug#9830).
+
+** Improvements
+
+*** Can compile with ARC (Automatic Reference Counting) on Xcode 4.2.
+Specify CC='clang -fobjc-arc' on configure.
+
+*** When running Ediff on a fullboth frame, it no longer gets obscured
+by the menu bar or the Dock even if we focus Ediff Control Panel.
+
+*** Unlike fullboth frames, fullscreen frames no longer occupy the
+whole desktop area on Mac OS X 10.7 when the desktop width/height is
+not a multiple of the nominal character width/height, respectively.
+
+
 * emacs-23.3a-mac-1.9995 [experimental/hackers-only] (2011-08-27)
+http://lists.gnu.org/archive/html/emacs-devel/2011-08/msg00977.html
 
 ** Fixed bugs
 

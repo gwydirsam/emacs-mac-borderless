@@ -432,11 +432,11 @@ struct scroll_bar {
 
 /* Extract the reference to the scroller control from a struct
    scroll_bar.  */
-#define SCROLL_BAR_SCROLLER(ptr) ((EmacsScroller *) (ptr)->mac_control_ref)
+#define SCROLL_BAR_SCROLLER(ptr) ((__bridge EmacsScroller *) (ptr)->mac_control_ref)
 
 /* Store the reference to a scroller control in a struct
    scroll_bar.  */
-#define SET_SCROLL_BAR_SCROLLER(ptr, ref) ((ptr)->mac_control_ref = (ref))
+#define SET_SCROLL_BAR_SCROLLER(ptr, ref) ((ptr)->mac_control_ref = (__bridge void *) (ref))
 
 /* Trimming off a few pixels from each side prevents
    text from glomming up against the scroll bar */
@@ -703,8 +703,13 @@ extern Lisp_Object mac_get_selection_value P_ ((Selection, Lisp_Object));
 extern Lisp_Object mac_get_selection_target_list P_ ((Selection));
 extern Lisp_Object mac_dnd_default_known_types P_ ((void));
 
+#if defined (__clang__) && MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#define MAC_USE_AUTORELEASE_LOOP 1
+extern void mac_autorelease_loop P_ ((Lisp_Object (^) (void)));
+#else
 extern void *mac_alloc_autorelease_pool P_ ((void));
 extern void mac_release_autorelease_pool P_ ((void *));
+#endif
 
 extern int mac_tracking_area_works_with_cursor_rects_invalidation_p P_ ((void));
 extern void mac_invalidate_frame_cursor_rects P_ ((struct frame *f));
