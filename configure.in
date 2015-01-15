@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.62)
-AC_INIT(emacs, 23.2.90)
+AC_INIT(emacs, 23.2.91)
 AC_CONFIG_HEADER(src/config.h:src/config.in)
 AC_CONFIG_SRCDIR(src/lisp.h)
 
@@ -1790,6 +1790,8 @@ if test "${HAVE_X11}" = "yes" && test "${with_gconf}" = "yes"; then
    PKG_CHECK_MODULES(GCONF, gconf-2.0 >= 2.13, HAVE_GCONF=yes, HAVE_GCONF=no)
    if test "$HAVE_GCONF" = yes; then
       AC_DEFINE(HAVE_GCONF, 1, [Define to 1 if using GConf.])
+      dnl Newer GConf doesn't link with g_objects, so this is not defined.
+      AC_CHECK_FUNCS([g_type_init])
    fi
 fi
 
@@ -2963,15 +2965,19 @@ extern char *getenv ();
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #endif
-#ifndef __GNUC__
-# ifdef HAVE_ALLOCA_H
-#  include <alloca.h>
-# else /* AIX files deal with #pragma.  */
-#  ifndef alloca /* predefined by HP cc +Olibcalls */
-char *alloca ();
-#  endif
-# endif /* HAVE_ALLOCA_H */
-#endif /* __GNUC__ */
+#ifdef HAVE_ALLOCA_H
+# include <alloca.h>
+#elif defined __GNUC__
+# define alloca __builtin_alloca
+#elif defined _AIX
+# define alloca __alloca
+#else
+# include <stddef.h>
+# ifdef  __cplusplus
+extern "C"
+# endif
+void *alloca (size_t);
+#endif
 #ifndef HAVE_SIZE_T
 typedef unsigned size_t;
 #endif

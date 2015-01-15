@@ -3810,6 +3810,7 @@ event_to_kboard (event)
     return FRAME_KBOARD (XFRAME (frame));
 }
 
+#ifdef subprocesses
 /* Return the number of slots occupied in kbd_buffer.  */
 
 static int
@@ -3822,6 +3823,7 @@ kbd_buffer_nr_stored (void)
        : ((kbd_buffer + KBD_BUFFER_SIZE) - kbd_fetch_ptr
           + (kbd_store_ptr - kbd_buffer)));
 }
+#endif	/* subprocesses */
 
 Lisp_Object Vthrow_on_input;
 
@@ -3945,6 +3947,7 @@ kbd_buffer_store_event_hold (event, hold_quit)
     {
       *kbd_store_ptr = *event;
       ++kbd_store_ptr;
+#ifdef subprocesses
       if (kbd_buffer_nr_stored () > KBD_BUFFER_SIZE/2 && ! kbd_on_hold_p ())
         {
           /* Don't read keyboard input until we have processed kbd_buffer.
@@ -3956,6 +3959,7 @@ kbd_buffer_store_event_hold (event, hold_quit)
 #endif
           stop_polling ();
         }
+#endif	/* subprocesses */
     }
 
   /* If we're inside while-no-input, and this event qualifies
@@ -4124,6 +4128,7 @@ kbd_buffer_get_event (kbp, used_mouse_menu, end_time)
   register int c;
   Lisp_Object obj;
 
+#ifdef subprocesses
   if (kbd_on_hold_p () && kbd_buffer_nr_stored () < KBD_BUFFER_SIZE/4)
     {
       /* Start reading input again, we have processed enough so we can
@@ -4135,6 +4140,7 @@ kbd_buffer_get_event (kbp, used_mouse_menu, end_time)
 #endif /* SIGIO */
       start_polling ();
     }
+#endif	/* subprocesses */
 
   if (noninteractive
       /* In case we are running as a daemon, only do this before
@@ -7378,10 +7384,12 @@ tty_read_avail_input (struct terminal *terminal,
   int n_to_read, i;
   struct tty_display_info *tty = terminal->display_info.tty;
   int nread = 0;
+#ifdef subprocesses
   int buffer_free = KBD_BUFFER_SIZE - kbd_buffer_nr_stored () - 1;
 
   if (kbd_on_hold_p () || buffer_free <= 0)
     return 0;
+#endif	/* subprocesses */
 
   if (!terminal->name)		/* Don't read from a dead terminal. */
     return 0;
@@ -7463,9 +7471,11 @@ tty_read_avail_input (struct terminal *terminal,
 #endif
 #endif
 
+#ifdef subprocesses
   /* Don't read more than we can store.  */
   if (n_to_read > buffer_free)
     n_to_read = buffer_free;
+#endif	/* subprocesses */
 
   /* Now read; for one reason or another, this will not block.
      NREAD is set to the number of chars read.  */

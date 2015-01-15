@@ -3,7 +3,7 @@
 This file is part of GNU Emacs Mac port.  */
 
 /* This was generated from the Ideographic Variation Database file at
-   http://www.unicode.org/ivd/data/2007-12-14/IVD_Sequences.txt
+   http://www.unicode.org/ivd/data/2010-11-14/IVD_Sequences.txt
    using admin/mac/uvs.el in GNU Emacs Mac port, and distributed under
    the Terms of Use in http://www.unicode.org/terms_of_use.html.  */
 static const unsigned char mac_uvs_table_adobe_japan1_bytes[] =

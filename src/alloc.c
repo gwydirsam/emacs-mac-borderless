@@ -5780,6 +5780,9 @@ mark_terminals (void)
     {
       eassert (t->name != NULL);
 #ifdef HAVE_WINDOW_SYSTEM
+      /* If a terminal object is reachable from a stacpro'ed object,
+	 it might have been marked already.  Make sure the image cache
+	 gets marked.  */
       mark_image_cache (t->image_cache);
 #endif /* HAVE_WINDOW_SYSTEM */
       if (!VECTOR_MARKED_P (t))

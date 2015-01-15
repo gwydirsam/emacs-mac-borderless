@@ -1,3 +1,97 @@
+2010-12-07  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* xsmfns.c (smc_die_CB): Call Fkill_emacs (Bug#7552).
+
+2010-12-06  Chong Yidong  <cyd@stupidchicken.com>
+
+	* dispextern.h (struct it): New member overlay_strings_charpos.
+
+	* xdisp.c (next_overlay_string, load_overlay_strings): Record the
+	charpos where we computed n_overlay_strings.
+	(next_overlay_string): Load overlay strings at recorded position,
+	which may not be the same as the iterator's charpos (Bug#7016).
+
+2010-12-05  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (ns_dumpglyphs_image): If drawing cursor, fill background
+	with cursor color and draw a rectangle around the image (Bug#7412).
+
+2010-12-05  Chong Yidong  <cyd@stupidchicken.com>
+
+	* xdisp.c (try_scrolling): Avoid infloop if the first line is
+	obscured due to a vscroll (Bug#7537).
+
+2010-12-02  Jan Djärv  <jhd@zeplinf.localdomain>
+
+	* nsterm.h (FRAME_NS_TOOLBAR_HEIGHT): Rename to FRAME_TOOLBAR_HEIGHT.
+
+	* nsterm.m (x_set_window_size, windowWillResize, initFrameFromEmacs):
+	Use FRAME_TOOLBAR_HEIGHT.
+	(x_set_offset): Handle XNegative and YNegative in
+	f->size_hint_flags (Bug#7510).
+
+2010-11-25  Kenichi Handa  <handa@m17n.org>
+
+	* charset.c (emacs_mule_charset): Make it an array of charset ID;
+	i.e. integer.
+	(Fdefine_charset_internal): Adjusted for the above change.
+	(init_charset_once): Likewise.
+
+	* charset.h (emacs_mule_charset): Adjust the prototype.  Delete
+	duplicated extern.
+
+	* coding.c (emacs_mule_char): Adjust for the change of
+	emacs_mule_charset.
+
+	* lread.c (read_emacs_mule_char): Adjust for the change of
+	emacs_mule_charset.
+
+2010-11-22  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (_PROCESS_MEMORY_COUNTERS_EX): Don't define with versions
+	of w32api >= 3.15.  (Bug#6989)  (Bug#7452)
+
+2010-11-22  YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
+
+	* alloc.c (mark_terminals): Ensure that the image cache is marked
+	even if the terminal object was marked earlier (Bug#6301).
+
+2010-11-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* editfns.c (Fbyte_to_string): Signal an error arg is not a byte.
+
+2010-11-20  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* gtkutil.c (menubar_map_cb): New function (Bug#7425).
+	(xg_update_frame_menubar): Connect signal map to menubar_map_cb.
+	Use 23 as menubar height if 0. (Bug#7425).
+
+2010-11-14  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* xsettings.c (init_gconf): Check HAVE_G_TYPE_INIT.
+
+	* config.in (HAVE_G_TYPE_INIT): New symbol.
+
+2010-11-12  Eli Zaretskii  <eliz@gnu.org>
+
+	* lread.c (Fload): Mention `load-in-progress' and
+	`load-file-name'.  (Bug#7346)
+
+2010-11-09  Eli Zaretskii  <eliz@gnu.org>
+
+	* keyboard.c (kbd_buffer_nr_stored): Define only ifdef subprocesses.
+	(kbd_buffer_store_event_hold, kbd_buffer_get_event)
+	(tty_read_avail_input): Call kbd_buffer_nr_stored only ifdef
+	subprocesses.  Use buffer_free only ifdef subprocesses.
+
+	* process.c (init_process) [subprocesses]: Init kbd_is_on_hold in
+	the subprocesses version, not in the non-subprocesses one.
+
+	* Makefile.in: Don't use ## comment, it breaks the MSDOS build.
+
+	* xfns.c (x_real_positions): Fix declaration-after-statement
+	problem.
+
 2010-11-05  Chong Yidong  <cyd@stupidchicken.com>
 
 	* image.c (free_image): Don't garbage the frame here, since this

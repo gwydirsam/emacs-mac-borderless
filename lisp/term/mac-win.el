@@ -1783,6 +1783,8 @@ non-nil, and the input device supports it."
 			(nth 3 first-height)))))
 	     (scroll-amount (nth 3 event))
 	     (delta-y (- (round (nth 4 scroll-amount))))
+	     (scroll-conservatively 0)
+	     scroll-preserve-screen-position
 	     auto-window-vscroll
 	     redisplay-needed)
 	(unwind-protect
