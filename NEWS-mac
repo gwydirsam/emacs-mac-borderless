@@ -1,5 +1,22 @@
+* emacs-23.1.97-mac-1.992 [experimental/hackers-only] (2010-05-04)
+Based on Emacs 23.1.97
+
+** Fixed bugs
+
+*** Tooltips don't respect customized `tooltip' face font setting.
+
+*** Font specs specified for non-ASCII characters in a non-default
+fontset are not used in new frames.  Reported by Ichiro Enoki.
+
+** Improvements
+
+*** New function `mac-file-alias-p', which is parallel to
+`file-symlink-p'.
+
+
 * emacs-23.1.96-mac-1.991 [experimental/hackers-only] (2010-04-20)
 Based on Emacs 23.1.96
+http://lists.gnu.org/archive/html/emacs-devel/2010-04/msg00901.html
 
 ** Fixed bugs
 

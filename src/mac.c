@@ -1826,6 +1826,8 @@ xrm_get_preference_database (application)
 }
 
 
+Lisp_Object Qmac_file_alias_p;
+
 void
 initialize_applescript ()
 {
@@ -2044,6 +2046,58 @@ CODE must be a 4-character string.  Return non-nil if successful.  */)
   return Qt;
 }
 
+DEFUN ("mac-file-alias-p", Fmac_file_alias_p, Smac_file_alias_p, 1, 1, 0,
+       doc: /* Return non-nil if file FILENAME is the name of an alias file.
+The value is the file referred to by the alias file, as a string.
+Otherwise it returns nil.
+
+This function returns t when given the name of an alias file
+containing an unresolvable alias.  */)
+     (filename)
+     Lisp_Object filename;
+{
+  OSStatus err;
+  Lisp_Object handler, result = Qnil;
+  FSRef fref;
+
+  CHECK_STRING (filename);
+  filename = Fexpand_file_name (filename, Qnil);
+
+  /* If the file name has special constructs in it,
+     call the corresponding file handler.  */
+  handler = Ffind_file_name_handler (filename, Qmac_file_alias_p);
+  if (!NILP (handler))
+    return call2 (handler, Qmac_file_alias_p, filename);
+
+  BLOCK_INPUT;
+  err = FSPathMakeRef (SDATA (ENCODE_FILE (filename)), &fref, NULL);
+  if (err == noErr)
+    {
+      Boolean alias_p = false, folder_p;
+
+      err = FSResolveAliasFileWithMountFlags (&fref, false,
+					      &folder_p, &alias_p,
+					      kResolveAliasFileNoUI);
+      if (err != noErr)
+	result = Qt;
+      else if (alias_p)
+	{
+	  char buf[MAXPATHLEN];
+
+	  err = FSRefMakePath (&fref, buf, sizeof (buf));
+	  if (err == noErr)
+	    {
+	      result = make_unibyte_string (buf, strlen (buf));
+	      if (buf[0] == '/' && index (buf, ':'))
+		result = concat2 (build_string ("/:"), result);
+	      result = DECODE_FILE (result);
+	    }
+	}
+    }
+  UNBLOCK_INPUT;
+
+  return result;
+}
 
 /* Moving files to the system recycle bin.
    Used by `move-file-to-trash' instead of the default moving to ~/.Trash  */
@@ -3465,6 +3519,9 @@ syms_of_mac ()
   Qdictionary = intern_c_string ("dictionary");	staticpro (&Qdictionary);
   Qdescription = intern_c_string ("description"); staticpro (&Qdescription);
 
+  Qmac_file_alias_p = intern_c_string ("mac-file-alias-p");
+  staticpro (&Qmac_file_alias_p);
+
   Qxml = intern_c_string ("xml");
   staticpro (&Qxml);
 
@@ -3497,6 +3554,7 @@ syms_of_mac ()
   defsubr (&Smac_set_file_type);
   defsubr (&Smac_get_file_creator);
   defsubr (&Smac_get_file_type);
+  defsubr (&Smac_file_alias_p);
   defsubr (&Ssystem_move_file_to_trash);
   defsubr (&Sdo_applescript);
 

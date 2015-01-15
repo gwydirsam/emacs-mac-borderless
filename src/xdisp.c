@@ -19500,7 +19500,7 @@ get_char_face_and_encoding (f, c, face_id, char2b, multibyte_p, display_p)
     }
 
   /* Make sure X resources of the face are allocated.  */
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (HAVE_MACGUI)
   if (display_p)
 #endif
     {

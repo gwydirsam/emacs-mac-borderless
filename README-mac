@@ -104,15 +104,51 @@ The Mac port is a descendant of the following ports for Mac OS X.
       * Update display while the resize control (or the slider in the
 	font panel) is being dragged
 
+Being a port of Emacs 23.2, the Mac port also supports the following
+features besides those inherited from the above ancestors:
+
+  * The `fullscreen' frame parameter, with all values supported:
+    `fullboth', `fullwidth', `fullheight', and 'maximized'.  The
+    fullboth frames, which don't have the title bar, still allow us to
+    access the menu bar, the Dock (Mac OS X 10.3 and later), and the
+    tool bars.  The menu bar can also be activated via
+    `menu-bar-open', `Control-F2' (if full keyboard access enabled),
+    or `Command-Shift-/' (on Mac OS X 10.5 and later) even for
+    fullboth frames where the menu bar is usually hidden.  Changing
+    fonts or internal-border-width in fullscreen frames does not
+    clutter display.  On multiple monitor environments, one can move
+    fullscreen frames to another monitor by setting the `left' and
+    `top' frame parameters accordingly.  Attaching/detaching external
+    monitors should work even with fullscreen frames.
+  * The `sticky' frame parameter, which allows us to keep particular
+    frames visible for all Spaces on Mac OS X 10.5 and later.
+  * The function `system-move-file-to-trash', which can be specified
+    as a value of `delete-by-moving-to-trash'.
+  * SVG image display.  This can be done via the WebKit framework on
+    Mac OS X 10.4 and later, so you don't need librsvg.
+  * Multi-page TIFF images.
+  * The function `x-select-font' that provides modal font selection
+    dialog in a compatible way with GTK+ and W32 ones.  Note that a
+    nonmodal counterpart has been available since Emacs 22 Carbon port
+    via `mac-font-panel-mode'.
+  * Unicode character display including non-BMP ones.
+  * Complex text layout (left-to-right only) and text shaping.  They
+    are implemented using the Core Text or NS Text layout engine, so
+    you don't need libotf.
+  * Glyph selection with variation selectors.  Most of Adobe-Japan1
+    ideographic glyphs are accessible via IVSes (Ideographic Variation
+    Sequences) even for the OS-bundled Hiragino fonts, which do not
+    contain the UVS subtable in their cmap table as of Mac OS X 10.6.
+
 As Quickdraw-style font rendering is considered obsolete as of Mac OS
 X 10.5, the variable `mac-allow-anti-aliasing', which was supported in
-the above ports (under a somewhat inappropriate name), is no longer
-supported in the Mac port.  If you want to control anti-aliasing, then
-you can set it with either from the Appearance pane of the System
-Preferences, or the `AppleAntiAliasingThreshold' property that can be
-set with the `defaults' command.  Alternatively, you can specify nil
-or t for the `:antialias' property of a font-spec to control
-anti-aliasing per font.
+the preceding ports (under a somewhat inappropriate name), is no
+longer supported in the Mac port.  If you want to control
+anti-aliasing, then you can set it with either from the Appearance
+pane of the System Preferences, or the `AppleAntiAliasingThreshold'
+property that can be set with the `defaults' command.  Alternatively,
+you can specify nil or t for the `:antialias' property of a font-spec
+to control anti-aliasing per font.
 
 The Mac port doesn't support multi-tty with GUI.  I have no idea how I
 can detach Emacs as a GUI application from Window Server or Dock
