@@ -95,6 +95,7 @@ static OSErr posix_pathname_to_fsspec P_ ((const char *, FSSpec *));
 static OSErr fsspec_to_posix_pathname P_ ((const FSSpec *, char *, int));
 #endif
 
+#if !__LP64__
 /* When converting from Mac to Unix pathnames, /'s in folder names are
    converted to :'s.  This function, used in copying folder names,
    performs a strncat and converts all character a to b in the copy of
@@ -271,6 +272,7 @@ posix_to_mac_pathname (const char *ufn, char *mfn, int mfnbuflen)
 
   return 1;
 }
+#endif	/* !__LP64__ */
 
 
 /***********************************************************************
@@ -920,13 +922,13 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
  ***********************************************************************/
 
 #if TARGET_API_MAC_CARBON
-static Lisp_Object Qstring, Qnumber, Qboolean, Qdate, Qdata;
-static Lisp_Object Qarray, Qdictionary;
+Lisp_Object Qstring, Qnumber, Qboolean, Qdate, Qdata, Qarray, Qdictionary;
+static Lisp_Object Qdescription;
 
 struct cfdict_context
 {
   Lisp_Object *result;
-  int with_tag, hash_bound;
+  int flags, hash_bound;
 };
 
 /* C string to CFString.  */
@@ -1043,6 +1045,29 @@ cfstring_to_lisp (string)
 }
 
 
+/* From CFString to a lisp string.  Returns a unibyte string
+   containing a UTF-16 byte sequence in native byte order, no BOM.  */
+
+Lisp_Object
+cfstring_to_lisp_utf_16 (string)
+     CFStringRef string;
+{
+  Lisp_Object result = Qnil;
+  CFIndex len, buf_len;
+
+  len = CFStringGetLength (string);
+  if (CFStringGetBytes (string, CFRangeMake (0, len), kCFStringEncodingUnicode,
+			0, false, NULL, 0, &buf_len) == len)
+    {
+      result = make_uninit_string (buf_len);
+      CFStringGetBytes (string, CFRangeMake (0, len), kCFStringEncodingUnicode,
+			0, false, SDATA (result), buf_len, NULL);
+    }
+
+  return result;
+}
+
+
 /* CFNumber to a lisp integer or a lisp float.  */
 
 Lisp_Object
@@ -1117,7 +1142,7 @@ cfobject_desc_to_lisp (object)
 }
 
 
-/* Callback functions for cfproperty_list_to_lisp.  */
+/* Callback functions for cfobject_to_lisp.  */
 
 static void
 cfdictionary_add_to_list (key, value, context)
@@ -1126,11 +1151,18 @@ cfdictionary_add_to_list (key, value, context)
      void *context;
 {
   struct cfdict_context *cxt = (struct cfdict_context *)context;
+  Lisp_Object lisp_key;
+
+  if (CFGetTypeID (key) != CFStringGetTypeID ())
+    lisp_key = cfobject_to_lisp (key, cxt->flags, cxt->hash_bound);
+  else if (cxt->flags & CFOBJECT_TO_LISP_DONT_DECODE_DICTIONARY_KEY)
+    lisp_key = cfstring_to_lisp_nodecode (key);
+  else
+    lisp_key = cfstring_to_lisp (key);
 
   *cxt->result =
-    Fcons (Fcons (cfstring_to_lisp (key),
-		  cfproperty_list_to_lisp (value, cxt->with_tag,
-					   cxt->hash_bound)),
+    Fcons (Fcons (lisp_key,
+		  cfobject_to_lisp (value, cxt->flags, cxt->hash_bound)),
 	   *cxt->result);
 }
 
@@ -1140,17 +1172,142 @@ cfdictionary_puthash (key, value, context)
      const void *value;
      void *context;
 {
-  Lisp_Object lisp_key = cfstring_to_lisp (key);
+  Lisp_Object lisp_key;
   struct cfdict_context *cxt = (struct cfdict_context *)context;
   struct Lisp_Hash_Table *h = XHASH_TABLE (*(cxt->result));
   unsigned hash_code;
 
+  if (CFGetTypeID (key) != CFStringGetTypeID ())
+    lisp_key = cfobject_to_lisp (key, cxt->flags, cxt->hash_bound);
+  else if (cxt->flags & CFOBJECT_TO_LISP_DONT_DECODE_DICTIONARY_KEY)
+    lisp_key = cfstring_to_lisp_nodecode (key);
+  else
+    lisp_key = cfstring_to_lisp (key);
+
   hash_lookup (h, lisp_key, &hash_code);
   hash_put (h, lisp_key,
-	    cfproperty_list_to_lisp (value, cxt->with_tag, cxt->hash_bound),
+	    cfobject_to_lisp (value, cxt->flags, cxt->hash_bound),
 	    hash_code);
 }
 
+
+/* Convert Core Foundation Object OBJ to a Lisp object.
+
+   FLAGS is bitwise-or of some of the following flags.
+   If CFOBJECT_TO_LISP_WITH_TAG is set, a symbol that represents the
+   type of the original Core Foundation object is prepended.
+   If CFOBJECT_TO_LISP_DONT_DECODE_STRING is set, CFStrings (except
+   dictionary keys) are not decoded and the resulting Lisp objects are
+   unibyte strings as UTF-8 byte sequences.
+   If CFOBJECT_TO_LISP_DONT_DECODE_DICTIONARY_KEY is set, dictionary
+   key CFStrings are not decoded.
+
+   HASH_BOUND specifies which kinds of the lisp objects, alists or
+   hash tables, are used as the targets of the conversion from
+   CFDictionary.  If HASH_BOUND is negative, always generate alists.
+   If HASH_BOUND >= 0, generate an alist if the number of keys in the
+   dictionary is smaller than HASH_BOUND, and a hash table
+   otherwise.  */
+
+Lisp_Object
+cfobject_to_lisp (obj, flags, hash_bound)
+     CFTypeRef obj;
+     int flags, hash_bound;
+{
+  CFTypeID type_id = CFGetTypeID (obj);
+  Lisp_Object tag = Qnil, result = Qnil;
+  struct gcpro gcpro1, gcpro2;
+
+  GCPRO2 (tag, result);
+
+  if (type_id == CFStringGetTypeID ())
+    {
+      tag = Qstring;
+      if (flags & CFOBJECT_TO_LISP_DONT_DECODE_STRING)
+	result = cfstring_to_lisp_nodecode (obj);
+      else
+	result = cfstring_to_lisp (obj);
+    }
+  else if (type_id == CFNumberGetTypeID ())
+    {
+      tag = Qnumber;
+      result = cfnumber_to_lisp (obj);
+    }
+  else if (type_id == CFBooleanGetTypeID ())
+    {
+      tag = Qboolean;
+      result = cfboolean_to_lisp (obj);
+    }
+  else if (type_id == CFDateGetTypeID ())
+    {
+      tag = Qdate;
+      result = cfdate_to_lisp (obj);
+    }
+  else if (type_id == CFDataGetTypeID ())
+    {
+      tag = Qdata;
+      result = cfdata_to_lisp (obj);
+    }
+  else if (type_id == CFArrayGetTypeID ())
+    {
+      CFIndex index, count = CFArrayGetCount (obj);
+
+      tag = Qarray;
+      result = Fmake_vector (make_number (count), Qnil);
+      for (index = 0; index < count; index++)
+	XVECTOR (result)->contents[index] =
+	  cfobject_to_lisp (CFArrayGetValueAtIndex (obj, index),
+			    flags, hash_bound);
+    }
+  else if (type_id == CFDictionaryGetTypeID ())
+    {
+      struct cfdict_context context;
+      CFIndex count = CFDictionaryGetCount (obj);
+
+      tag = Qdictionary;
+      context.result  = &result;
+      context.flags = flags;
+      context.hash_bound = hash_bound;
+      if (hash_bound < 0 || count < hash_bound)
+	{
+	  result = Qnil;
+	  CFDictionaryApplyFunction (obj, cfdictionary_add_to_list,
+				     &context);
+	}
+      else
+	{
+	  result = make_hash_table (Qequal,
+				    make_number (count),
+				    make_float (DEFAULT_REHASH_SIZE),
+				    make_float (DEFAULT_REHASH_THRESHOLD),
+				    Qnil, Qnil, Qnil);
+	  CFDictionaryApplyFunction (obj, cfdictionary_puthash,
+				     &context);
+	}
+    }
+  else
+    {
+      CFStringRef desc = CFCopyDescription (obj);
+
+      tag = Qdescription;
+      if (desc)
+	{
+	  if (flags & CFOBJECT_TO_LISP_DONT_DECODE_STRING)
+	    result = cfstring_to_lisp_nodecode (desc);
+	  else
+	    result = cfstring_to_lisp (desc);
+
+	  CFRelease (desc);
+	}
+    }
+
+  UNGCPRO;
+
+  if (flags & CFOBJECT_TO_LISP_WITH_TAG)
+    result = Fcons (tag, result);
+
+  return result;
+}
 
 /* Convert CFPropertyList PLIST to a lisp object.  If WITH_TAG is
    non-zero, a symbol that represents the type of the original Core
@@ -1166,81 +1323,153 @@ cfproperty_list_to_lisp (plist, with_tag, hash_bound)
      CFPropertyListRef plist;
      int with_tag, hash_bound;
 {
-  CFTypeID type_id = CFGetTypeID (plist);
-  Lisp_Object tag = Qnil, result = Qnil;
-  struct gcpro gcpro1, gcpro2;
+  return cfobject_to_lisp (plist, with_tag ? CFOBJECT_TO_LISP_WITH_TAG : 0,
+			   hash_bound);
+}
 
-  GCPRO2 (tag, result);
+/* Create CFPropertyList from a Lisp object OBJ, which must be a form
+   of a return value of cfproperty_list_to_lisp with with_tag set.  */
 
-  if (type_id == CFStringGetTypeID ())
-    {
-      tag = Qstring;
-      result = cfstring_to_lisp (plist);
-    }
-  else if (type_id == CFNumberGetTypeID ())
-    {
-      tag = Qnumber;
-      result = cfnumber_to_lisp (plist);
-    }
-  else if (type_id == CFBooleanGetTypeID ())
-    {
-      tag = Qboolean;
-      result = cfboolean_to_lisp (plist);
-    }
-  else if (type_id == CFDateGetTypeID ())
-    {
-      tag = Qdate;
-      result = cfdate_to_lisp (plist);
-    }
-  else if (type_id == CFDataGetTypeID ())
-    {
-      tag = Qdata;
-      result = cfdata_to_lisp (plist);
-    }
-  else if (type_id == CFArrayGetTypeID ())
-    {
-      CFIndex index, count = CFArrayGetCount (plist);
+CFPropertyListRef
+cfproperty_list_create_with_lisp_data (obj)
+     Lisp_Object obj;
+{
+  CFPropertyListRef result = NULL;
 
-      tag = Qarray;
-      result = Fmake_vector (make_number (count), Qnil);
-      for (index = 0; index < count; index++)
-	XVECTOR (result)->contents[index] =
-	  cfproperty_list_to_lisp (CFArrayGetValueAtIndex (plist, index),
-				   with_tag, hash_bound);
-    }
-  else if (type_id == CFDictionaryGetTypeID ())
+  if (CONSP (obj))
     {
-      struct cfdict_context context;
-      CFIndex count = CFDictionaryGetCount (plist);
+      Lisp_Object type = XCAR (obj), data = XCDR (obj);
 
-      tag = Qdictionary;
-      context.result  = &result;
-      context.with_tag = with_tag;
-      context.hash_bound = hash_bound;
-      if (hash_bound < 0 || count < hash_bound)
+      if (EQ (type, Qstring))
 	{
-	  result = Qnil;
-	  CFDictionaryApplyFunction (plist, cfdictionary_add_to_list,
-				     &context);
+	  if (STRINGP (data))
+	    result = cfstring_create_with_string (data);
 	}
-      else
+      else if (EQ (type, Qnumber))
 	{
-	  result = make_hash_table (Qequal,
-				    make_number (count),
-				    make_float (DEFAULT_REHASH_SIZE),
-				    make_float (DEFAULT_REHASH_THRESHOLD),
-				    Qnil, Qnil, Qnil);
-	  CFDictionaryApplyFunction (plist, cfdictionary_puthash,
-				     &context);
+	  if (INTEGERP (data))
+	    {
+	      long value = XINT (data);
+
+	      result = CFNumberCreate (NULL, kCFNumberLongType, &value);
+	    }
+	  else if (FLOATP (data))
+	    result = CFNumberCreate (NULL, kCFNumberDoubleType,
+				     &XFLOAT_DATA (data));
+	}
+      else if (EQ (type, Qboolean))
+	{
+	  if (NILP (data))
+	    result = kCFBooleanFalse;
+	  else if (EQ (data, Qt))
+	    result = kCFBooleanTrue;
+	}
+      else if (EQ (type, Qdate))
+	{
+	  if (CONSP (data) && INTEGERP (XCAR (data))
+	      && CONSP (XCDR (data)) && INTEGERP (XCAR (XCDR (data)))
+	      && CONSP (XCDR (XCDR (data)))
+	      && INTEGERP (XCAR (XCDR (XCDR (data)))))
+	    {
+	      CFAbsoluteTime at;
+
+	      at = (XINT (XCAR (data)) * 65536.0 + XINT (XCAR (XCDR (data)))
+		    + XINT (XCAR (XCDR (XCDR (data)))) * 0.000001
+		    - kCFAbsoluteTimeIntervalSince1970);
+	      result = CFDateCreate (NULL, at);
+	    }
+	}
+      else if (EQ (type, Qdata))
+	{
+	  if (STRINGP (data))
+	    result = CFDataCreate (NULL, SDATA (data), SBYTES (data));
+	}
+      else if (EQ (type, Qarray))
+	{
+	  if (VECTORP (data))
+	    {
+	      int size = ASIZE (data);
+	      CFMutableArrayRef array =
+		CFArrayCreateMutable (NULL, size, &kCFTypeArrayCallBacks);
+
+	      if (array)
+		{
+		  int i;
+
+		  for (i = 0; i < size; i++)
+		    {
+		      CFPropertyListRef value =
+			cfproperty_list_create_with_lisp_data (AREF (data, i));
+
+		      if (value)
+			{
+			  CFArrayAppendValue (array, value);
+			  CFRelease (value);
+			}
+		    }
+
+		  result = CFArrayCreateCopy (NULL, array);
+		  CFRelease (array);
+		}
+	    }
+	}
+      else if (EQ (type, Qdictionary))
+	{
+	  if (NILP (data) || CONSP (data) || HASH_TABLE_P (data))
+	    {
+	      CFMutableDictionaryRef dictionary =
+		CFDictionaryCreateMutable (NULL, 0,
+					   &kCFTypeDictionaryKeyCallBacks,
+					   &kCFTypeDictionaryValueCallBacks);
+	      if (dictionary)
+		{
+		  if (!HASH_TABLE_P (data))
+		    for (; CONSP (data); data = XCDR (data))
+		      {
+			if (CONSP (XCAR (data))
+			    && STRINGP (XCAR (XCAR (data))))
+			  {
+			    CFStringRef key =
+			      cfstring_create_with_string (XCAR (XCAR (data)));
+			    CFPropertyListRef value =
+			      cfproperty_list_create_with_lisp_data (XCDR (XCAR (data)));
+
+			    if (value)
+			      {
+				CFDictionaryAddValue (dictionary, key, value);
+				CFRelease (value);
+			      }
+			    CFRelease (key);
+			  }
+		      }
+		  else		/* HASH_TABLE_P (data) */
+		    {
+		      struct Lisp_Hash_Table *h = XHASH_TABLE (data);
+		      int i;
+
+		      for (i = 0; i < HASH_TABLE_SIZE (h); ++i)
+			if (!NILP (HASH_HASH (h, i)))
+			  {
+			    CFStringRef key =
+			      cfstring_create_with_string (HASH_KEY (h, i));
+			    CFPropertyListRef value =
+			      cfproperty_list_create_with_lisp_data (HASH_VALUE (h, i));
+
+			    if (value)
+			      {
+				CFDictionaryAddValue (dictionary, key, value);
+				CFRelease (value);
+			      }
+			    CFRelease (key);
+			  }
+		    }
+
+		  result = CFDictionaryCreateCopy (NULL, dictionary);
+		  CFRelease (dictionary);
+		}
+	    }
 	}
     }
-  else
-    abort ();
-
-  UNGCPRO;
-
-  if (with_tag)
-    result = Fcons (tag, result);
 
   return result;
 }
@@ -2988,6 +3217,8 @@ link (const char *name1, const char *name2)
 
 #endif  /* ! MAC_OSX */
 
+
+#if !__LP64__
 /* Determine the path name of the file specified by VREFNUM, DIRID,
    and NAME and place that in the buffer PATH of length
    MAXPATHLEN.  */
@@ -3034,6 +3265,7 @@ path_from_vol_dir_name (char *path, int man_path_len, short vol_ref_num,
 
   return 1;  /* success */
 }
+#endif
 
 
 #ifndef MAC_OSX
@@ -3310,6 +3542,7 @@ getpid ()
 #endif /* ! MAC_OSX */
 
 
+#if !__LP64__
 /* Return the path to the directory in which Emacs can create
    temporary files.  The MacOS "temporary items" directory cannot be
    used because it removes the file written by a process when it
@@ -3362,6 +3595,7 @@ get_temp_dir_name ()
 
   return temp_dir_name;
 }
+#endif
 
 #ifndef MAC_OSX
 
@@ -4449,6 +4683,7 @@ component.  */)
 }
 
 
+#if !__LP64__
 DEFUN ("mac-file-name-to-posix", Fmac_file_name_to_posix,
        Smac_file_name_to_posix, 1, 1, 0,
        doc: /* Convert Macintosh FILENAME to Posix form.  */)
@@ -4481,6 +4716,7 @@ DEFUN ("posix-file-name-to-mac", Fposix_file_name_to_mac,
   else
     return Qnil;
 }
+#endif
 
 
 DEFUN ("mac-coerce-ae-data", Fmac_coerce_ae_data, Smac_coerce_ae_data, 3, 3, 0,
@@ -4893,9 +5129,28 @@ defined in the Carbon Event Manager.  */)
 #endif	/* TARGET_API_MAC_CARBON */
 
 
+static ScriptCode
+mac_get_system_script_code ()
+{
+  ScriptCode result;
+#if TARGET_API_MAC_CARBON
+  OSStatus err;
+
+  err = RevertTextEncodingToScriptInfo (CFStringGetSystemEncoding (),
+					&result, NULL, NULL);
+  if (err != noErr)
+    result = 0;
+#else
+  result = (ScriptCode) GetScriptManagerVariable (smSysScript);
+#endif
+
+  return result;
+}
+
 static Lisp_Object
 mac_get_system_locale ()
 {
+#if !__LP64__
   OSStatus err;
   LangCode lang;
   RegionCode region;
@@ -4912,6 +5167,9 @@ mac_get_system_locale ()
     return build_string (str);
   else
     return Qnil;
+#else
+  return Qnil;
+#endif
 }
 
 
@@ -5278,8 +5536,7 @@ init_mac_osx_environment ()
   mac_emacs_pid = getpid ();
 
   /* Initialize locale related variables.  */
-  mac_system_script_code =
-    (ScriptCode) GetScriptManagerVariable (smSysScript);
+  mac_system_script_code = mac_get_system_script_code ();
   Vmac_system_locale = mac_get_system_locale ();
 
   /* Fetch the pathname of the application bundle as a C string into
@@ -5427,6 +5684,7 @@ syms_of_mac ()
   Qdata    = intern ("data");		staticpro (&Qdata);
   Qarray   = intern ("array");		staticpro (&Qarray);
   Qdictionary = intern ("dictionary");	staticpro (&Qdictionary);
+  Qdescription = intern ("description"); staticpro (&Qdescription);
 
   Qxml = intern ("xml");
   staticpro (&Qxml);
@@ -5464,12 +5722,14 @@ syms_of_mac ()
   defsubr (&Smac_get_file_creator);
   defsubr (&Smac_get_file_type);
   defsubr (&Sdo_applescript);
+#if !__LP64__
   defsubr (&Smac_file_name_to_posix);
   defsubr (&Sposix_file_name_to_mac);
+#endif
 
   DEFVAR_INT ("mac-system-script-code", &mac_system_script_code,
     doc: /* The system script code.  */);
-  mac_system_script_code = (ScriptCode) GetScriptManagerVariable (smSysScript);
+  mac_system_script_code = mac_get_system_script_code ();
 
   DEFVAR_LISP ("mac-system-locale", &Vmac_system_locale,
     doc: /* The system locale identifier string.

@@ -187,6 +187,12 @@ struct mac_display_info
 
   /* Cache of images.  */
   struct image_cache *image_cache;
+
+#if USE_APPKIT
+  /* This is a button event that wants to activate the menubar.
+     We save it here until the command loop gets to think about it.  */
+  EventRef saved_menu_event;
+#endif
 };
 
 /* This checks to make sure we have a display.  */
@@ -303,7 +309,11 @@ struct mac_output
 #if TARGET_API_MAC_CARBON
   /* The Mac control reference for the hourglass (progress indicator)
      shown at the upper-right corner of the window.  */
+#if USE_APPKIT
+  void *hourglass_control;
+#else
   ControlRef hourglass_control;
+#endif
 #endif
 
   /* This is the Emacs structure for the display this frame is on.  */
@@ -349,6 +359,10 @@ struct mac_output
   /* Quartz 2D graphics context.  */
   CGContextRef cg_context;
 #endif
+
+#if USE_APPKIT
+  void *emacs_view;
+#endif
 };
 
 typedef struct mac_output mac_output;
@@ -369,6 +383,7 @@ typedef struct mac_output mac_output;
 #define FRAME_BASELINE_OFFSET(f) ((f)->output_data.mac->baseline_offset)
 
 #define FRAME_SIZE_HINTS(f) ((f)->output_data.mac->size_hints)
+#define FRAME_EMACS_VIEW(f) ((f)->output_data.mac->emacs_view)
 
 /* This gives the mac_display_info structure for the display F is on.  */
 #define FRAME_MAC_DISPLAY_INFO(f) (&one_mac_display_info)
@@ -426,6 +441,7 @@ struct scroll_bar {
      frame.  */
   Lisp_Object top, left, width, height;
 
+#if !USE_APPKIT
   /* The starting and ending positions of the handle, relative to the
      handle area (i.e. zero is the top position, not
      SCROLL_BAR_TOP_BORDER).  If they're equal, that means the handle
@@ -447,15 +463,6 @@ struct scroll_bar {
      being dragged, this is Qnil.  */
   Lisp_Object dragging;
 
-#ifdef MAC_OSX
-  /* t if the background of the fringe that is adjacent to a scroll
-     bar is extended to the gap between the fringe and the bar.  */
-  Lisp_Object fringe_extended_p;
-#endif
-
-  /* t if redraw needed in the next XTset_vertical_scroll_bar call.  */
-  Lisp_Object redraw_needed_p;
-
 #ifdef USE_TOOLKIT_SCROLL_BARS
   /* The position and size of the scroll bar handle track area in
      pixels, relative to the frame.  */
@@ -464,6 +471,16 @@ struct scroll_bar {
   /* Minimum length of the scroll bar handle, in pixels.  */
   Lisp_Object min_handle;
 #endif
+#endif	/* !USE_APPKIT */
+
+#ifdef MAC_OSX
+  /* t if the background of the fringe that is adjacent to a scroll
+     bar is extended to the gap between the fringe and the bar.  */
+  Lisp_Object fringe_extended_p;
+#endif
+
+  /* t if redraw needed in the next XTset_vertical_scroll_bar call.  */
+  Lisp_Object redraw_needed_p;
 };
 
 /* The number of elements a vector holding a struct scroll_bar needs.  */
@@ -484,7 +501,19 @@ struct scroll_bar {
   (XSETINT ((low),  (ulong) & 0xffff), \
    XSETINT ((high), (ulong) >> 16))
 
+#if USE_APPKIT
+/* Extract the reference to the scroller control from a struct
+   scroll_bar.  */
+#define SCROLL_BAR_SCROLLER(ptr)				\
+  ((EmacsScroller *) SCROLL_BAR_PACK ((ptr)->control_ref_low,	\
+				      (ptr)->control_ref_high))
 
+/* Store the reference to a scroller control in a struct
+   scroll_bar.  */
+#define SET_SCROLL_BAR_SCROLLER(ptr, ref)				\
+  (SCROLL_BAR_UNPACK ((ptr)->control_ref_low,				\
+                      (ptr)->control_ref_high, (unsigned long) (ref)))
+#else  /* !USE_APPKIT */
 /* Extract the Mac control handle of the scroll bar from a struct
    scroll_bar.  */
 #define SCROLL_BAR_CONTROL_REF(ptr)				\
@@ -495,6 +524,7 @@ struct scroll_bar {
 #define SET_SCROLL_BAR_CONTROL_REF(ptr, ref)				\
   (SCROLL_BAR_UNPACK ((ptr)->control_ref_low,				\
                       (ptr)->control_ref_high, (unsigned long) (ref)))
+#endif  /* !USE_APPKIT */
 
 /* Return the inside width of a vertical scroll bar, given the outside
    width.  */
@@ -709,11 +739,14 @@ extern CFStringRef cfstring_create_with_string P_ ((Lisp_Object));
 extern Lisp_Object cfdata_to_lisp P_ ((CFDataRef));
 extern Lisp_Object cfstring_to_lisp_nodecode P_ ((CFStringRef));
 extern Lisp_Object cfstring_to_lisp P_ ((CFStringRef));
+extern Lisp_Object cfstring_to_lisp_utf_16 P_ ((CFStringRef));
 extern Lisp_Object cfnumber_to_lisp P_ ((CFNumberRef));
 extern Lisp_Object cfdate_to_lisp P_ ((CFDateRef));
 extern Lisp_Object cfboolean_to_lisp P_ ((CFBooleanRef));
 extern Lisp_Object cfobject_desc_to_lisp P_ ((CFTypeRef));
+extern Lisp_Object cfobject_to_lisp P_ ((CFTypeRef, int, int));
 extern Lisp_Object cfproperty_list_to_lisp P_ ((CFPropertyListRef, int, int));
+extern CFPropertyListRef cfproperty_list_create_with_lisp_data P_ ((Lisp_Object));
 extern void mac_wakeup_from_rne P_ ((void));
 #endif
 extern void xrm_merge_string_database P_ ((XrmDatabase, const char *));
@@ -722,7 +755,7 @@ extern Lisp_Object xrm_get_resource P_ ((XrmDatabase, const char *,
 extern XrmDatabase xrm_get_preference_database P_ ((const char *));
 EXFUN (Fmac_get_preference, 4);
 
-/* Defined in mactoolbox.c.  */
+/* Defined in macappkit.m or mactoolbox.c.  */
 
 extern void mac_alert_sound_play P_ ((void));
 extern OSStatus install_application_handler P_ ((void));
@@ -746,8 +779,10 @@ extern void mac_dispose_frame_window P_ ((struct frame *));
 extern CGContextRef mac_begin_cg_clip P_ ((struct frame *, GC));
 extern void mac_end_cg_clip P_ ((struct frame *));
 #endif
+#if USE_QUICKDRAW
 extern void mac_begin_clip P_ ((struct frame *, GC));
 extern void mac_end_clip P_ ((struct frame *, GC));
+#endif
 extern void mac_create_scroll_bar P_ ((struct scroll_bar *, const Rect *,
 				       Boolean));
 extern void mac_dispose_scroll_bar P_ ((struct scroll_bar *));
@@ -801,6 +836,11 @@ extern Lisp_Object mac_get_selection_value P_ ((Selection, Lisp_Object));
 extern Lisp_Object mac_get_selection_target_list P_ ((Selection));
 #if TARGET_API_MAC_CARBON
 extern Lisp_Object mac_dnd_default_known_types P_ ((void));
+#endif
+
+#if USE_APPKIT
+extern void *mac_alloc_autorelease_pool P_ ((void));
+extern void mac_release_autorelease_pool P_ ((void *));
 #endif
 
 /* arch-tag: 6b4ca125-5bef-476d-8ee8-31ed808b7e79

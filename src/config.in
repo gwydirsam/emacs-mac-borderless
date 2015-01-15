@@ -840,6 +840,9 @@ Boston, MA 02110-1301, USA.  */
 /* Define to the unexec source file name. */
 #undef UNEXEC_SRC
 
+/* Define to 1 if you are using the Cocoa Application Kit on Mac OS X. */
+#undef USE_APPKIT
+
 /* Define to 1 if we should use toolkit scroll bars. */
 #undef USE_TOOLKIT_SCROLL_BARS
 

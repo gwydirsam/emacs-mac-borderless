@@ -1,0 +1,93 @@
+1. What's this?
+
+This is "Carbon+AppKit port" addition to GNU Emacs 22.3.
+
+The Carbon+AppKit port of GNU Emacs 22.3 is a port of the Carbon port
+(aka "Carbon Emacs", don't confuse it with "Carbon Emacs Package")
+that is a part of the official GNU Emacs 22 distribution and provides
+native GUI support for Mac OS.  The two ports differ in the GUI
+implementation basis: the Carbon port uses Carbon HIToolbox, but the
+Carbon+AppKit port uses the Cocoa Application Kit framework (AppKit).
+
+The Carbon+AppKit port inherits the code of the non-GUI part of the
+Carbon port, such as drawing, font and image handling.  So in this
+sense, the Carbon+AppKit port can be regarded as a variant of the
+Carbon port.  Obviously, this is not a backport of the Cocoa/GNUstep
+port (aka "Emacs.app").
+
+The Carbon+AppKit port shares mostly the same features with the Carbon
+port including the following:
+
+  * C-g handling
+    You can quit (while t) and (shell-command "sleep 100").
+
+  * Emulation of `select' without periodic polling
+    It doesn't use CPU time while the Lisp interpreter is idle and
+    waiting for some events to come, even with subprocesses or network
+    connections.
+
+  * Graceful termination
+    If you try logout/shutdown/reboot while leaving a file-visiting
+    buffer modified and unsaved, a popup window appears for
+    confirmation.  If you cancel the termination of Emacs, the whole
+    logout/shutdown/reboot process is also canceled immediately.
+
+  * Apple Event handling
+    One can define Apple Event handlers at the Lisp level.  Actually,
+    graceful termination above is an instance of Lisp-level Apple
+    Event handling.  Another example is "Get URL" handler that enables
+    us to invoke the mailer you customized with `mail-user-agent',
+    e.g.,
+
+      $ osascript -e 'tell application "Emacs"
+		      to open location "mailto:foo@example.com"'
+
+    If you set Emacs as the default mailer via Mail.app preference,
+    the Emacs mailer will set up a draft buffer when you click a
+    mailto: link in a Web browser.
+
+  * DictionaryService support (10.4 and later)
+    You can look up a word under the mouse pointer in the selected
+    window by typing Command-Control-D.
+
+Basically, the Carbon+AppKit port doesn't add new features per se,
+except for the following two aspects:
+
+  * Resolution independence (10.4 and later, 10.5 recommended)
+    Scaling works in Framework-Scaled Mode as opposed to (blurry)
+    Magnified Mode for the Carbon port.  You may want to disable
+    QuickDraw Text, which is incompatible with Framework-Scaled Mode,
+    by adding "-DUSE_QUICKDRAW=0" to CFLAGS on compilation.
+
+  * 64-bit (10.5, MAY CRASH, see below)
+    You can build and run a 64-bit binary with GUI support by
+    specifying CC='gcc -m64' on configure.
+    !! Caution !! The resulting binary will crash when you try to
+    display particular characters such as combining diacritics.  This
+    is due to a bug in 64-bit ATSUI.  Apple says it won't be fixed but
+    maybe you can vote for the fix of this bug
+    (rdar://problem/5578675) at the Apple Bug Reporter.
+
+
+2. Build instruction
+
+  a. Untar the official GNU Emacs 22.3 distribution tarball.  Let
+     EMACS_SOURCE_TOP be the top directory of the source tree.
+
+  b. Apply the patch `patch-carbon+appkit' to the source tree.
+
+  c. Copy `lisp/term/mac-win.elc' to
+     `EMACS_SOURCE_TOP/lisp/term/mac-win.elc' by overriding the
+     latter.  (Alternatively, you can bytecompile
+     `EMACS_SOURCE_TOP/lisp/term/mac-win.el' that was patched in the
+     previous step.)
+
+  d. Copy `src/macappkit.h' and `src/macappkit.m' to
+     `EMACS_SOURCE_TOP/src'.
+
+  e. Build as usual with adding "--with-appkit" as a configure option.
+
+Enjoy,
+
+				     YAMAMOTO Mitsuharu
+				mituharu@math.s.chiba-u.ac.jp

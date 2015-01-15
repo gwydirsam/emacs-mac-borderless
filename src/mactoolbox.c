@@ -1940,6 +1940,7 @@ mac_prepare_for_quickdraw (f)
 }
 #endif
 
+#if USE_QUICKDRAW
 static RgnHandle saved_port_clip_region = NULL;
 
 void
@@ -1975,6 +1976,7 @@ mac_end_clip (f, gc)
   if (gc && gc->n_clip_rects)
     SetClip (saved_port_clip_region);
 }
+#endif	/* USE_QUICKDRAW */
 
 #if TARGET_API_MAC_CARBON
 /* Mac replacement for XCopyArea: used only for scrolling.  */
@@ -4653,7 +4655,9 @@ menu_target_item_handler (next_handler, event, data)
   MenuRef menu;
   MenuItemIndex menu_item;
   Lisp_Object help;
+#if USE_QUICKDRAW
   GrafPtr port;
+#endif
   int specpdl_count = SPECPDL_INDEX ();
 
   /* Don't be bothered with the overflowed toolbar items menu.  */
@@ -4677,9 +4681,13 @@ menu_target_item_handler (next_handler, event, data)
      want tooltips during menu tracking.  */
   record_unwind_protect (restore_show_help_function, Vshow_help_function);
   Vshow_help_function = Qnil;
+#if USE_QUICKDRAW
   GetPort (&port);
+#endif
   show_help_echo (help, Qnil, Qnil, Qnil, 1);
+#if USE_QUICKDRAW
   SetPort (port);
+#endif
   unbind_to (specpdl_count, Qnil);
 
   return err == noErr ? noErr : eventNotHandledErr;

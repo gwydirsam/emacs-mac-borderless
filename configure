@@ -1345,6 +1345,7 @@ Optional Packages:
                           don't use Motif or Xaw3d scroll bars
   --without-xim           don't use X11 XIM
   --without-carbon        don't use Carbon GUI on Mac OS X
+  --with-appkit           use Mac Cocoa Application Kit Framework
   --with-x                use the X Window System
 
 Some influential environment variables:
@@ -1973,6 +1974,12 @@ fi
 # Check whether --enable-carbon-app was given.
 if test "${enable_carbon_app+set}" = set; then
   enableval=$enable_carbon_app;  carbon_appdir_x=${enableval}
+fi
+
+
+# Check whether --with-appkit was given.
+if test "${with_appkit+set}" = set; then
+  withval=$with_appkit;
 fi
 
 
@@ -14258,6 +14265,13 @@ fi
 
 done
 
+  if test "${with_appkit}" = yes; then
+
+cat >>confdefs.h <<\_ACEOF
+#define USE_APPKIT 1
+_ACEOF
+
+  fi
   ## Specify the install directory
   carbon_appdir=
   if test "${carbon_appdir_x}" != ""; then

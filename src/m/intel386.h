@@ -215,7 +215,7 @@ NOTE-END */
 #endif
 
 #if defined (MAC_OSX) || defined (DARWIN)
-#ifdef _LP64
+#if defined (_LP64) || defined (__llvm__)
 /* For Intel Mac, with CC='gcc -arch x86_64'.  */
 #define NO_ARG_ARRAY
 #endif

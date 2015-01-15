@@ -282,11 +282,17 @@ Boston, MA 02110-1301, USA.  */
 #define LIBS_IMAGE -framework QuickTime
 #endif
 
+#if USE_APPKIT
+#define LIBS_GUI -framework Cocoa
+#else
+#define LIBS_GUI
+#endif
+
 #endif	/* HAVE_CARBON */
 
 /* Link in the Carbon lib. */
 #ifdef HAVE_CARBON
-#define LIBS_CARBON -framework Carbon LIBS_IMAGE
+#define LIBS_CARBON -framework Carbon LIBS_IMAGE LIBS_GUI
 #else
 #define LIBS_CARBON
 #endif

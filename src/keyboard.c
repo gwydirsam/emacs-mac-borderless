@@ -1301,7 +1301,13 @@ command_loop ()
   else
     while (1)
       {
+#if USE_APPKIT
+	void *pool = mac_alloc_autorelease_pool ();
+#endif
 	internal_catch (Qtop_level, top_level_1, Qnil);
+#if USE_APPKIT
+	mac_release_autorelease_pool (pool);
+#endif
 	/* Reset single_kboard in case top-level set it while
 	   evaluating an -f option, or we are stuck there for some
 	   other reason.  */
@@ -1327,7 +1333,15 @@ command_loop_2 ()
   register Lisp_Object val;
 
   do
-    val = internal_condition_case (command_loop_1, Qerror, cmd_error);
+    {
+#if USE_APPKIT
+      void *pool = mac_alloc_autorelease_pool ();
+#endif
+      val = internal_condition_case (command_loop_1, Qerror, cmd_error);
+#if USE_APPKIT
+      mac_release_autorelease_pool (pool);
+#endif
+    }
   while (!NILP (val));
 
   return Qnil;
@@ -1542,6 +1556,9 @@ command_loop_1 ()
 
   while (1)
     {
+#if USE_APPKIT
+      void *pool = mac_alloc_autorelease_pool ();
+#endif
       if (! FRAME_LIVE_P (XFRAME (selected_frame)))
 	Fkill_emacs (Qnil);
 
@@ -1968,6 +1985,9 @@ command_loop_1 ()
 #ifdef MULTI_KBOARD
       if (!was_locked)
 	any_kboard_state ();
+#endif
+#if USE_APPKIT
+      mac_release_autorelease_pool (pool);
 #endif
     }
 }

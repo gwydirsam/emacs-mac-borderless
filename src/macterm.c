@@ -240,6 +240,7 @@ static void x_after_update_window_line P_ ((struct glyph_row *));
 static XCharStruct *mac_per_char_metric P_ ((XFontStruct *, XChar2b *, int));
 static void XSetFont P_ ((Display *, GC, XFontStruct *));
 
+#if !USE_APPKIT
 extern void mac_toolbox_initialize P_ ((void));
 extern void x_scroll_bar_report_motion P_ ((struct frame **, Lisp_Object *,
 					    enum scroll_bar_part *,
@@ -248,9 +249,38 @@ extern void x_scroll_bar_report_motion P_ ((struct frame **, Lisp_Object *,
 #if USE_CG_DRAWING
 extern void mac_flush_display_optional P_ ((struct frame *));
 #endif
+#endif
 
+#if USE_QUICKDRAW
 #define GC_FORE_COLOR(gc)	(&(gc)->fore_color)
 #define GC_BACK_COLOR(gc)	(&(gc)->back_color)
+#elif !USE_MAC_IMAGE_IO
+static RGBColor *
+GC_FORE_COLOR (gc)
+     GC gc;
+{
+  static RGBColor color;
+
+  color.red = RED16_FROM_ULONG (gc->xgcv.foreground);
+  color.green = GREEN16_FROM_ULONG (gc->xgcv.foreground);
+  color.blue = BLUE16_FROM_ULONG (gc->xgcv.foreground);
+
+  return &color;
+}
+
+static RGBColor *
+GC_BACK_COLOR (gc)
+     GC gc;
+{
+  static RGBColor color;
+
+  color.red = RED16_FROM_ULONG (gc->xgcv.background);
+  color.green = GREEN16_FROM_ULONG (gc->xgcv.background);
+  color.blue = BLUE16_FROM_ULONG (gc->xgcv.background);
+
+  return &color;
+}
+#endif
 #define GC_FONT(gc)		((gc)->xgcv.font)
 #define FRAME_NORMAL_GC(f)	((f)->output_data.mac->normal_gc)
 
@@ -342,6 +372,7 @@ init_cg_color ()
 
 /* X display function emulation */
 
+#if !USE_APPKIT
 /* Mac version of XDrawLine.  */
 
 static void
@@ -390,6 +421,7 @@ mac_draw_line (f, gc, x1, y1, x2, y2)
   mac_end_clip (f, gc);
 #endif
 }
+#endif
 
 /* Mac version of XDrawLine (to Pixmap).  */
 
@@ -853,6 +885,40 @@ mac_draw_rectangle (f, gc, x, y, width, height)
 }
 
 
+#if USE_APPKIT
+static void
+mac_fill_trapezoid_for_relief (f, gc, x, y, width, height, top_p)
+     struct frame *f;
+     GC gc;
+     int x, y;
+     unsigned int width, height;
+     int top_p;
+{
+  CGContextRef context;
+  CGRect rect = mac_rect_make (f, x, y, width, height);
+  CGPoint points[4];
+
+  points[0].x = points[1].x = CGRectGetMinX (rect);
+  points[2].x = points[3].x = CGRectGetMaxX (rect);
+  points[0].y = points[3].y = CGRectGetMinY (rect);
+  points[1].y = points[2].y = CGRectGetMaxY (rect);
+
+  if (top_p)
+    points[2].x -= CGRectGetHeight (rect);
+  else
+    points[0].x += CGRectGetHeight (rect);
+
+  context = mac_begin_cg_clip (f, gc);
+  CG_SET_FILL_COLOR_WITH_GC_FOREGROUND (context, gc);
+  CGContextBeginPath (context);
+  CGContextAddLines (context, points, 4);
+  CGContextClosePath (context);
+  CGContextFillPath (context);
+  mac_end_cg_clip (f);
+}
+#endif
+
+
 static void
 mac_invert_rectangle (f, x, y, width, height)
      struct frame *f;
@@ -878,12 +944,19 @@ mac_invert_rectangle (f, x, y, width, height)
 #endif	/* USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1040 */
 #if !USE_CG_DRAWING || MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
     {
+#if USE_QUICKDRAW
       Rect r;
 
       mac_begin_clip (f, NULL);
       SetRect (&r, x, y, x + width, y + height);
       InvertRect (&r);
       mac_end_clip (f, NULL);
+#elif USE_APPKIT
+      extern void mac_appkit_invert_rectangle P_ ((struct frame *, int, int,
+						   unsigned int, unsigned int));
+
+      mac_appkit_invert_rectangle (f, x, y, width, height);
+#endif
     }
 #endif
 }
@@ -974,6 +1047,8 @@ mac_draw_image_string_atsui (f, gc, x, y, buf, nchars, bg_width,
 					    &text_layout);
   if (err != noErr)
     return;
+
+#if USE_QUICKDRAW
 #ifdef MAC_OSX
   if (!mac_use_core_graphics)
     {
@@ -1005,6 +1080,9 @@ mac_draw_image_string_atsui (f, gc, x, y, buf, nchars, bg_width,
 #ifdef MAC_OSX
     }
   else
+#endif
+#endif	/* USE_QUICKDRAW */
+#ifdef MAC_OSX
     {
       static CGContextRef context;
       static const ATSUAttributeTag tags[] = {kATSUCGContextTag};
@@ -1075,6 +1153,7 @@ mac_draw_image_string_atsui (f, gc, x, y, buf, nchars, bg_width,
 #endif	/* USE_ATSUI */
 
 
+#if USE_QUICKDRAW
 static void
 mac_draw_image_string_qd (f, gc, x, y, buf, nchars, bg_width,
 			  overstrike_p, bytes_per_char)
@@ -1141,6 +1220,7 @@ mac_draw_image_string_qd (f, gc, x, y, buf, nchars, bg_width,
     SwapQDTextFlags(savedFlags);
 #endif
 }
+#endif	/* USE_QUICKDRAW */
 
 
 static INLINE void
@@ -1158,8 +1238,14 @@ mac_draw_string_common (f, gc, x, y, buf, nchars, bg_width,
 				 overstrike_p, bytes_per_char);
   else
 #endif	/* USE_ATSUI */
-    mac_draw_image_string_qd (f, gc, x, y, buf, nchars, bg_width,
-			      overstrike_p, bytes_per_char);
+    {
+#if !USE_QUICKDRAW
+      abort ();
+#else  /* USE_QUICKDRAW */
+      mac_draw_image_string_qd (f, gc, x, y, buf, nchars, bg_width,
+				overstrike_p, bytes_per_char);
+#endif	/* USE_QUICKDRAW */
+    }
 }
 
 
@@ -1292,6 +1378,9 @@ mac_query_char_extents (style, c,
   else
 #endif
     {
+#if !USE_QUICKDRAW
+      abort ();
+#else  /* USE_QUICKDRAW */
       if (font_ascent_return || font_descent_return)
 	{
 	  FontInfo font_info;
@@ -1310,6 +1399,7 @@ mac_query_char_extents (style, c,
 	  QDTextBounds (1, &ch, &char_bounds);
 	  STORE_XCHARSTRUCT (*overall_return, width, char_bounds);
 	}
+#endif   /* USE_QUICKDRAW */
     }
 
   return err;
@@ -1566,7 +1656,7 @@ mac_copy_area_with_mask (src, mask, f, gc, src_x, src_y,
 /* Mac replacement for XCopyArea: used only for scrolling.  */
 
 #if TARGET_API_MAC_CARBON
-/* Defined in mactoolbox.c.  */
+/* Defined in either mactoolbox.c or macappkit.m.  */
 extern void mac_scroll_area P_ ((struct frame *, GC, int, int,
 				 unsigned int, unsigned int, int, int));
 #else  /* not TARGET_API_MAC_CARBON */
@@ -1652,8 +1742,10 @@ XFreeGC (display, gc)
      Display *display;
      GC gc;
 {
+#if USE_QUICKDRAW
   if (gc->clip_region)
     DisposeRgn (gc->clip_region);
+#endif
 #if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
   if (CGColorGetTypeID != NULL)
@@ -1696,9 +1788,11 @@ XSetForeground (display, gc, color)
   if (gc->xgcv.foreground != color)
     {
       gc->xgcv.foreground = color;
+#if USE_QUICKDRAW
       gc->fore_color.red = RED16_FROM_ULONG (color);
       gc->fore_color.green = GREEN16_FROM_ULONG (color);
       gc->fore_color.blue = BLUE16_FROM_ULONG (color);
+#endif
 #if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
       if (CGColorGetTypeID != NULL)
@@ -1714,9 +1808,9 @@ XSetForeground (display, gc, color)
 	    {
 	      CGFloat rgba[4];
 
-	      rgba[0] = gc->fore_color.red / 65535.0f;
-	      rgba[1] = gc->fore_color.green / 65535.0f;
-	      rgba[2] = gc->fore_color.blue / 65535.0f;
+	      rgba[0] = RED_FROM_ULONG (color) / 255.0f;
+	      rgba[1] = GREEN_FROM_ULONG (color) / 255.0f;
+	      rgba[2] = BLUE_FROM_ULONG (color) / 255.0f;
 	      rgba[3] = 1.0f;
 	      gc->cg_fore_color = CGColorCreate (mac_cg_color_space_rgb, rgba);
 	    }
@@ -1737,9 +1831,11 @@ XSetBackground (display, gc, color)
   if (gc->xgcv.background != color)
     {
       gc->xgcv.background = color;
+#if USE_QUICKDRAW
       gc->back_color.red = RED16_FROM_ULONG (color);
       gc->back_color.green = GREEN16_FROM_ULONG (color);
       gc->back_color.blue = BLUE16_FROM_ULONG (color);
+#endif
 #if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
       if (CGColorGetTypeID != NULL)
@@ -1755,9 +1851,9 @@ XSetBackground (display, gc, color)
 	    {
 	      CGFloat rgba[4];
 
-	      rgba[0] = gc->back_color.red / 65535.0f;
-	      rgba[1] = gc->back_color.green / 65535.0f;
-	      rgba[2] = gc->back_color.blue / 65535.0f;
+	      rgba[0] = RED_FROM_ULONG (color) / 255.0f;
+	      rgba[1] = GREEN_FROM_ULONG (color) / 255.0f;
+	      rgba[2] = BLUE_FROM_ULONG (color) / 255.0f;
 	      rgba[3] = 1.0f;
 	      gc->cg_back_color = CGColorCreate (mac_cg_color_space_rgb, rgba);
 	    }
@@ -1793,6 +1889,7 @@ mac_set_clip_rectangles (f, gc, rectangles, n)
   xassert (n >= 0 && n <= MAX_CLIP_RECTS);
 
   gc->n_clip_rects = n;
+#if USE_QUICKDRAW
   if (n > 0)
     {
       if (gc->clip_region == NULL)
@@ -1810,6 +1907,7 @@ mac_set_clip_rectangles (f, gc, rectangles, n)
 	  DisposeRgn (region);
 	}
     }
+#endif
 #if defined (MAC_OSX) && (USE_ATSUI || USE_CG_DRAWING)
   for (i = 0; i < n; i++)
     {
@@ -1934,7 +2032,11 @@ mac_draw_vertical_window_border (w, x, y0, y1)
     XSetForeground (FRAME_MAC_DISPLAY (f), f->output_data.mac->normal_gc,
 		    face->foreground);
 
+#if USE_APPKIT
+  mac_fill_rectangle (f, f->output_data.mac->normal_gc, x, y0, 1, y1 - y0);
+#else
   mac_draw_line (f, f->output_data.mac->normal_gc, x, y0, x, y1);
+#endif
 }
 
 /* End update of window W (which is equal to updated_window).
@@ -2779,6 +2881,9 @@ mac_compute_glyph_string_overhangs (s)
     }
   else
     {
+#if !USE_QUICKDRAW
+      abort ();
+#else  /* USE_QUICKDRAW */
       Rect r;
       MacFontStruct *font = s->font;
 
@@ -2794,6 +2899,7 @@ mac_compute_glyph_string_overhangs (s)
 
       s->right_overhang = r.right > s->width ? r.right - s->width : 0;
       s->left_overhang = r.left < 0 ? -r.left : 0;
+#endif	/* USE_QUICKDRAW */
     }
 }
 
@@ -3330,6 +3436,52 @@ x_draw_relief_rect (f, left_x, top_y, right_x, bottom_y, width,
      int top_p, bot_p, left_p, right_p, raised_p;
      Rect *clip_rect;
 {
+#if USE_APPKIT
+  GC top_left_gc, bottom_right_gc;
+  
+  if (raised_p)
+    {
+      top_left_gc = f->output_data.mac->white_relief.gc;
+      bottom_right_gc = f->output_data.mac->black_relief.gc;
+    }
+  else
+    {
+      top_left_gc = f->output_data.mac->black_relief.gc;
+      bottom_right_gc = f->output_data.mac->white_relief.gc;
+    }
+
+  mac_set_clip_rectangles (f, top_left_gc, clip_rect, 1);
+  mac_set_clip_rectangles (f, bottom_right_gc, clip_rect, 1);
+
+  if (left_p)
+    mac_fill_rectangle (f, top_left_gc, left_x, top_y,
+			width, bottom_y + 1 - top_y);
+  if (right_p)
+    mac_fill_rectangle (f, bottom_right_gc, right_x + 1 - width, top_y,
+			width, bottom_y + 1 - top_y);
+  if (top_p)
+    {
+      if (!right_p)
+	mac_fill_rectangle (f, top_left_gc, left_x, top_y,
+			    right_x + 1 - left_x, width);
+      else
+	mac_fill_trapezoid_for_relief (f, top_left_gc, left_x, top_y,
+				       right_x + 1 - left_x, width, 1);
+    }
+  if (bot_p)
+    {
+      if (!left_p)
+	mac_fill_rectangle (f, bottom_right_gc, left_x, bottom_y + 1 - width,
+			    right_x + 1 - left_x, width);
+      else
+	mac_fill_trapezoid_for_relief (f, bottom_right_gc,
+				       left_x, bottom_y + 1 - width,
+				       right_x + 1 - left_x, width, 0);
+    }
+
+  mac_set_clip_rectangles (f, top_left_gc, clip_rect, 1);
+  mac_set_clip_rectangles (f, bottom_right_gc, clip_rect, 1);
+#else
   int i;
   GC gc;
 
@@ -3373,6 +3525,7 @@ x_draw_relief_rect (f, left_x, top_y, right_x, bottom_y, width,
 		     right_x - i, top_y + i + 1, right_x - i, bottom_y - i);
 
   mac_reset_clip_rectangles (f, gc);
+#endif
 }
 
 
@@ -4535,9 +4688,11 @@ XTmouse_position (fp, insist, bar_window, part, x, y, time)
 
   BLOCK_INPUT;
 
+#if !USE_APPKIT
   if (! NILP (last_mouse_scroll_bar) && insist == 0)
     x_scroll_bar_report_motion (fp, bar_window, part, x, y, time);
   else
+#endif	/* !USE_APPKIT */
     {
       Lisp_Object frame, tail;
 
@@ -5613,11 +5768,13 @@ x_set_offset (f, xoff, yoff, change_gravity)
   mac_move_window_structure (FRAME_MAC_WINDOW (f), f->left_pos, f->top_pos);
   /* If the title bar is completely outside the screen, adjust the
      position. */
+#if !USE_APPKIT
   ConstrainWindowToScreen (FRAME_MAC_WINDOW (f), kWindowTitleBarRgn,
 			   kWindowConstrainMoveRegardlessOfFit
 			   | kWindowConstrainAllowPartial, NULL, NULL);
   if (!NILP (tip_frame) && XFRAME (tip_frame) == f)
     mac_handle_origin_change (f);
+#endif	/* !USE_APPKIT */
 #else
   {
     Rect inner, outer, screen_rect, dummy;
@@ -5965,7 +6122,7 @@ x_make_frame_invisible (f)
 
   BLOCK_INPUT;
 
-#if !TARGET_API_MAC_CARBON
+#if !TARGET_API_MAC_CARBON || USE_APPKIT
   /* Before unmapping the window, update the WM_SIZE_HINTS property to claim
      that the current position of the window is user-specified, rather than
      program-specified, so that when the window is mapped again, it will be
@@ -5978,7 +6135,7 @@ x_make_frame_invisible (f)
 
   UNBLOCK_INPUT;
 
-#if !TARGET_API_MAC_CARBON
+#if !TARGET_API_MAC_CARBON || USE_APPKIT
   mac_handle_visibility_change (f);
 #endif
 }
@@ -6017,7 +6174,7 @@ x_iconify_frame (f)
   if (err != noErr)
     error ("Can't notify window manager of iconification");
 
-#if !TARGET_API_MAC_CARBON
+#if !TARGET_API_MAC_CARBON || USE_APPKIT
   mac_handle_visibility_change (f);
 #endif
 }
@@ -6844,6 +7001,14 @@ fm_get_style_from_font (font)
   FMFontFamily font_family;
 #define FONT_HEADER_MAC_STYLE_OFFSET (4*4 + 2*2 + 8*2 + 2*4)
 
+#if __LP64__
+  err = ATSFontGetTable (FMGetATSFontRefFromFont (font),
+			 'head', FONT_HEADER_MAC_STYLE_OFFSET,
+			 sizeof (mac_style), &mac_style, &len);
+  if (err == noErr
+      && len >= FONT_HEADER_MAC_STYLE_OFFSET + sizeof (mac_style))
+    style = EndianU16_BtoN (mac_style);
+#else
   /* FMGetFontFamilyInstanceFromFont returns `normal' as the style of
      some font (e.g., Optima) even if it is `bold'.  */
   err = FMGetFontTable (font, 'head', FONT_HEADER_MAC_STYLE_OFFSET,
@@ -6853,6 +7018,7 @@ fm_get_style_from_font (font)
     style = EndianU16_BtoN (mac_style);
   else
     FMGetFontFamilyInstanceFromFont (font, &font_family, &style);
+#endif
 
   return style;
 }
@@ -7033,6 +7199,7 @@ init_font_name_table ()
     }
 #endif
 
+#if USE_QUICKDRAW
   /* Create a dummy instance iterator here to avoid creating and
      destroying it in the loop.  */
   if (FMCreateFontFamilyInstanceIterator (0, &ffii) != noErr)
@@ -7099,6 +7266,7 @@ init_font_name_table ()
   /* Dispose of the iterators.  */
   FMDisposeFontFamilyIterator (&ffi);
   FMDisposeFontFamilyInstanceIterator (&ffii);
+#endif	/* USE_QUICKDRAW */
 #else  /* !TARGET_API_MAC_CARBON */
   GrafPtr port;
   SInt16 fontnum, old_fontnum;
@@ -7589,14 +7757,17 @@ mac_load_query_font (f, fontname)
 			       tags, sizes, values);
       if (err != noErr)
 	return NULL;
+#if !__LP64__
       err = FMGetFontFamilyInstanceFromFont (font_id, &fontnum, &style);
       if (err != noErr)
+#endif
 	fontnum = -1;
       scriptcode = kTextEncodingMacUnicode;
     }
   else
 #endif
     {
+#if USE_QUICKDRAW
       Lisp_Object tmp = Fassoc (build_string (family), fm_font_family_alist);
 
       if (NILP (tmp))
@@ -7609,6 +7780,9 @@ mac_load_query_font (f, fontname)
 #else
       scriptcode = FontToScript (fontnum);
 #endif
+#else	/* !USE_QUICKDRAW */
+      return NULL;
+#endif	/* !USE_QUICKDRAW */
     }
 
   font = (MacFontStruct *) xmalloc (sizeof (struct MacFontStruct));
@@ -7737,6 +7911,9 @@ mac_load_query_font (f, fontname)
   else
 #endif
     {
+#if !USE_QUICKDRAW
+      abort ();
+#else  /* USE_QUICKDRAW */
       OSStatus err;
       FontInfo the_fontinfo;
       int is_two_byte_font;
@@ -7830,6 +8007,7 @@ mac_load_query_font (f, fontname)
 	}
 
       mac_end_clip (f, NULL);
+#endif	/* USE_QUICKDRAW */
     }
 
   if (space_bounds)
@@ -8222,18 +8400,26 @@ int mac_screen_config_changed = 0;
 
 /* Apple Events */
 #if TARGET_API_MAC_CARBON
+#if !USE_APPKIT
 Lisp_Object Qhi_command;
 #ifdef MAC_OSX
 Lisp_Object Qtoolbar_switch_mode;
 #endif
-#if USE_MAC_TSM
+#endif
+#if USE_MAC_TSM || USE_APPKIT
 Lisp_Object Qtext_input;
-Lisp_Object Qupdate_active_input_area, Qunicode_for_key_event;
 Lisp_Object Vmac_ts_active_input_overlay, Vmac_ts_active_input_buf;
 static Lisp_Object Vmac_ts_script_language_on_focus;
 static Lisp_Object saved_ts_script_language_on_focus;
 static ScriptLanguageRecord saved_ts_language;
 static Component saved_ts_component;
+#endif
+#if USE_MAC_TSM
+Lisp_Object Qupdate_active_input_area, Qunicode_for_key_event;
+#endif
+#if USE_APPKIT
+Lisp_Object Qinsert_text, Qset_marked_text;
+Lisp_Object Qaction, Qmac_action_key_paths;
 #endif
 #ifdef MAC_OSX
 Lisp_Object Qservice, Qpaste, Qperform;
@@ -8242,7 +8428,9 @@ Lisp_Object Qmouse_drag_overlay;
 #endif	/* TARGET_API_MAC_CARBON */
 extern Lisp_Object Qundefined;
 extern int XTread_socket P_ ((int, int, struct input_event *));
+#if !USE_APPKIT
 extern void init_apple_event_handler P_ ((void));
+#endif
 extern void mac_find_apple_event_spec P_ ((AEEventClass, AEEventID,
 					   Lisp_Object *, Lisp_Object *,
 					   Lisp_Object *));
@@ -8544,11 +8732,12 @@ mac_ax_number_of_characters (f)
 #endif
 #endif
 
-#if USE_MAC_TSM
+#if USE_MAC_TSM || USE_APPKIT
 OSStatus
 mac_restore_keyboard_input_source ()
 {
   OSStatus err = noErr;
+#if !__LP64__
   ScriptLanguageRecord slrec, *slptr = NULL;
 
   if (EQ (Vmac_ts_script_language_on_focus, Qt)
@@ -8583,6 +8772,7 @@ mac_restore_keyboard_input_source ()
       if (err == noErr)
 	KeyScript (slptr->fScript | smKeyForceKeyScriptMask);
     }
+#endif	/* !__LP64__ */
 
   return err;
 }
@@ -8590,6 +8780,7 @@ mac_restore_keyboard_input_source ()
 void
 mac_save_keyboard_input_source ()
 {
+#if !__LP64__
   OSStatus err;
   ScriptLanguageRecord slrec, *slptr = NULL;
 
@@ -8619,6 +8810,7 @@ mac_save_keyboard_input_source ()
       GetDefaultInputMethod (&saved_ts_component, slptr);
 #endif
     }
+#endif	/* !__LP64__ */
 }
 #endif
 
@@ -8722,7 +8914,16 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
       /* translate the keycode back to determine the original key */
 #ifdef MAC_OSX
       UCKeyboardLayout *uchr_ptr = NULL;
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
+#if __LP64__
+      TISInputSourceRef source = TISCopyCurrentKeyboardLayoutInputSource ();
+      CFDataRef uchr_data = NULL;
+
+      if (source)
+	uchr_data =
+	  TISGetInputSourceProperty (source, kTISPropertyUnicodeKeyLayoutData);
+      if (uchr_data)
+	uchr_ptr = (UCKeyboardLayout *) CFDataGetBytePtr (uchr_data);
+#elif MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
       OSStatus err;
       KeyboardLayoutRef layout;
 
@@ -8764,6 +8965,10 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
 	  if (status == noErr && actual_length == 1)
 	    mac_set_unicode_keystroke_event (code, buf);
 	}
+#if __LP64__
+      if (source)
+	CFRelease (source);
+#endif
 #endif	/* MAC_OSX */
 
       if (buf->kind == NO_EVENT)
@@ -9453,7 +9658,7 @@ static struct redisplay_interface x_redisplay_interface =
   x_update_window_end,
   x_cursor_to,
   x_flush,
-#if USE_CG_DRAWING
+#if USE_CG_DRAWING && !USE_APPKIT
   mac_flush_display_optional,
 #else
   0, /* flush_display_optional */
@@ -9529,7 +9734,9 @@ mac_initialize ()
 
   install_application_handler ();
 
+#if !USE_APPKIT
   mac_toolbox_initialize ();
+#endif
 
 #ifdef MAC_OSX
   if (!inhibit_window_system)
@@ -9574,15 +9781,19 @@ syms_of_macterm ()
   Fput (Qsuper,   Qmodifier_value, make_number (super_modifier));
 
 #if TARGET_API_MAC_CARBON
+#if !USE_APPKIT
   Qhi_command   = intern ("hi-command");    staticpro (&Qhi_command);
 #ifdef MAC_OSX
   Qtoolbar_switch_mode = intern ("toolbar-switch-mode");
   staticpro (&Qtoolbar_switch_mode);
+#endif
+#endif
 #if USE_MAC_FONT_PANEL
   Qpanel_closed = intern ("panel-closed");  staticpro (&Qpanel_closed);
   Qselection    = intern ("selection");     staticpro (&Qselection);
 #endif
 
+#ifdef MAC_OSX
   Qservice     = intern ("service");	  staticpro (&Qservice);
   Qpaste       = intern ("paste");	  staticpro (&Qpaste);
   Qperform     = intern ("perform");	  staticpro (&Qperform);
@@ -9590,12 +9801,22 @@ syms_of_macterm ()
   Qmouse_drag_overlay = intern ("mouse-drag-overlay");
   staticpro (&Qmouse_drag_overlay);
 #endif
-#if USE_MAC_TSM
+#if USE_MAC_TSM || USE_APPKIT
   Qtext_input = intern ("text-input");	staticpro (&Qtext_input);
+#endif
+#if USE_MAC_TSM
   Qupdate_active_input_area = intern ("update-active-input-area");
   staticpro (&Qupdate_active_input_area);
   Qunicode_for_key_event = intern ("unicode-for-key-event");
   staticpro (&Qunicode_for_key_event);
+#endif
+#if USE_APPKIT
+  Qinsert_text = intern ("insert-text");	staticpro (&Qinsert_text);
+  Qset_marked_text = intern ("set-marked-text"); staticpro (&Qset_marked_text);
+
+  Qaction = intern ("action");		staticpro (&Qaction);
+  Qmac_action_key_paths = intern ("mac-action-key-paths");
+  staticpro (&Qmac_action_key_paths);
 #endif
 #endif
 
@@ -9623,7 +9844,7 @@ syms_of_macterm ()
   fm_style_face_attributes_alist = Qnil;
 #endif
 
-#if USE_MAC_TSM
+#if USE_MAC_TSM || USE_APPKIT
   staticpro (&saved_ts_script_language_on_focus);
   saved_ts_script_language_on_focus = Qnil;
 #endif
@@ -9744,7 +9965,7 @@ CODING_SYSTEM is a coding system corresponding to TEXT-ENCODING.  */);
     Fcons (list3 (build_string ("mac-roman"),
 		  make_number (smRoman), Qnil), Qnil);
 
-#if USE_MAC_TSM
+#if USE_MAC_TSM || USE_APPKIT
   DEFVAR_LISP ("mac-ts-active-input-overlay", &Vmac_ts_active_input_overlay,
     doc: /* Overlay used to display Mac TSM active input area.  */);
   Vmac_ts_active_input_overlay = Qnil;

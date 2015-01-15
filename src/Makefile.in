@@ -285,6 +285,8 @@ TOOLKIT_DEFINES =
 ALL_CFLAGS=-Demacs -DHAVE_CONFIG_H $(TOOLKIT_DEFINES) $(MYCPPFLAGS) -I. -I${srcdir} C_SWITCH_MACHINE C_SWITCH_SYSTEM C_SWITCH_SITE C_SWITCH_X_SITE C_SWITCH_X_MACHINE C_SWITCH_X_SYSTEM C_SWITCH_SYSTEM_TEMACS ${CFLAGS_SOUND} ${CFLAGS}
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(ALL_CFLAGS) $<
+.m.o:
+	$(CC) -c $(CPPFLAGS) $(ALL_CFLAGS) $<
 
 #ifndef LIBX10_MACHINE
 #define LIBX10_MACHINE
@@ -575,7 +577,11 @@ CYGWIN_OBJ = sheap.o
 
 #ifdef HAVE_CARBON
 mac = $(dot)$(dot)/mac/
+#if USE_APPKIT
+MAC_OBJ = mac.o macterm.o macfns.o macmenu.o macselect.o fontset.o fringe.o image.o macappkit.o
+#else
 MAC_OBJ = mac.o macterm.o macfns.o macmenu.o macselect.o fontset.o fringe.o image.o mactoolbox.o
+#endif
 emacsapp = $(PWD)/$(mac)Emacs.app/
 emacsappsrc = ${srcdir}/../mac/Emacs.app/
 #endif
@@ -1289,6 +1295,9 @@ macterm.o: blockinput.h atimer.h systime.h syssignal.h macterm.h macgui.h \
   process.h coding.h $(config_h)
 macselect.o: blockinput.h atimer.h systime.h macterm.h macgui.h frame.h \
   keymap.h $(config_h)
+macappkit.o: blockinput.h atimer.h systime.h macterm.h macgui.h frame.h \
+  charset.h dispextern.h fontset.h termhooks.h buffer.h window.h keyboard.h \
+  intervals.h composite.h keymap.h macappkit.h $(config_h)
 mactoolbox.o: blockinput.h atimer.h systime.h macterm.h macgui.h frame.h \
   charset.h coding.h ccl.h dispextern.h fontset.h termhooks.h buffer.h \
   window.h keyboard.h $(config_h)

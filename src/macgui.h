@@ -98,28 +98,35 @@ typedef unsigned long Time;
 /* Whether to use Quartz 2D routines for drawing operations other than
    texts.  */
 #ifndef USE_CG_DRAWING
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
+#if USE_APPKIT || MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
 #define USE_CG_DRAWING 1
 #endif
 #endif
 
 /* Whether to use the standard Font Panel floating dialog.  */
 #ifndef USE_MAC_FONT_PANEL
-#if USE_ATSUI && MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
+#if USE_ATSUI && (USE_APPKIT || MAC_OS_X_VERSION_MAX_ALLOWED >= 1020)
 #define USE_MAC_FONT_PANEL 1
 #endif
 #endif
 
 /* Whether to use Text Services Manager.  */
 #ifndef USE_MAC_TSM
-#if TARGET_API_MAC_CARBON
+#if TARGET_API_MAC_CARBON && !USE_APPKIT
 #define USE_MAC_TSM 1
 #endif
 #endif
 
-/* Whether to use HIToolbar.  */
+/* Whether to use QuickDraw.  */
+#ifndef USE_QUICKDRAW
+#if !__LP64__
+#define USE_QUICKDRAW 1
+#endif
+#endif
+
+/* Whether to use Carbon HIToolbar or Cocoa NSToolbar.  */
 #ifndef USE_MAC_TOOLBAR
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030 && MAC_OS_X_VERSION_MIN_REQUIRED != 1020
+#if USE_CG_DRAWING && (USE_APPKIT || (MAC_OS_X_VERSION_MAX_ALLOWED >= 1030 && MAC_OS_X_VERSION_MIN_REQUIRED != 1020))
 #define USE_MAC_TOOLBAR 1
 #endif
 #endif
@@ -128,6 +135,7 @@ typedef unsigned long Time;
 typedef float CGFloat;
 #endif
 
+#if !USE_APPKIT
 typedef WindowRef Window;
 #if TARGET_API_MAC_CARBON
 typedef ScrapRef Selection;
@@ -152,6 +160,29 @@ typedef int Selection;
 #define mac_get_global_mouse	GetGlobalMouse
 #define mac_is_window_toolbar_visible	IsWindowToolbarVisible
 #define mac_rect_make(f, x, y, w, h)	CGRectMake (x, y, w, h)
+#else
+typedef void *Window;
+typedef void *Selection;
+extern void mac_set_window_title P_ ((Window, CFStringRef));
+extern void mac_set_window_modified P_ ((Window, Boolean));
+extern Boolean mac_is_window_visible P_ ((Window));
+extern Boolean mac_is_window_collapsed P_ ((Window));
+extern void mac_bring_window_to_front P_ ((Window));
+extern void mac_send_window_behind P_ ((Window, Window));
+extern void mac_hide_window P_ ((Window));
+extern void mac_show_window P_ ((Window));
+extern OSStatus mac_collapse_window P_ ((Window, Boolean));
+extern Window mac_front_non_floating_window P_ ((void));
+extern Window mac_active_non_floating_window P_ ((void));
+extern void mac_activate_window P_ ((Window, Boolean));
+extern OSStatus mac_move_window_structure P_ ((Window, short, short));
+extern void mac_move_window P_ ((Window, short, short, Boolean));
+extern void mac_size_window P_ ((Window, short, short, Boolean));
+extern void mac_get_global_mouse P_ ((Point *));
+extern Boolean mac_is_window_toolbar_visible P_ ((Window));
+extern CGRect mac_rect_make P_ ((struct frame *, CGFloat, CGFloat,
+				 CGFloat, CGFloat));
+#endif
 
 #if USE_MAC_IMAGE_IO
 typedef struct _XImage
@@ -283,11 +314,13 @@ typedef struct _XGC
 
   /* Cached data members follow.  */
 
+#if USE_QUICKDRAW
   /* QuickDraw foreground color.  */
   RGBColor fore_color;
 
   /* QuickDraw background color.  */
   RGBColor back_color;
+#endif
 
 #if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
   /* Quartz 2D foreground color.  */
@@ -301,8 +334,10 @@ typedef struct _XGC
   /* Number of clipping rectangles.  */
   int n_clip_rects;
 
+#if USE_QUICKDRAW
   /* QuickDraw clipping region.  Ignored if n_clip_rects == 0.  */
   RgnHandle clip_region;
+#endif
 
 #if defined (MAC_OSX) && (USE_ATSUI || USE_CG_DRAWING)
   /* Clipping rectangles used in Quartz 2D drawing.  The y-coordinate
@@ -398,6 +433,12 @@ typedef struct {
    (nr).top = (y),				\
    (nr).right = ((nr).left + (width)),		\
    (nr).bottom = ((nr).top + (height)))
+
+enum {
+  CFOBJECT_TO_LISP_WITH_TAG			= 1 << 0,
+  CFOBJECT_TO_LISP_DONT_DECODE_STRING		= 1 << 1,
+  CFOBJECT_TO_LISP_DONT_DECODE_DICTIONARY_KEY	= 1 << 2
+};
 
 /* Definitions copied from lwlib.h */
 

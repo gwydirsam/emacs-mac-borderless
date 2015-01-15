@@ -77,10 +77,18 @@ static Lisp_Object Vselection_alist;
    handling.  */
 Lisp_Object Vselection_converter_alist;
 
+#if USE_APPKIT
+/* A selection name (represented as a Lisp symbol) can be associated
+   with a pasteboard via `mac-pasteboard-name' property.  Likewise for
+   a selection type with a pasteboard data type via
+   `mac-pasteboard-data-type'.  */
+Lisp_Object Qmac_pasteboard_name, Qmac_pasteboard_data_type;
+#else  /* !USE_APPKIT */
 /* A selection name (represented as a Lisp symbol) can be associated
    with a named scrap via `mac-scrap-name' property.  Likewise for a
    selection type with a scrap flavor type via `mac-ostype'.  */
 Lisp_Object Qmac_scrap_name, Qmac_ostype;
+#endif	/* !USE_APPKIT */
 
 
 /* Do protocol to assert ourself as a selection owner.
@@ -1060,6 +1068,9 @@ nil, which means the event is already resumed or expired.  */)
 ***********************************************************************/
 #if TARGET_API_MAC_CARBON
 Lisp_Object Vmac_dnd_known_types;
+#if USE_APPKIT
+Lisp_Object QCactions, Qcopy, Qlink, Qgeneric, Qprivate, Qmove, Qdelete;
+#endif	/* USE_APPKIT */
 #endif	/* TARGET_API_MAC_CARBON */
 
 
@@ -1146,11 +1157,19 @@ The types are chosen in the order they appear in the list.  */);
   Qforeign_selection = intern ("foreign-selection");
   staticpro (&Qforeign_selection);
 
+#if USE_APPKIT
+  Qmac_pasteboard_name = intern ("mac-pasteboard-name");
+  staticpro (&Qmac_pasteboard_name);
+
+  Qmac_pasteboard_data_type = intern ("mac-pasteboard-data-type");
+  staticpro (&Qmac_pasteboard_data_type);
+#else  /* !USE_APPKIT */
   Qmac_scrap_name = intern ("mac-scrap-name");
   staticpro (&Qmac_scrap_name);
 
   Qmac_ostype = intern ("mac-ostype");
   staticpro (&Qmac_ostype);
+#endif	/* !USE_APPKIT */
 
   Qmac_apple_event_class = intern ("mac-apple-event-class");
   staticpro (&Qmac_apple_event_class);
@@ -1160,6 +1179,16 @@ The types are chosen in the order they appear in the list.  */);
 
   Qemacs_suspension_id = intern ("emacs-suspension-id");
   staticpro (&Qemacs_suspension_id);
+
+#if USE_APPKIT
+  QCactions = intern (":actions");	staticpro (&QCactions);
+  Qcopy	    = intern ("copy");		staticpro (&Qcopy);
+  Qlink	    = intern ("link");		staticpro (&Qlink);
+  Qgeneric  = intern ("generic");	staticpro (&Qgeneric);
+  Qprivate  = intern ("private");	staticpro (&Qprivate);
+  Qmove	    = intern ("move");		staticpro (&Qmove);
+  Qdelete   = intern ("delete");	staticpro (&Qdelete);
+#endif	/* USE_APPKIT */
 }
 
 /* arch-tag: f3c91ad8-99e0-4bd6-9eef-251b2f848732

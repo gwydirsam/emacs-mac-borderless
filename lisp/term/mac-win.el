@@ -1337,6 +1337,64 @@ correspoinding TextEncodingBase value."
   (prog1 (or text (setq text (copy-sequence " ")))
     (put-text-property 0 (length text) 'display (create-image data 'tiff t)
 		       text)))
+
+(defun mac-pasteboard-string-to-string (data &optional coding-system)
+  (or coding-system (setq coding-system mac-system-coding-system))
+  (let* ((encoding
+	  (and (eq (coding-system-base coding-system) 'japanese-shift-jis)
+	       mac-text-encoding-mac-japanese-basic-variant))
+	 (str (mac-code-convert-string data 'utf-8
+				       (or encoding coding-system))))
+    (when str
+      (setq str (decode-coding-string str coding-system))
+      (if (eq encoding mac-text-encoding-mac-japanese-basic-variant)
+	  ;; Does it contain Apple one-byte extensions other than
+	  ;; reverse solidus?
+	  (if (string-match "[\xa0\xfd-\xff]" str)
+	      (setq str nil)
+	    ;; ASCII-only?
+	    (unless (mac-code-convert-string data
+					     'utf-8 mac-text-encoding-ascii)
+	      (subst-char-in-string ?\x5c ?\(J\(B str t)
+	      (subst-char-in-string ?\x80 ?\\ str t)))))
+    (or str (decode-coding-string data 'utf-8))))
+
+(defun mac-string-to-pasteboard-string (string &optional coding-system)
+  (or coding-system (setq coding-system mac-system-coding-system))
+  (let (data encoding)
+    (when (memq (coding-system-base coding-system)
+		(find-coding-systems-string string))
+      (let ((str string))
+	(when (eq coding-system 'japanese-shift-jis)
+	  (setq encoding mac-text-encoding-mac-japanese-basic-variant)
+	  (setq str (subst-char-in-string ?\\ ?\x80 str))
+	  (subst-char-in-string ?\(J\(B ?\x5c str t)
+	  ;; ASCII-only?
+	  (if (string-match "\\`[\x00-\x7f]*\\'" str)
+	      (setq str nil)))
+	(and str
+	     (setq data (mac-code-convert-string
+			 (encode-coding-string str coding-system)
+			 (or encoding coding-system) 'utf-8)))))
+    (or data (encode-coding-string string 'utf-8))))
+
+(defun mac-pasteboard-filenames-to-file-urls (data)
+  ;; DATA is a property list (in Foundation terminology) of the form
+  ;; (array . [(string . FILENAME1) ... (string . FILENAMEn)]), where
+  ;; each FILENAME is a unibyte string in UTF-8.
+  (when (eq (car-safe data) 'array)
+    (let ((coding (or file-name-coding-system default-file-name-coding-system)))
+      (mapcar
+       (lambda (tag-data)
+	 (when (eq (car tag-data) 'string)
+	   (let ((filename (encode-coding-string
+			    (mac-pasteboard-string-to-string (cdr tag-data))
+			    coding)))
+	     (concat "file://localhost"
+		     (mapconcat 'url-hexify-string
+				(split-string filename "/") "/")))))
+       (cdr data)))))
+
 
 ;;;; Selections
 
@@ -1387,6 +1445,8 @@ in `selection-converter-alist', which see."
 	       (setq data-type (get-text-property 0 'foreign-selection data)))
       (cond ((eq data-type 'public.utf16-plain-text)
 	     (setq data (mac-utxt-to-string data coding)))
+	    ((eq data-type 'NSStringPboardType)
+	     (setq data (mac-pasteboard-string-to-string data coding)))
 	    ((eq data-type 'com.apple.traditional-mac-plain-text)
 	     (setq data (mac-TEXT-to-string data coding)))
 	    ((eq data-type 'public.file-url)
@@ -1396,6 +1456,7 @@ in `selection-converter-alist', which see."
 
 (defun x-selection-value (type)
   (let ((data-types '(public.utf16-plain-text
+		      NSStringPboardType
 		      com.apple.traditional-mac-plain-text
 		      public.file-url))
 	text tiff-image)
@@ -1406,9 +1467,12 @@ in `selection-converter-alist', which see."
       (setq data-types (cdr data-types)))
     (if text
 	(remove-text-properties 0 (length text) '(foreign-selection nil) text))
-    (setq tiff-image (condition-case nil
-			 (x-get-selection type 'public.tiff)
-		       (error nil)))
+    (setq tiff-image (or (condition-case nil
+			     (x-get-selection type 'public.tiff)
+			   (error nil))
+			 (condition-case nil
+			     (x-get-selection type 'NSTIFFPboardType)
+			   (error nil))))
     (when tiff-image
       (remove-text-properties 0 (length tiff-image)
 			      '(foreign-selection nil) tiff-image)
@@ -1481,6 +1545,17 @@ in `selection-converter-alist', which see."
 (put 'public.tiff 'mac-ostype "TIFF")
 (put 'public.file-url 'mac-ostype "furl")
 
+(put 'CLIPBOARD 'mac-pasteboard-name
+     "Apple CFPasteboard general")	; NSGeneralPboard
+(put 'FIND 'mac-pasteboard-name
+     "Apple CFPasteboard find")		; NSFindPboard
+(put 'PRIMARY 'mac-pasteboard-name
+     (format "GNU Emacs CFPasteboard primary %d" (emacs-pid)))
+(put 'NSStringPboardType 'mac-pasteboard-data-type "NSStringPboardType")
+(put 'NSTIFFPboardType 'mac-pasteboard-data-type
+     "NeXT TIFF v4.0 pasteboard type")
+(put 'NSFilenamesPboardType 'mac-pasteboard-data-type "NSFilenamesPboardType")
+
 (defun mac-select-convert-to-string (selection type value)
   (let ((str (cdr (xselect-convert-to-string selection nil value)))
 	(coding (or next-selection-coding-system selection-coding-system)))
@@ -1494,6 +1569,8 @@ in `selection-converter-alist', which see."
 	  (cond
 	   ((eq type 'public.utf16-plain-text)
 	    (setq str (mac-string-to-utxt str coding)))
+	   ((eq type 'NSStringPboardType)
+	    (setq str (mac-string-to-pasteboard-string str coding)))
 	   ((eq type 'com.apple.traditional-mac-plain-text)
 	    (setq str (mac-string-to-TEXT str coding)))
 	   (t
@@ -1513,14 +1590,23 @@ in `selection-converter-alist', which see."
 		 (mapconcat 'url-hexify-string
 			    (split-string filename "/") "/")))))
 
+(defun mac-select-convert-to-pasteboard-filenames (selection type value)
+  (let ((filename (xselect-convert-to-filename selection type value)))
+    (and filename
+	 (setq filename (mac-string-to-pasteboard-string filename))
+	 (cons type `(array . [(string . ,filename)])))))
+
 (setq selection-converter-alist
       (nconc
        '((public.utf16-plain-text . mac-select-convert-to-string)
+	 (NSStringPboardType . mac-select-convert-to-string)
 	 (com.apple.traditional-mac-plain-text . mac-select-convert-to-string)
 	 ;; This is not enabled by default because the `Import Image'
 	 ;; menu makes Emacs crash or hang for unknown reasons.
 	 ;; (public.tiff . nil)
+	 (NSTIFFPboardType . nil)
 	 (public.file-url . mac-select-convert-to-file-url)
+	 (NSFilenamesPboardType . mac-select-convert-to-pasteboard-filenames)
 	 )
        selection-converter-alist))
 
@@ -2125,13 +2211,153 @@ either in the current buffer or in the echo area."
 (define-key mac-apple-event-map [text-input unicode-for-key-event]
   'mac-ts-unicode-for-key-event)
 
+(defconst mac-marked-text-underline-style-faces
+  '((0 . mac-ts-raw-text)		  ; NSUnderlineStyleNone
+    (1 . mac-ts-converted-text)		  ; NSUnderlineStyleSingle
+    (2 . mac-ts-selected-converted-text)) ; NSUnderlineStyleThick
+  "Alist of NSUnderlineStyle vs Emacs face in marked text.")
+
+(defun mac-text-input-set-marked-text (event)
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (text (cdr (mac-ae-parameter ae)))
+	 (selected-range (cdr (mac-ae-parameter ae "selectedRange")))
+	 (script-language (mac-ae-script-language ae "tssl"))
+	 (coding (or (cdr (assq (car script-language)
+				mac-script-code-coding-systems))
+		     'mac-roman)))
+    (let ((use-echo-area
+	   (or isearch-mode
+	       (and cursor-in-echo-area (current-message))
+	       ;; Overlay strings are not shown in some cases.
+	       (get-char-property (point) 'invisible)
+	       (and (not (bobp))
+		    (or (and (get-char-property (point) 'display)
+			     (eq (get-char-property (1- (point)) 'display)
+				 (get-char-property (point) 'display)))
+			(and (get-char-property (point) 'composition)
+			     (eq (get-char-property (1- (point)) 'composition)
+				 (get-char-property (point) 'composition)))))))
+	  active-input-string caret-seen)
+      ;; Decode the active input area text with inheriting faces and
+      ;; the caret position.
+      (put-text-property (* (car selected-range) 2) (length text)
+			 'cursor t text)
+      (setq active-input-string
+	    (mapconcat
+	     (lambda (str)
+	       (let* ((decoded (mac-utxt-to-string str coding))
+		      (underline-style
+		       (or (cdr (get-text-property 0 'NSUnderline str)) 0))
+		      (face
+		       (cdr (assq underline-style
+				  mac-marked-text-underline-style-faces))))
+		 (put-text-property 0 (length decoded) 'face face decoded)
+		 (when (and (not caret-seen)
+			    (get-text-property 0 'cursor str))
+		   (setq caret-seen t)
+		   (if (or use-echo-area (null cursor-type))
+		       (put-text-property 0 1 'face 'mac-ts-caret-position
+					  decoded)
+		     (put-text-property 0 1 'cursor t decoded)))
+		 decoded))
+	     (mac-split-string-by-property-change text)
+	     ""))
+      (put-text-property 0 (length active-input-string)
+			 'mac-ts-active-input-string t active-input-string)
+      (if use-echo-area
+	  (let ((msg (current-message))
+		message-log-max)
+	    (if (and msg
+		     ;; Don't get confused by previously displayed
+		     ;; `active-input-string'.
+		     (null (get-text-property 0 'mac-ts-active-input-string
+					      msg)))
+		(setq msg (propertize msg 'display
+				      (concat msg active-input-string)))
+	      (setq msg active-input-string))
+	    (message "%s" msg)
+	    (overlay-put mac-ts-active-input-overlay 'before-string nil))
+	(move-overlay mac-ts-active-input-overlay
+		      (point) (point) (current-buffer))
+	(overlay-put mac-ts-active-input-overlay 'before-string
+		     active-input-string)))))
+
+(defun mac-text-input-insert-text (event)
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (text (cdr (mac-ae-parameter ae)))
+	 (script-language (mac-ae-script-language ae "tssl"))
+	 (coding (or (cdr (assq (car script-language)
+				mac-script-code-coding-systems))
+		     'mac-roman)))
+    (overlay-put mac-ts-active-input-overlay 'before-string nil)
+    (let ((msg (current-message))
+	  message-log-max)
+      (when msg
+	(if (get-text-property 0 'mac-ts-active-input-string msg)
+	    (message nil)
+	  (let ((disp-prop (get-text-property 0 'display msg)))
+	    (when (and (stringp disp-prop)
+		       (> (length disp-prop) 1)
+		       (get-text-property (1- (length disp-prop))
+					  'mac-ts-active-input-string))
+	      (remove-text-properties 0 (length disp-prop)
+				      '(mac-ts-active-input-string nil)
+				      msg)
+	      (message "%s" msg))))))
+    (mac-unread-string (mac-utxt-to-string text coding))))
+
+(define-key mac-apple-event-map [text-input set-marked-text]
+  'mac-text-input-set-marked-text)
+(define-key mac-apple-event-map [text-input insert-text]
+  'mac-text-input-insert-text)
+
+;;; Converted Actions
+(defun mac-handle-toolbar-pill-button-clicked (event)
+  "Toggle visibility of tool-bars in response to EVENT.
+With no keyboard modifiers, it toggles the visibility of the
+frame where the tool-bar toggle button was pressed.  With some
+modifiers, it changes the global tool-bar visibility setting."
+  (interactive "e")
+  (let ((ae (mac-event-ae event)))
+    (if (mac-ae-keyboard-modifiers ae)
+	;; Globally toggle tool-bar-mode if some modifier key is pressed.
+	(tool-bar-mode 'toggle)
+      (let ((frame (cdr (mac-ae-parameter ae 'frame))))
+	(select-frame-set-input-focus frame)
+	(set-frame-parameter frame 'tool-bar-lines
+			     (if (= (frame-parameter frame 'tool-bar-lines) 0)
+				 1 0))))))
+
+(define-key mac-apple-event-map [action about] 'about-emacs)
+(define-key mac-apple-event-map [action preferences] 'customize)
+(define-key mac-apple-event-map [action toolbar-pill-button-clicked]
+ 'mac-handle-toolbar-pill-button-clicked)
+
 ;;; Services
 (defun mac-service-open-file ()
   "Open the file specified by the selection value for Services."
   (interactive)
   ;; The selection seems not to contain the file name as
-  ;; public.utf16-plain-text data on Mac OS X 10.4.
-  (dnd-open-file (x-get-selection mac-service-selection 'public.file-url) nil))
+  ;; public.utf16-plain-text or NSStringPboardType data on Mac OS X 10.4.
+  (let (data file-urls)
+    (setq data (condition-case nil
+		   (x-get-selection mac-service-selection 'public.file-url)
+		 (error nil)))
+    (if data
+	(setq file-urls (list data))
+      (setq data
+	    (condition-case nil
+		(x-get-selection mac-service-selection 'NSFilenamesPboardType)
+	      (error nil)))
+      (if data
+	  (setq file-urls
+		(mac-pasteboard-filenames-to-file-urls data))))
+    (when file-urls
+      (dolist (file-url file-urls)
+	(dnd-open-file file-url nil))
+      (select-frame-set-input-focus (selected-frame)))))
 
 (defun mac-service-open-selection ()
   "Create a new buffer containing the selection value for Services."
@@ -2221,7 +2447,13 @@ either in the current buffer or in the echo area."
     ("hfs " . mac-dnd-handle-hfs)
     ("utxt" . mac-dnd-insert-utxt)
     ("TEXT" . mac-dnd-insert-TEXT)
-    ("TIFF" . mac-dnd-insert-TIFF))
+    ("TIFF" . mac-dnd-insert-TIFF)
+    ("NSFilenamesPboardType" . mac-dnd-handle-pasteboard-filenames)
+					; NSFilenamesPboardType
+    ("NSStringPboardType" . mac-dnd-insert-pasteboard-string)
+					; NSStringPboardType
+    ("NeXT TIFF v4.0 pasteboard type" . mac-dnd-insert-TIFF) ; NSTIFFPboardType
+    )
   "Which function to call to handle a drop of that type.
 The function takes three arguments, WINDOW, ACTION and DATA.
 WINDOW is where the drop occurred, ACTION is always `private' on
@@ -2250,6 +2482,10 @@ See also `mac-dnd-known-types'."
 				 (split-string file-name "/") "/"))))
     (dnd-handle-one-url window action url)))
 
+(defun mac-dnd-handle-pasteboard-filenames (window action data)
+  (dolist (file-url (mac-pasteboard-filenames-to-file-urls data))
+    (dnd-handle-one-url window action file-url)))
+
 (defun mac-dnd-insert-utxt (window action data)
   (dnd-insert-text window action (mac-utxt-to-string data)))
 
@@ -2258,6 +2494,9 @@ See also `mac-dnd-known-types'."
 
 (defun mac-dnd-insert-TIFF (window action data)
   (dnd-insert-text window action (mac-TIFF-to-string data)))
+
+(defun mac-dnd-insert-pasteboard-string (window action data)
+  (dnd-insert-text window action (mac-pasteboard-string-to-string data)))
 
 (defun mac-dnd-drop-data (event frame window data type &optional action)
   (or action (setq action 'private))
@@ -2287,12 +2526,22 @@ See also `mac-dnd-known-types'."
 	(ae (mac-event-ae event))
 	action)
     (when (windowp window) (select-window window))
-    (if (memq 'option (mac-ae-keyboard-modifiers ae))
-	(setq action 'copy))
-    (dolist (item (mac-ae-list ae))
-      (if (not (equal (car item) "null"))
-	  (mac-dnd-drop-data event (selected-frame) window
-			     (cdr item) (car item) action)))))
+    (if (not (equal (car ae) "aevt"))
+	;; NSPasteboard-style drag-n-drop event of the form:
+	;; (:type TYPE-STRING :actions ACTION-LIST :data OBJECT)
+	(let ((type (plist-get ae :type))
+	      (actions (plist-get ae :actions))
+	      (data (plist-get ae :data)))
+	  (if (and (not (memq 'generic actions)) (memq 'copy actions))
+	      (setq action 'copy))
+	  (mac-dnd-drop-data event (selected-frame) window data type action))
+      ;; Apple event style drag-n-drop event.
+      (if (memq 'option (mac-ae-keyboard-modifiers ae))
+	  (setq action 'copy))
+      (dolist (item (mac-ae-list ae))
+	(if (not (equal (car item) "null"))
+	    (mac-dnd-drop-data event (selected-frame) window
+			       (cdr item) (car item) action))))))
 
 ;;; Do the actual Windows setup here; the above code just defines
 ;;; functions and variables that we use now.
@@ -2321,6 +2570,9 @@ See also `mac-dnd-known-types'."
 		     t))
 
 (setq frame-creation-function 'x-create-frame-with-faces)
+
+
+(when (x-list-fonts "*-mac-roman" nil nil 1)
 
 (defvar mac-font-encoder-list
   '(("mac-roman" mac-roman-encoder
@@ -2499,6 +2751,8 @@ It returns a name of the created fontset."
     (fontset-add-mac-fonts fontset t)
     fontset))
 
+) ;; (x-list-fonts "*-mac-roman" nil nil 1)
+
 ;; Adjust Courier font specifications in x-fixed-font-alist.
 (let ((courier-fonts (assoc "Courier" x-fixed-font-alist)))
   (if courier-fonts
@@ -2520,14 +2774,20 @@ It returns a name of the created fontset."
 (cond ((x-list-fonts "*-iso10646-1" nil nil 1)
        ;; Use ATSUI (if available) for the following charsets.
        (dolist
-	   (charset '(latin-iso8859-1
-		      latin-iso8859-2 latin-iso8859-3 latin-iso8859-4
-		      thai-tis620 greek-iso8859-7 arabic-iso8859-6
-		      hebrew-iso8859-8 cyrillic-iso8859-5
-		      latin-iso8859-9 latin-iso8859-15 latin-iso8859-14
-		      japanese-jisx0212 chinese-sisheng ipa
-		      vietnamese-viscii-lower vietnamese-viscii-upper
-		      lao ethiopic tibetan))
+	   (charset (append
+		     (unless (x-list-fonts "*-mac-roman" nil nil 1)
+		       '(katakana-jisx0201
+			 latin-jisx0201
+			 chinese-gb2312 japanese-jisx0208 korean-ksc5601
+			 chinese-big5-1 chinese-big5-2))
+		     '(latin-iso8859-1
+		       latin-iso8859-2 latin-iso8859-3 latin-iso8859-4
+		       thai-tis620 greek-iso8859-7 arabic-iso8859-6
+		       hebrew-iso8859-8 cyrillic-iso8859-5
+		       latin-iso8859-9 latin-iso8859-15 latin-iso8859-14
+		       japanese-jisx0212 chinese-sisheng ipa
+		       vietnamese-viscii-lower vietnamese-viscii-upper
+		       lao ethiopic tibetan)))
 	 (set-fontset-font nil charset '(nil . "iso10646-1"))))
       ((null (x-list-fonts "*-iso8859-1" nil nil 1))
        ;; Add Mac-encoding fonts unless ETL fonts are installed.
@@ -2536,10 +2796,11 @@ It returns a name of the created fontset."
 ;; Create a fontset that uses mac-roman font.  With this fontset,
 ;; characters decoded from mac-roman encoding (ascii, latin-iso8859-1,
 ;; and mule-unicode-xxxx-yyyy) are displayed by a mac-roman font.
-(create-fontset-from-fontset-spec
- "-etl-fixed-medium-r-normal-*-16-*-*-*-*-*-fontset-standard,
+(when (x-list-fonts "*-mac-roman" nil nil 1)
+  (create-fontset-from-fontset-spec
+   "-etl-fixed-medium-r-normal-*-16-*-*-*-*-*-fontset-standard,
 ascii:-*-Monaco-*-*-*-*-12-*-*-*-*-*-mac-roman")
-(fontset-add-mac-fonts "fontset-standard" t)
+  (fontset-add-mac-fonts "fontset-standard" t))
 
 ;; Create fontset specified in X resources "Fontset-N" (N is 0, 1, ...).
 (create-fontset-from-x-resource)
