@@ -544,6 +544,19 @@ in `selection-converter-alist', which see."
 	(setq text (mac-TIFF-to-string tiff-image))))
     text))
 
+(defun mac-selection-value-equal (v1 v2)
+  (let ((equal-so-far t))
+    (while (and (consp v1) (consp v2) equal-so-far)
+      (setq equal-so-far
+	    (mac-selection-value-equal (car v1) (car v2)))
+      (setq v1 (cdr v1) v2 (cdr v2)))
+    (and equal-so-far
+	 (if (not (and (stringp v1) (stringp v2)))
+	     (equal v1 v2)
+	   (and (string= v1 v2)
+		(equal (get-text-property 0 'display v1)
+		       (get-text-property 0 'display v2)))))))
+
 ;; Return the value of the current selection.
 ;; Treat empty strings as if they were unset.
 ;; If this function is called twice and finds the same text,
@@ -565,8 +578,8 @@ in `selection-converter-alist', which see."
 	       ((or (not clip-text) (equal clip-text ""))
 		(setq x-last-selected-text-clipboard nil))
 	       ((eq      clip-text x-last-selected-text-clipboard) nil)
-	       ((equal-including-properties clip-text
-					    x-last-selected-text-clipboard)
+	       ((mac-selection-value-equal clip-text
+					   x-last-selected-text-clipboard)
 		;; Record the newer string,
 		;; so subsequent calls can use the `eq' test.
 		(setq x-last-selected-text-clipboard clip-text)
@@ -584,8 +597,8 @@ in `selection-converter-alist', which see."
 	       ((or (not primary-text) (equal primary-text ""))
 		(setq x-last-selected-text-primary nil))
 	       ((eq      primary-text x-last-selected-text-primary) nil)
-	       ((equal-including-properties primary-text
-					    x-last-selected-text-primary)
+	       ((mac-selection-value-equal primary-text
+					   x-last-selected-text-primary)
 		;; Record the newer string,
 		;; so subsequent calls can use the `eq' test.
 		(setq x-last-selected-text-primary primary-text)
@@ -1506,20 +1519,8 @@ non-nil, and the input device supports it."
 	     ;; the window to scroll.
 	     (header-line-height
 	      (or (window-line-height 'header-line window-to-scroll)
-		  ;; Avoid recentering in redisplay.  This still
-		  ;; needs some improvement.
-		  (let* ((origin-posn (posn-at-x-y 0 0 window-to-scroll))
-			 (first-y
-			  (if (eq (posn-area origin-posn) 'header-line)
-			      (cdr (posn-object-width-height origin-posn))
-			    0))
-			 (point-coord
-			  (pos-visible-in-window-p nil window-to-scroll t))
-			 (point-posn
-			  (if point-coord
-			      (posn-at-x-y (car point-coord)
-					   (max (cadr point-coord) first-y)
-					   window-to-scroll))))
+		  ;; Avoid recentering in redisplay.
+		  (progn
 		    (redisplay t)
 		    (window-line-height 'header-line window-to-scroll))))
 	     (first-height (window-line-height 0 window-to-scroll))
@@ -1813,7 +1814,11 @@ The actual magnification is performed by `text-scale-mode'."
   (require 'face-remap)
   (with-selected-window (posn-window (event-start event))
     (let ((magnification (car (nth 3 event)))
-	  level)
+	  (level
+	   (round (log mac-text-scale-magnification text-scale-mode-step))))
+      (if (/= level text-scale-mode-amount)
+	  (setq mac-text-scale-magnification
+		(expt text-scale-mode-step text-scale-mode-amount)))
       (setq mac-text-scale-magnification
 	    (min (max (* mac-text-scale-magnification (+ 1.0 magnification))
 		      (car mac-text-scale-magnification-range))

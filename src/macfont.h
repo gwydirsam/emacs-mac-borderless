@@ -247,8 +247,16 @@ extern FontDescriptorRef mac_nsctfont_copy_font_descriptor P_ ((void *));
 #define MAC_FONT_CHARACTER_SET_STRING_ATTRIBUTE \
   (CFSTR ("MAC_FONT_CHARACTER_SET_STRING_ATTRIBUTE"))
 
+typedef const struct _EmacsScreenFont *ScreenFontRef; /* opaque */
+
 extern CFComparisonResult mac_font_family_compare P_ ((const void *,
 						       const void *, void *));
+extern ScreenFontRef mac_screen_font_create_with_name P_ ((CFStringRef,
+							   CGFloat));
+extern CGFloat mac_screen_font_get_advance_width_for_glyph P_ ((ScreenFontRef,
+								CGGlyph));
+Boolean mac_screen_font_get_metrics P_ ((ScreenFontRef, CGFloat *,
+					 CGFloat *, CGFloat *));
 extern void mac_register_font_driver P_ ((struct frame *));
 #if USE_CORE_TEXT
 extern Boolean mac_ctfont_descriptor_supports_languages P_ ((CTFontDescriptorRef,

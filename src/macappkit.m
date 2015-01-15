@@ -1345,21 +1345,32 @@ emacs_windows_need_display_p (with_resize_control_p)
 			      withObject:nil];
       if (keyBindingsWithConflicts == nil)
 	{
-	  /* We use a mostly empty dictionary because if it contains
-	     entries with prefix keys, then they are swallowed.  It
-	     also prevents key bindings for writing direction commands
-	     from being intercepted by NSTextInputContext on Mac OS X
-	     10.6.  The entries below are for the delete key because
-	     Mac OS X 10.6 maps it to 0x08 (C-h) in -[NSResponder
-	     interpretKeyEvents:] if the dictionary is empty.  */
+	  NSArray *writingDirectionCommands =
+	    [NSArray arrayWithObjects:@"insertRightToLeftSlash:",
+		     @"makeBaseWritingDirectionNatural:",
+		     @"makeBaseWritingDirectionLeftToRight:",
+		     @"makeBaseWritingDirectionRightToLeft:",
+		     @"makeTextWritingDirectionNatural:",
+		     @"makeTextWritingDirectionLeftToRight:",
+		     @"makeTextWritingDirectionRightToLeft:", nil];
+	  NSMutableDictionary *dictionary;
+	  NSEnumerator *enumerator;
+	  NSString *key;
+
+	  /* Replace entries for prefix keys and writing direction
+	     commands with dummy ones.  */
 	  keyBindingsWithConflicts = [[keyBindingManager dictionary] retain];
-	  keyBindingsWithoutConflicts =
-	    [[NSDictionary
-	       dictionaryWithObjectsAndKeys:@"deleteBackward:", @"\177",
-	       @"deleteBackwardByDecomposingPreviousCharacter:", @"^\177",
-	       @"deleteWordBackward:", @"^~\177",
-	       @"deleteWordBackward:", @"~\177",
-	       @"deleteToBeginningOfLine:", @"@\177", nil] retain];
+	  dictionary = [keyBindingsWithConflicts mutableCopy];
+	  enumerator = [keyBindingsWithConflicts keyEnumerator];
+	  while ((key = [enumerator nextObject]) != nil)
+	    {
+	      id object = [keyBindingsWithConflicts objectForKey:key];
+
+	      if (![object isKindOfClass:[NSString class]]
+		  || [writingDirectionCommands containsObject:object])
+		[dictionary setObject:@"dummy:" forKey:key];
+	    }
+	  keyBindingsWithoutConflicts = dictionary;
 	}
       [keyBindingManager setDictionary:keyBindingsWithoutConflicts];
     }
@@ -3563,11 +3574,11 @@ extern CFStringRef mac_ax_string_for_range P_ ((struct frame *,
 		  struct glyph_row *row;
 		  struct glyph *glyph;
 
-		  fast_find_position (w, range.location + i, &hpos, &vpos,
-				      &x, &y, Qnil);
+		  fast_find_position (w, BUF_BEGV (b) + range.location + i,
+				      &hpos, &vpos, &x, &y, Qnil);
 		  row = MATRIX_ROW (w->current_matrix, vpos);
 		  glyph = row->glyphs[TEXT_AREA] + hpos;
-		  if (glyph->charpos == range.location + i
+		  if (glyph->charpos == BUF_BEGV (b) + range.location + i
 		      && glyph->type == CHAR_GLYPH
 		      && !glyph->glyph_not_available_p)
 		    font = [NSFont fontWithFace:(FACE_FROM_ID
@@ -10048,14 +10059,12 @@ mac_font_create_with_name (name, size)
      CGFloat size;
 {
   NSFont *result;
-  NSFont *font;
 
 #if USE_CORE_TEXT
   if (EQ (macfont_driver_type, Qmac_ct))
     return (FontRef) CTFontCreateWithName (name, size, NULL);
 #endif
-  font = [NSFont fontWithName:((NSString *) name) size:size];
-  result = (NSFont *) font;
+  result = [NSFont fontWithName:((NSString *) name) size:size];
 
   return result ? CFRetain (result) : NULL;
 }
@@ -10613,3 +10622,77 @@ mac_font_get_glyph_for_cid (font, collection, cid)
   }
 }
 #endif
+
+ScreenFontRef
+mac_screen_font_create_with_name (name, size)
+     CFStringRef name;
+     CGFloat size;
+{
+  NSFont *result, *font;
+
+  font = [NSFont fontWithName:((NSString *) name) size:size];
+  result = [font screenFont];
+
+  return result ? CFRetain (result) : NULL;
+}
+
+CGFloat
+mac_screen_font_get_advance_width_for_glyph (font, glyph)
+     ScreenFontRef font;
+     CGGlyph glyph;
+{
+  NSSize advancement = [(NSFont *)font advancementForGlyph:glyph];
+
+  return advancement.width;
+}
+
+Boolean
+mac_screen_font_get_metrics (font, ascent, descent, leading)
+    ScreenFontRef font;
+    CGFloat *ascent, *descent, *leading;
+{
+  NSFont *nsFont = [(NSFont *)font printerFont];
+  NSTextStorage *textStorage;
+  NSLayoutManager *layoutManager;
+  NSTextContainer *textContainer;
+  NSRect usedRect;
+  NSPoint spaceLocation;
+  CGFloat descender;
+
+  textStorage = [[NSTextStorage alloc] initWithString:@" "];
+  layoutManager = [[NSLayoutManager alloc] init];
+  textContainer = [[NSTextContainer alloc] init];
+
+  [textStorage setFont:nsFont];
+  [textContainer setLineFragmentPadding:0];
+  [layoutManager setUsesScreenFonts:YES];
+
+  [layoutManager addTextContainer:textContainer];
+  [textContainer release];
+  [textStorage addLayoutManager:layoutManager];
+  [layoutManager release];
+
+  if (!(textStorage && layoutManager && textContainer))
+    {
+      [textStorage release];
+
+      return false;
+    }
+
+  usedRect = [layoutManager lineFragmentUsedRectForGlyphAtIndex:0
+						 effectiveRange:NULL];
+  spaceLocation = [layoutManager locationForGlyphAtIndex:0];
+  [textStorage release];
+
+  *ascent = spaceLocation.y;
+  *descent = NSHeight (usedRect) - spaceLocation.y;
+  *leading = 0;
+  descender = [nsFont descender];
+  if (- descender < *descent)
+    {
+      *leading = *descent + descender;
+      *descent = - descender;
+    }
+
+  return true;
+}

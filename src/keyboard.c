@@ -11816,8 +11816,11 @@ init_keyboard ()
 
 #ifdef POLL_FOR_INPUT
   poll_timer = NULL;
-  poll_suppress_count = 1;
-  start_polling ();
+  if (!interrupt_input)
+    {
+      poll_suppress_count = 1;
+      start_polling ();
+    }
 #endif
 }
 

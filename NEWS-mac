@@ -1,4 +1,32 @@
+* emacs-23.2-mac-1.995 [experimental/hackers-only] (2010-06-26)
+
+** Fixed bugs
+
+*** Text scaling by pinch out/in and by C-x C-+/C-- are not in sync.
+
+*** Shift-Tab is recognized as Tab, and keyboard navigation after
+Command-Shift-/ doesn't work on Mac OS X 10.6.  These are regressions
+caused by the previous fix for the DefaultKeyBinding.dict problem.
+
+*** Successive paste of the same image from other applications via the
+clipboard causes duplication in the kill ring.  Reported by Leo.  This
+is a regression caused by the previous fix.
+
+*** Fonts in highlighted words with the pop-up dictionary
+(Command-Control-D) are sometimes incorrect.  This is a regression
+caused by refactoring for the accessibility support.
+
+** Improvements
+
+*** Font design destination can be specified via the `:destination'
+font property.  The value 1 means the destination is video text as in
+the XLFD Conventions, and screen font metrics are used in that case.
+You can see the difference with (make-frame '((font
+. "Monaco-9:antialias=off:destination=1"))), for example.
+
+
 * emacs-23.2-mac-1.994 [experimental/hackers-only] (2010-05-29)
+http://lists.gnu.org/archive/html/emacs-devel/2010-05/msg00951.html
 
 ** Fixed bugs
 

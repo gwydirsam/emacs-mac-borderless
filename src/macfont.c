@@ -57,6 +57,18 @@ Lisp_Object Qmac_fd;
 Lisp_Object Qmac_fm;
 #endif
 
+/* The font property key specifying the font design destination.  The
+   value is an unsigned integer code: 0 for WYSIWIG, and 1 for Video
+   text.  (See the documentation of X Logical Font Description
+   Conventions.)  In the Mac font driver, 1 means the screen font is
+   used for calculating some glyph metrics.  You can see the
+   difference with Monaco 8pt or 9pt, for example.  */
+static Lisp_Object QCdestination;
+
+/* The boolean-valued font property key specifying the use of
+   leading.  */
+static Lisp_Object QCminspace;
+
 struct macfont_metrics;
 
 /* The actual structure for Mac font that can be casted to struct font.  */
@@ -66,6 +78,7 @@ struct macfont_info
   struct font font;
   FontRef macfont;
   CGFontRef cgfont;
+  ScreenFontRef screen_font;
   struct macfont_cache *cache;
   struct macfont_metrics **metrics;
   short metrics_nrows;
@@ -523,7 +536,12 @@ macfont_glyph_extents (font, glyph, metrics, advance_delta, force_integral_p)
 
   if (METRICS_STATUS (cache) == METRICS_INVALID)
     {
-      CGFloat fwidth = mac_font_get_advance_width_for_glyph (macfont, glyph);
+      CGFloat fwidth;
+
+      if (macfont_info->screen_font)
+	fwidth = mac_screen_font_get_advance_width_for_glyph (macfont_info->screen_font, glyph);
+      else
+	fwidth = mac_font_get_advance_width_for_glyph (macfont, glyph);
 
       /* For synthetic mono fonts, cache->width_{int,frac} holds the
 	 advance delta value.  */
@@ -1023,6 +1041,7 @@ static int macfont_draw P_ ((struct glyph_string *, int, int, int, int, int));
 static Lisp_Object macfont_shape P_ ((Lisp_Object));
 static int macfont_variation_glyphs P_ ((struct font *, int c,
 					 unsigned variations[256]));
+static void macfont_filter_properties P_ ((Lisp_Object, Lisp_Object));
 
 struct font_driver macfont_driver =
   {
@@ -1053,7 +1072,7 @@ struct font_driver macfont_driver =
     macfont_shape,
     NULL,			/* check */
     macfont_variation_glyphs,
-    NULL,			/* filter_properties */
+    macfont_filter_properties,
   };
 
 static Lisp_Object
@@ -1913,7 +1932,6 @@ macfont_open (f, entity, pixel_size)
   int len, i, total_width;
   CGGlyph glyph;
   CGFloat ascent, descent, leading;
-  CFStringRef family_name;
 
   val = assq_no_quit (QCfont_entity, AREF (entity, FONT_EXTRA_INDEX));
   if (! CONSP (val)
@@ -1954,6 +1972,12 @@ macfont_open (f, entity, pixel_size)
   macfont_info = (struct macfont_info *) font;
   macfont_info->macfont = macfont;
   macfont_info->cgfont = mac_font_copy_graphics_font (macfont);
+  val = assq_no_quit (QCdestination, AREF (entity, FONT_EXTRA_INDEX));
+  if (CONSP (val) && EQ (XCDR (val), make_number (1)))
+    macfont_info->screen_font = mac_screen_font_create_with_name (font_name,
+								  size);
+  else
+    macfont_info->screen_font = NULL;
   macfont_info->cache = macfont_lookup_cache (font_name);
   macfont_retain_cache (macfont_info->cache);
   macfont_info->metrics = NULL;
@@ -2004,30 +2028,41 @@ macfont_open (f, entity, pixel_size)
   else
     font->average_width = font->space_width; /* XXX */
 
-  ascent = mac_font_get_ascent (macfont);
-  descent = mac_font_get_descent (macfont);
-  leading = mac_font_get_leading (macfont);
-  /* AppKit and WebKit do some adjustment to the heights of Courier,
-     Helvetica, and Times.  */
-  family_name = mac_font_copy_family_name (macfont);
-  if (family_name)
+  if (!(macfont_info->screen_font
+	&& mac_screen_font_get_metrics (macfont_info->screen_font,
+					&ascent, &descent, &leading)))
     {
-      if ((CFStringCompare (family_name, CFSTR ("Courier"), 0)
-	   == kCFCompareEqualTo)
-	  || (CFStringCompare (family_name, CFSTR ("Helvetica"), 0)
-	      == kCFCompareEqualTo)
-	  || (CFStringCompare (family_name, CFSTR ("Times"), 0)
-	      == kCFCompareEqualTo))
-	ascent += (ascent + descent) * .15;
-      else if (CFStringHasPrefix (family_name, CFSTR ("Hiragino")))
+      CFStringRef family_name;
+
+      ascent = mac_font_get_ascent (macfont);
+      descent = mac_font_get_descent (macfont);
+      leading = mac_font_get_leading (macfont);
+      /* AppKit and WebKit do some adjustment to the heights of
+	 Courier, Helvetica, and Times.  */
+      family_name = mac_font_copy_family_name (macfont);
+      if (family_name)
 	{
-	  leading *= .25;
-	  ascent += leading;
+	  if ((CFStringCompare (family_name, CFSTR ("Courier"), 0)
+	       == kCFCompareEqualTo)
+	      || (CFStringCompare (family_name, CFSTR ("Helvetica"), 0)
+		  == kCFCompareEqualTo)
+	      || (CFStringCompare (family_name, CFSTR ("Times"), 0)
+		  == kCFCompareEqualTo))
+	    ascent += (ascent + descent) * .15;
+	  else if (CFStringHasPrefix (family_name, CFSTR ("Hiragino")))
+	    {
+	      leading *= .25;
+	      ascent += leading;
+	    }
+	  CFRelease (family_name);
 	}
-      CFRelease (family_name);
     }
   font->ascent = ascent + 0.5;
-  font->descent = descent + leading + 0.5;
+  val = assq_no_quit (QCminspace, AREF (entity, FONT_EXTRA_INDEX));
+  if (CONSP (val) && !NILP (XCDR (val)))
+    font->descent = descent + 0.5;
+  else
+    font->descent = descent + leading + 0.5;
   font->height = font->ascent + font->descent;
 
   font->underline_position = - mac_font_get_underline_position (macfont) + 0.5;
@@ -2058,6 +2093,8 @@ macfont_close (f, font)
   BLOCK_INPUT;
   CFRelease (macfont_info->macfont);
   CGFontRelease (macfont_info->cgfont);
+  if (macfont_info->screen_font)
+    CFRelease (macfont_info->screen_font);
   macfont_release_cache (macfont_info->cache);
   for (i = 0; i < macfont_info->metrics_nrows; i++)
     if (macfont_info->metrics[i])
@@ -2706,6 +2743,62 @@ macfont_variation_glyphs (font, c, variations)
   return n;
 }
 
+static const char *const macfont_booleans[] = {
+  ":antialias",
+  ":minspace",
+  NULL,
+};
+
+static const char *const macfont_non_booleans[] = {
+  ":lang",
+  ":script",
+  ":destination",
+  NULL,
+};
+
+static void
+macfont_filter_properties (font, alist)
+     Lisp_Object font;
+     Lisp_Object alist;
+{
+  Lisp_Object it;
+  int i;
+
+  /* Set boolean values to Qt or Qnil */
+  for (i = 0; macfont_booleans[i] != NULL; ++i)
+    for (it = alist; ! NILP (it); it = XCDR (it))
+      {
+        Lisp_Object key = XCAR (XCAR (it));
+        Lisp_Object val = XCDR (XCAR (it));
+        char *keystr = SDATA (SYMBOL_NAME (key));
+
+        if (strcmp (macfont_booleans[i], keystr) == 0)
+          {
+            char *str = SYMBOLP (val) ? SDATA (SYMBOL_NAME (val)) : NULL;
+            if (INTEGERP (val)) str = XINT (val) != 0 ? "true" : "false";
+            if (str == NULL) str = "true";
+
+            val = Qt;
+            if (strcmp ("false", str) == 0 || strcmp ("False", str) == 0
+                || strcmp ("FALSE", str) == 0 || strcmp ("FcFalse", str) == 0
+                || strcmp ("off", str) == 0 || strcmp ("OFF", str) == 0
+                || strcmp ("Off", str) == 0)
+              val = Qnil;
+            Ffont_put (font, key, val);
+          }
+      }
+
+  for (i = 0; macfont_non_booleans[i] != NULL; ++i)
+    for (it = alist; ! NILP (it); it = XCDR (it))
+      {
+        Lisp_Object key = XCAR (XCAR (it));
+        Lisp_Object val = XCDR (XCAR (it));
+        char *keystr = SDATA (SYMBOL_NAME (key));
+        if (strcmp (macfont_non_booleans[i], keystr) == 0)
+          Ffont_put (font, key, val);
+      }
+}
+
 #if USE_CORE_TEXT
 Boolean
 mac_ctfont_descriptor_supports_languages (descriptor, languages)
@@ -3266,6 +3359,8 @@ syms_of_macfont ()
     register_font_driver (&macfont_driver, NULL);
   }
 #endif
+  DEFSYM (QCdestination, ":destination");
+  DEFSYM (QCminspace, ":minspace");
 
   macfont_driver_type = macfont_driver.type = Qnil;
   staticpro (&macfont_driver_type);
