@@ -1,6 +1,6 @@
 ;;; vc-dir.el --- Directory status display under VC
 
-;; Copyright (C) 2007, 2008, 2009
+;; Copyright (C) 2007, 2008, 2009, 2010
 ;;   Free Software Foundation, Inc.
 
 ;; Author:   Dan Nicolaescu <dann@ics.uci.edu>
@@ -101,7 +101,9 @@ See `run-hooks'."
                       (return buffer))))))))
     (or buf
         ;; Create a new buffer named BNAME.
-        (with-current-buffer (create-file-buffer bname)
+	;; We pass a filename to create-file-buffer because it is what
+	;; the function expects, and also what uniquify needs (if active)
+        (with-current-buffer (create-file-buffer (expand-file-name bname dir))
           (cd dir)
           (vc-setup-buffer (current-buffer))
           ;; Reset the vc-parent-buffer-name so that it does not appear
@@ -872,7 +874,10 @@ If it is a file, return the corresponding cons for the file itself."
             (let ((ddir default-directory))
               (when (vc-string-prefix-p ddir file)
                 (if (file-directory-p file)
-                    (vc-dir-resync-directory-files file)
+		    (progn
+		      (vc-dir-resync-directory-files file)
+		      (ewoc-set-hf vc-ewoc
+				   (vc-dir-headers vc-dir-backend default-directory) ""))
                   (let ((state (vc-dir-recompute-file-state file ddir)))
                     (vc-dir-update
                      (list state)
@@ -928,7 +933,7 @@ the *vc-dir* buffer.
     (set (make-local-variable 'vc-ewoc) (ewoc-create #'vc-dir-printer))
     (set (make-local-variable 'revert-buffer-function)
 	 'vc-dir-revert-buffer-function)
-    (setq list-buffers-directory default-directory)
+    (setq list-buffers-directory (expand-file-name "*vc-dir*" default-directory))
     (add-to-list 'vc-dir-buffers (current-buffer))
     ;; Make sure that if the directory buffer is killed, the update
     ;; process running in the background is also killed.

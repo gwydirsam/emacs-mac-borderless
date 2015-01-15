@@ -1,7 +1,7 @@
 /* Fully extensible Emacs, running on Unix, intended for GNU.
    Copyright (C) 1985, 1986, 1987, 1993, 1994, 1995, 1997, 1998, 1999,
-                 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
-                 Free Software Foundation, Inc.
+                 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+                 2010  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -157,7 +157,7 @@ void *malloc_state_ptr;
 extern void *malloc_get_state ();
 /* From glibc, a routine that overwrites the malloc internal state.  */
 extern int malloc_set_state ();
-/* Non-zero if the MALLOC_CHECK_ enviroment variable was set while
+/* Non-zero if the MALLOC_CHECK_ environment variable was set while
    dumping.  Used to work around a bug in glibc's malloc.  */
 int malloc_using_checking;
 #endif
@@ -747,7 +747,7 @@ void (*__malloc_initialize_hook) () = malloc_initialize_hook;
 
 
 #define REPORT_EMACS_BUG_ADDRESS "bug-gnu-emacs@gnu.org"
-#define REPORT_EMACS_BUG_PRETEST_ADDRESS "emacs-pretest-bug@gnu.org"
+#define REPORT_EMACS_BUG_PRETEST_ADDRESS "bug-gnu-emacs@gnu.org"
 
 /* This function is used to determine an address to which bug report should
    be sent.  */
@@ -1892,7 +1892,7 @@ const struct standard_args standard_args[] =
   /* -d must come last before the options handled in startup.el.  */
   { "-d", "--display", 60, 1 },
   { "-display", 0, 60, 1 },
-  /* Now for the options handled in startup.el.  */
+  /* Now for the options handled in `command-line' (startup.el).  */
   { "-Q", "--quick", 55, 0 },
   { "-quick", 0, 55, 0 },
   { "-q", "--no-init-file", 50, 0 },
@@ -1901,10 +1901,12 @@ const struct standard_args standard_args[] =
   { "-u", "--user", 30, 1 },
   { "-user", 0, 30, 1 },
   { "-debug-init", "--debug-init", 20, 0 },
-  { "-nbi", "--no-bitmap-icon", 15, 0 },
   { "-iconic", "--iconic", 15, 0 },
   { "-D", "--basic-display", 12, 0},
   { "-basic-display", 0, 12, 0},
+  { "-nbc", "--no-blinking-cursor", 12, 0 },
+  /* Now for the options handled in `command-line-1' (startup.el).  */
+  { "-nbi", "--no-bitmap-icon", 10, 0 },
   { "-bg", "--background-color", 10, 1 },
   { "-background", 0, 10, 1 },
   { "-fg", "--foreground-color", 10, 1 },
@@ -1914,7 +1916,6 @@ const struct standard_args standard_args[] =
   { "-ib", "--internal-border", 10, 1 },
   { "-ms", "--mouse-color", 10, 1 },
   { "-cr", "--cursor-color", 10, 1 },
-  { "-nbc", "--no-blinking-cursor", 10, 0 },
   { "-fn", "--font", 10, 1 },
   { "-font", 0, 10, 1 },
   { "-fs", "--fullscreen", 10, 0 },

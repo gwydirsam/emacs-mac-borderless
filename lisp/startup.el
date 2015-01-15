@@ -1,7 +1,7 @@
 ;;; startup.el --- process Emacs shell arguments
 
 ;; Copyright (C) 1985, 1986, 1992, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-;;   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+;;   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 ;;   Free Software Foundation, Inc.
 
 ;; Maintainer: FSF
@@ -758,7 +758,8 @@ opening the first frame (e.g. open a connection to an X server).")
       (pop args)))
 
   (let ((done nil)
-	(args (cdr command-line-args)))
+	(args (cdr command-line-args))
+	display-arg)
 
     ;; Figure out which user's init file to load,
     ;; either from the environment or from the options.
@@ -794,6 +795,11 @@ opening the first frame (e.g. open a connection to an X server).")
 		(setq argval nil
                       argi orig-argi)))))
 	(cond
+	 ;; The --display arg is handled partly in C, partly in Lisp.
+	 ;; When it shows up here, we just put it back to be handled
+	 ;; by `command-line-1'.
+	 ((member argi '("-d" "-display"))
+	  (setq display-arg (list argi (pop args))))
 	 ((member argi '("-Q" "-quick"))
 	  (setq init-file-user nil
 		site-run-file nil
@@ -813,8 +819,6 @@ opening the first frame (e.g. open a connection to an X server).")
 	  (setq init-file-debug t))
 	 ((equal argi "-iconic")
 	  (push '(visibility . icon) initial-frame-alist))
-	 ((member argi '("-icon-type" "-i" "-itype"))
-	  (push '(icon-type . t) default-frame-alist))
 	 ((member argi '("-nbc" "-no-blinking-cursor"))
 	  (setq no-blinking-cursor t))
 	 ;; Push the popped arg back on the list of arguments.
@@ -824,6 +828,9 @@ opening the first frame (e.g. open a connection to an X server).")
 	;; Was argval set but not used?
 	(and argval
 	     (error "Option `%s' doesn't allow an argument" argi))))
+
+    ;; Re-attach the --display arg.
+    (and display-arg (setq args (append display-arg args)))
 
     ;; Re-attach the program name to the front of the arg list.
     (and command-line-args
@@ -2191,12 +2198,12 @@ A fancy display is used on graphic displays, normal otherwise."
 		   (setq cl1-line (string-to-number (match-string 1 argi))
 			 cl1-column (string-to-number (match-string 2 argi))))
 
-		  ((setq cl1-tem (assoc argi command-line-x-option-alist))
+		  ((setq cl1-tem (assoc orig-argi command-line-x-option-alist))
 		   ;; Ignore X-windows options and their args if not using X.
 		   (setq command-line-args-left
 			 (nthcdr (nth 1 cl1-tem) command-line-args-left)))
 
-		  ((setq cl1-tem (assoc argi command-line-ns-option-alist))
+		  ((setq cl1-tem (assoc orig-argi command-line-ns-option-alist))
 		   ;; Ignore NS-windows options and their args if not using NS.
 		   (setq command-line-args-left
 			 (nthcdr (nth 1 cl1-tem) command-line-args-left)))

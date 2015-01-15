@@ -1,6 +1,6 @@
 @c This is part of the Emacs manual.
 @c Copyright (C) 1985, 1986, 1987, 1993, 1994, 1995, 1997, 1999, 2000,
-@c   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+@c   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 @c   Free Software Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Programs, Building, Text, Top
@@ -1609,13 +1609,13 @@ hungry-delete feature is enabled.
 
 @table @kbd
 @item C-c C-w
-@itemx M-x c-subword-mode
-@findex c-subword-mode
+@itemx M-x subword-mode
+@findex subword-mode
 Enable (or disable) @dfn{subword mode}.  In subword mode, Emacs's word
 commands recognize upper case letters in
 @samp{StudlyCapsIdentifiers} as word boundaries.  This is indicated by
 the flag @samp{/w} on the mode line after the mode name
-(e.g. @samp{C/law}).  You can even use @kbd{M-x c-subword-mode} in
+(e.g. @samp{C/law}).  You can even use @kbd{M-x subword-mode} in
 non-CC Mode buffers.
 
 In the GNU project, we recommend using underscores to separate words

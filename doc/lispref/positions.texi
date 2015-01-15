@@ -1,7 +1,7 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
 @c Copyright (C) 1990, 1991, 1992, 1993, 1994, 1995, 1998, 1999, 2000, 2001,
-@c   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+@c   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @setfilename ../../info/positions
 @node Positions, Markers, Frames, Top
@@ -806,7 +806,9 @@ after the completion of the excursion.
 
   The forms for saving and restoring the configuration of windows are
 described elsewhere (see @ref{Window Configurations}, and @pxref{Frame
-Configurations}).
+Configurations}).  When only the identity of the current buffer needs
+to be saved and restored, it is preferable to use
+@code{save-current-buffer} instead.
 
 @defspec save-excursion body@dots{}
 @cindex mark excursion
@@ -817,10 +819,10 @@ buffer and the values of point and the mark in it, evaluates
 point and the mark.  All three saved values are restored even in case of
 an abnormal exit via @code{throw} or error (@pxref{Nonlocal Exits}).
 
-The @code{save-excursion} special form is the standard way to switch
-buffers or move point within one part of a program and avoid affecting
-the rest of the program.  It is used more than 4000 times in the Lisp
-sources of Emacs.
+The @code{save-excursion} special form is the standard way to move
+point within one part of a program and avoid affecting the rest of the
+program.  It is used more than 4000 times in the Lisp sources
+of Emacs.
 
 @code{save-excursion} does not save the values of point and the mark for
 other buffers, so changes in other buffers remain in effect after

@@ -1,7 +1,7 @@
 ;;; mail-utils.el --- utility functions used both by rmail and rnews
 
 ;; Copyright (C) 1985, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-;;   2009  Free Software Foundation, Inc.
+;;   2009, 2010  Free Software Foundation, Inc.
 
 ;; Maintainer: FSF
 ;; Keywords: mail, news
@@ -133,6 +133,8 @@ If NOERROR is non-nil, return t if successful.
 If UNIBYTE is non-nil, insert converted characters as unibyte.
 That is useful if you are going to character code decoding afterward,
 as Rmail does."
+  ;; FIXME: `unibyte' should always be non-nil, and the iso-latin-1
+  ;; specific handling should be removed (or moved elsewhere and generalized).
   (interactive "r\nP")
   (let (failed)
     (save-match-data

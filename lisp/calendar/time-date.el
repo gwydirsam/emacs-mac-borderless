@@ -1,7 +1,7 @@
 ;;; time-date.el --- Date and time handling functions
 
 ;; Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
-;;   2007, 2008, 2009  Free Software Foundation, Inc.
+;;   2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	Masanobu Umeda <umerin@mse.kyutech.ac.jp>
@@ -98,7 +98,8 @@ and type 2 is the list (HIGH LOW MICRO)."
 
 ;;;###autoload
 (defun date-to-time (date)
-  "Parse a string DATE that represents a date-time and return a time value."
+  "Parse a string DATE that represents a date-time and return a time value.
+If DATE lacks timezone information, GMT is assumed."
   (condition-case ()
       (apply 'encode-time
 	     (parse-time-string

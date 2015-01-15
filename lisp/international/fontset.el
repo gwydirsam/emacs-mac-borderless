@@ -1,9 +1,9 @@
 ;;; fontset.el --- commands for handling fontset
 
 ;; Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-;;   2005, 2006, 2007, 2008, 2009  Free Software Foundation, Inc.
+;;   2005, 2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-;;   2005, 2006, 2007, 2008, 2009
+;;   2005, 2006, 2007, 2008, 2009, 2010
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
 ;;   Registration Number H14PRO021
 ;; Copyright (C) 2003, 2006
@@ -361,8 +361,10 @@
 	     (let ((from (car range)) (to (cdr range)))
 	       (if (< to #x110000)
 		   (while (<= from to)
-		     (aset cjk-table from
-			   (logior (or (aref cjk-table from) 0) mask))
+		     (or (memq (aref char-script-table from)
+			       '(kana hangul han cjk-misc))
+			 (aset cjk-table from
+			       (logior (or (aref cjk-table from) 0) mask)))
 		     (setq from (1+ from))))))
 	 (nth 1 elt) nil (nth 2 elt) (nth 3 elt)))
       (setq i (1+ i)))

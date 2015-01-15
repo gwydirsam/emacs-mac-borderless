@@ -1,9 +1,9 @@
 GNU Emacs NEWS -- history of user-visible changes.
 
-Copyright (C) 2007, 2008, 2009 Free Software Foundation, Inc.
+Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
-Please send Emacs bug reports to emacs-pretest-bug@gnu.org.
+Please send Emacs bug reports to bug-gnu-emacs@gnu.org.
 If possible, use M-x report-emacs-bug.
 
 This file is about changes in Emacs version 23.
@@ -122,6 +122,11 @@ international/ucs-normalize.el.
 ** Function arguments in *Help* buffers are now shown in upper-case.
 Customize `help-downcase-arguments' to t to show them in lower-case.
 
+** Delete Auto Composition Mode.  Now the variable
+`auto-composition-mode' is simply a buffer local variable.  The
+commands `auto-composition-mode' and `global-auto-composition-mode'
+still works as before.
+
 
 * Editing Changes in Emacs 23.2
 
@@ -182,7 +187,7 @@ that file exists.
 
 ** The bookmark menu has a narrowing search via bookmark-bmenu-search.
 
-** LaTeX mode now provides completion (via completion-at-point)
+** LaTeX mode now provides completion (via completion-at-point).
 
 ** sym-comp.el is now declared obsolete, superceded by completion-at-point.
 
@@ -235,8 +240,9 @@ on the page edge advances to the next/previous page.
 
 ** GDB-UI
 
-*** Toolbar functionality for reverse debugging. Display of STL collections as
-    watch expressions.  These features require GDB 7.0 or later.
+*** Toolbar functionality for reverse debugging.  Display of STL
+collections as watch expressions.  These features require GDB 7.0
+or later.
 
 ** Grep
 +++
@@ -316,14 +322,13 @@ backends do not support this.
 **** The short log format for git makes use of the graph display, so
 it's not supported on git versions earlier than 1.5.
 
-**** The new variable vc-git-add-signoff can be used to add a
-Signed-off-by line when committing.
-
 **** Support for operating with stashes has been added to vc-dir: the stash list is
 displayed in the *vc-dir* header, stashes can be created, removed, applied and
 their content displayed.
 
 **** vc-dir displays the stash status
+
+**** vc-dir requires at least git-1.5.5.
 
 *** vc-bzr supports operating with shelves: the shelve list is
 displayed in the *vc-dir* header, shelves can be created, removed and applied.
@@ -586,7 +591,7 @@ a GIF library.
 
 *** Emacs now supports multi-page TIFF images.
 
-** New NeXTSTEP-based port
+** New NeXTSTEP-based port.
 This provides support for GNUstep (via the GNUstep libraries) and Mac
 OS X (via the Cocoa libraries).
 
@@ -617,7 +622,7 @@ emacs-devel@gnu.org to inform the Emacs developers.
 *** Old GNU/Linux systems based on libc version 5.
 
 *** Old FreeBSD, NetBSD, and OpenBSD systems based on the COFF
-    executable format.
+executable format.
 
 *** Solaris versions 2.6 and below.
 
@@ -1187,23 +1192,23 @@ specifies what to do when a buffer is visited, killed, or written.
 ** Abbrev has been rewritten in Elisp and extended with more flexibility.
 
 *** New functions: abbrev-get, abbrev-put, abbrev-table-get, abbrev-table-put,
-    abbrev-table-p, abbrev-insert, abbrev-table-menu.
+abbrev-table-p, abbrev-insert, abbrev-table-menu.
 
 *** Special hook `abbrev-expand-functions' obsoletes `pre-abbrev-expand-hook'.
 
 *** `make-abbrev-table', `define-abbrev', `define-abbrev-table' all take
-    extra arguments for arbitrary properties.
+extra arguments for arbitrary properties.
 
 *** New variable `abbrev-minor-mode-table-alist'.
 
 *** `local-abbrev-table' can hold a list of abbrev-tables.
 
 *** Abbrevs have now the following special properties:
-    `:count', `:system', `:enable-function', `:case-fixed'.
+`:count', `:system', `:enable-function', `:case-fixed'.
 
 *** Abbrev-tables have now the following special properties:
-    `:parents', `:case-fixed', `:enable-function', `:regexp',
-    `abbrev-table-modiff'.
+`:parents', `:case-fixed', `:enable-function', `:regexp',
+`abbrev-table-modiff'.
 
 ** Apropos
 
@@ -2148,7 +2153,6 @@ ordered by their priorities.
 
 **** `coding-system-from-name' returns a coding system matching with
 the argument name.
-
 
 ** There is a new input method, Robin, different from Quail.
 It has three functionalities:

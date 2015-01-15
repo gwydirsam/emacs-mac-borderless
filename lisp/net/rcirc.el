@@ -1,6 +1,6 @@
 ;;; rcirc.el --- default, simple IRC client.
 
-;; Copyright (C) 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+;; Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 ;; Author: Ryan Yeske
 ;; URL: http://www.nongnu.org/rcirc
@@ -836,6 +836,7 @@ If SILENT is non-nil, do not print the message in any irc buffer."
 
 (define-key rcirc-browse-url-map (kbd "RET") 'rcirc-browse-url-at-point)
 (define-key rcirc-browse-url-map (kbd "<mouse-2>") 'rcirc-browse-url-at-mouse)
+(define-key rcirc-browse-url-map [follow-link] 'mouse-face)
 
 (defvar rcirc-short-buffer-name nil
   "Generated abbreviation to use to indicate buffer activity.")

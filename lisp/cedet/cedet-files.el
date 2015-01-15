@@ -1,6 +1,6 @@
 ;;; cedet-files.el --- Common routines dealing with file names.
 
-;; Copyright (C) 2007, 2008, 2009  Free Software Foundation, Inc.
+;; Copyright (C) 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -69,7 +69,7 @@ specific conversions during tests."
   (let ((file referencefile))
     ;; Replace the ! with /
     (setq file (subst-char-in-string ?! ?/ file))
-    ;; Occurances of // meant there was once a single !.
+    ;; Occurrences of // meant there was once a single !.
     (setq file (replace-regexp-in-string "//" "!" file))
 
     ;; Handle Windows special cases

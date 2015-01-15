@@ -1,7 +1,7 @@
 /* File IO for GNU Emacs.
    Copyright (C) 1985, 1986, 1987, 1988, 1993, 1994, 1995, 1996,
                  1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -214,6 +214,12 @@ Lisp_Object Qdelete_by_moving_to_trash;
 
 /* Lisp function for moving files to trash.  */
 Lisp_Object Qmove_file_to_trash;
+
+/* Lisp function for recursively copying directories.  */
+Lisp_Object Qcopy_directory;
+
+/* Lisp function for recursively deleting directories.  */
+Lisp_Object Qdelete_directory;
 
 extern Lisp_Object Vuser_login_name;
 
@@ -2241,7 +2247,11 @@ This is what happens in interactive use with M-x.  */)
       && (NILP (Fstring_equal (Fdowncase (file), Fdowncase (newname))))
 #endif
       )
-    newname = Fexpand_file_name (Ffile_name_nondirectory (file), newname);
+    {
+      Lisp_Object fname = NILP (Ffile_directory_p (file))
+	? file : Fdirectory_file_name (file);
+      newname = Fexpand_file_name (Ffile_name_nondirectory (fname), newname);
+    }
   else
     newname = Fexpand_file_name (newname, Qnil);
 
@@ -2279,15 +2289,21 @@ This is what happens in interactive use with M-x.  */)
                                  NILP (ok_if_already_exists) ? Qnil : Qt);
           else
 #endif
+	  if (!NILP (Ffile_directory_p (file)))
+	    call4 (Qcopy_directory, file, newname, Qt, Qnil);
+	  else
+	    /* We have already prompted if it was an integer, so don't
+	       have copy-file prompt again.  */
 	    Fcopy_file (file, newname,
-			/* We have already prompted if it was an integer,
-			   so don't have copy-file prompt again.  */
 			NILP (ok_if_already_exists) ? Qnil : Qt,
 			Qt, Qt);
 
 	  count = SPECPDL_INDEX ();
 	  specbind (Qdelete_by_moving_to_trash, Qnil);
-	  Fdelete_file (file);
+	  if (!NILP (Ffile_directory_p (file)))
+	    call2 (Qdelete_directory, file, Qt);
+	  else
+	    Fdelete_file (file);
 	  unbind_to (count, Qnil);
 	}
       else
@@ -4096,7 +4112,7 @@ variable `last-coding-system-used' to the coding system actually used.  */)
 	}
 
       SAVE_MODIFF = MODIFF;
-      current_buffer->auto_save_modified = MODIFF;
+      BUF_AUTOSAVE_MODIFF (current_buffer) = MODIFF;
       XSETFASTINT (current_buffer->save_length, Z - BEG);
 #ifdef CLASH_DETECTION
       if (NILP (handler))
@@ -5306,7 +5322,7 @@ A non-nil CURRENT-ONLY argument means save only current buffer.  */)
 	   and file changed since last real save.  */
 	if (STRINGP (b->auto_save_file_name)
 	    && BUF_SAVE_MODIFF (b) < BUF_MODIFF (b)
-	    && b->auto_save_modified < BUF_MODIFF (b)
+	    && BUF_AUTOSAVE_MODIFF (b) < BUF_MODIFF (b)
 	    /* -1 means we've turned off autosaving for a while--see below.  */
 	    && XINT (b->save_length) >= 0
 	    && (do_handled_files
@@ -5348,7 +5364,7 @@ A non-nil CURRENT-ONLY argument means save only current buffer.  */)
 	      message1 ("Auto-saving...");
 	    internal_condition_case (auto_save_1, Qt, auto_save_error);
 	    auto_saved++;
-	    b->auto_save_modified = BUF_MODIFF (b);
+	    BUF_AUTOSAVE_MODIFF (b) = BUF_MODIFF (b);
 	    XSETFASTINT (current_buffer->save_length, Z - BEG);
 	    set_buffer_internal (old);
 
@@ -5393,7 +5409,9 @@ DEFUN ("set-buffer-auto-saved", Fset_buffer_auto_saved,
 No auto-save file will be written until the buffer changes again.  */)
      ()
 {
-  current_buffer->auto_save_modified = MODIFF;
+  /* FIXME: This should not be called in indirect buffers, since
+     they're not autosaved.  */
+  BUF_AUTOSAVE_MODIFF (current_buffer) = MODIFF;
   XSETFASTINT (current_buffer->save_length, Z - BEG);
   current_buffer->auto_save_failure_time = -1;
   return Qnil;
@@ -5416,7 +5434,9 @@ in the visited file.  If the buffer has no visited file,
 then any auto-save counts as "recent".  */)
      ()
 {
-  return (SAVE_MODIFF < current_buffer->auto_save_modified) ? Qt : Qnil;
+  /* FIXME: maybe we should return nil for indirect buffers since
+     they're never autosaved.  */
+  return (SAVE_MODIFF < BUF_AUTOSAVE_MODIFF (current_buffer) ? Qt : Qnil);
 }
 
 /* Reading and completing file names */
@@ -5722,6 +5742,10 @@ When non-nil, the function `move-file-to-trash' will be used by
   Qdelete_by_moving_to_trash = intern_c_string ("delete-by-moving-to-trash");
   Qmove_file_to_trash = intern_c_string ("move-file-to-trash");
   staticpro (&Qmove_file_to_trash);
+  Qcopy_directory = intern_c_string ("copy-directory");
+  staticpro (&Qcopy_directory);
+  Qdelete_directory = intern_c_string ("delete-directory");
+  staticpro (&Qdelete_directory);
 
   defsubr (&Sfind_file_name_handler);
   defsubr (&Sfile_name_directory);

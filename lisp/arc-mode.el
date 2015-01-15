@@ -1,7 +1,7 @@
 ;;; arc-mode.el --- simple editing of archives
 
 ;; Copyright (C) 1995, 1997, 1998, 2001, 2002, 2003, 2004, 2005, 2006,
-;;   2007, 2008, 2009  Free Software Foundation, Inc.
+;;   2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
 ;; Author: Morten Welinder <terra@gnu.org>
 ;; Keywords: files archives msdog editing major-mode
@@ -1784,7 +1784,10 @@ This doesn't recover lost files, it just undoes changes in the buffer itself."
 (defun archive-zip-extract (archive name)
   (if (equal (car archive-zip-extract) "pkzip")
       (archive-*-extract archive name archive-zip-extract)
-    (archive-extract-by-stdout archive name archive-zip-extract)))
+    ;; unzip expands wildcards in NAME, so we need to quote it.
+    ;; FIXME: Does pkzip need similar treatment?
+    (archive-extract-by-stdout archive (shell-quote-argument name)
+			       archive-zip-extract)))
 
 (defun archive-zip-write-file-member (archive descr)
   (archive-*-write-file-member

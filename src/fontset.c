@@ -1,8 +1,8 @@
 /* Fontset handler.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
      Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-     2005, 2006, 2007, 2008, 2009
+     2005, 2006, 2007, 2008, 2009, 2010
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H14PRO021
    Copyright (C) 2003, 2006
@@ -536,8 +536,8 @@ fontset_find_font (fontset, c, face, id, fallback)
 {
   Lisp_Object vec, font_group;
   int i, charset_matched = 0, found_index;
-  FRAME_PTR f = (FRAMEP (FONTSET_FRAME (fontset)))
-    ? XFRAME (selected_frame) : XFRAME (FONTSET_FRAME (fontset));
+  FRAME_PTR f = (FRAMEP (FONTSET_FRAME (fontset))
+		 ? XFRAME (FONTSET_FRAME (fontset)) : XFRAME (selected_frame));
   Lisp_Object rfont_def;
 
   font_group = fontset_get_font_group (fontset, fallback ? -1 : c);

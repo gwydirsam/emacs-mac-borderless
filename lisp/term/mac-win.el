@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
 ;;   2008  Free Software Foundation, Inc.
-;; Copyright (C) 2009  YAMAMOTO Mitsuharu
+;; Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
 
 ;; Author: Andrew Choi <akochoi@mac.com>
 ;;	YAMAMOTO Mitsuharu <mituharu@math.s.chiba-u.ac.jp>
@@ -148,21 +148,31 @@
 
 ;;;; Function keys
 
+(defvar x-alternatives-map
+  (let ((map (make-sparse-keymap)))
+    ;; Map certain keypad keys into ASCII characters that people usually expect.
+    (define-key map [M-backspace] [?\M-\d])
+    (define-key map [M-delete] [?\M-\d])
+    (define-key map [M-tab] [?\M-\t])
+    (define-key map [M-linefeed] [?\M-\n])
+    (define-key map [M-clear] [?\M-\C-l])
+    (define-key map [M-return] [?\M-\C-m])
+    (define-key map [M-escape] [?\M-\e])
+    (define-key map [iso-lefttab] [backtab])
+    (define-key map [S-iso-lefttab] [backtab])
+    map)
+  "Keymap of possible alternative meanings for some keys.")
+
 (defun x-setup-function-keys (frame)
   "Set up `function-key-map' on the graphical frame FRAME."
   ;; Don't do this twice on the same display, or it would break
   ;; normal-erase-is-backspace-mode.
   (unless (terminal-parameter frame 'x-setup-function-keys)
+    ;; Map certain keypad keys into ASCII characters that people usually expect.
     (with-selected-frame frame
-      ;; Map certain keypad keys into ASCII characters
-      ;; that people usually expect.
-      (define-key local-function-key-map [M-backspace] [?\M-\d])
-      (define-key local-function-key-map [M-delete] [?\M-\d])
-      (define-key local-function-key-map [M-tab] [?\M-\t])
-      (define-key local-function-key-map [M-linefeed] [?\M-\n])
-      (define-key local-function-key-map [M-clear] [?\M-\C-l])
-      (define-key local-function-key-map [M-return] [?\M-\C-m])
-      (define-key local-function-key-map [M-escape] [?\M-\e]))
+      (let ((map (copy-keymap x-alternatives-map)))
+        (set-keymap-parent map (keymap-parent local-function-key-map))
+        (set-keymap-parent local-function-key-map map)))
     (set-terminal-parameter frame 'x-setup-function-keys t)))
 
 ;; Modifier name `ctrl' is an alias of `control'.
@@ -393,9 +403,7 @@
 					  'utf-16be 'utf-16le))))))
 
 (defun mac-TIFF-to-string (data &optional text)
-  (prog1 (or text (setq text (copy-sequence " ")))
-    (put-text-property 0 (length text) 'display (create-image data 'tiff t)
-		       text)))
+  (propertize (or text " ") 'display (create-image data 'tiff t)))
 
 (defun mac-pasteboard-string-to-string (data &optional coding-system)
   (mac-utxt-to-string data coding-system 'utf-8))
@@ -531,7 +539,9 @@ in `selection-converter-alist', which see."
     (when tiff-image
       (remove-text-properties 0 (length tiff-image)
 			      '(foreign-selection nil) tiff-image)
-      (setq text (mac-TIFF-to-string tiff-image text)))
+      (if text
+	  (setq text (list text (mac-TIFF-to-string tiff-image text)))
+	(setq text (mac-TIFF-to-string tiff-image))))
     text))
 
 ;; Return the value of the current selection.
@@ -542,20 +552,20 @@ in `selection-converter-alist', which see."
 (defun x-get-selection-value ()
   ;; With multi-tty, this function may be called from a tty frame.
   (when (eq (framep (selected-frame)) 'mac)
-    (let (clip-text primary-text)
+    (let (clip-text primary-text selection-value)
       (when x-select-enable-clipboard
 	(setq clip-text (x-selection-value 'CLIPBOARD))
-	(if (string= clip-text "") (setq clip-text nil))
+	(if (equal clip-text "") (setq clip-text nil))
 
 	;; Check the CLIPBOARD selection for 'newness', is it different
 	;; from what we remebered them to be last time we did a
 	;; cut/paste operation.
 	(setq clip-text
 	      (cond ;; check clipboard
-	       ((or (not clip-text) (string= clip-text ""))
+	       ((or (not clip-text) (equal clip-text ""))
 		(setq x-last-selected-text-clipboard nil))
 	       ((eq      clip-text x-last-selected-text-clipboard) nil)
-	       ((string= clip-text x-last-selected-text-clipboard)
+	       ((equal clip-text x-last-selected-text-clipboard)
 		;; Record the newer string,
 		;; so subsequent calls can use the `eq' test.
 		(setq x-last-selected-text-clipboard clip-text)
@@ -570,10 +580,10 @@ in `selection-converter-alist', which see."
 	;; cut/paste operation.
 	(setq primary-text
 	      (cond ;; check primary selection
-	       ((or (not primary-text) (string= primary-text ""))
+	       ((or (not primary-text) (equal primary-text ""))
 		(setq x-last-selected-text-primary nil))
 	       ((eq      primary-text x-last-selected-text-primary) nil)
-	       ((string= primary-text x-last-selected-text-primary)
+	       ((equal primary-text x-last-selected-text-primary)
 		;; Record the newer string,
 		;; so subsequent calls can use the `eq' test.
 		(setq x-last-selected-text-primary primary-text)
@@ -588,8 +598,13 @@ in `selection-converter-alist', which see."
       ;; selection from clipboard (if we are supposed to) and primary,
       ;; So return the first one that has changed (which is the first
       ;; non-null one).
-      (or clip-text primary-text)
-      )))
+      (setq selection-value (or clip-text primary-text))
+      ;; If the selection-value contains multiple items, we need to
+      ;; protect the saved x-last-selected-text-clipboard/primary from
+      ;; caller's nreverse.
+      (if (listp selection-value)
+	  (setq selection-value (copy-sequence selection-value)))
+      selection-value)))
 
 ;; Arrange for the kill and yank functions to set and check the clipboard.
 (setq interprogram-cut-function 'x-select-text)

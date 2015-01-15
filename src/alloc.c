@@ -1,6 +1,6 @@
 /* Storage allocation and gc for GNU Emacs Lisp interpreter.
    Copyright (C) 1985, 1986, 1988, 1993, 1994, 1995, 1997, 1998, 1999,
-      2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+      2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
       Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -4725,11 +4725,11 @@ check_pure_size ()
 
 static char *
 find_string_data_in_pure (data, nbytes)
-     char *data;
+     const char *data;
      int nbytes;
 {
   int i, skip, bm_skip[256], last_char_skip, infinity, start, start_max;
-  unsigned char *p;
+  const unsigned char *p;
   char *non_lisp_beg;
 
   if (pure_bytes_used_non_lisp < nbytes + 1)
@@ -4740,7 +4740,7 @@ find_string_data_in_pure (data, nbytes)
   for (i = 0; i < 256; i++)
     bm_skip[i] = skip;
 
-  p = (unsigned char *) data;
+  p = (const unsigned char *) data;
   while (--skip > 0)
     bm_skip[*p++] = skip;
 
@@ -4754,7 +4754,7 @@ find_string_data_in_pure (data, nbytes)
   infinity = pure_bytes_used_non_lisp + 1;
   bm_skip['\0'] = infinity;
 
-  p = (unsigned char *) non_lisp_beg + nbytes;
+  p = (const unsigned char *) non_lisp_beg + nbytes;
   start = 0;
   do
     {
@@ -4796,7 +4796,7 @@ find_string_data_in_pure (data, nbytes)
 
 Lisp_Object
 make_pure_string (data, nchars, nbytes, multibyte)
-     char *data;
+     const char *data;
      int nchars, nbytes;
      int multibyte;
 {

@@ -1,7 +1,7 @@
 /* Lisp functions pertaining to editing.
    Copyright (C) 1985, 1986, 1987, 1989, 1993, 1994, 1995, 1996,
                  1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1574,7 +1574,8 @@ instead of the current time.  The argument should have the form
 have the form (HIGH . LOW), but this is considered obsolete.
 
 WARNING: Since the result is floating point, it may not be exact.
-Do not use this function if precise time stamps are required.  */)
+If precise time stamps are required, use either `current-time',
+or (if you need time as a string) `format-time-string'.  */)
      (specified_time)
      Lisp_Object specified_time;
 {
@@ -1896,7 +1897,7 @@ usage: (encode-time SECOND MINUTE HOUR DAY MONTH YEAR &optional ZONE)  */)
 }
 
 DEFUN ("current-time-string", Fcurrent_time_string, Scurrent_time_string, 0, 1, 0,
-       doc: /* Return the current time, as a human-readable string.
+       doc: /* Return the current local time, as a human-readable string.
 Programs can use this function to decode a time,
 since the number of columns in each field is fixed
 if the year is in the range 1000-9999.
@@ -2869,8 +2870,8 @@ Both characters must have the same length of multi-byte form.  */)
 		{
 		  if (MODIFF - 1 == SAVE_MODIFF)
 		    SAVE_MODIFF++;
-		  if (MODIFF - 1 == current_buffer->auto_save_modified)
-		    current_buffer->auto_save_modified++;
+		  if (MODIFF - 1 == BUF_AUTOSAVE_MODIFF (current_buffer))
+		    BUF_AUTOSAVE_MODIFF (current_buffer)++;
 		}
 
 	      /* The before-change-function may have moved the gap
@@ -4176,8 +4177,8 @@ usage: (format STRING &rest OBJECTS)  */)
 	      len = make_number (SCHARS (args[n]));
 	      new_len = make_number (info[n].end - info[n].start);
 	      props = text_property_list (args[n], make_number (0), len, Qnil);
-	      extend_property_ranges (props, len, new_len);
-	      /* If successive arguments have properites, be sure that
+	      props = extend_property_ranges (props, new_len);
+	      /* If successive arguments have properties, be sure that
 		 the value of `composition' property be the copy.  */
 	      if (n > 1 && info[n - 1].end)
 		make_composition_value_copy (props);

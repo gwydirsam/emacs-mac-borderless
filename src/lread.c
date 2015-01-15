@@ -1,7 +1,7 @@
 /* Lisp parsing and input streams.
    Copyright (C) 1985, 1986, 1987, 1988, 1989, 1993, 1994, 1995,
                  1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1155,7 +1155,7 @@ Return t if the file exists and loads successfully.  */)
 
   if (!bcmp (SDATA (found) + SBYTES (found) - 4,
 	     ".elc", 4)
-      || (version = safe_to_load_p (fd)) > 0)
+      || (fd >= 0 && (version = safe_to_load_p (fd)) > 0))
     /* Load .elc files directly, but not when they are
        remote and have no handler!  */
     {
@@ -4381,20 +4381,20 @@ the rest of the FORMS.  */);
   Vafter_load_alist = Qnil;
 
   DEFVAR_LISP ("load-history", &Vload_history,
-	       doc: /* Alist mapping file names to symbols and features.
-Each alist element is a list that starts with a file name,
-except for one element (optional) that starts with nil and describes
-definitions evaluated from buffers not visiting files.
+	       doc: /* Alist mapping loaded file names to symbols and features.
+Each alist element should be a list (FILE-NAME ENTRIES...), where
+FILE-NAME is the name of a file that has been loaded into Emacs.
+The file name is absolute and true (i.e. it doesn't contain symlinks).
+As an exception, one of the alist elements may have FILE-NAME nil,
+for symbols and features not associated with any file.
 
-The file name is absolute and is the true file name (i.e. it doesn't
-contain symbolic links) of the loaded file.
-
-The remaining elements of each list are symbols defined as variables
-and cons cells of the form `(provide . FEATURE)', `(require . FEATURE)',
-`(defun . FUNCTION)', `(autoload . SYMBOL)', `(defface . SYMBOL)'
-and `(t . SYMBOL)'.  An element `(t . SYMBOL)' precedes an entry
-`(defun . FUNCTION)', and means that SYMBOL was an autoload before
-this file redefined it as a function.
+The remaining ENTRIES in the alist element describe the functions and
+variables defined in that file, the features provided, and the
+features required.  Each entry has the form `(provide . FEATURE)',
+`(require . FEATURE)', `(defun . FUNCTION)', `(autoload . SYMBOL)',
+`(defface . SYMBOL)', or `(t . SYMBOL)'.  In addition, an entry `(t
+. SYMBOL)' may precede an entry `(defun . FUNCTION)', and means that
+SYMBOL was an autoload before this file redefined it as a function.
 
 During preloading, the file name recorded is relative to the main Lisp
 directory.  These file names are converted to absolute at startup.  */);

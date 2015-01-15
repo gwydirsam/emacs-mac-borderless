@@ -1,7 +1,7 @@
 /* Implementation of GUI terminal on the Microsoft W32 API.
    Copyright (C) 1989, 1993, 1994, 1995, 1996, 1997, 1998,
                  1999, 2000, 2001, 2002, 2003, 2004, 2005,
-                 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -733,11 +733,6 @@ x_after_update_window_line (desired_row)
 	  height > 0))
     {
       int y = WINDOW_TO_FRAME_PIXEL_Y (w, max (0, desired_row->y));
-
-      /* Internal border is drawn below the tool bar.  */
-      if (WINDOWP (f->tool_bar_window)
-	  && w == XWINDOW (f->tool_bar_window))
-	y -= width;
 
       BLOCK_INPUT;
       {

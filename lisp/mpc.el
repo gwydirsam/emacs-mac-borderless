@@ -1,6 +1,6 @@
 ;;; mpc.el --- A client for the Music Player Daemon   -*- coding: utf-8 -*-
 
-;; Copyright (C) 2006, 2007, 2008, 2009  Free Software Foundation, Inc.
+;; Copyright (C) 2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: multimedia
@@ -1728,7 +1728,7 @@ A value of t means the main playlist.")
   "Remove the selected songs from the playlist."
   (interactive)
   (unless mpc-songs-playlist
-    (error "The selected songs aren't part of a playlist."))
+    (error "The selected songs aren't part of a playlist"))
   (let ((song-poss (mapcar #'cdr (mpc-songs-selection))))
     (mpc-cmd-delete song-poss mpc-songs-playlist)
     (mpc-songs-refresh)

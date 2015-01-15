@@ -1,6 +1,6 @@
 /* font.h -- Interface definition for font handling.
-   Copyright (C) 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
-   Copyright (C) 2006, 2007, 2008, 2009
+   Copyright (C) 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H13PRO009
 
@@ -689,6 +689,14 @@ struct font_driver
 				   int c, unsigned variations[256]));
 
   void (*filter_properties) P_ ((Lisp_Object font, Lisp_Object properties));
+
+  /* Optional.
+
+     Return non-zero if FONT_OBJECT can be used as a (cached) font
+     for ENTITY on frame F.  */
+  int (*cached_font_ok) P_ ((struct frame *f,
+                             Lisp_Object font_object,
+                             Lisp_Object entity));
 };
 
 

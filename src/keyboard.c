@@ -1,7 +1,7 @@
 /* Keyboard and mouse input; editor command loop.
    Copyright (C) 1985, 1986, 1987, 1988, 1989, 1993, 1994, 1995,
                  1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -3182,6 +3182,7 @@ read_char (commandflag, nmaps, maps, prev_event, used_mouse_menu, end_time)
 
   if (!NILP (tem))
     {
+      struct buffer *prev_buffer = current_buffer;
 #if 0 /* This shouldn't be necessary anymore. --lorentey  */
       int was_locked = single_kboard;
       int count = SPECPDL_INDEX ();
@@ -3205,7 +3206,16 @@ read_char (commandflag, nmaps, maps, prev_event, used_mouse_menu, end_time)
       unbind_to (count, Qnil);
 #endif
 
-      goto retry;
+      if (current_buffer != prev_buffer)
+	{
+	  /* The command may have changed the keymaps.  Pretend there
+	     is input in another keyboard and return.  This will
+	     recalculate keymaps.  */
+	  c = make_number (-2);
+	  goto exit;
+	}
+      else
+	goto retry;
     }
 
   /* Handle things that only apply to characters.  */
@@ -7559,11 +7569,11 @@ input_available_signal (signo)
   signal (signo, input_available_signal);
 #endif /* USG */
 
+  SIGNAL_THREAD_CHECK (signo);
+
 #ifdef SYNC_INPUT
   interrupt_input_pending = 1;
   pending_signals = 1;
-#else
-  SIGNAL_THREAD_CHECK (signo);
 #endif
 
   if (input_available_clear_time)
@@ -9562,7 +9572,13 @@ read_key_sequence (keybuf, bufsize, prompt, dont_downcase_last,
 	    key = read_char (NILP (prompt), nmaps,
 			     (Lisp_Object *) submaps, last_nonmenu_event,
 			     &used_mouse_menu, NULL);
-	    if (INTEGERP (key) && XINT (key) == -2) /* wrong_kboard_jmpbuf */
+	    if ((INTEGERP (key) && XINT (key) == -2) /* wrong_kboard_jmpbuf */
+		/* When switching to a new tty (with a new keyboard),
+		   read_char returns the new buffer, rather than -2
+		   (Bug#5095).  This is because `terminal-init-xterm'
+		   calls read-char, which eats the wrong_kboard_jmpbuf
+		   return.  Any better way to fix this? -- cyd  */
+		|| (interrupted_kboard != current_kboard))
 	      {
 		int found = 0;
 		struct kboard *k;

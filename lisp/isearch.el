@@ -1,7 +1,7 @@
 ;;; isearch.el --- incremental search minor mode
 
 ;; Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001,
-;;   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+;;   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 ;;   Free Software Foundation, Inc.
 
 ;; Author: Daniel LaLiberte <liberte@cs.uiuc.edu>
@@ -1754,7 +1754,10 @@ Scroll-bar or mode-line events are processed appropriately."
 (put 'digit-argument 'isearch-scroll t)
 
 (defcustom isearch-allow-scroll nil
-  "If non-nil, scrolling commands are allowed during incremental search."
+  "Whether scrolling is allowed during incremental search.
+If non-nil, scrolling commands can be used in Isearch mode.
+However, the current match will never scroll offscreen.
+If nil, scolling commands will first cancel Isearch mode."
   :type 'boolean
   :group 'isearch)
 

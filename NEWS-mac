@@ -1,3 +1,23 @@
+* emacs-23.1.92-mac-1.97 [experimental/hackers-only] (2010-01-30)
+Based on Emacs 23.1.92
+
+** Fixed bugs
+
+*** Turning on the toolbar in a fullscreen frame leaves garbage if it
+has non-zero internal border width.
+
+** Improvements
+
+*** When the clipboard has both textual and image data, yank inserts
+the former and push both into the kill ring so the latter can be
+inserted with yank-pop afterwards.
+
+*** Use non-integral x positions for displaying antialiased
+proportional fonts.  You can see the difference by putting the box
+cursor over Helvetica 12pt `I', whose ideal width is 3.33398 but
+displayed with the rounded width 3, for example.
+
+
 * emacs-23.1.91-mac-1.96 [experimental/hackers-only] (2009-12-31)
 Based on Emacs 23.1.91
 

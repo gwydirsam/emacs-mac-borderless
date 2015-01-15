@@ -1,5 +1,5 @@
 /* Functions for GUI implemented with Cocoa AppKit on the Mac OS.
-   Copyright (C) 2008, 2009  YAMAMOTO Mitsuharu
+   Copyright (C) 2008, 2009, 2010  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -5964,7 +5964,9 @@ static void update_services_menu_types P_ ((void));
 	     X 10.5 because -[NSWindow sendEvent:] now sends keyDown:
 	     to the first responder even if the command-key modifier
 	     is set when it is not a key equivalent.  But we keep this
-	     for binary compatibility.  */
+	     for binary compatibility.
+	     Update: this is necessary for passing Control-Tab to
+	     Emacs on Mac OS X 10.5 and later.  */
 	  [firstResponder keyDown:theEvent];
 
 	  return YES;
@@ -6027,8 +6029,9 @@ restore_show_help_function (old_show_help_function)
   else
     help = Qnil;
 
-  /* Temporarily bind Vshow_help_function to Qnil because we don't
-     want tooltips during menu tracking.  */
+  /* Temporarily bind Vshow_help_function to
+     tooltip-show-help-non-mode because we don't want tooltips during
+     menu tracking.  */
   record_unwind_protect (restore_show_help_function, Vshow_help_function);
   Vshow_help_function = intern ("tooltip-show-help-non-mode");
 
@@ -6365,7 +6368,7 @@ create_and_show_popup_menu (f, first_wv, x, y, for_click)
 
 - (id)initWithWidgetValue:(widget_value *)wv
 {
-  char *dialog_name;
+  const char *dialog_name;
   int nb_buttons, first_group_count, i;
   CGFloat buttons_height, text_height, inner_width, inner_height;
   NSString *message;

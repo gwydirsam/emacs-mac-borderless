@@ -1,7 +1,7 @@
 ;;; sgml-mode.el --- SGML- and HTML-editing modes -*- coding: utf-8 -*-
 
 ;; Copyright (C) 1992, 1995, 1996, 1998, 2001, 2002, 2003, 2004,
-;;   2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+;;   2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 ;; Author: James Clark <jjc@jclark.com>
 ;; Maintainer: FSF
@@ -608,11 +608,7 @@ Uses `sgml-char-names'."
   "Insert a symbolic character name according to `sgml-char-names'."
   (interactive "*")
   (if sgml-name-8bit-mode
-      (let ((mc last-command-event))
-	(if (< mc 256)
-	    (setq mc (unibyte-char-to-multibyte mc)))
-	(or mc (setq mc last-command-event))
-	(sgml-name-char mc))
+      (sgml-name-char last-command-event)
     (self-insert-command 1)))
 
 (defun sgml-name-8bit-mode ()

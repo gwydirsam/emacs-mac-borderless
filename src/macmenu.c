@@ -1,7 +1,7 @@
 /* Menu support for GNU Emacs on Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
                  2008  Free Software Foundation, Inc.
-   Copyright (C) 2009  YAMAMOTO Mitsuharu
+   Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -609,7 +609,7 @@ mac_menu_show (FRAME_PTR f, int x, int y, int for_click, int keymaps,
 	{
 	  /* Create a new pane.  */
 	  Lisp_Object pane_name, prefix;
-	  char *pane_string;
+	  const char *pane_string;
 
 	  pane_name = AREF (menu_items, i + MENU_ITEMS_PANE_NAME);
 	  prefix = AREF (menu_items, i + MENU_ITEMS_PANE_PREFIX);
@@ -815,7 +815,7 @@ mac_menu_show (FRAME_PTR f, int x, int y, int for_click, int keymaps,
 #ifdef HAVE_DIALOGS
 /* Construct native Mac OS dialog based on widget_value tree.  */
 
-static char * button_names [] = {
+static const char * button_names [] = {
   "button1", "button2", "button3", "button4", "button5",
   "button6", "button7", "button8", "button9", "button10" };
 
@@ -851,7 +851,7 @@ mac_dialog_show (f, keymaps, title, header, error_name)
      representing the text label and buttons.  */
   {
     Lisp_Object pane_name, prefix;
-    char *pane_string;
+    const char *pane_string;
     pane_name = XVECTOR (menu_items)->contents[MENU_ITEMS_PANE_NAME];
     prefix = XVECTOR (menu_items)->contents[MENU_ITEMS_PANE_PREFIX];
     pane_string = (NILP (pane_name)
@@ -900,7 +900,7 @@ mac_dialog_show (f, keymaps, title, header, error_name)
 
 	wv = xmalloc_widget_value ();
 	prev_wv->next = wv;
-	wv->name = (char *) button_names[nb_buttons];
+	wv->name = button_names[nb_buttons];
 	if (!NILP (descrip))
 	  wv->key = (char *) SDATA (descrip);
 	wv->value = (char *) SDATA (item_name);

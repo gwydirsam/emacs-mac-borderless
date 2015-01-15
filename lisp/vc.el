@@ -1,7 +1,7 @@
 ;;; vc.el --- drive a version-control system from within Emacs
 
 ;; Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 2000,
-;;   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+;;   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 ;;   Free Software Foundation, Inc.
 
 ;; Author:     FSF (see below for full credits)
@@ -791,13 +791,23 @@ in their implementation of vc-BACKEND-diff.")
 
 (defmacro with-vc-properties (files form settings)
   "Execute FORM, then maybe set per-file properties for FILES.
+If any of FILES is actually a directory, then do the same for all
+buffers for files in that directory.
 SETTINGS is an association list of property/value pairs.  After
 executing FORM, set those properties from SETTINGS that have not yet
 been updated to their corresponding values."
   (declare (debug t))
-  `(let ((vc-touched-properties (list t)))
-     ,form
+  `(let ((vc-touched-properties (list t))
+	 (flist nil))
      (dolist (file ,files)
+       (if (file-directory-p file)
+	   (dolist (buffer (buffer-list))
+	     (let ((fname (buffer-file-name buffer)))
+	       (when (and fname (vc-string-prefix-p file fname))
+		 (push fname flist))))
+	 (push file flist)))
+     ,form
+     (dolist (file flist)
        (dolist (setting ,settings)
          (let ((property (car setting)))
            (unless (memq property vc-touched-properties)

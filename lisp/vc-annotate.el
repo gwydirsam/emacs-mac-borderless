@@ -1,7 +1,7 @@
 ;;; vc-annotate.el --- VC Annotate Support
 
 ;; Copyright (C) 1997, 1998, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
-;;   2007, 2008, 2009 Free Software Foundation, Inc.
+;;   2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 ;; Author:     Martin Lorentzson  <emwson@emw.ericsson.se>
 ;; Maintainer: FSF
@@ -447,7 +447,8 @@ Return a cons (REV . FILENAME)."
     (let ((rev-at-line (vc-annotate-extract-revision-at-line)))
       (if (not rev-at-line)
 	  (message "Cannot extract revision number from the current line")
-	(if (equal (car rev-at-line) vc-annotate-parent-rev)
+	(if (and (equal (car rev-at-line) vc-annotate-parent-rev)
+		 (string= (cdr rev-at-line) vc-annotate-parent-file))
 	    (message "Already at revision %s" rev-at-line)
 	  (vc-annotate-warp-revision (car rev-at-line) (cdr rev-at-line)))))))
 

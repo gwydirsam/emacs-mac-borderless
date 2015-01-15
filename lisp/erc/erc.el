@@ -1,7 +1,7 @@
 ;; erc.el --- An Emacs Internet Relay Chat client
 
 ;; Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-;;   2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+;;   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 ;; Author: Alexander L. Belikoff (alexander@belikoff.net)
 ;; Contributors: Sergey Berezin (sergey.berezin@cs.cmu.edu),
@@ -5654,11 +5654,13 @@ user input."
   "Determine the connection and authentication parameters.
 Sets the buffer local variables:
 
+- `erc-session-connector'
 - `erc-session-server'
 - `erc-session-port'
 - `erc-session-full-name'
 - `erc-server-current-nick'"
-  (setq erc-session-server (erc-compute-server server)
+  (setq erc-session-connector erc-server-connect-function
+        erc-session-server (erc-compute-server server)
 	erc-session-port (or port erc-default-port)
 	erc-session-user-full-name (erc-compute-full-name name))
   (erc-set-current-nick (erc-compute-nick nick)))

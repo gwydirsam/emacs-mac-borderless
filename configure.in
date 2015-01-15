@@ -4,7 +4,7 @@ dnl 	autoconf
 dnl in the directory containing this script.
 dnl
 dnl  Copyright (C) 1994, 1995, 1996, 1999, 2000, 2001, 2002, 2003,
-dnl    2004, 2005, 2006, 2007, 2008, 2009  Free Software Foundation, Inc.
+dnl    2004, 2005, 2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 dnl
 dnl  This file is part of GNU Emacs.
 dnl
@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.62)
-AC_INIT(emacs, 23.1.91)
+AC_INIT(emacs, 23.1.92)
 AC_CONFIG_HEADER(src/config.h:src/config.in)
 AC_CONFIG_SRCDIR(src/lisp.h)
 
@@ -1113,7 +1113,7 @@ AC_CHECK_HEADERS(sys/select.h sys/timeb.h sys/time.h unistd.h utime.h \
   linux/version.h sys/systeminfo.h termios.h limits.h string.h stdlib.h \
   termcap.h stdio_ext.h fcntl.h strings.h coff.h pty.h sys/mman.h \
   sys/param.h sys/vlimit.h sys/resource.h locale.h sys/_mbstate_t.h \
-  sys/utsname.h pwd.h)
+  sys/utsname.h pwd.h utmp.h)
 
 AC_MSG_CHECKING(if personality LINUX32 can be set)
 AC_TRY_COMPILE([#include <sys/personality.h>], [personality (PER_LINUX32)],
@@ -2001,12 +2001,17 @@ if test "${HAVE_X11}" = "yes"; then
     if test "x${with_xft}" != "xno"; then
 
       PKG_CHECK_MODULES(XFT, xft >= 0.13.0, , HAVE_XFT=no)
-      if test "$HAVE_XFT" != no; then
+      ## Because xftfont.c uses XRenderQueryExtension, we also
+      ## need to link to -lXrender.
+      HAVE_XRENDER=no
+      AC_CHECK_LIB(Xrender, XRenderQueryExtension, HAVE_XRENDER=yes)
+      if test "$HAVE_XFT" != no && test "$HAVE_XRENDER" != no; then
 	OLD_CPPFLAGS="$CPPFLAGS"
 	OLD_CFLAGS="$CFLAGS"
 	OLD_LIBS="$LIBS"
 	CPPFLAGS="$CPPFLAGS $XFT_CFLAGS"
 	CFLAGS="$CFLAGS $XFT_CFLAGS"
+	XFT_LIBS="-lXrender $XFT_LIBS"
 	LIBS="$XFT_LIBS $LIBS"
 	AC_CHECK_HEADER(X11/Xft/Xft.h,
 	  AC_CHECK_LIB(Xft, XftFontOpen, HAVE_XFT=yes, , $XFT_LIBS))
@@ -2748,7 +2753,7 @@ fi
 
 AH_TOP([/* GNU Emacs site configuration template file.
    Copyright (C) 1988, 1993, 1994, 1999, 2000, 2001, 2002, 2004, 2005,
-     2006, 2007, 2008, 2009  Free Software Foundation, Inc.
+     2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 

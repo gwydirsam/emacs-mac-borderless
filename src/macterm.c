@@ -1,7 +1,7 @@
 /* Implementation of GUI terminal on the Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
                  2008  Free Software Foundation, Inc.
-   Copyright (C) 2009  YAMAMOTO Mitsuharu
+   Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -1145,11 +1145,6 @@ x_after_update_window_line (desired_row)
     {
       int y = WINDOW_TO_FRAME_PIXEL_Y (w, max (0, desired_row->y));
 
-      /* Internal border is drawn below the tool bar.  */
-      if (WINDOWP (f->tool_bar_window)
-	  && w == XWINDOW (f->tool_bar_window))
-	y -= width;
-
       BLOCK_INPUT;
       mac_clear_area (f, 0, y, width, height);
       mac_clear_area (f, FRAME_PIXEL_WIDTH (f) - width, y, width, height);
@@ -1795,19 +1790,27 @@ x_draw_composite_glyph_string_foreground (s)
 	      if (j < i)
 		{
 		  font->driver->draw (s, j, i, x, y, 0);
+		  if (s->face->overstrike)
+		    font->driver->draw (s, j, i, x + 1, y, 0);
 		  x += width;
 		}
 	      xoff = LGLYPH_XOFF (glyph);
 	      yoff = LGLYPH_YOFF (glyph);
 	      wadjust = LGLYPH_WADJUST (glyph);
 	      font->driver->draw (s, i, i + 1, x + xoff, y + yoff, 0);
+	      if (s->face->overstrike)
+		font->driver->draw (s, i, i + 1, x + xoff + 1, y + yoff, 0);
 	      x += wadjust;
 	      j = i + 1;
 	      width = 0;
 	    }
 	}
       if (j < i)
-	font->driver->draw (s, j, i, x, y, 0);
+	{
+	  font->driver->draw (s, j, i, x, y, 0);
+	  if (s->face->overstrike)
+	    font->driver->draw (s, j, i, x + 1, y, 0);
+	}
     }
 }
 
@@ -3997,26 +4000,7 @@ x_new_font (f, font_object, fontset)
 	 doing it because it's done in Fx_show_tip, and it leads to
 	 problems because the tip frame has no widget.  */
       if (NILP (tip_frame) || XFRAME (tip_frame) != f)
-	{
-	  int rows, cols;
-
-	  /* When the frame is maximized/fullscreen or running under for
-             example Xmonad, x_set_window_size will be a no-op.
-             In that case, the right thing to do is extend rows/cols to
-             the current frame size.  We do that first if x_set_window_size
-             turns out to not be a no-op (there is no way to know).
-             The size will be adjusted again if the frame gets a
-             ConfigureNotify event as a result of x_set_window_size.  */
-          rows = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (f, FRAME_PIXEL_HEIGHT (f));
-	  /* Update f->scroll_bar_actual_width because it is used in
-	     FRAME_PIXEL_WIDTH_TO_TEXT_COLS.  */
-	  f->scroll_bar_actual_width
-	    = FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f);
-          cols = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (f, FRAME_PIXEL_WIDTH (f));
-
-          change_frame_size (f, rows, cols, 0, 1, 0);
-          x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
-        }
+	x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
     }
 
   return font_object;
@@ -4220,6 +4204,26 @@ x_set_window_size (f, change_gravity, cols, rows)
   int pixelwidth, pixelheight;
 
   BLOCK_INPUT;
+
+  if (NILP (tip_frame) || XFRAME (tip_frame) != f)
+    {
+      int r, c;
+
+      /* When the frame is maximized/fullscreen or running under for
+	 example Xmonad, x_set_window_size will be a no-op.
+	 In that case, the right thing to do is extend rows/cols to
+	 the current frame size.  We do that first if x_set_window_size
+	 turns out to not be a no-op (there is no way to know).
+	 The size will be adjusted again if the frame gets a
+	 ConfigureNotify event as a result of x_set_window_size.  */
+      r = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (f, FRAME_PIXEL_HEIGHT (f));
+      /* Update f->scroll_bar_actual_width because it is used in
+	 FRAME_PIXEL_WIDTH_TO_TEXT_COLS.  */
+      f->scroll_bar_actual_width
+	= FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f);
+      c = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (f, FRAME_PIXEL_WIDTH (f));
+      change_frame_size (f, r, c, 0, 1, 0);
+    }
 
   check_frame_size (f, &rows, &cols);
   f->scroll_bar_actual_width

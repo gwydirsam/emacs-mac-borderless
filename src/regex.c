@@ -3,7 +3,7 @@
    internationalization features.)
 
    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-                 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+                 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
                  Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
@@ -4083,8 +4083,7 @@ analyse_first (p, pend, fastmap, multibyte)
 		     the corresponding multibyte character.  */
 		  int c = RE_CHAR_TO_MULTIBYTE (p[1]);
 
-		  if (! CHAR_BYTE8_P (c))
-		    fastmap[CHAR_LEADING_CODE (c)] = 1;
+		  fastmap[CHAR_LEADING_CODE (c)] = 1;
 		}
 	    }
 	  break;

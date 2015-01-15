@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 1985, 1986, 1987, 1992, 1993, 1994, 1995, 1996,
 ;;   1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-;;   2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+;;   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 ;; Maintainer: FSF
 
@@ -1284,9 +1284,13 @@ its documentation for additional customization information."
     ))
 
 (defmacro minibuffer-with-setup-hook (fun &rest body)
-  "Add FUN to `minibuffer-setup-hook' while executing BODY.
+  "Temporarily add FUN to `minibuffer-setup-hook' while executing BODY.
 BODY should use the minibuffer at most once.
-Recursive uses of the minibuffer will not be affected."
+Recursive uses of the minibuffer are unaffected (FUN is not
+called additional times).
+
+This macro actually adds an auxiliary function that calls FUN,
+rather than FUN itself, to `minibuffer-setup-hook'."
   (declare (indent 1) (debug t))
   (let ((hook (make-symbol "setup-hook")))
     `(let (,hook)
@@ -4661,21 +4665,35 @@ If RECURSIVE is non-nil, all files in DIRECTORY are deleted as well."
   ;; delete-directory handler.
   (setq directory (directory-file-name (expand-file-name directory)))
   (let ((handler (find-file-name-handler directory 'delete-directory)))
-    (if handler
-	(funcall handler 'delete-directory directory recursive)
+    (cond
+     (handler
+      (funcall handler 'delete-directory directory recursive))
+     (delete-by-moving-to-trash
+      ;; Only move non-empty dir to trash if recursive deletion was
+      ;; requested.  This mimics the non-`delete-by-moving-to-trash'
+      ;; case, where the operation fails in delete-directory-internal.
+      ;; As `move-file-to-trash' trashes directories (empty or
+      ;; otherwise) as a unit, we do not need to recurse here.
+      (if (and (not recursive)
+	       ;; Check if directory is empty apart from "." and "..".
+	       (directory-files
+		directory 'full directory-files-no-dot-files-regexp))
+	  (error "Directory is not empty, not moving to trash")
+	(move-file-to-trash directory)))
+     ;; Otherwise, call outselves recursively if needed.
+     (t
       (if (and recursive (not (file-symlink-p directory)))
-	  (mapc
-	   (lambda (file)
-	     ;; This test is equivalent to
-	     ;; (and (file-directory-p fn) (not (file-symlink-p fn)))
-	     ;; but more efficient
-	     (if (eq t (car (file-attributes file)))
-		 (delete-directory file recursive)
-	       (delete-file file)))
-	   ;; We do not want to delete "." and "..".
-	   (directory-files
-	    directory 'full directory-files-no-dot-files-regexp)))
-      (delete-directory-internal directory))))
+	  (mapc (lambda (file)
+		  ;; This test is equivalent to
+		  ;; (and (file-directory-p fn) (not (file-symlink-p fn)))
+		  ;; but more efficient
+		  (if (eq t (car (file-attributes file)))
+		      (delete-directory file recursive)
+		    (delete-file file)))
+		;; We do not want to delete "." and "..".
+		(directory-files
+		 directory 'full directory-files-no-dot-files-regexp)))
+      (delete-directory-internal directory)))))
 
 (defun copy-directory (directory newname &optional keep-time parents)
   "Copy DIRECTORY to NEWNAME.  Both args must be strings.
@@ -4710,20 +4728,17 @@ this happens by default."
       ;; Compute target name.
       (setq directory (directory-file-name (expand-file-name directory))
 	    newname   (directory-file-name (expand-file-name newname)))
-      (if (and (file-directory-p newname)
-	       (not (string-equal (file-name-nondirectory directory)
-				  (file-name-nondirectory newname))))
-	  (setq newname
-		(expand-file-name (file-name-nondirectory directory) newname)))
       (if (not (file-directory-p newname)) (make-directory newname parents))
 
       ;; Copy recursively.
       (mapc
        (lambda (file)
-	 (if (file-directory-p file)
-	     (copy-directory file newname keep-time parents)
-	   (copy-file file newname t keep-time)))
-       ;; We do not want to delete "." and "..".
+	 (let ((target (expand-file-name
+			(file-name-nondirectory file) newname)))
+	   (if (file-directory-p file)
+	       (copy-directory file target keep-time parents)
+	     (copy-file file target t keep-time))))
+       ;; We do not want to copy "." and "..".
        (directory-files	directory 'full directory-files-no-dot-files-regexp))
 
       ;; Set directory attributes.

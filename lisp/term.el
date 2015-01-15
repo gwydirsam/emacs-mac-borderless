@@ -1,7 +1,7 @@
 ;;; term.el --- general command interpreter in a window stuff
 
 ;; Copyright (C) 1988, 1990, 1992, 1994, 1995, 2001, 2002, 2003,
-;;   2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+;;   2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 ;; Author: Per Bothner <per@bothner.com>
 ;; Maintainer: Dan Nicolaescu <dann@ics.uci.edu>, Per Bothner <per@bothner.com>
@@ -1208,8 +1208,17 @@ without any interpretation."
 
 (defun term-send-raw-meta ()
   (interactive)
-  (let* ((keys (this-command-keys))
-         (char (aref keys (1- (length keys)))))
+  (let ((char last-input-event))
+    (when (symbolp last-input-event)
+      ;; Convert `return' to C-m, etc.
+      (let ((tmp (get char 'event-symbol-elements)))
+	(when tmp
+	  (setq char (car tmp)))
+	(when (symbolp char)
+	  (setq tmp (get char 'ascii-character))
+	  (when tmp
+	    (setq char tmp)))))
+    (setq char (event-basic-type char))
     (term-send-raw-string (if (and (numberp char)
 				   (> char 127)
 				   (< char 256))

@@ -1,7 +1,7 @@
 /* Definitions and headers for communication on the Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004,
                  2005, 2006, 2007, 2008 Free Software Foundation, Inc.
-   Copyright (C) 2009  YAMAMOTO Mitsuharu
+   Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -298,12 +298,12 @@ typedef struct _widget_value
 {
   /* name of widget */
   Lisp_Object   lname;
-  char*		name;
+  const char*	name;
   /* value (meaning depend on widget type) */
-  char*		value;
+  const char*	value;
   /* keyboard equivalent. no implications for XtTranslations */
   Lisp_Object   lkey;
-  char*		key;
+  const char*	key;
   /* Help string or nil if none.
      GC finds this string through the frame's menu_bar_vector
      or through menu_items.  */

@@ -1,7 +1,7 @@
 ;;; easy-mmode.el --- easy definition for major and minor modes
 
 ;; Copyright (C) 1997, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
-;;   2008, 2009  Free Software Foundation, Inc.
+;;   2008, 2009, 2010  Free Software Foundation, Inc.
 
 ;; Author: Georges Brun-Cottan <Georges.Brun-Cottan@inria.fr>
 ;; Maintainer: Stefan Monnier <monnier@gnu.org>
@@ -326,9 +326,13 @@ call another major mode in their body."
        (make-variable-buffer-local ',MODE-major-mode)
        ;; The actual global minor-mode
        (define-minor-mode ,global-mode
+	 ;; Very short lines to avoid too long lines in the generated
+	 ;; doc string.
 	 ,(format "Toggle %s in every possible buffer.
-With prefix ARG, turn %s on if and only if ARG is positive.
-%s is enabled in all buffers where `%s' would do it.
+With prefix ARG, turn %s on if and only if
+ARG is positive.
+%s is enabled in all buffers where
+\`%s' would do it.
 See `%s' for more information on %s."
 		  pretty-name pretty-global-name pretty-name turn-on
 		  mode pretty-name)

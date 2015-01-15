@@ -1,6 +1,6 @@
 /* Define frame-object for GNU Emacs.
    Copyright (C) 1993, 1994, 1999, 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -595,6 +595,11 @@ typedef struct frame *FRAME_PTR;
 #define FRAME_TOP_MARGIN(F) \
      (FRAME_MENU_BAR_LINES (F) + FRAME_TOOL_BAR_LINES (F))
 
+/* Pixel height of the top margin above.  */
+
+#define FRAME_TOP_MARGIN_HEIGHT(f) \
+  (FRAME_TOP_MARGIN (f) * FRAME_LINE_HEIGHT (f))
+
 /* Nonzero if this frame should display a menu bar
    in a way that does not use any text lines.  */
 #if defined (USE_X_TOOLKIT) || defined (HAVE_NTGUI) || defined (HAVE_MACGUI) \
@@ -980,7 +985,7 @@ extern Lisp_Object selected_frame;
    at ROW/COL.  */
 
 #define FRAME_LINE_TO_PIXEL_Y(f, row) \
-  (FRAME_INTERNAL_BORDER_WIDTH (f)  \
+  ((row < FRAME_TOP_MARGIN (f) ? 0 : FRAME_INTERNAL_BORDER_WIDTH (f))	\
    + (row) * FRAME_LINE_HEIGHT (f))
 
 #define FRAME_COL_TO_PIXEL_X(f, col) \
@@ -1005,7 +1010,13 @@ extern Lisp_Object selected_frame;
    the pixel on FRAME at Y/X.  */
 
 #define FRAME_PIXEL_Y_TO_LINE(f, y) \
-  (((y) - FRAME_INTERNAL_BORDER_WIDTH (f))	\
+  (((y) < FRAME_TOP_MARGIN_HEIGHT (f)	\
+    ? (y)	\
+    : ((y) < FRAME_TOP_MARGIN_HEIGHT (f) + FRAME_INTERNAL_BORDER_WIDTH (f) \
+       ? (y) - (FRAME_TOP_MARGIN_HEIGHT (f) + FRAME_INTERNAL_BORDER_WIDTH (f) \
+		/* Arrange for the division to round down.  */	\
+		+ FRAME_LINE_HEIGHT (f) - 1)	\
+       : (y) - FRAME_INTERNAL_BORDER_WIDTH (f)))	\
    / FRAME_LINE_HEIGHT (f))
 
 #define FRAME_PIXEL_X_TO_COL(f, x) \

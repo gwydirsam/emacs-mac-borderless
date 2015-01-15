@@ -1,7 +1,7 @@
 ;;; sendmail.el --- mail sending commands for Emacs.  -*- byte-compile-dynamic: t -*-
 
 ;; Copyright (C) 1985, 1986, 1992, 1993, 1994, 1995, 1996, 1998, 2000,
-;;   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+;;   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 ;;   Free Software Foundation, Inc.
 
 ;; Maintainer: FSF
@@ -1505,14 +1505,18 @@ and don't delete any header fields."
   (interactive "P")
   (if mail-reply-action
       (let ((start (point))
-	    (original mail-reply-action))
+	    (original mail-reply-action)
+	    (omark (mark t)))
 	(and (consp original) (eq (car original) 'insert-buffer)
 	     (setq original (nth 1 original)))
 	(if (consp original)
-	    (apply (car original) (cdr original))
-	  ;; If the original message is in another window in the same frame,
-	  ;; delete that window to save screen space.
-	  ;; t means don't alter other frames.
+	    (progn
+	      ;; Call yank function, and set the mark if it doesn't.
+	      (apply (car original) (cdr original))
+	      (if (eq omark (mark t))
+		  (push-mark (point))))
+	  ;; If the original message is in another window in the same
+	  ;; frame, delete that window to save space.
 	  (delete-windows-on original t)
 	  (with-no-warnings
 	    ;; We really want this to set mark.

@@ -1,6 +1,6 @@
 ;;; rmailmm.el --- MIME decoding and display stuff for RMAIL
 
-;; Copyright (C) 2006, 2007, 2008, 2009  Free Software Foundation, Inc.
+;; Copyright (C) 2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
 ;; Author: Alexander Pohoyda
 ;;	Alex Schroeder
@@ -361,7 +361,10 @@ The parsed header value:
 	 (setq content-transfer-encoding nil))
 	((string= content-transfer-encoding "8bit")
 	 ;; FIXME: Is this the correct way?
-	 (set-buffer-multibyte nil)))
+         ;; No, of course not, it just means there's no decoding to do.
+	 ;; (set-buffer-multibyte nil)
+         (setq content-transfer-encoding nil)
+         ))
   ;; Inline stuff requires work.  Attachments are handled by the bulk
   ;; handler.
   (if (string= "inline" (car content-disposition))

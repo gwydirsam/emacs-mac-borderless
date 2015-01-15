@@ -1,3 +1,55 @@
+2010-01-21  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus.texi (Score File Format): Fix typo.
+
+2010-01-19  Mark A. Hershberger  <mah@everybody.org>
+
+	* cc-mode.texi: Replace references to obsolete c-subword-mode.
+
+2010-01-18  Juanma Barranquero  <lekktu@gmail.com>
+
+	* ada-mode.texi (Project File Overview): Fix typo.
+
+2010-01-17  Chong Yidong  <cyd@stupidchicken.com>
+
+	* semantic.texi: Add Richard Y. Kim credit.
+
+	* eieio.texi (Making New Objects): Fix typo (Bug#5406).
+
+2010-01-17  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Frequently Asked Questions): Add GNU Emacs 23 and
+	SXEmacs	22 to the supported systems.  New item for hung ssh sessions.
+
+2010-01-17  Glenn Morris  <rgm@gnu.org>
+
+	* calc.texi (Reporting Bugs): Don't mention format of repository.
+
+	* woman.texi (Bugs): Make "Emacs repository" less specific,
+	and the URL for same more specific.
+
+	* faq.texi (Latest version of Emacs): The repository is now Bazaar.
+
+2010-01-17  Juanma Barranquero  <lekktu@gmail.com>
+
+	* ede.texi (ede-step-project, ede-proj-target):
+	* tramp.texi (Remote processes): Fix typos.
+
+2010-01-16  Mario Lang  <mlang@delysid.org>
+
+	* ede.texi (ede-target):
+	* org.texi (Refiling notes): Remove duplicated words.
+
+2010-01-04  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* gnus.texi (Posting Styles): Use with-current-buffer.
+	* calc.texi (Defining Simple Commands): Prefer save-current-buffer.
+
+2010-01-02  Kevin Ryde  <user42@zip.com.au>
+
+	* eieio.texi (Naming Conventions): Correction to xref on elisp
+	coding conventions, is "Tips" node not "Standards".
+
 2009-12-24  Chong Yidong  <cyd@stupidchicken.com>
 
 	* calc.texi (General Mode Commands): Calc file should be in .emacs.d.
@@ -6170,8 +6222,8 @@
 
 1998-04-06  Andreas Schwab  <schwab@gnu.org>
 
-	* Makefile.in (ENVADD): Enviroment vars to pass to texi2dvi.  Use
-	it in dvi targets.
+	* Makefile.in (ENVADD): Environment vars to pass to texi2dvi.
+	Use it in dvi targets.
 	(../etc/GNU): Change to $(srcdir) first.
 
 1998-03-11  Carsten Dominik  <cd@delysid.gnu.org>
@@ -6507,7 +6559,7 @@
 ;; End:
 
     Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2001, 2002,
-      2003, 2004, 2005, 2006, 2007, 2008, 2009  Free Software Foundation, Inc.
+      2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

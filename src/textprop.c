@@ -1,6 +1,6 @@
 /* Interface code for dealing with text properties.
    Copyright (C) 1993, 1994, 1995, 1997, 1999, 2000, 2001, 2002, 2003,
-                 2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+                 2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1346,13 +1346,15 @@ the designated part of OBJECT.  */)
 /* Replace properties of text from START to END with new list of
    properties PROPERTIES.  OBJECT is the buffer or string containing
    the text.  OBJECT nil means use the current buffer.
-   SIGNAL_AFTER_CHANGE_P nil means don't signal after changes.  Value
-   is nil if the function _detected_ that it did not replace any
-   properties, non-nil otherwise.  */
+   COHERENT_CHANGE_P nil means this is being called as an internal
+   subroutine, rather than as a change primitive with checking of
+   read-only, invoking change hooks, etc..  Value is nil if the
+   function _detected_ that it did not replace any properties, non-nil
+   otherwise.  */
 
 Lisp_Object
-set_text_properties (start, end, properties, object, signal_after_change_p)
-     Lisp_Object start, end, properties, object, signal_after_change_p;
+set_text_properties (start, end, properties, object, coherent_change_p)
+     Lisp_Object start, end, properties, object, coherent_change_p;
 {
   register INTERVAL i;
   Lisp_Object ostart, oend;
@@ -1397,12 +1399,12 @@ set_text_properties (start, end, properties, object, signal_after_change_p)
 	return Qnil;
     }
 
-  if (BUFFERP (object))
+  if (BUFFERP (object) && !NILP (coherent_change_p))
     modify_region (XBUFFER (object), XINT (start), XINT (end), 1);
 
   set_text_properties_1 (start, end, properties, object, i);
 
-  if (BUFFERP (object) && !NILP (signal_after_change_p))
+  if (BUFFERP (object) && !NILP (coherent_change_p))
     signal_after_change (XINT (start), XINT (end) - XINT (start),
 			 XINT (end) - XINT (start));
   return Qt;
@@ -2028,24 +2030,41 @@ add_text_properties_from_list (object, list, delta)
 
 
 
-/* Modify end-points of ranges in LIST destructively.  LIST is a list
-   as returned from text_property_list.  Change end-points equal to
-   OLD_END to NEW_END.  */
+/* Modify end-points of ranges in LIST destructively, and return the
+   new list.  LIST is a list as returned from text_property_list.
+   Discard properties that begin at or after NEW_END, and limit
+   end-points to NEW_END.  */
 
-void
-extend_property_ranges (list, old_end, new_end)
-     Lisp_Object list, old_end, new_end;
+Lisp_Object
+extend_property_ranges (list, new_end)
+     Lisp_Object list, new_end;
 {
-  for (; CONSP (list); list = XCDR (list))
+  Lisp_Object prev = Qnil, head = list;
+  int max = XINT (new_end);
+
+  for (; CONSP (list); prev = list, list = XCDR (list))
     {
-      Lisp_Object item, end;
+      Lisp_Object item, beg, end;
 
       item = XCAR (list);
+      beg = XCAR (item);
       end = XCAR (XCDR (item));
 
-      if (EQ (end, old_end))
+      if (XINT (beg) >= max)
+	{
+	  /* The start-point is past the end of the new string.
+	     Discard this property.  */
+	  if (EQ (head, list))
+	    head = XCDR (list);
+	  else
+	    XSETCDR (prev, XCDR (list));
+	}
+      else if (XINT (end) > max)
+	/* The end-point is past the end of the new string.  */
 	XSETCAR (XCDR (item), new_end);
     }
+
+  return head;
 }
 
 

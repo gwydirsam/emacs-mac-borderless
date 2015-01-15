@@ -1,6 +1,6 @@
 /* X Communication module for terminals which understand the X protocol.
    Copyright (C) 1989, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-                 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+                 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
                  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -753,11 +753,6 @@ x_after_update_window_line (desired_row)
     {
       int y = WINDOW_TO_FRAME_PIXEL_Y (w, max (0, desired_row->y));
 
-      /* Internal border is drawn below the tool bar.  */
-      if (WINDOWP (f->tool_bar_window)
-	  && w == XWINDOW (f->tool_bar_window))
-	y -= width;
-
       BLOCK_INPUT;
       x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
 		    0, y, width, height, False);
@@ -1383,19 +1378,27 @@ x_draw_composite_glyph_string_foreground (s)
 	      if (j < i)
 		{
 		  font->driver->draw (s, j, i, x, y, 0);
+		  if (s->face->overstrike)
+		    font->driver->draw (s, j, i, x + 1, y, 0);
 		  x += width;
 		}
 	      xoff = LGLYPH_XOFF (glyph);
 	      yoff = LGLYPH_YOFF (glyph);
 	      wadjust = LGLYPH_WADJUST (glyph);
 	      font->driver->draw (s, i, i + 1, x + xoff, y + yoff, 0);
+	      if (s->face->overstrike)
+		font->driver->draw (s, i, i + 1, x + xoff + 1, y + yoff, 0);
 	      x += wadjust;
 	      j = i + 1;
 	      width = 0;
 	    }
 	}
       if (j < i)
-	font->driver->draw (s, j, i, x, y, 0);
+	{
+	  font->driver->draw (s, j, i, x, y, 0);
+	  if (s->face->overstrike)
+	    font->driver->draw (s, j, i, x + 1, y, 0);
+	}
     }
 }
 
@@ -2951,6 +2954,12 @@ x_clear_frame (struct frame *f)
      colors or something like that, then they should be notified.  */
   x_scroll_bar_clear (f);
 
+#if defined (USE_GTK) && defined (USE_TOOLKIT_SCROLL_BARS)
+  /* Make sure scroll bars are redrawn.  As they aren't redrawn by
+     redisplay, do it here.  */
+  gtk_widget_queue_draw (FRAME_GTK_WIDGET (f));
+#endif
+  
   XFlush (FRAME_X_DISPLAY (f));
 
   UNBLOCK_INPUT;
@@ -3056,7 +3065,7 @@ XTflash (f)
 	  XFillRectangle (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), gc,
 			  flash_left,
 			  (FRAME_INTERNAL_BORDER_WIDTH (f)
-			   + FRAME_TOOL_BAR_LINES (f) * FRAME_LINE_HEIGHT (f)),
+			   + FRAME_TOP_MARGIN_HEIGHT (f)),
 			  width, flash_height);
 	  XFillRectangle (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), gc,
 			  flash_left,
@@ -3110,7 +3119,7 @@ XTflash (f)
 	  XFillRectangle (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), gc,
 			  flash_left,
 			  (FRAME_INTERNAL_BORDER_WIDTH (f)
-			   + FRAME_TOOL_BAR_LINES (f) * FRAME_LINE_HEIGHT (f)),
+			   + FRAME_TOP_MARGIN_HEIGHT (f)),
 			  width, flash_height);
 	  XFillRectangle (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), gc,
 			  flash_left,
@@ -5788,6 +5797,7 @@ event_handler_gdk (gxev, ev, data)
 {
   XEvent *xev = (XEvent *) gxev;
 
+  BLOCK_INPUT;
   if (current_count >= 0)
     {
       struct x_display_info *dpyinfo;
@@ -5798,22 +5808,26 @@ event_handler_gdk (gxev, ev, data)
       /* Filter events for the current X input method.
          GTK calls XFilterEvent but not for key press and release,
          so we do it here.  */
-      if (xev->type == KeyPress || xev->type == KeyRelease)
-        if (dpyinfo && x_filter_event (dpyinfo, xev))
-          return GDK_FILTER_REMOVE;
+      if ((xev->type == KeyPress || xev->type == KeyRelease)
+	  && dpyinfo
+	  && x_filter_event (dpyinfo, xev))
+	{
+	  UNBLOCK_INPUT;
+	  return GDK_FILTER_REMOVE;
+	}
 #endif
 
       if (! dpyinfo)
         current_finish = X_EVENT_NORMAL;
       else
-	{
-	  current_count +=
-	    handle_one_xevent (dpyinfo, xev, &current_finish,
-			       current_hold_quit);
-	}
+	current_count +=
+	  handle_one_xevent (dpyinfo, xev, &current_finish,
+			     current_hold_quit);
     }
   else
     current_finish = x_dispatch_event (xev, xev->xany.display);
+
+  UNBLOCK_INPUT;
 
   if (current_finish == X_EVENT_GOTO_OUT || current_finish == X_EVENT_DROP)
     return GDK_FILTER_REMOVE;
@@ -8064,32 +8078,7 @@ x_new_font (f, font_object, fontset)
 	 doing it because it's done in Fx_show_tip, and it leads to
 	 problems because the tip frame has no widget.  */
       if (NILP (tip_frame) || XFRAME (tip_frame) != f)
-        {
-	  int rows, cols;
-	  
-	  /* When the frame is maximized/fullscreen or running under for
-             example Xmonad, x_set_window_size will be a no-op.
-             In that case, the right thing to do is extend rows/cols to
-             the current frame size.  We do that first if x_set_window_size
-             turns out to not be a no-op (there is no way to know).
-             The size will be adjusted again if the frame gets a
-             ConfigureNotify event as a result of x_set_window_size.  */
-          int pixelh = FRAME_PIXEL_HEIGHT (f);
-#ifdef USE_X_TOOLKIT
-          /* The menu bar is not part of text lines.  The tool bar
-             is however.  */
-          pixelh -= FRAME_MENUBAR_HEIGHT (f);
-#endif
-          rows = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (f, pixelh);
-	  /* Update f->scroll_bar_actual_width because it is used in
-	     FRAME_PIXEL_WIDTH_TO_TEXT_COLS.  */
-	  f->scroll_bar_actual_width
-	    = FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f);
-          cols = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (f, FRAME_PIXEL_WIDTH (f));
-          
-          change_frame_size (f, rows, cols, 0, 1, 0);
-          x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
-        }
+        x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
     }
 
 #ifdef HAVE_X_I18N
@@ -8977,6 +8966,32 @@ x_set_window_size (f, change_gravity, cols, rows)
 {
   BLOCK_INPUT;
 
+  if (NILP (tip_frame) || XFRAME (tip_frame) != f)
+    {
+      int r, c;
+	  
+      /* When the frame is maximized/fullscreen or running under for
+         example Xmonad, x_set_window_size_1 will be a no-op.
+         In that case, the right thing to do is extend rows/cols to
+         the current frame size.  We do that first if x_set_window_size_1
+         turns out to not be a no-op (there is no way to know).
+         The size will be adjusted again if the frame gets a
+         ConfigureNotify event as a result of x_set_window_size.  */
+      int pixelh = FRAME_PIXEL_HEIGHT (f);
+#ifdef USE_X_TOOLKIT
+      /* The menu bar is not part of text lines.  The tool bar
+         is however.  */
+      pixelh -= FRAME_MENUBAR_HEIGHT (f);
+#endif
+      r = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (f, pixelh);
+      /* Update f->scroll_bar_actual_width because it is used in
+         FRAME_PIXEL_WIDTH_TO_TEXT_COLS.  */
+      f->scroll_bar_actual_width
+        = FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f);
+      c = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (f, FRAME_PIXEL_WIDTH (f));
+      change_frame_size (f, r, c, 0, 1, 0);
+    }
+
 #ifdef USE_GTK
   if (FRAME_GTK_WIDGET (f))
     xg_frame_set_char_size (f, cols, rows);
@@ -9811,7 +9826,7 @@ x_wm_set_icon_pixmap (f, pixmap_id)
 {
   Pixmap icon_pixmap, icon_mask;
 
-#ifndef USE_X_TOOLKIT
+#if !defined USE_X_TOOLKIT && !defined USE_GTK
   Window window = FRAME_OUTER_WINDOW (f);
 #endif
 
@@ -10066,7 +10081,6 @@ x_term_init (display_name, xrm_option, resource_name)
     int argc;
     char *argv[NUM_ARGV];
     char **argv2 = argv;
-    GdkAtom atom;
     guint id;
 #ifndef HAVE_GTK_MULTIDISPLAY
     if (!EQ (Vinitial_window_system, Qx))
@@ -10205,10 +10219,25 @@ x_term_init (display_name, xrm_option, resource_name)
 	terminal->kboard = (KBOARD *) xmalloc (sizeof (KBOARD));
 	init_kboard (terminal->kboard);
 	terminal->kboard->Vwindow_system = Qx;
+
+	/* Add the keyboard to the list before running Lisp code (via
+           Qvendor_specific_keysyms below), since these are not traced
+           via terminals but only through all_kboards.  */
+	terminal->kboard->next_kboard = all_kboards;
+	all_kboards = terminal->kboard;
+
 	if (!EQ (XSYMBOL (Qvendor_specific_keysyms)->function, Qunbound))
 	  {
 	    char *vendor = ServerVendor (dpy);
-	    /* Temporarily hide the partially initialized terminal */
+
+	    /* Protect terminal from GC before removing it from the
+	       list of terminals.  */
+	    struct gcpro gcpro1;
+	    Lisp_Object gcpro_term;
+	    XSETTERMINAL (gcpro_term, terminal);
+	    GCPRO1 (gcpro_term);
+
+	    /* Temporarily hide the partially initialized terminal.  */
 	    terminal_list = terminal->next_terminal;
 	    UNBLOCK_INPUT;
 	    terminal->kboard->Vsystem_key_alist
@@ -10217,10 +10246,9 @@ x_term_init (display_name, xrm_option, resource_name)
 	    BLOCK_INPUT;
 	    terminal->next_terminal = terminal_list;
  	    terminal_list = terminal;
+	    UNGCPRO;
 	  }
 
-	terminal->kboard->next_kboard = all_kboards;
-	all_kboards = terminal->kboard;
 	/* Don't let the initial kboard remain current longer than necessary.
 	   That would cause problems if a file loaded on startup tries to
 	   prompt in the mini-buffer.  */
@@ -10569,7 +10597,6 @@ void
 x_delete_display (dpyinfo)
      struct x_display_info *dpyinfo;
 {
-  int i;
   struct terminal *t;
 
   /* Close all frames and delete the generic struct terminal for this
@@ -10721,7 +10748,6 @@ void
 x_delete_terminal (struct terminal *terminal)
 {
   struct x_display_info *dpyinfo = terminal->display_info.x;
-  int i;
 
   /* Protect against recursive calls.  delete_frame in
      delete_terminal calls us back when it deletes our last frame.  */

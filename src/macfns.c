@@ -1,7 +1,7 @@
 /* Graphical user interface functions for Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
                  2008  Free Software Foundation, Inc.
-   Copyright (C) 2009  YAMAMOTO Mitsuharu
+   Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -221,7 +221,7 @@ x_real_positions (f, xptr, yptr)
 typedef struct colormap_t
 {
   unsigned long color;
-  char *name;
+  const char *name;
 } colormap_t;
 
 static const colormap_t mac_color_map[] =
@@ -1614,32 +1614,26 @@ x_set_tool_bar_lines (f, value, oldval)
       change_window_heights (root_window, delta);
       adjust_glyphs (f);
 
-      /* We also have to make sure that the internal border at the top
-	 of the frame, below the menu bar or tool bar, is redrawn when
-	 the tool bar disappears.  This is so because the internal
-	 border is below the tool bar if one is displayed, but is
-	 below the menu bar if there isn't a tool bar.  The tool bar
-	 draws into the area below the menu bar.  */
-      if (FRAME_MAC_WINDOW (f) && FRAME_TOOL_BAR_LINES (f) == 0)
-	{
-	  clear_frame (f);
-	  clear_current_matrices (f);
-	}
-
-      /* If the tool bar gets smaller, the internal border below it
-	 has to be cleared.  It was formerly part of the display of
-	 the larger tool bar, and updating windows won't clear it.  */
-      if (delta < 0)
+      /* If the tool bar height gets changed, the internal border
+	 below the top margin has to be cleared.  It was formerly part
+	 of the display of the larger tool bar, and updating windows
+	 won't clear it.  */
+      if (delta)
 	{
 	  int height = FRAME_INTERNAL_BORDER_WIDTH (f);
 	  int width = FRAME_PIXEL_WIDTH (f);
-	  int y = nlines * FRAME_LINE_HEIGHT (f);
 
-	  BLOCK_INPUT;
-	  mac_clear_area (f, 0, y, width, height);
-	  UNBLOCK_INPUT;
+	  /* height can be zero here. */
+	  if (height > 0 && width > 0)
+	    {
+	      int y = FRAME_TOP_MARGIN_HEIGHT (f);
 
-	  if (WINDOWP (f->tool_bar_window))
+	      BLOCK_INPUT;
+	      mac_clear_area (f, 0, y, width, height);
+	      UNBLOCK_INPUT;
+	    }
+
+	  if (delta < 0 && WINDOWP (f->tool_bar_window))
 	    clear_glyph_matrix (XWINDOW (f->tool_bar_window)->current_matrix);
 	}
     }

@@ -1,7 +1,7 @@
 ;;; vc-hooks.el --- resident support for version-control
 
 ;; Copyright (C) 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000, 2001,
-;;   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+;;   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 ;;   Free Software Foundation, Inc.
 
 ;; Author:     FSF (see vc.el for full credits)
@@ -88,6 +88,8 @@ An empty list disables VC altogether."
   "List of extra directories to search for version control commands."
   :type '(repeat directory)
   :group 'vc)
+
+(make-obsolete 'vc-path "should not be necessary anymore." "23.2")
 
 (defcustom vc-make-backup-files nil
   "If non-nil, backups of registered files are made as with other files.

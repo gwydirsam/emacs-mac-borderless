@@ -1,6 +1,6 @@
 /* Fundamental definitions for GNU Emacs Lisp interpreter.
    Copyright (C) 1985, 1986, 1987, 1993, 1994, 1995, 1997, 1998, 1999, 2000,
-                 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+                 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
                  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -2701,7 +2701,7 @@ extern Lisp_Object make_uninit_multibyte_string P_ ((int, int));
 extern Lisp_Object make_string_from_bytes P_ ((const char *, int, int));
 extern Lisp_Object make_specified_string P_ ((const char *, int, int, int));
 EXFUN (Fpurecopy, 1);
-extern Lisp_Object make_pure_string P_ ((char *, int, int, int));
+extern Lisp_Object make_pure_string P_ ((const char *, int, int, int));
 extern Lisp_Object make_pure_c_string (const char *data);
 extern Lisp_Object pure_cons P_ ((Lisp_Object, Lisp_Object));
 extern Lisp_Object make_pure_vector P_ ((EMACS_INT));

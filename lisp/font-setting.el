@@ -1,6 +1,6 @@
 ;;; font-setting.el --- Support dynamic font changes
 
-;; Copyright (C) 2009 Free Software Foundation, Inc.
+;; Copyright (C) 2009, 2010 Free Software Foundation, Inc.
 
 ;; Author: Jan Djärv <jan.h.d@swipnet.se>
 ;; Maintainer: FSF
@@ -57,7 +57,7 @@ current form for the frame (i.e. hinting or somesuch changed)."
 	(if (display-graphic-p f)
 	    (let* ((frame-font
 		    (or (font-get (face-attribute 'default :font f
-						  'default) :name)
+						  'default) :user-spec)
 			(frame-parameter f 'font-parameter)))
 		   (font-to-set
 		    (if set-font new-font
