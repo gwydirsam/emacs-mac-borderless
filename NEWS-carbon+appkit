@@ -1,3 +1,22 @@
+* emacs-22.3-appkit-1.5 (2009-08-03)
+
+** Fixed bugs
+
+*** "open -g" (available on Mac OS X 10.5 and later) does not work.
+
+*** Control-Tab is not recognized on Mac OS X 10.4 and earlier.
+
+** Improvements
+
+*** Resizing truncates the window width/height to multiple of the
+nominal character size instead of rounding unless the resizing is
+triggered by mouse dragging of the resize handle.
+
+*** Warning "CFMessagePort: bootstrap_register(): failed" with
+multiple invocations via command-line or "open -n" is suppressed
+(except for Mac OS X 10.4).
+
+
 * emacs-22.3-appkit-1.4 (2009-06-27)
 
 ** Fixed bugs

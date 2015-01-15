@@ -968,7 +968,12 @@ install_application_handler ()
     err = install_menu_target_item_handler ();
 
 #ifdef MAC_OSX
-  if (err == noErr)
+  /* Try to suppress the warning "CFMessagePort: bootstrap_register():
+     failed" displayed by the second instance of Emacs.  Strictly
+     speaking, there's a race condition, but it is not critical
+     anyway.  Unfortunately, Mac OS X 10.4 still displays warnings at
+     the first event loop.  */
+  if (err == noErr && !mac_service_provider_registered_p ())
     err = install_service_handler ();
 #endif
 

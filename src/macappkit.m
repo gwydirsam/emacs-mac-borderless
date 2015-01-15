@@ -659,7 +659,13 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
-  [NSApp setServicesProvider:self];
+  /* Try to suppress the warning "CFMessagePort: bootstrap_register():
+     failed" displayed by the second instance of Emacs.  Strictly
+     speaking, there's a race condition, but it is not critical
+     anyway.  Unfortunately, Mac OS X 10.4 still displays warnings at
+     -[NSApplication setServicesMenu:] or the first event loop.  */
+  if (!mac_service_provider_registered_p ())
+    [NSApp setServicesProvider:self];
 
   /* Dummy object creation/destruction so +[NSTSMInputContext
      initialize] can install a handler to the event dispatcher target
@@ -741,14 +747,29 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
       {
 	NSUInteger flags = [event modifierFlags];
 	UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
+	unsigned short key_code = [event keyCode];
 	NSString *characters;
 	unsigned char char_code;
 
-	if (!(mac_mapped_modifiers (modifiers, [event keyCode])
+	if (!(mac_mapped_modifiers (modifiers, key_code)
 	      & ~(mac_pass_command_to_system ? cmdKey : 0)
 	      & ~(mac_pass_control_to_system ? controlKey : 0))
 	    && ([NSApp keyWindow] || (flags & NSCommandKeyMask)))
-	  goto OTHER;
+	  {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	    /* This is a workaround for the problem that Control-Tab
+	       is not recognized on Mac OS X 10.4 and earlier.  */
+	    if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4
+		&& [[[NSApp keyWindow] firstResponder]
+		     isMemberOfClass:[EmacsView class]]
+		&& key_code == 0x30 /* kVK_Tab */
+		&& ((flags & (NSControlKeyMask | NSCommandKeyMask))
+		    == NSControlKeyMask)
+		&& [[NSApp mainMenu] performKeyEquivalent:event])
+	      break;
+#endif
+	    goto OTHER;
+	  }
 
 	characters = [event characters];
 	if ([characters length] == 1 && [characters characterAtIndex:0] < 0x80)
@@ -757,7 +778,7 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 	  char_code = 0;
 
 	do_keystroke (([event isARepeat] ? autoKey : keyDown),
-		      char_code, [event keyCode], modifiers,
+		      char_code, key_code, modifiers,
 		      [event timestamp] * 1000, &inev);
 
 	[self storeEvent:&inev];
@@ -1263,13 +1284,14 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 {
   struct frame *f = emacsFrame;
   NSEvent *currentEvent = [NSApp currentEvent];
+  BOOL leftMouseDragged = ([currentEvent type] == NSLeftMouseDragged);
   XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
   EmacsView *emacsView = FRAME_EMACS_VIEW (f);
   NSRect windowFrame, emacsViewFrame;
   NSSize emacsViewSizeInPixels, emacsViewSize;
   CGFloat dw, dh;
 
-  if ([currentEvent type] == NSLeftMouseDragged)
+  if (leftMouseDragged)
     {
       EmacsWindow *window = (EmacsWindow *) sender;
 
@@ -1295,7 +1317,7 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   else
     emacsViewSize.width = size_hints->base_width
       + (int) ((emacsViewSize.width - size_hints->base_width)
-	       / (float) size_hints->width_inc + .5)
+	       / size_hints->width_inc + (leftMouseDragged ? .5 : 0))
       * size_hints->width_inc;
 
   if (emacsViewSize.height < size_hints->min_height)
@@ -1303,7 +1325,7 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   else
     emacsViewSize.height = size_hints->base_height
       + (int) ((emacsViewSize.height - size_hints->base_height)
-	       / (float) size_hints->height_inc + .5)
+	       / size_hints->height_inc + (leftMouseDragged ? .5 : 0))
       * size_hints->height_inc;
 
   emacsViewSizeInPixels = [emacsView convertSize:emacsViewSize toView:nil];
@@ -5243,7 +5265,7 @@ x_activate_menubar (f)
 
   if (menu_item_selection)
     find_and_call_menu_selection (f, f->menu_bar_items_used, f->menu_bar_vector,
-				  (void *) (long) menu_item_selection);
+				  (void *) (intptr_t) menu_item_selection);
 }
 
 /* Set up the initial menu bar.  */

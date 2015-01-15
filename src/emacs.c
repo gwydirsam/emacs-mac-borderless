@@ -938,10 +938,7 @@ main (argc, argv
      these cases, the working directory becomes `/', so we change it
      to the user's home directory.  */
   if (argc > skip_args + 1 && strncmp (argv[skip_args+1], "-psn_", 5) == 0)
-    {
-      chdir (getenv ("HOME"));
-      skip_args++;
-    }
+    chdir (getenv ("HOME"));
 #endif /* MAC_OSX */
 
 #ifdef VMS

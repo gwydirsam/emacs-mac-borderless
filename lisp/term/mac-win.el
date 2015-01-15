@@ -236,6 +236,24 @@ This function returns ARGS minus the arguments that have been processed."
 	(setq args (cons orig-this-switch args)))))
   (nconc (nreverse args) x-invocation-args))
 
+(defvar mac-startup-options nil
+  "Alist of Mac-specific startup options.
+Each element looks like (OPTION-TYPE . OPTIONS).
+OPTION-TYPE is a symbol specifying the type of startup options:
+
+ command-line -- List of Mac-specific command line options.")
+
+(defun mac-handle-args (args)
+  "Process the Mac-related command line options in ARGS.
+It records Mac-specific options (currently -psn_HIGH_LOW added by
+Launch Services) in `mac-startup-options' as a value for the key
+symbol `command-line' and forwards the remaining ones to
+`x-handle-args'."
+  (when (and (cadr args) (string-match "\\`-psn_" (cadr args)))
+    (push (cons 'command-line (list (cadr args))) mac-startup-options)
+    (setq args (cons (car args) (cddr args))))
+  (x-handle-args args))
+
 
 ;;
 ;; Standard Mac cursor shapes
@@ -2555,7 +2573,7 @@ See also `mac-dnd-known-types'."
 ;;; Do the actual Windows setup here; the above code just defines
 ;;; functions and variables that we use now.
 
-(setq command-line-args (x-handle-args command-line-args))
+(setq command-line-args (mac-handle-args command-line-args))
 
 ;;; Make sure we have a valid resource name.
 (or (stringp x-resource-name)
@@ -3007,7 +3025,9 @@ ascii:-*-Monaco-*-*-*-*-12-*-*-*-*-*-mac-roman")
 ;; If Emacs is invoked from the command line, the initial frame
 ;; doesn't get focused.
 (add-hook 'after-init-hook
-	  (lambda () (if (eq (frame-visible-p (selected-frame)) t)
+	  (lambda () (if (and (null (cdr (assq 'command-line
+					       mac-startup-options)))
+			      (eq (frame-visible-p (selected-frame)) t))
 			 (x-focus-frame (selected-frame)))))
 
 ;; arch-tag: 71dfcd14-cde8-4d66-b05c-85ec94fb23a6

@@ -510,7 +510,7 @@ struct scroll_bar {
    scroll_bar.  */
 #define SET_SCROLL_BAR_SCROLLER(ptr, ref)				\
   (SCROLL_BAR_UNPACK ((ptr)->control_ref_low,				\
-                      (ptr)->control_ref_high, (unsigned long) (ref)))
+                      (ptr)->control_ref_high, (uintptr_t) (ref)))
 #else  /* !USE_APPKIT */
 /* Extract the Mac control handle of the scroll bar from a struct
    scroll_bar.  */
@@ -759,6 +759,7 @@ extern Lisp_Object xrm_get_resource P_ ((XrmDatabase, const char *,
 					 const char *));
 extern XrmDatabase xrm_get_preference_database P_ ((const char *));
 EXFUN (Fmac_get_preference, 4);
+extern int mac_service_provider_registered_p P_ ((void));
 
 /* Defined in macappkit.m or mactoolbox.c.  */
 

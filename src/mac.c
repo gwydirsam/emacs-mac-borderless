@@ -68,6 +68,13 @@ Boston, MA 02110-1301, USA.  */
 #include <unistd.h>
 #endif
 
+#ifdef MAC_OSX
+#undef init_process
+#include <mach/mach.h>
+#include <servers/bootstrap.h>
+#define init_process emacs_init_process
+#endif
+
 /* The system script code. */
 static EMACS_INT mac_system_script_code;
 
@@ -5393,7 +5400,7 @@ mac_try_close_socket (fd)
 #if SELECT_USE_CFSOCKET
   if (getpid () == mac_emacs_pid && cfsockets_for_select)
     {
-      void *key = (void *) (long) fd;
+      void *key = (void *) (intptr_t) fd;
       CFSocketRef socket =
 	(CFSocketRef) CFDictionaryGetValue (cfsockets_for_select, key);
 
@@ -5506,7 +5513,7 @@ sys_select (nfds, rfds, wfds, efds, timeout)
 	  for (fd = minfd; fd < nfds; fd++)
 	    if (FD_ISSET (fd, rfds) || (wfds && FD_ISSET (fd, wfds)))
 	      {
-		void *key = (void *) (long) fd;
+		void *key = (void *) (intptr_t) fd;
 		CFRunLoopSourceRef source =
 		  (CFRunLoopSourceRef) CFDictionaryGetValue (sources, key);
 
@@ -5536,7 +5543,7 @@ sys_select (nfds, rfds, wfds, efds, timeout)
 	  for (fd = minfd; fd < nfds; fd++)
 	    if (FD_ISSET (fd, rfds) || (wfds && FD_ISSET (fd, wfds)))
 	      {
-		void *key = (void *) (long) fd;
+		void *key = (void *) (intptr_t) fd;
 		CFRunLoopSourceRef source =
 		  (CFRunLoopSourceRef) CFDictionaryGetValue (sources, key);
 
@@ -5601,6 +5608,34 @@ sys_select (nfds, rfds, wfds, efds, timeout)
     EMACS_SET_SECS_USECS (select_timeout, 0, 0);
     return select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
   }
+}
+
+/* Return whether the service provider for the current application is
+   already registered.  */
+
+int
+mac_service_provider_registered_p ()
+{
+  name_t name = "org.gnu.Emacs";
+  CFBundleRef bundle;
+  mach_port_t port;
+
+  bundle = CFBundleGetMainBundle ();
+  if (bundle)
+    {
+      CFStringRef identifier = CFBundleGetIdentifier (bundle);
+
+      if (identifier)
+	{
+	  CFStringGetCString (identifier, name, sizeof (name),
+			      kCFStringEncodingUTF8);
+	  CFRelease (identifier);
+	}
+    }
+  /* Mac OS X 10.1 doesn't have strlcat.  */
+  strncat (name, ".ServiceProvider", sizeof (name) - strlen (name) - 1);
+
+  return bootstrap_look_up (bootstrap_port, name, &port) == KERN_SUCCESS;
 }
 
 /* Set up environment variables so that Emacs can correctly find its
