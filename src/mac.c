@@ -658,6 +658,7 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
  ***********************************************************************/
 
 Lisp_Object Qstring, Qnumber, Qboolean, Qdate, Qarray, Qdictionary;
+Lisp_Object Qrange, Qpoint;
 extern Lisp_Object Qdata;
 static Lisp_Object Qdescription;
 
@@ -1050,17 +1051,27 @@ cfobject_to_lisp (obj, flags, hash_bound)
     }
   else
     {
-      CFStringRef desc = CFCopyDescription (obj);
+      Lisp_Object tag_result = mac_nsvalue_to_lisp (obj);
 
-      tag = Qdescription;
-      if (desc)
+      if (CONSP (tag_result))
 	{
-	  if (flags & CFOBJECT_TO_LISP_DONT_DECODE_STRING)
-	    result = cfstring_to_lisp_nodecode (desc);
-	  else
-	    result = cfstring_to_lisp (desc);
+	  tag = XCAR (tag_result);
+	  result = XCDR (tag_result);
+	}
+      else
+	{
+	  CFStringRef desc = CFCopyDescription (obj);
 
-	  CFRelease (desc);
+	  tag = Qdescription;
+	  if (desc)
+	    {
+	      if (flags & CFOBJECT_TO_LISP_DONT_DECODE_STRING)
+		result = cfstring_to_lisp_nodecode (desc);
+	      else
+		result = cfstring_to_lisp (desc);
+
+	      CFRelease (desc);
+	    }
 	}
     }
 
@@ -3517,6 +3528,8 @@ syms_of_mac ()
   Qdate	   = intern_c_string ("date");		staticpro (&Qdate);
   Qarray   = intern_c_string ("array");		staticpro (&Qarray);
   Qdictionary = intern_c_string ("dictionary");	staticpro (&Qdictionary);
+  Qrange = intern_c_string ("range");		staticpro (&Qrange);
+  Qpoint = intern_c_string ("point");		staticpro (&Qpoint);
   Qdescription = intern_c_string ("description"); staticpro (&Qdescription);
 
   Qmac_file_alias_p = intern_c_string ("mac-file-alias-p");

@@ -565,7 +565,8 @@ in `selection-converter-alist', which see."
 	       ((or (not clip-text) (equal clip-text ""))
 		(setq x-last-selected-text-clipboard nil))
 	       ((eq      clip-text x-last-selected-text-clipboard) nil)
-	       ((equal clip-text x-last-selected-text-clipboard)
+	       ((equal-including-properties clip-text
+					    x-last-selected-text-clipboard)
 		;; Record the newer string,
 		;; so subsequent calls can use the `eq' test.
 		(setq x-last-selected-text-clipboard clip-text)
@@ -583,7 +584,8 @@ in `selection-converter-alist', which see."
 	       ((or (not primary-text) (equal primary-text ""))
 		(setq x-last-selected-text-primary nil))
 	       ((eq      primary-text x-last-selected-text-primary) nil)
-	       ((equal primary-text x-last-selected-text-primary)
+	       ((equal-including-properties primary-text
+					    x-last-selected-text-primary)
 		;; Record the newer string,
 		;; so subsequent calls can use the `eq' test.
 		(setq x-last-selected-text-primary primary-text)
@@ -1141,6 +1143,16 @@ the echo area or in a buffer where the cursor is not displayed."
   'mac-text-input-insert-text)
 
 ;;; Converted Actions
+(defun mac-handle-copy (event)
+  "Copy the selected text to the clipboard.
+This is used in response to \"Speak selected text.\""
+  (interactive "e")
+  (let ((string
+	 (condition-case nil
+	     (buffer-substring-no-properties (region-beginning) (region-end))
+	   (error ""))))
+    (x-set-selection 'CLIPBOARD string)))
+
 (defun mac-handle-toolbar-pill-button-clicked (event)
   "Toggle visibility of tool-bars in response to EVENT.
 With no keyboard modifiers, it toggles the visibility of the
@@ -1160,13 +1172,14 @@ modifiers, it changes the global tool-bar visibility setting."
 ;; Currently, this is called only when the zoom button is clicked
 ;; while the frame is in fullwidth/fullheight/maximized.
 (defun mac-handle-zoom (event)
-  (interactive "e")
   "Cancel frame fullscreen status in response to EVENT."
+  (interactive "e")
   (let ((ae (mac-event-ae event)))
     (let ((frame (cdr (mac-ae-parameter ae 'frame))))
       (set-frame-parameter frame 'fullscreen nil))))
 
 (define-key mac-apple-event-map [action about] 'about-emacs)
+(define-key mac-apple-event-map [action copy] 'mac-handle-copy)
 (define-key mac-apple-event-map [action preferences] 'customize)
 (define-key mac-apple-event-map [action toolbar-pill-button-clicked]
  'mac-handle-toolbar-pill-button-clicked)
@@ -1217,6 +1230,53 @@ modifiers, it changes the global tool-bar visibility setting."
  'mac-handle-show-all-help-topics)
 (put 'show-all-help-topics 'mac-action-key-paths
      '("searchStringForAllHelpTopics"))
+
+;;; Accessibility
+(defun mac-ax-set-selected-text-range (event)
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (tag-data (cdr (mac-ae-parameter ae)))
+	 (window (cdr (mac-ae-parameter ae 'window))))
+    (if (and (eq window (posn-window (event-start event)))
+	     (eq (car tag-data) 'range))
+	(goto-char (+ (point-min) (car (cdr tag-data)))))))
+
+(defun mac-ax-set-visible-character-range (event)
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (tag-data (cdr (mac-ae-parameter ae)))
+	 (window (cdr (mac-ae-parameter ae 'window))))
+    (if (and (eq window (posn-window (event-start event)))
+	     (eq (car tag-data) 'range))
+	(set-window-start window (+ (point-min) (car (cdr tag-data)))))))
+
+(defun mac-ax-show-menu (event)
+  "Pop up major mode menu near the point in response to accessibility EVENT."
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (window (cdr (mac-ae-parameter ae 'window))))
+    ;; Check if a different window is selected after the event
+    ;; occurred.
+    (if (eq window (posn-window (event-start event)))
+	(let* ((posn (posn-at-point))
+	       (x-y (posn-x-y posn))
+	       (width-height (posn-object-width-height posn))
+	       (edges (window-pixel-edges))
+	       (inside-edges (window-inside-pixel-edges))
+	       (xoffset (+ (- (car inside-edges) (car edges))
+			   (car x-y)
+			   (min (car width-height) (frame-char-width))))
+	       (yoffset (+ (cdr x-y)
+			   (min (cdr width-height) (frame-char-height)))))
+	  (popup-menu (mouse-menu-major-mode-map)
+		      (list (list xoffset yoffset) window))))))
+
+(define-key mac-apple-event-map [accessibility set-selected-text-range]
+  'mac-ax-set-selected-text-range)
+(define-key mac-apple-event-map [accessibility set-visible-character-range]
+  'mac-ax-set-visible-character-range)
+(define-key mac-apple-event-map [accessibility show-menu]
+  'mac-ax-show-menu)
 
 ;;; Services
 (defun mac-service-open-file ()
@@ -1460,15 +1520,6 @@ non-nil, and the input device supports it."
 			      (posn-at-x-y (car point-coord)
 					   (max (cadr point-coord) first-y)
 					   window-to-scroll))))
-		    (when (and point-posn
-			       (> (- (+ (window-vscroll window-to-scroll t)
-					(cadr point-coord)
-					(cdr (posn-object-width-height
-					      point-posn)))
-				     first-y)
-				  window-inside-pixel-height))
-		      (with-selected-window window-to-scroll
-			(forward-line -1)))
 		    (redisplay t)
 		    (window-line-height 'header-line window-to-scroll))))
 	     (first-height (window-line-height 0 window-to-scroll))
@@ -1544,7 +1595,7 @@ non-nil, and the input device supports it."
 		  (end-of-buffer
 		   (set-window-vscroll nil 0 t)
 		   (condition-case nil
-		       (while t (scroll-up 1))
+		       (funcall mwheel-scroll-up-function 1)
 		     (end-of-buffer))
 		   (setq delta-y 0)))
 		(set-window-vscroll nil 0 t))
@@ -1688,16 +1739,24 @@ non-nil, and the input device supports it."
 				       (1+ target-row)))
 			  (setq delta-y (- delta-y scrolled-pixel-height)))))
 		(beginning-of-buffer
+		 (condition-case nil
+		     (funcall mwheel-scroll-down-function 1)
+		   (beginning-of-buffer))
 		 (setq delta-y 0))
 		(end-of-buffer
 		 (condition-case nil
-		     (while t (scroll-up 1))
+		     (funcall mwheel-scroll-up-function 1)
 		   (end-of-buffer))
 		 (setq delta-y 0)))
 	      (when (> delta-y 0)
 		(scroll-down 1)
 		(set-window-vscroll nil delta-y t)
-		(setq redisplay-needed t)))
+		(setq redisplay-needed t))
+	      (if (> (count-screen-lines (window-start) (window-end)) 1)
+		  ;; Make sure that the cursor is fully visible.
+		  (while (and (< (window-start) (point))
+			      (not (pos-visible-in-window-p)))
+		    (vertical-motion -1))))
 	  (if curwin (select-window curwin))
 	  (if redisplay-needed
 	      (let ((mac-redisplay-dont-reset-vscroll t))
@@ -1730,6 +1789,61 @@ Return non-nil if the new state is enabled."
                            mouse-wheel-scroll-amount))
         (global-set-key key 'mac-mwheel-scroll)
 	(push key mac-mwheel-installed-bindings)))))
+
+
+;;; Trackpad events
+(defvar text-scale-mode-step) ;; in face-remap.el
+
+(defvar mac-text-scale-magnification 1.0
+  "Magnification value for text scaling.
+The variable `text-scale-mode-amount' is set to the rounded
+logarithm of this value using the value of `text-scale-mode-step'
+as base.")
+(make-variable-buffer-local 'mac-text-scale-magnification)
+
+(defcustom mac-text-scale-magnification-range '(0.1 . 20.0)
+  "Pair of mininum and maximum values for `mac-text-scale-magnification'."
+  :type '(cons number number)
+  :group 'mac)
+
+(defun mac-magnify-text-scale (event)
+  "Magnify the height of the default face in the buffer where EVENT happened.
+The actual magnification is performed by `text-scale-mode'."
+  (interactive "e")
+  (require 'face-remap)
+  (with-selected-window (posn-window (event-start event))
+    (let ((magnification (car (nth 3 event)))
+	  level)
+      (setq mac-text-scale-magnification
+	    (min (max (* mac-text-scale-magnification (+ 1.0 magnification))
+		      (car mac-text-scale-magnification-range))
+		 (cdr mac-text-scale-magnification-range)))
+      (setq level
+	    (round (log mac-text-scale-magnification text-scale-mode-step)))
+      (text-scale-set level))))
+
+(defun mac-mouse-turn-on-fullscreen (event)
+  "Turn on fullscreen in response to the mouse event EVENT."
+  (interactive "e")
+  (let ((frame (window-frame (posn-window (event-start event)))))
+    (if (not (eq (frame-parameter frame 'fullscreen) 'fullboth))
+	(set-frame-parameter frame 'fullscreen 'fullboth))))
+
+(defun mac-mouse-turn-off-fullscreen (event)
+  "Turn off fullscreen in response to the mouse event EVENT."
+  (interactive "e")
+  (let ((frame (window-frame (posn-window (event-start event)))))
+    (if (frame-parameter frame 'fullscreen)
+	(set-frame-parameter frame 'fullscreen nil))))
+
+(global-set-key [magnify-up] 'mac-magnify-text-scale)
+(global-set-key [magnify-down] 'mac-magnify-text-scale)
+(global-set-key [S-magnify-up] 'mac-mouse-turn-on-fullscreen)
+(global-set-key [S-magnify-down] 'mac-mouse-turn-off-fullscreen)
+(global-set-key [rotate-left] 'ignore)
+(global-set-key [rotate-right] 'ignore)
+(global-set-key [S-rotate-left] 'ignore)
+(global-set-key [S-rotate-right] 'ignore)
 
 
 ;;; Window system initialization.

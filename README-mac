@@ -157,7 +157,11 @@ without separating a GUI process (not thread) from the main Emacs
 (Lisp evaluator) process.
 
 
-2. Build instruction
+2. Build instructions
+
+  NOTE: Some older versions of Xcode for Mac OS X 10.4 are known to be
+  incompatible with newer versions of WebKit.  At least, Xcode 2.4.1
+  works, but Xcode 2.1 has some problems.
 
   a. Get the official GNU Emacs 23.X distribution tarball from some
      GNU mirror site if this file is part of

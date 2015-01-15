@@ -5380,7 +5380,8 @@ static char *lispy_wheel_names[] =
 {
   "wheel-up", "wheel-down", "wheel-left", "wheel-right"
 #ifdef HAVE_MACGUI
-  , "swipe-up", "swipe-down", "swipe-left", "swipe-right"
+  , "swipe-up", "swipe-down", "swipe-left", "swipe-right",
+  "magnify-up", "magnify-down", "rotate-left", "rotate-right"
 #endif
 };
 
@@ -6094,6 +6095,12 @@ make_lispy_event (event)
 	      /* Emit a swipe event.  */
 	      event->modifiers &= ~drag_modifier;
 	      symbol_num += 4;
+	    }
+          else if (event->modifiers & click_modifier)
+	    {
+	      /* Emit a maginify/rotate event.  */
+	      event->modifiers &= ~click_modifier;
+	      symbol_num += 8;
 	    }
 #endif
 

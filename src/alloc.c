@@ -5088,6 +5088,10 @@ returns nil, because real GC can't be done.  */)
 
   /* Mark all the special slots that serve as the roots of accessibility.  */
 
+  /* Terminals need to be marked in a special way.  But they can be
+     reachable from other roots and might be marked normally if
+     mark_terminals is called later.  */
+  mark_terminals ();
   for (i = 0; i < staticidx; i++)
     mark_object (*staticvec[i]);
 
@@ -5096,7 +5100,6 @@ returns nil, because real GC can't be done.  */)
       mark_object (bind->symbol);
       mark_object (bind->old_value);
     }
-  mark_terminals ();
   mark_kboards ();
   mark_ttys ();
 

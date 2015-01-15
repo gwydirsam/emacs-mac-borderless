@@ -165,6 +165,55 @@ NSRectToCGRect (nsrect)
   return cfstring_to_lisp_utf_16 ((CFStringRef) self);
 }
 
+/* Return an array containing substrings from the receiver that have
+   been divided by "camelcasing".  If SEPARATOR is non-nil, it
+   specifies separating characters that are used instead of upper case
+   letters.  */
+
+- (NSArray *)componentsSeparatedByCamelCasingWithCharactersInSet:(NSCharacterSet *)separator
+{
+  NSMutableArray *result = [NSMutableArray arrayWithCapacity:0];
+  NSUInteger length = [self length];
+  NSRange upper = NSMakeRange (0, 0), rest = NSMakeRange (0, length);
+
+  if (separator == nil)
+    separator = [NSCharacterSet uppercaseLetterCharacterSet];
+
+  while (rest.length != 0)
+    {
+      NSRange next = [self rangeOfCharacterFromSet:separator options:0
+					     range:rest];
+
+      if (next.location == rest.location)
+	upper.length = next.location - upper.location;
+      else
+	{
+	  NSRange capitalized;
+
+	  if (next.location == NSNotFound)
+	    next.location = length;
+	  if (upper.length)
+	    [result addObject:[self substringWithRange:upper]];
+	  capitalized.location = NSMaxRange (upper);
+	  capitalized.length = next.location - capitalized.location;
+	  [result addObject:[self substringWithRange:capitalized]];
+	  upper = NSMakeRange (next.location, 0);
+	  if (next.location == length)
+	    break;
+	}
+      rest.location = NSMaxRange (next);
+      rest.length = length - rest.location;
+    }
+
+  if (rest.length == 0 && length != 0)
+    {
+      upper.length = length - upper.location;
+      [result addObject:[self substringWithRange:upper]];
+    }
+
+  return result;
+}
+
 @end				// NSString (Emacs)
 
 @implementation NSFont (Emacs)
@@ -603,6 +652,65 @@ install_dispatch_handler ()
   return err;
 }
 
+extern Lisp_Object Qrange, Qpoint, Qsize, Qrect;
+
+/* Return a pair of a type tag and a Lisp object converted form the
+   NSValue object OBJ.  If the object is not an NSValue object or not
+   created from NSRange, NSPoint, NSSize, or NSRect, then return
+   nil.  */
+
+Lisp_Object
+mac_nsvalue_to_lisp (obj)
+     CFTypeRef obj;
+{
+  Lisp_Object result = Qnil;
+
+  if ([(id)obj isKindOfClass:[NSValue class]])
+    {
+      NSValue *value = (NSValue *) obj;
+      const char *type = [value objCType];
+      Lisp_Object tag = Qnil;
+
+      if (strcmp (type, @encode (NSRange)) == 0)
+	{
+	  NSRange range = [value rangeValue];
+
+	  tag = Qrange;
+	  result = Fcons (make_number (range.location),
+			  make_number (range.length));
+	}
+      else if (strcmp (type, @encode (NSPoint)) == 0)
+	{
+	  NSPoint point = [value pointValue];
+
+	  tag = Qpoint;
+	  result = Fcons (make_float (point.x), make_float (point.y));
+	}
+      else if (strcmp (type, @encode (NSSize)) == 0)
+	{
+	  NSSize size = [value sizeValue];
+
+	  tag = Qsize;
+	  result = Fcons (make_float (size.width), make_float (size.height));
+	}
+      else if (strcmp (type, @encode (NSRect)) == 0)
+	{
+	  NSRect rect = [value rectValue];
+
+	  tag = Qrect;
+	  result = list4 (make_float (NSMinX (rect)),
+			  make_float (NSMinY (rect)),
+			  make_float (NSWidth (rect)),
+			  make_float (NSHeight (rect)));
+	}
+
+      if (!NILP (tag))
+	result = Fcons (tag, result);
+    }
+
+  return result;
+}
+
 /* Autorelease pool.  */
 
 void *
@@ -655,6 +763,7 @@ extern Lisp_Object Vmac_help_topics;
 
 static void init_menu_bar P_ ((void));
 static void init_apple_event_handler P_ ((void));
+static void init_accessibility P_ ((void));
 static UInt32 mac_modifier_flags_to_modifiers P_ ((NSUInteger));
 
 static BOOL is_action_selector P_ ((SEL));
@@ -846,6 +955,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
   serviceProviderRegistered = mac_service_provider_registered_p ();
   init_menu_bar ();
   init_apple_event_handler ();
+  init_accessibility ();
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
@@ -1233,35 +1343,25 @@ emacs_windows_need_display_p (with_resize_control_p)
 			      withObject:nil];
       [keyBindingManager performSelector:@selector(setArgumentBinding:)
 			      withObject:nil];
-      /* Remove key bindings for writing direction commands as they
-	 are intercepted by NSTextInputContext on Mac OS X 10.6.  */
-      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
+      if (keyBindingsWithConflicts == nil)
 	{
-	  if (keyBindingsWithConflicts == nil)
-	    {
-	      NSArray *writingDirectionCommands =
-		[NSArray arrayWithObjects:@"insertRightToLeftSlash:",
-			 @"makeBaseWritingDirectionNatural:",
-			 @"makeBaseWritingDirectionLeftToRight:",
-			 @"makeBaseWritingDirectionRightToLeft:",
-			 @"makeTextWritingDirectionNatural:",
-			 @"makeTextWritingDirectionLeftToRight:",
-			 @"makeTextWritingDirectionRightToLeft:", nil];
-	      NSMutableDictionary *dictionary;
-	      NSEnumerator *enumerator;
-	      NSString *command;
-
-	      keyBindingsWithConflicts =
-		[[keyBindingManager dictionary] retain];
-	      dictionary = [keyBindingsWithConflicts mutableCopy];
-	      enumerator = [writingDirectionCommands objectEnumerator];
-	      while ((command = [enumerator nextObject]) != nil)
-		[dictionary removeObjectsForKeys:[dictionary
-						   allKeysForObject:command]];
-	      keyBindingsWithoutConflicts = dictionary;
-	    }
-	  [keyBindingManager setDictionary:keyBindingsWithoutConflicts];
+	  /* We use a mostly empty dictionary because if it contains
+	     entries with prefix keys, then they are swallowed.  It
+	     also prevents key bindings for writing direction commands
+	     from being intercepted by NSTextInputContext on Mac OS X
+	     10.6.  The entries below are for the delete key because
+	     Mac OS X 10.6 maps it to 0x08 (C-h) in -[NSResponder
+	     interpretKeyEvents:] if the dictionary is empty.  */
+	  keyBindingsWithConflicts = [[keyBindingManager dictionary] retain];
+	  keyBindingsWithoutConflicts =
+	    [[NSDictionary
+	       dictionaryWithObjectsAndKeys:@"deleteBackward:", @"\177",
+	       @"deleteBackwardByDecomposingPreviousCharacter:", @"^\177",
+	       @"deleteWordBackward:", @"^~\177",
+	       @"deleteWordBackward:", @"~\177",
+	       @"deleteToBeginningOfLine:", @"@\177", nil] retain];
 	}
+      [keyBindingManager setDictionary:keyBindingsWithoutConflicts];
     }
   else
     {
@@ -1275,9 +1375,8 @@ emacs_windows_need_display_p (with_resize_control_p)
 	performSelector:@selector(setArgumentBinding:)
 	     withObject:[userDefaults
 			  stringForKey:@"NSRepeatCountBinding"]];
-      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
-	if (keyBindingsWithConflicts)
-	  [keyBindingManager setDictionary:keyBindingsWithConflicts];
+      if (keyBindingsWithConflicts)
+	[keyBindingManager setDictionary:keyBindingsWithConflicts];
     }
 
   conflictingKeyBindingsDisabled = flag;
@@ -1349,6 +1448,7 @@ install_application_handler ()
 
 static void set_global_focus_view_frame P_ ((struct frame *));
 static void unset_global_focus_view_frame P_ ((void));
+static void mac_update_accessibility_status P_ ((struct frame *));
 
 extern void mac_handle_visibility_change P_ ((struct frame *));
 extern void mac_handle_origin_change P_ ((struct frame *));
@@ -2565,6 +2665,33 @@ mac_frame_up_to_date (f)
     }
 }
 
+void
+mac_update_window_end (w)
+     struct window *w;
+{
+  if (w == XWINDOW (selected_window))
+    {
+      struct frame *f = XFRAME (w->frame);
+
+      mac_update_accessibility_status (f);
+    }
+}
+
+void
+mac_cursor_to (vpos, hpos, y, x)
+     int vpos, hpos, y, x;
+{
+  x_cursor_to (vpos, hpos, y, x);
+
+  /* Not called as part of an update.  */
+  if (updated_window == NULL)
+    {
+      BLOCK_INPUT;
+      mac_update_accessibility_status (SELECTED_FRAME ());
+      UNBLOCK_INPUT;
+    }
+}
+
 /* Create a new Mac window for the frame F and store it in
    FRAME_MAC_WINDOW (f).  Non-zero TOOLTIP_P means it is for the tip
    frame.  */
@@ -2879,13 +3006,14 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   struct frame *f = [self emacsFrame];
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
   int modifiers = mac_event_to_emacs_modifiers (theEvent);
-  CGFloat deltaX = [theEvent deltaX], deltaY = [theEvent deltaY];
-  CGFloat deltaZ = [theEvent deltaZ];
+  NSEventType type = [theEvent type];
+  CGFloat deltaX = 0, deltaY = 0, deltaZ = 0;
   CGFloat deviceDeltaX = 0, deviceDeltaY = 0, deviceDeltaZ = 0;
   Lisp_Object scrollPhase = Qnil;
 
-  if ([theEvent type] == NSScrollWheel)
+  switch (type)
     {
+    case NSScrollWheel:
       if ([theEvent respondsToSelector:@selector(_continuousScroll)]
 	  && [theEvent _continuousScroll])
 	{
@@ -2907,6 +3035,24 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 	      modifiers = savedWheelModifiers;
 	    }
 	}
+      /* fall through */
+
+    case NSEventTypeSwipe:
+      deltaX = [theEvent deltaX];
+      deltaY = [theEvent deltaY];
+      deltaZ = [theEvent deltaZ];
+      break;
+
+    case NSEventTypeMagnify:
+      deltaY = [theEvent magnification];
+      break;
+
+    case NSEventTypeRotate:
+      deltaX = [theEvent rotation];
+      break;
+
+    default:
+      abort ();
     }
 
   if (
@@ -2925,9 +3071,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
     return;
 
   EVENT_INIT (inputEvent);
-  if ([theEvent type] != NSScrollWheel)
-    inputEvent.arg = Qnil;
-  else
+  if (type == NSScrollWheel)
     {
       inputEvent.arg = list3 (make_float (deltaX), make_float (deltaY),
 			      make_float (deltaZ));
@@ -2942,6 +3086,12 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       if (!NILP (scrollPhase))
 	inputEvent.arg = nconc2 (inputEvent.arg, Fcons (scrollPhase, Qnil));
     }
+  else if (type == NSEventTypeMagnify)
+    inputEvent.arg = Fcons (make_float (deltaY), Qnil);
+  else if (type == NSEventTypeRotate)
+    inputEvent.arg = Fcons (make_float (deltaX), Qnil);
+  else
+    inputEvent.arg = Qnil;
   inputEvent.kind = (deltaY != 0 || deviceDeltaY != 0
 		     ? WHEEL_EVENT : HORIZ_WHEEL_EVENT);
   inputEvent.code = 0;
@@ -2951,7 +3101,8 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 	: (deltaY > 0 || deviceDeltaY > 0 ? up_modifier
 	   : (deltaX < 0 || deviceDeltaX < 0 ? down_modifier
 	      : up_modifier)))
-     | ([theEvent type] == NSScrollWheel ? 0 : drag_modifier));
+     | (type == NSScrollWheel ? 0
+	: (type == NSEventTypeSwipe ? drag_modifier : click_modifier)));
   XSETINT (inputEvent.x, point.x);
   XSETINT (inputEvent.y, point.y);
   XSETFRAME (inputEvent.frame_or_window, f);
@@ -2960,6 +3111,16 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 }
 
 - (void)swipeWithEvent:(NSEvent *)event
+{
+  [self scrollWheel:event];
+}
+
+- (void)magnifyWithEvent:(NSEvent *)event
+{
+  [self scrollWheel:event];
+}
+
+- (void)rotateWithEvent:(NSEvent *)event
 {
   [self scrollWheel:event];
 }
@@ -3128,13 +3289,17 @@ get_text_input_script_language (slrec)
     {
       NSUInteger flags = [rawKeyEvent modifierFlags];
       UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
+      unichar character;
 
       if (mac_mapped_modifiers (modifiers, [rawKeyEvent keyCode])
 	  || [rawKeyEvent type] == NSKeyUp
 	  || ([aString isKindOfClass:[NSString class]]
 	      && [aString isEqualToString:[rawKeyEvent characters]]
 	      && [(NSString *)aString length] == 1
-	      && [aString characterAtIndex:0] < 0x80))
+	      && ((character = [aString characterAtIndex:0]) < 0x80
+		  /* NSEvent reserves the following Unicode characters
+		     for function keys on the keyboard.  */
+		  || (character >= 0xf700 && character <= 0xf74f))))
 	{
 	  /* Process it in keyDown:.  */
 	  keyEventsInterpreted = NO;
@@ -3338,9 +3503,9 @@ get_text_input_script_language (slrec)
 }
 
 extern void mac_ax_selected_text_range P_ ((struct frame *, CFRange *));
-extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
-						       EMACS_INT, EMACS_INT,
-						       UniChar *));
+extern EMACS_INT mac_ax_number_of_characters P_ ((struct frame *));
+extern CFStringRef mac_ax_string_for_range P_ ((struct frame *,
+						const CFRange *, CFRange *));
 
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)aRange
 						actualRange:(NSRangePointer)actualRange;
@@ -3379,68 +3544,48 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  && XINT (w->last_modified) == BUF_MODIFF (b)
 	  && XINT (w->last_overlay_modified) == BUF_OVERLAY_MODIFF (b))
 	{
-	  EMACS_INT start, end, begv = BUF_BEGV (b), zv = BUF_ZV (b);
+	  NSRange range;
+	  CFStringRef string = mac_ax_string_for_range (f, (CFRange *) &aRange,
+							(CFRange *) &range);
 
-	  /* The documentation says "An implementation of this method
-	     should be prepared for aRange to be out-of-bounds".  */
-	  start = begv + aRange.location;
-	  end = start + aRange.length;
-	  if (start < begv)
-	    start = begv;
-	  else if (start > zv)
-	    start = zv;
-	  if (end < begv)
-	    end = begv;
-	  else if (end > zv)
-	    end = zv;
-
-	  if (start < end)
+	  if (string)
 	    {
-	      NSUInteger length = end - start;
-	      unichar *characters = xmalloc (length * sizeof (unichar));
+	      NSMutableAttributedString *attributedString =
+		[[[NSMutableAttributedString alloc]
+		   initWithString:((NSString *) string)] autorelease];
+	      NSUInteger i;
 
-	      if (mac_store_buffer_text_to_unicode_chars (b, start, end,
-							  ((UniChar *)
-							   characters)))
+	      [attributedString beginEditing];
+	      for (i = 0; i < range.length; i++)
 		{
-		  NSString *string = [NSString stringWithCharacters:characters
-							     length:length];
-		  NSMutableAttributedString *attributedString =
-		    [[[NSMutableAttributedString alloc] initWithString:string]
-		      autorelease];
-		  NSUInteger i;
+		  NSFont *font = nil;
+		  int hpos, vpos, x, y;
+		  struct glyph_row *row;
+		  struct glyph *glyph;
 
-		  [attributedString beginEditing];
-		  for (i = 0; i < length; i++)
-		    {
-		      NSFont *font = nil;
-		      int hpos, vpos, x, y;
-		      struct glyph_row *row;
-		      struct glyph *glyph;
-
-		      fast_find_position (w, start + i, &hpos, &vpos,
-					  &x, &y, Qnil);
-		      row = MATRIX_ROW (w->current_matrix, vpos);
-		      glyph = row->glyphs[TEXT_AREA] + hpos;
-		      if (glyph->charpos == start + i
-			  && glyph->type == CHAR_GLYPH
-			  && !glyph->glyph_not_available_p)
-			font = [NSFont fontWithFace:(FACE_FROM_ID
-						     (f, glyph->face_id))];
-		      if (font == nil)
-			font = [NSFont fontWithFace:(FACE_FROM_ID
-						     (f, DEFAULT_FACE_ID))];
-		      [attributedString addAttribute:NSFontAttributeName
-					       value:font
-					       range:(NSMakeRange (i, 1))];
-		    }
-		  [attributedString endEditing];
-		  result = attributedString;
-
-		  if (actualRange)
-		    *actualRange = NSMakeRange (start - begv, length);
+		  fast_find_position (w, range.location + i, &hpos, &vpos,
+				      &x, &y, Qnil);
+		  row = MATRIX_ROW (w->current_matrix, vpos);
+		  glyph = row->glyphs[TEXT_AREA] + hpos;
+		  if (glyph->charpos == range.location + i
+		      && glyph->type == CHAR_GLYPH
+		      && !glyph->glyph_not_available_p)
+		    font = [NSFont fontWithFace:(FACE_FROM_ID
+						 (f, glyph->face_id))];
+		  if (font == nil)
+		    font = [NSFont fontWithFace:(FACE_FROM_ID
+						 (f, DEFAULT_FACE_ID))];
+		  [attributedString addAttribute:NSFontAttributeName
+					   value:font
+					   range:(NSMakeRange (i, 1))];
 		}
-	      xfree (characters);
+	      [attributedString endEditing];
+	      result = attributedString;
+
+	      if (actualRange)
+		*actualRange = range;
+
+	      CFRelease (string);
 	    }
 	}
     }
@@ -3481,7 +3626,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)aRange
-			 actualRange:(NSRangePointer)actualRange;
+			 actualRange:(NSRangePointer)actualRange
 {
   NSRect rect = NSZeroRect;
   struct frame *f = NULL;
@@ -3547,7 +3692,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  && XINT (w->last_modified) == BUF_MODIFF (b)
 	  && XINT (w->last_overlay_modified) == BUF_OVERLAY_MODIFF (b))
 	{
-	  EMACS_INT charpos = BUF_BEGV (b) + aRange.location;
+	  EMACS_INT last_charpos, charpos = BUF_BEGV (b) + aRange.location;
 	  struct glyph *end;
 	  int width = 0;
 
@@ -3563,11 +3708,14 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	    }
 	  end = row->glyphs[TEXT_AREA] + row->used[TEXT_AREA];
 
+	  last_charpos = charpos;
 	  while (glyph < end
 		 && !INTEGERP (glyph->object)
 		 && (!BUFFERP (glyph->object)
 		     || glyph->charpos < charpos + aRange.length))
 	    {
+	      if (BUFFERP (glyph->object))
+		last_charpos = glyph->charpos;
 	      width += glyph->pixel_width;
 	      ++glyph;
 	    }
@@ -3577,7 +3725,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 			     width, row->height);
 	  if (actualRange)
 	    *actualRange = NSMakeRange (aRange.location,
-					glyph->charpos - charpos);
+					last_charpos - charpos);
 	}
     }
 
@@ -3655,11 +3803,9 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 - (NSString *)string
 {
-  struct frame *f;
-  struct buffer *b;
-  NSUInteger length;
-  unichar *characters;
-  NSString *result = nil;
+  struct frame *f = [self emacsFrame];
+  CFRange range;
+  CFStringRef string;
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
   if (handling_document_access_lock_document_p)
@@ -3671,16 +3817,10 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
        altered. */
     return nil;
 
-  f = [self emacsFrame];
-  b = XBUFFER (XWINDOW (f->selected_window)->buffer);
-  length = BUF_ZV (b) - BUF_BEGV (b);
-  characters = xmalloc (length * sizeof (unichar));
-  if (mac_store_buffer_text_to_unicode_chars (b, BUF_BEGV (b), BUF_ZV (b),
-					      (UniChar *) characters))
-    result = [NSString stringWithCharacters:characters length:length];
-  xfree (characters);
+  range = CFRangeMake (0, mac_ax_number_of_characters (f));
+  string = mac_ax_string_for_range (f, &range, NULL);
 
-  return result;
+  return [(NSString *)string autorelease];
 }
 
 - (void)viewDidEndLiveResize
@@ -6308,6 +6448,18 @@ static void mac_fake_menu_bar_click P_ ((EventPriority));
       else
 #endif
 	{
+	  if ([theEvent type] == NSKeyDown
+	      && (([theEvent modifierFlags]
+		   & 0xffff0000UL) /* NSDeviceIndependentModifierFlagsMask */
+		  == ((1UL << 31) | NSCommandKeyMask))
+	      && [[theEvent charactersIgnoringModifiers] isEqualToString:@"c"])
+	    {
+	      /* Probably Command-C from "Speak selected text."  */
+	      [NSApp sendAction:@selector(copy:) to:nil from:nil];
+
+	      return YES;
+	    }
+
 	  /* Note: this is not necessary for binaries built on Mac OS
 	     X 10.5 because -[NSWindow sendEvent:] now sends keyDown:
 	     to the first responder even if the command-key modifier
@@ -7795,7 +7947,6 @@ extern Lisp_Object Qservice, Qpaste, Qperform;
 {
   OSStatus err;
   NSPasteboard *servicePboard;
-  NSArray *serviceTypes;
   NSEnumerator *enumerator;
   NSString *type;
   BOOL result = NO;
@@ -7805,12 +7956,11 @@ extern Lisp_Object Qservice, Qpaste, Qperform;
   if (err != noErr || pboard == nil)
     return NO;
 
-  serviceTypes = [servicePboard types];
   [pboard declareTypes:[NSArray array] owner:nil];
 
-  enumerator = [types objectEnumerator];
+  enumerator = [[servicePboard types] objectEnumerator];
   while ((type = [enumerator nextObject]) != nil)
-    if ([serviceTypes containsObject:type])
+    if ([types containsObject:type])
       {
 	NSData *data = [servicePboard dataForType:type];
 
@@ -8187,7 +8337,7 @@ extern long do_applescript P_ ((Lisp_Object, Lisp_Object *));
     }
 }
 
-@end				// EmacsController (OSA)
+@end				// EmacsController (AppleScript)
 
 long
 mac_appkit_do_applescript (script, result)
@@ -8290,11 +8440,121 @@ mac_appkit_do_applescript (script, result)
 
 @end				// NSView (Emacs)
 
-@implementation EmacsSVGLoadDelegate
+@implementation EmacsSVGLoader
 
-- (Boolean)isLoaded
+- (id)initWithEmacsFrame:(struct frame *)f emacsImage:(struct image *)img
+      checkImageSizeFunc:(int (*)(struct frame *, int, int))checkImageSize
+	  imageErrorFunc:(void (*)(char *, Lisp_Object, Lisp_Object))imageError
 {
-  return isLoaded;
+  self = [super init];
+
+  if (self == nil)
+    return nil;
+
+  emacsFrame = f;
+  emacsImage = img;
+  checkImageSizeFunc = checkImageSize;
+  imageErrorFunc = imageError;
+
+  return self;
+}
+
+- (int)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor
+{
+  if ([NSApp isRunning])
+    {
+      NSRect frameRect;
+      WebView *webView;
+      NSNumber *widthNum, *heightNum;
+      int width, height;
+
+      frameRect = NSMakeRect (0, 0, 100, 100); /* Adjusted later.  */
+      webView = [[WebView alloc] initWithFrame:frameRect
+				     frameName:nil groupName:nil];
+      [webView setValue:backgroundColor forKey:@"backgroundColor"];
+      [webView setFrameLoadDelegate:self];
+      [[webView mainFrame] loadData:data MIMEType:@"image/svg+xml"
+		   textEncodingName:nil baseURL:nil];
+
+      /* [webView isLoading] is not sufficient if we have <image
+	 xlink:href=... /> */
+      while (!isLoaded)
+	mac_run_loop_run_once (0);
+
+      @try
+	{
+	  widthNum = [webView valueForKeyPath:@"mainFrame.DOMDocument.rootElement.width.baseVal.value"];
+	  heightNum = [webView valueForKeyPath:@"mainFrame.DOMDocument.rootElement.height.baseVal.value"];
+	}
+      @catch (NSException *exception)
+	{
+	  widthNum = nil;
+	  heightNum = nil;
+	}
+
+      if ([widthNum isKindOfClass:[NSNumber class]]
+	  && [heightNum isKindOfClass:[NSNumber class]])
+	{
+	  width = [widthNum intValue];
+	  height = [heightNum intValue];
+	}
+      else
+	{
+	  [webView release];
+	  (*imageErrorFunc) ("Error reading SVG image `%s'",
+			     emacsImage->spec, Qnil);
+
+	  return 0;
+	}
+
+      if (!(*checkImageSizeFunc) (emacsFrame, width, height))
+	{
+	  [webView release];
+	  (*imageErrorFunc) ("Invalid image size (see `max-image-size')",
+			     Qnil, Qnil);
+
+	  return 0;
+	}
+
+      frameRect.size.width = width;
+      frameRect.size.height = height;
+      emacsImage->width = width;
+      emacsImage->height = height;
+      [webView setFrame:frameRect];
+      emacsImage->pixmap = [webView createXImageFromRect:frameRect
+					 backgroundColor:nil];
+      [webView release];
+
+      return 1;
+    }
+  else
+    {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      __block int result;
+
+      [NSApp runTemporarilyWithBlock:^{
+	  result = [self loadData:data backgroundColor:backgroundColor];
+	}];
+
+      return result;
+#else
+      NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
+      NSInvocation *invocation =
+	[NSInvocation invocationWithMethodSignature:signature];
+      int result;
+
+      [invocation setTarget:self];
+      [invocation setSelector:_cmd];
+      [invocation setArgument:&data atIndex:2];
+      [invocation setArgument:&backgroundColor atIndex:3];
+
+      [NSApp runTemporarilyWithInvocation:invocation];
+
+      [invocation getReturnValue:&result];
+
+      return result;
+#endif
+    }
 }
 
 - (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
@@ -8302,7 +8562,7 @@ mac_appkit_do_applescript (script, result)
   isLoaded = YES;
 }
 
-@end				// EmacsSVGLoadDelegate
+@end				// EmacsSVGLoader
 
 int
 mac_webkit_supports_svg_p ()
@@ -8327,79 +8587,681 @@ mac_svg_load_image (f, img, contents, size, color,
      int (*check_image_size_func) P_ ((struct frame *, int, int));
      void (*image_error_func) P_ ((char *, Lisp_Object, Lisp_Object));
 {
-  NSRect frameRect;
-  WebView *webView;
-  EmacsSVGLoadDelegate *delegate;
-  NSData *data;
-  NSNumber *widthNum, *heightNum;
-  int width, height;
+  EmacsSVGLoader *loader =
+    [[EmacsSVGLoader alloc] initWithEmacsFrame:f emacsImage:img
+			    checkImageSizeFunc:check_image_size_func
+				imageErrorFunc:image_error_func];
+  NSData *data =
+    [NSData dataWithBytesNoCopy:contents length:size freeWhenDone:NO];
+  NSColor *backgroundColor =
+    [NSColor colorWithDeviceRed:(color->red / 65535.0)
+			  green:(color->green / 65535.0)
+			   blue:(color->blue / 65535.0)
+			  alpha:1.0];
+  int result = [loader loadData:data backgroundColor:backgroundColor];
 
-  frameRect = NSMakeRect (0, 0, 100, 100); /* Adjusted later.  */
-  webView = [[WebView alloc] initWithFrame:frameRect
-				 frameName:nil groupName:nil];
-  [webView setValue:[NSColor colorWithDeviceRed:(color->red / 65535.0)
-					  green:(color->green / 65535.0)
-					   blue:(color->blue / 65535.0)
-					  alpha:1.0]
-	     forKey:@"backgroundColor"];
-  delegate = [[EmacsSVGLoadDelegate alloc] init];
-  [webView setFrameLoadDelegate:delegate];
-  data = [NSData dataWithBytesNoCopy:contents length:size freeWhenDone:NO];
-  [[webView mainFrame] loadData:data MIMEType:@"image/svg+xml"
-	       textEncodingName:nil baseURL:nil];
+  [loader release];
 
-  /* [webView isLoading] is not sufficient if we have <image
-     xlink:href=... /> */
-  while (![delegate isLoaded])
-    mac_run_loop_run_once (0);
-
-  @try
-    {
-      widthNum = [webView valueForKeyPath:@"mainFrame.DOMDocument.rootElement.width.baseVal.value"];
-      heightNum = [webView valueForKeyPath:@"mainFrame.DOMDocument.rootElement.height.baseVal.value"];
-    }
-  @catch (NSException *exception)
-    {
-      widthNum = nil;
-      heightNum = nil;
-    }
-
-  if ([widthNum isKindOfClass:[NSNumber class]]
-      && [heightNum isKindOfClass:[NSNumber class]])
-    {
-      width = [widthNum intValue];
-      height = [heightNum intValue];
-    }
-  else
-    {
-      [webView release];
-      [delegate release];
-      (*image_error_func) ("Error reading SVG image `%s'", img->spec, Qnil);
-
-      return 0;
-    }
-
-  if (!(*check_image_size_func) (f, width, height))
-    {
-      [webView release];
-      [delegate release];
-      (*image_error_func) ("Invalid image size", Qnil, Qnil);
-
-      return 0;
-    }
-
-  frameRect.size.width = width;
-  frameRect.size.height = height;
-  img->width = width;
-  img->height = height;
-  [webView setFrame:frameRect];
-  img->pixmap = [webView createXImageFromRect:frameRect backgroundColor:nil];
-  [webView release];
-  [delegate release];
-
-  return 1;
+  return result;
 }
 #endif	/* USE_MAC_IMAGE_IO */
+
+
+/***********************************************************************
+			Accessibility Support
+***********************************************************************/
+
+extern Lisp_Object Qaccessibility, Qwindow;
+
+extern EMACS_INT mac_ax_line_for_index P_ ((struct frame *, EMACS_INT));
+extern int mac_ax_range_for_line P_ ((struct frame *, EMACS_INT, CFRange *));
+
+static id ax_get_value P_ ((EmacsView *));
+static id ax_get_selected_text P_ ((EmacsView *));
+static id ax_get_selected_text_range P_ ((EmacsView *));
+static id ax_get_number_of_characters P_ ((EmacsView *));
+static id ax_get_visible_character_range P_ ((EmacsView *));
+#if 0
+static id ax_get_shared_text_ui_elements P_ ((EmacsView *));
+static id ax_get_shared_character_range P_ ((EmacsView *));
+#endif
+static id ax_get_insertion_point_line_number P_ ((EmacsView *));
+static id ax_get_selected_text_ranges P_ ((EmacsView *));
+
+static id ax_get_line_for_index P_ ((EmacsView *, id));
+static id ax_get_range_for_line P_ ((EmacsView *, id));
+static id ax_get_string_for_range P_ ((EmacsView *, id));
+static id ax_get_range_for_position P_ ((EmacsView *, id));
+static id ax_get_range_for_index P_ ((EmacsView *, id));
+static id ax_get_bounds_for_range P_ ((EmacsView *, id));
+static id ax_get_rtf_for_range P_ ((EmacsView *, id));
+#if 0
+static id ax_get_style_range_for_index P_ ((EmacsView *, id));
+#endif
+static id ax_get_attributed_string_for_range P_ ((EmacsView *, id));
+
+static const struct {
+  NSString *const *ns_name_ptr;
+  CFStringRef fallback_name;
+  id (*handler) (EmacsView *);
+} ax_attribute_table[] = {
+  {&NSAccessibilityValueAttribute, NULL, ax_get_value},
+  {&NSAccessibilitySelectedTextAttribute, NULL, ax_get_selected_text},
+  {&NSAccessibilitySelectedTextRangeAttribute,
+   NULL, ax_get_selected_text_range},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityNumberOfCharactersAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXNumberOfCharacters"), ax_get_number_of_characters},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityVisibleCharacterRangeAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXVisibleCharacterRange"), ax_get_visible_character_range},
+#if 0
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilitySharedTextUIElementsAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXSharedTextUIElements"), ax_get_shared_text_ui_elements},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilitySharedCharacterRangeAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXSharedCharacterRange"), ax_get_shared_character_range},
+#endif	/* 0 */
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+    &NSAccessibilityInsertionPointLineNumberAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXInsertionPointLineNumber"), ax_get_insertion_point_line_number},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+    &NSAccessibilitySelectedTextRangesAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXSelectedTextRanges"), ax_get_selected_text_ranges},
+};
+static const size_t ax_attribute_count =
+  sizeof (ax_attribute_table) / sizeof (ax_attribute_table[0]);
+static NSArray *ax_attribute_names;
+static Lisp_Object ax_attribute_event_ids;
+
+static const struct {
+  NSString *const *ns_name_ptr;
+  CFStringRef fallback_name;
+  id (*handler) (EmacsView *, id);
+} ax_parameterized_attribute_table[] = {
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityLineForIndexParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXLineForIndex"), ax_get_line_for_index},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityRangeForLineParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXRangeForLine"), ax_get_range_for_line},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityStringForRangeParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXStringForRange"), ax_get_string_for_range},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityRangeForPositionParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXRangeForPosition"), ax_get_range_for_position},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityRangeForIndexParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXRangeForIndex"), ax_get_range_for_index},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityBoundsForRangeParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXBoundsForRange"), ax_get_bounds_for_range},
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityRTFForRangeParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXRTFForRange"), ax_get_rtf_for_range},
+#if 0
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+    &NSAccessibilityStyleRangeForIndexParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXStyleRangeForIndex"), ax_get_style_range_for_index},
+#endif	/* 0 */
+  {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+    &NSAccessibilityAttributedStringForRangeParameterizedAttribute,
+#else
+    NULL,
+#endif
+    CFSTR ("AXAttributedStringForRange"), ax_get_attributed_string_for_range},
+};
+static const size_t ax_parameterized_attribute_count =
+  (sizeof (ax_parameterized_attribute_table)
+   / sizeof (ax_parameterized_attribute_table[0]));
+static NSArray *ax_parameterized_attribute_names;
+
+static const struct {
+  NSString *const *ns_name_ptr;
+  CFStringRef fallback_name;
+} ax_action_table[] = {
+  {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1040
+    &NSAccessibilityShowMenuAction,
+#else
+    NULL,
+#endif
+    CFSTR ("AXShowMenu")},
+};
+static const size_t ax_action_count =
+  sizeof (ax_action_table) / sizeof (ax_action_table[0]);
+static NSArray *ax_action_names;
+static Lisp_Object ax_action_event_ids;
+
+static NSString *ax_selected_text_changed_notification;
+
+static Lisp_Object
+ax_name_to_symbol (name, prefix)
+     NSString *name, *prefix;
+{
+  NSArray *nameComponents =
+    [[name substringFromIndex:2] /* strip off leading "AX" */
+      componentsSeparatedByCamelCasingWithCharactersInSet:nil];
+  NSMutableArray *symbolComponents =
+    [NSMutableArray arrayWithCapacity:[nameComponents count]];
+  NSEnumerator *enumerator = [nameComponents objectEnumerator];
+  NSString *component;
+
+  if (prefix)
+    [symbolComponents addObject:prefix];
+  while ((component = [enumerator nextObject]) != nil)
+    [symbolComponents addObject:[component lowercaseString]];
+
+  return Fintern ([[symbolComponents componentsJoinedByString:@"-"]
+		    UTF8LispString], Qnil);
+}
+
+static void
+init_accessibility ()
+{
+  int i;
+  NSString **buf;
+
+  buf = xmalloc (sizeof (NSString *) * ax_attribute_count);
+  ax_attribute_event_ids =
+    Fmake_vector (make_number (ax_attribute_count), Qnil);
+  staticpro (&ax_attribute_event_ids);
+  for (i = 0; i < ax_attribute_count; i++)
+    {
+      buf[i] = (ax_attribute_table[i].ns_name_ptr
+		? *ax_attribute_table[i].ns_name_ptr
+		: (NSString *) ax_attribute_table[i].fallback_name);
+      ASET (ax_attribute_event_ids, i, ax_name_to_symbol (buf[i], @"set"));
+    }
+  ax_attribute_names = [[NSArray alloc] initWithObjects:buf
+						  count:ax_attribute_count];
+
+  buf = xrealloc (buf, sizeof (NSString *) * ax_parameterized_attribute_count);
+  for (i = 0; i < ax_parameterized_attribute_count; i++)
+    buf[i] = (ax_parameterized_attribute_table[i].ns_name_ptr
+	      ? *ax_parameterized_attribute_table[i].ns_name_ptr
+	      : (NSString *) ax_parameterized_attribute_table[i].fallback_name);
+  ax_parameterized_attribute_names =
+    [[NSArray alloc] initWithObjects:buf
+			       count:ax_parameterized_attribute_count];
+
+  buf = xrealloc (buf, sizeof (NSString *) * ax_action_count);
+  ax_action_event_ids = Fmake_vector (make_number (ax_action_count), Qnil);
+  staticpro (&ax_action_event_ids);
+  for (i = 0; i < ax_action_count; i++)
+    {
+      buf[i] = (ax_action_table[i].ns_name_ptr
+		? *ax_action_table[i].ns_name_ptr
+		: (NSString *) ax_action_table[i].fallback_name);
+      ASET (ax_action_event_ids, i, ax_name_to_symbol (buf[i], nil));
+    }
+  ax_action_names = [[NSArray alloc] initWithObjects:buf count:ax_action_count];
+
+  xfree (buf);
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+  if (&NSAccessibilitySelectedTextChangedNotification != NULL)
+#endif
+    ax_selected_text_changed_notification =
+      NSAccessibilitySelectedTextChangedNotification;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+  else
+#endif
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1040 */
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
+    ax_selected_text_changed_notification =
+      (NSString *) CFSTR ("AXSelectedTextChanged");
+#endif
+}
+
+@implementation EmacsView (Accessibility)
+
+- (BOOL)accessibilityIsIgnored
+{
+  return NO;
+}
+
+- (NSArray *)accessibilityAttributeNames
+{
+  static NSArray *names = nil;
+
+  if (names == nil)
+    names = [[[super accessibilityAttributeNames]
+	       arrayByAddingObjectsFromArray:ax_attribute_names] retain];
+
+  return names;
+}
+
+static id
+ax_get_value (emacsView)
+     EmacsView *emacsView;
+{
+  return [emacsView string];
+}
+
+static id
+ax_get_selected_text (emacsView)
+     EmacsView *emacsView;
+{
+  struct frame *f = [emacsView emacsFrame];
+  CFRange selectedRange;
+  CFStringRef string;
+
+  if (poll_suppress_count == 0 && !NILP (Vinhibit_quit))
+    /* Don't try to get buffer contents as the gap might be being
+       altered. */
+    return nil;
+
+  mac_ax_selected_text_range (f, &selectedRange);
+  string = mac_ax_string_for_range (f, &selectedRange, NULL);
+
+  return [(NSString *)string autorelease];
+}
+
+static id
+ax_get_insertion_point_line_number (emacsView)
+     EmacsView *emacsView;
+{
+  struct frame *f = [emacsView emacsFrame];
+  EMACS_INT line;
+
+  if (poll_suppress_count == 0 && !NILP (Vinhibit_quit))
+    /* Don't try to get buffer contents as the gap might be being
+       altered. */
+    return nil;
+
+  line = mac_ax_line_for_index (f, -1);
+
+  return line >= 0 ? [NSNumber numberWithLong:line] : nil;
+}
+
+static id
+ax_get_selected_text_range (emacsView)
+     EmacsView *emacsView;
+{
+  return [NSValue valueWithRange:[emacsView selectedRange]];
+}
+
+static id
+ax_get_number_of_characters (emacsView)
+     EmacsView *emacsView;
+{
+  EMACS_INT length = mac_ax_number_of_characters ([emacsView emacsFrame]);
+
+  return [NSNumber numberWithLong:length];
+}
+
+static id
+ax_get_visible_character_range (emacsView)
+     EmacsView *emacsView;
+{
+  NSRange range;
+
+  mac_ax_visible_character_range ([emacsView emacsFrame], (CFRange *) &range);
+
+  return [NSValue valueWithRange:range];
+}
+
+static id
+ax_get_selected_text_ranges (emacsView)
+     EmacsView *emacsView;
+{
+  NSValue *rangeValue = [NSValue valueWithRange:[emacsView selectedRange]];
+
+  return [NSArray arrayWithObject:rangeValue];
+}
+
+- (id)accessibilityAttributeValue:(NSString *)attribute
+{
+  NSUInteger index = [ax_attribute_names indexOfObject:attribute];
+
+  if (index != NSNotFound)
+    return (*ax_attribute_table[index].handler) (self);
+  else if ([attribute isEqualToString:NSAccessibilityRoleAttribute])
+    return NSAccessibilityTextAreaRole;
+  else
+    return [super accessibilityAttributeValue:attribute];
+}
+
+- (BOOL)accessibilityIsAttributeSettable:(NSString *)attribute
+{
+  NSUInteger index = [ax_attribute_names indexOfObject:attribute];
+
+  if (index != NSNotFound)
+    {
+      Lisp_Object tem = get_keymap (Vmac_apple_event_map, 0, 0);
+
+      if (!NILP (tem))
+	tem = get_keymap (access_keymap (tem, Qaccessibility, 0, 1, 0), 0, 0);
+      if (!NILP (tem))
+	tem = access_keymap (tem, AREF (ax_attribute_event_ids, index),
+			     0, 1, 0);
+
+      return !NILP (tem) && !EQ (tem, Qundefined);
+    }
+  else
+    return [super accessibilityIsAttributeSettable:attribute];
+}
+
+- (void)accessibilitySetValue:(id)value forAttribute:(NSString *)attribute
+{
+  NSUInteger index = [ax_attribute_names indexOfObject:attribute];
+
+  if (index != NSNotFound)
+    {
+      struct frame *f = [self emacsFrame];
+      struct input_event inev;
+      Lisp_Object arg = Qnil, obj;
+
+      if (NILP (AREF (ax_attribute_event_ids, index)))
+	abort ();
+
+      arg = Fcons (Fcons (Qwindow,
+			  Fcons (build_string ("Lisp"),
+				 f->selected_window)), arg);
+      obj = cfobject_to_lisp ((CFTypeRef) value,
+			      CFOBJECT_TO_LISP_FLAGS_FOR_EVENT, -1);
+      arg = Fcons (Fcons (build_string ("----"),
+			  Fcons (build_string ("Lisp"), obj)), arg);
+      EVENT_INIT (inev);
+      inev.kind = MAC_APPLE_EVENT;
+      inev.x = Qaccessibility;
+      inev.y = AREF (ax_attribute_event_ids, index);
+      XSETFRAME (inev.frame_or_window, f);
+      inev.arg = Fcons (build_string ("aevt"), arg);
+      [[NSApp delegate] storeEvent:&inev];
+    }
+  else
+    [super accessibilitySetValue:value forAttribute:attribute];
+}
+
+- (NSArray *)accessibilityParameterizedAttributeNames
+{
+  static NSArray *names = nil;
+
+  if (names == nil)
+    names = [[[super accessibilityAttributeNames]
+	       arrayByAddingObjectsFromArray:ax_parameterized_attribute_names]
+	      retain];
+
+  return names;
+}
+
+static id
+ax_get_line_for_index (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  struct frame *f = [emacsView emacsFrame];
+  EMACS_INT line;
+
+  if (poll_suppress_count == 0 && !NILP (Vinhibit_quit))
+    /* Don't try to get buffer contents as the gap might be being
+       altered. */
+    return nil;
+
+  line = mac_ax_line_for_index (f, [(NSNumber *)parameter longValue]);
+
+  return line >= 0 ? [NSNumber numberWithLong:line] : nil;
+}
+
+static id
+ax_get_range_for_line (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  struct frame *f = [emacsView emacsFrame];
+  EMACS_INT line;
+  NSRange range;
+
+  if (poll_suppress_count == 0 && !NILP (Vinhibit_quit))
+    /* Don't try to get buffer contents as the gap might be being
+       altered. */
+    return nil;
+
+  line = [(NSNumber *)parameter longValue];
+  if (mac_ax_range_for_line (f, line, (CFRange *) &range))
+    return [NSValue valueWithRange:range];
+  else
+    return nil;
+}
+
+static id
+ax_get_string_for_range (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  NSRange range = [(NSValue *)parameter rangeValue];
+  struct frame *f = [emacsView emacsFrame];
+  CFStringRef string;
+
+  if (poll_suppress_count == 0 && !NILP (Vinhibit_quit))
+    /* Don't try to get buffer contents as the gap might be being
+       altered. */
+    return nil;
+
+  string = mac_ax_string_for_range (f, (CFRange *) &range, NULL);
+
+  return [(NSString *)string autorelease];
+}
+
+static id
+ax_get_bounds_for_range (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  NSRange range = [(NSValue *)parameter rangeValue];
+  NSRect rect = NSZeroRect;
+
+  while (1)
+    {
+      NSRange actualRange;
+      NSRect firstRect = [emacsView firstRectForCharacterRange:range
+						   actualRange:&actualRange];
+
+      if (NSWidth (rect) == 0 && NSHeight (rect) == 0)
+	rect = firstRect;
+      else
+	rect = NSUnionRect (rect, firstRect);
+      if ((range.length == 0 && actualRange.length == 0)
+	  || NSEqualRects (firstRect, NSZeroRect))
+	break;
+      if (actualRange.length > 0)
+	{
+	  range.length -= NSMaxRange (actualRange) - range.location;
+	  range.location = NSMaxRange (actualRange);
+	}
+      else
+	{
+	  range.length--;
+	  range.location++;
+	}
+    }
+
+  return [NSValue valueWithRect:rect];
+}
+
+static id
+ax_get_range_for_position (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  NSPoint position = [(NSValue *)parameter pointValue];
+  NSUInteger index = [emacsView characterIndexForPoint:position];
+
+  if (index == NSNotFound)
+    return nil;
+  else
+    return [NSValue valueWithRange:(NSMakeRange (index, 1))];
+}
+
+static id
+ax_get_range_for_index (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  NSRange range = NSMakeRange ([(NSNumber *)parameter unsignedLongValue], 1);
+
+  return [NSValue valueWithRange:range];
+}
+
+static id
+ax_get_rtf_for_range (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  NSRange range = [(NSValue *)parameter rangeValue];
+  NSAttributedString *attributedString =
+    [emacsView attributedSubstringFromRange:range];
+
+  return [attributedString
+	   RTFFromRange:(NSMakeRange (0, [attributedString length]))
+	   documentAttributes:nil];
+}
+
+static id
+ax_get_attributed_string_for_range (emacsView, parameter)
+     EmacsView *emacsView;
+     id parameter;
+{
+  NSString *string = ax_get_string_for_range (emacsView, parameter);
+
+  if (string)
+    return [[[NSAttributedString alloc] initWithString:string] autorelease];
+  else
+    return nil;
+}
+
+- (id)accessibilityAttributeValue:(NSString *)attribute
+		     forParameter:(id)parameter
+{
+  NSUInteger index = [ax_parameterized_attribute_names indexOfObject:attribute];
+
+  if (index != NSNotFound)
+    return (*ax_parameterized_attribute_table[index].handler) (self, parameter);
+  else
+    return [super accessibilityAttributeValue:attribute forParameter:parameter];
+}
+
+- (NSArray *)accessibilityActionNames
+{
+  static NSArray *names = nil;
+
+  if (names == nil)
+    names = [[[super accessibilityActionNames]
+	       arrayByAddingObjectsFromArray:ax_action_names] retain];
+
+  return names;
+}
+
+- (void)accessibilityPerformAction:(NSString *)theAction
+{
+  NSUInteger index = [ax_action_names indexOfObject:theAction];
+
+  if (index != NSNotFound)
+    {
+      struct frame *f = [self emacsFrame];
+      struct input_event inev;
+      Lisp_Object arg = Qnil;
+      extern Lisp_Object Qwindow;
+
+      arg = Fcons (Fcons (Qwindow,
+			  Fcons (build_string ("Lisp"),
+				 f->selected_window)), arg);
+      EVENT_INIT (inev);
+      inev.kind = MAC_APPLE_EVENT;
+      inev.x = Qaccessibility;
+      inev.y = AREF (ax_action_event_ids, index);
+      XSETFRAME (inev.frame_or_window, f);
+      inev.arg = Fcons (build_string ("aevt"), arg);
+      [[NSApp delegate] storeEvent:&inev];
+    }
+  else
+    [super accessibilityPerformAction:theAction];
+}
+
+@end				// EmacsView (Accessibility)
+
+@implementation EmacsFrameController (Accessibility)
+
+- (void)postAccessibilityNotificationsToEmacsView
+{
+  NSAccessibilityPostNotification (emacsView,
+				   ax_selected_text_changed_notification);
+  NSAccessibilityPostNotification (emacsView,
+				   NSAccessibilityValueChangedNotification);
+}
+
+@end			       // EmacsFrameController (Accessibility)
+
+static void
+mac_update_accessibility_status (f)
+     struct frame *f;
+{
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+
+  [frameController postAccessibilityNotificationsToEmacsView];
+}
 
 
 /***********************************************************************

@@ -1081,6 +1081,8 @@ x_update_window_end (w, cursor_on_p, mouse_face_overwritten_p)
       if (draw_window_fringes (w, 1))
 	x_draw_vertical_border (w);
 
+      mac_update_window_end (w);
+
       UNBLOCK_INPUT;
     }
 
@@ -4786,6 +4788,7 @@ static ScriptLanguageRecord saved_ts_language;
 static Component saved_ts_component;
 Lisp_Object Qinsert_text, Qset_marked_text;
 Lisp_Object Qaction, Qmac_action_key_paths;
+Lisp_Object Qaccessibility;
 Lisp_Object Qservice, Qpaste, Qperform;
 Lisp_Object Qmouse_drag_overlay;
 
@@ -5194,8 +5197,7 @@ mac_ax_selected_text_range (f, range)
   mac_get_selected_range (XWINDOW (f->selected_window), range);
 }
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
-unsigned int
+EMACS_INT
 mac_ax_number_of_characters (f)
      struct frame *f;
 {
@@ -5203,7 +5205,169 @@ mac_ax_number_of_characters (f)
 
   return BUF_ZV (b) - BUF_BEGV (b);
 }
-#endif
+
+void
+mac_ax_visible_character_range (f, range)
+     struct frame *f;
+     CFRange *range;
+{
+  struct window *w = XWINDOW (f->selected_window);
+  struct buffer *b = XBUFFER (w->buffer);
+  EMACS_INT start, end;
+
+  /* XXX: Check validity of window_end_pos?  */
+  start = marker_position (w->start);
+  end = BUF_Z (b) - XFASTINT (w->window_end_pos);
+
+  range->location = start - BUF_BEGV (b);
+  range->length = end - start;
+}
+
+EMACS_INT
+mac_ax_line_for_index (f, index)
+     struct frame *f;
+     EMACS_INT index;
+{
+  struct buffer *b = XBUFFER (XWINDOW (f->selected_window)->buffer);
+  EMACS_INT line;
+  const unsigned char *limit, *begv, *zv, *gap_end, *p;
+
+  if (index >= 0)
+    limit = BUF_CHAR_ADDRESS (b, BUF_BEGV (b) + index);
+  else
+    limit = BUF_BYTE_ADDRESS (b, BUF_PT_BYTE (b));
+  begv = BUF_BYTE_ADDRESS (b, BUF_BEGV_BYTE (b));
+  zv = BUF_BYTE_ADDRESS (b, BUF_ZV_BYTE (b));
+
+  if (limit < begv || limit > zv)
+    return -1;
+
+  line = 0;
+  gap_end = BUF_GAP_END_ADDR (b);
+  if (begv < gap_end && gap_end <= limit)
+    {
+      for (p = gap_end; (p = memchr (p, '\n', limit - p)) != NULL; p++)
+	line++;
+      limit = BUF_GPT_ADDR (b);
+    }
+
+  for (p = begv; (p = memchr (p, '\n', limit - p)) != NULL; p++)
+    line++;
+
+  return line;
+}
+
+static const unsigned char *
+mac_ax_buffer_skip_lines (buf, n, start, end)
+     struct buffer *buf;
+     EMACS_INT n;
+     const unsigned char *start, *end;
+{
+  const unsigned char *gpt, *p, *limit;
+
+  gpt = BUF_GPT_ADDR (buf);
+  p = start;
+
+  if (p <= gpt && gpt < end)
+    limit = gpt;
+  else
+    limit = end;
+
+  while (n > 0)
+    {
+      p = memchr (p, '\n', limit - p);
+      if (p)
+	p++;
+      else if (limit == end)
+	break;
+      else
+	{
+	  p = BUF_GAP_END_ADDR (buf);
+	  p = memchr (p, '\n', end - p);
+	  if (p)
+	    p++;
+	  else
+	    break;
+	}
+      n--;
+    }
+
+  return p;
+}
+
+int
+mac_ax_range_for_line (f, line, range)
+     struct frame *f;
+     EMACS_INT line;
+     CFRange *range;
+{
+  struct buffer *b = XBUFFER (XWINDOW (f->selected_window)->buffer);
+  const unsigned char *begv, *zv, *p;
+  EMACS_INT start, end;
+  int i;
+
+  if (line < 0)
+    return 0;
+
+  begv = BUF_BYTE_ADDRESS (b, BUF_BEGV_BYTE (b));
+  zv = BUF_BYTE_ADDRESS (b, BUF_ZV_BYTE (b));
+
+  p = mac_ax_buffer_skip_lines (b, line, begv, zv);
+  if (p == NULL)
+    return 0;
+
+  start = buf_bytepos_to_charpos (b, BUF_PTR_BYTE_POS (b, p));
+  p = mac_ax_buffer_skip_lines (b, 1, p, zv);
+  if (p)
+    end = buf_bytepos_to_charpos (b, BUF_PTR_BYTE_POS (b, p));
+  else
+    end = BUF_ZV (b);
+
+  range->location = start - BUF_BEGV (b);
+  range->length = end - start;
+
+  return 1;
+}
+
+CFStringRef
+mac_ax_string_for_range (f, range, actual_range)
+     struct frame *f;
+     const CFRange *range;
+     CFRange *actual_range;
+{
+  struct buffer *b = XBUFFER (XWINDOW (f->selected_window)->buffer);
+  CFStringRef result = NULL;
+  EMACS_INT start, end, begv = BUF_BEGV (b), zv = BUF_ZV (b);
+
+  start = begv + range->location;
+  end = start + range->length;
+  if (start < begv)
+    start = begv;
+  else if (start > zv)
+    start = zv;
+  if (end < begv)
+    end = begv;
+  else if (end > zv)
+    end = zv;
+  if (start <= end)
+    {
+      EMACS_INT length = end - start;
+      UniChar *characters = xmalloc (length * sizeof (UniChar));
+
+      if (mac_store_buffer_text_to_unicode_chars (b, start, end, characters))
+	{
+	  result = CFStringCreateWithCharacters (NULL, characters, length);
+	  if (actual_range)
+	    {
+	      actual_range->location = start - begv;
+	      actual_range->length = length;
+	    }
+	}
+      xfree (characters);
+    }
+
+  return result;
+}
 
 OSStatus
 mac_restore_keyboard_input_source ()
@@ -5678,8 +5842,8 @@ mac_term_init (display_name, xrm_option, resource_name)
   terminal->name[SBYTES (display_name)] = 0;
 
   dpyinfo->mac_id_name
-    = (char *) xmalloc (SCHARS (Vinvocation_name)
-			+ SCHARS (Vsystem_name)
+    = (char *) xmalloc (SBYTES (Vinvocation_name)
+			+ SBYTES (Vsystem_name)
 			+ 2);
   sprintf (dpyinfo->mac_id_name, "%s@%s",
 	   SDATA (Vinvocation_name), SDATA (Vsystem_name));
@@ -5809,7 +5973,7 @@ static struct redisplay_interface x_redisplay_interface =
   x_after_update_window_line,
   x_update_window_begin,
   x_update_window_end,
-  x_cursor_to,
+  mac_cursor_to,
   x_flush,
   0, /* flush_display_optional */
   x_clear_window_mouse_face,
@@ -5969,6 +6133,9 @@ syms_of_macterm ()
   Qaction = intern_c_string ("action");		staticpro (&Qaction);
   Qmac_action_key_paths = intern_c_string ("mac-action-key-paths");
   staticpro (&Qmac_action_key_paths);
+
+  Qaccessibility = intern_c_string ("accessibility");
+  staticpro (&Qaccessibility);
 
   staticpro (&Qreverse);
   Qreverse = intern_c_string ("reverse");

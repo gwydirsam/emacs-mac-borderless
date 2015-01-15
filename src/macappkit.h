@@ -18,6 +18,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #undef Z
 #import <Cocoa/Cocoa.h>
+#import <AppKit/NSAccessibility.h> /* Mac OS X 10.2 needs this.  */
 #if USE_MAC_IMAGE_IO
 #import <WebKit/WebKit.h>
 #endif
@@ -67,6 +68,7 @@ typedef unsigned int NSUInteger;
 - (Lisp_Object)lispString;
 - (Lisp_Object)UTF8LispString;
 - (Lisp_Object)UTF16LispString;
+- (NSArray *)componentsSeparatedByCamelCasingWithCharactersInSet:(NSCharacterSet *)separator;
 @end
 
 @interface NSFont (Emacs)
@@ -296,6 +298,9 @@ typedef unsigned int NSUInteger;
 - (void)setAction:(SEL)aSelector;
 - (BOOL)sendAction:(SEL)theAction to:(id)theTarget;
 - (struct input_event *)inputEvent;
+- (NSString *)string;
+- (NSRect)firstRectForCharacterRange:(NSRange)aRange
+			 actualRange:(NSRangePointer)actualRange;
 - (void)viewFrameDidChange:(NSNotification *)notification;
 @end
 
@@ -501,14 +506,32 @@ typedef unsigned int NSUInteger;
 @end
 
 /* Class for SVG frame load delegate.  */
-@interface EmacsSVGLoadDelegate : NSObject
+@interface EmacsSVGLoader : NSObject
 {
+  /* Frame and image data structures to which the SVG image is
+     loaded.  */
+  struct frame *emacsFrame;
+  struct image *emacsImage;
+
+  /* Function called when checking image size.  */
+  int (*checkImageSizeFunc) (struct frame *, int, int);
+
+  /* Function called when reporting image load errors.  */
+  void (*imageErrorFunc) (char *, Lisp_Object, Lisp_Object);
+
   /* Whether a page load has completed.  */
-  Boolean isLoaded;
+  BOOL isLoaded;
 }
-- (Boolean)isLoaded;
+- (id)initWithEmacsFrame:(struct frame *)f emacsImage:(struct image *)img
+      checkImageSizeFunc:(int (*)(struct frame *, int, int))checkImageSize
+	  imageErrorFunc:(void (*)(char *, Lisp_Object, Lisp_Object))imageError;
+- (int)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor;
 @end
 #endif
+
+@interface EmacsFrameController (Accessibility)
+- (void)postAccessibilityNotificationsToEmacsView;
+@end
 
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
 
@@ -639,5 +662,30 @@ typedef NSUInteger NSWindowCollectionBehavior;
 @interface NSMenu (AvailableOn1060AndLater)
 - (BOOL)popUpMenuPositioningItem:(NSMenuItem *)item
 		      atLocation:(NSPoint)location inView:(NSView *)view;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1040
+@interface NSEvent (AvailableOn1040AndLater)
+- (float)rotation;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+enum {
+    NSEventTypeMagnify          = 30,
+    NSEventTypeSwipe            = 31,
+    NSEventTypeRotate           = 18
+};
+
+@interface NSEvent (AvailableOn1060AndLater)
+- (CGFloat)magnification;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
+@interface NSObject (AvailableOn1030AndLater)
+- (id)accessibilityAttributeValue:(NSString *)attribute
+		     forParameter:(id)parameter;
 @end
 #endif

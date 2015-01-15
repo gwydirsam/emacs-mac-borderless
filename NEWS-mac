@@ -1,5 +1,42 @@
+* emacs-23.2-mac-1.994 [experimental/hackers-only] (2010-05-29)
+
+** Fixed bugs
+
+*** Prefix keys defined in ~/Library/KeyBindings/DefaultKeyBinding.dict
+need to be typed multiple times.  Reported by Peter Dyballa and Drew Hess.
+
+*** Successive paste of different images from other applications via
+the clipboard only inserts the first image.  Reported by Leo.
+
+*** Successive SVG image loading in `vrend-clock' by Anders Waldenborg
+(http://lists.gnu.org/archive/html/bug-gnu-emacs/2010-05/msg00521.html)
+fails in a few seconds.
+
+*** The variable `face-ignored-fonts' does not work.
+Apply Kenichi Handa's fix for Bug#6287.
+This is useful when you want to turn off synthetic bold for some fonts
+like (add-to-list 'face-ignored-fonts "\\`-[^-]*-monaco-bold-").
+Synthetic bold seems to become lighter if the background is darker
+than the foreground and the LCD font smoothing is turned on.
+
+** Improvements
+
+*** "Speak selected text with when the key is pressed", which can be
+customized in the Speech pane in the System Preferences, now works.
+
+*** New events: magnify-up/down and rotate-left/right.  They are for
+newer trackpads with Mac OS X 10.5.2 and later.  By default,
+magnify-up/down, which are issued by pinch out/in, are bound to
+scaling text size by text-scale-mode.  With the shift key, they turn
+on/off fullscreen status of the frame.
+
+*** Experimental support for accessibility with respect to the custom
+view for Emacs frames.  Still there are several glitches.
+
+
 * emacs-23.2-mac-1.993 [experimental/hackers-only] (2010-05-09)
 Based on Emacs 23.2
+http://lists.gnu.org/archive/html/emacs-devel/2010-05/msg00266.html
 
 ** Improvements
 

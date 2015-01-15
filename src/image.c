@@ -2811,7 +2811,7 @@ image_load_image_io (f, img, type)
   if (!check_image_size (f, width, height))
     {
       CGImageRelease (image);
-      image_error ("Invalid image size", Qnil, Qnil);
+      image_error ("Invalid image size (see `max-image-size')", Qnil, Qnil);
       return 0;
     }
 
@@ -3020,7 +3020,7 @@ image_load_qt_1 (f, img, type, fss, dh)
 
   if (!check_image_size (f, width, height))
     {
-      image_error ("Invalid image size", Qnil, Qnil);
+      image_error ("Invalid image size (see `max-image-size')", Qnil, Qnil);
       goto error;
     }
 
@@ -3208,7 +3208,7 @@ image_load_quartz2d (f, img, png_p)
     {
       CGImageRelease (image);
       UNGCPRO;
-      image_error ("Invalid image size", Qnil, Qnil);
+      image_error ("Invalid image size (see `max-image-size')", Qnil, Qnil);
       return 0;
     }
 

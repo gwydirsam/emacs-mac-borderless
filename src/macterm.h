@@ -632,6 +632,7 @@ extern void free_frame_menubar P_ ((struct frame *));
 
 /* Defined in macappkit.m.  */
 
+extern Lisp_Object mac_nsvalue_to_lisp P_ ((CFTypeRef));
 extern void mac_alert_sound_play P_ ((void));
 extern OSStatus install_application_handler P_ ((void));
 extern void mac_get_window_structure_bounds P_ ((struct frame *,
@@ -645,6 +646,8 @@ extern void mac_set_frame_window_background P_ ((struct frame *,
 extern void mac_update_begin P_ ((struct frame *));
 extern void mac_update_end P_ ((struct frame *));
 extern void mac_frame_up_to_date P_ ((struct frame *));
+extern void mac_update_window_end P_ ((struct window *));
+extern void mac_cursor_to P_ ((int, int, int, int));
 extern void x_flush P_ ((struct frame *));
 extern void mac_create_frame_window P_ ((struct frame *));
 extern void mac_dispose_frame_window P_ ((struct frame *));
