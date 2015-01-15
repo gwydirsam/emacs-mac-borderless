@@ -308,6 +308,7 @@ typedef unsigned int NSUInteger;
 - (NSRect)convertEmacsViewRectToScreen:(NSRect)rect;
 - (NSRect)centerScanEmacsViewRect:(NSRect)rect;
 - (void)invalidateCursorRectsForEmacsView;
+- (void)storeModifyFrameParametersEvent:(Lisp_Object)alist;
 @end
 
 /* Class for Emacs view that handles drawing events only.  It is used

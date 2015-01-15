@@ -1947,6 +1947,25 @@ extern void mac_save_keyboard_input_source P_ ((void));
 }
 #endif
 
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem
+{
+  SEL action = [menuItem action];
+
+  if (action == @selector(runToolbarCustomizationPalette:))
+    return NO;
+
+  return [super validateMenuItem:menuItem];
+}
+
+- (void)toggleToolbarShown:(id)sender
+{
+  Lisp_Object alist =
+    list1 (Fcons (Qtool_bar_lines, make_number ([sender state] != NSOffState)));
+  EmacsFrameController *frameController = [self delegate];
+
+  [frameController storeModifyFrameParametersEvent:alist];
+}
+
 @end				// EmacsWindow
 
 @implementation EmacsFullscreenWindow
@@ -5869,7 +5888,10 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
   [toolbar setDisplayMode:NSToolbarDisplayModeIconOnly];
   [toolbar setSizeMode:NSToolbarSizeModeSmall];
-  [toolbar setAllowsUserCustomization:NO];
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6)
+    [toolbar setAllowsUserCustomization:NO];
+  else
+    [toolbar setAllowsUserCustomization:YES];
   [toolbar setAutosavesConfiguration:NO];
   [toolbar setDelegate:self];
   [toolbar setVisible:visible];
