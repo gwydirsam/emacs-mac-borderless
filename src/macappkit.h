@@ -46,6 +46,7 @@ typedef unsigned int NSUInteger;
 @protocol NSWindowDelegate <NSObject> @end
 @protocol NSToolbarDelegate <NSObject> @end
 @protocol NSMenuDelegate <NSObject> @end
+@protocol NSUserInterfaceItemSearching <NSObject> @end
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
@@ -92,6 +93,7 @@ typedef unsigned int NSUInteger;
 @end
 
 @interface NSScreen (Emacs)
++ (NSScreen *)screenContainingPoint:(NSPoint)aPoint;
 + (NSScreen *)closestScreenForRect:(NSRect)aRect;
 @end
 
@@ -147,6 +149,13 @@ typedef unsigned int NSUInteger;
   /* Saved key bindings with or without conflicts (currently, those
      for writing direction commands on Mac OS X 10.6).  */
   NSDictionary *keyBindingsWithConflicts, *keyBindingsWithoutConflicts;
+
+  /* Help topic that the user selected using Help menu search.  */
+  id selectedHelpTopic;
+
+  /* Search string for which the user selected "Show All Help
+     Topics".  */
+  NSString *searchStringForAllHelpTopics;
 }
 - (int)getAndClearMenuItemSelection;
 - (void)storeInputEvent:(id)sender;
@@ -307,9 +316,11 @@ typedef unsigned int NSUInteger;
      relative to the knob slot.  */
   CGFloat knobMinEdgeInSlot;
 }
++ (void)updateBehavioralParameters;
 - (BOOL)dragUpdatesFloatValue;
-- (NSTimeInterval)firstDelay;
-- (NSTimeInterval)continuousDelay;
+- (NSTimeInterval)buttonDelay;
+- (NSTimeInterval)buttonPeriod;
+- (BOOL)pagingBehavior;
 @end
 
 /* Just for avoiding warnings about undocumented methods in NSScroller.  */
@@ -376,7 +387,7 @@ typedef unsigned int NSUInteger;
 - (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar;
 - (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar;
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
-- (void)setupToolBar;
+- (void)setupToolBarWithVisibility:(BOOL)visible;
 - (void)storeToolBarEvent:(id)sender;
 - (void)noteToolBarMouseMovement:(NSEvent *)event;
 @end
@@ -441,7 +452,7 @@ typedef unsigned int NSUInteger;
 - (EventRef)_eventRef;
 @end
 
-@interface EmacsController (Menu) <NSMenuDelegate>
+@interface EmacsController (Menu) <NSMenuDelegate, NSUserInterfaceItemSearching>
 - (void)trackMenuBar;
 @end
 

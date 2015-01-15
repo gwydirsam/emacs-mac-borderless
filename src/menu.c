@@ -67,6 +67,10 @@ extern Lisp_Object Qmac_apple_event;
 #define HAVE_BOXES 1
 #endif
 
+/* The timestamp of the last input event Emacs received from the X server.  */
+/* Defined in keyboard.c.  */
+extern unsigned long last_event_timestamp;
+
 extern Lisp_Object QCtoggle, QCradio;
 
 Lisp_Object menu_items;
@@ -1079,7 +1083,6 @@ no quit occurs and `x-popup-menu' returns nil.  */)
   int keymaps = 0;
   int for_click = 0;
   int specpdl_count = SPECPDL_INDEX ();
-  Lisp_Object timestamp = Qnil;
   struct gcpro gcpro1;
 
   if (NILP (position))
@@ -1117,10 +1120,9 @@ no quit occurs and `x-popup-menu' returns nil.  */)
 	    for_click = 1;
 	    tem = Fcar (Fcdr (position));  /* EVENT_START (position) */
 	    window = Fcar (tem);	     /* POSN_WINDOW (tem) */
-	    tem = Fcdr (Fcdr (tem));
-	    x = Fcar (Fcar (tem));
-	    y = Fcdr (Fcar (tem));
-	    timestamp = Fcar (Fcdr (tem));
+	    tem = Fcar (Fcdr (Fcdr (tem))); /* POSN_WINDOW_POSN (tem) */
+	    x = Fcar (tem);
+	    y = Fcdr (tem);
 	  }
 
 	/* If a click happens in an external tool bar or a detached
@@ -1331,9 +1333,13 @@ no quit occurs and `x-popup-menu' returns nil.  */)
   selection = ns_menu_show (f, xpos, ypos, for_click,
 			    keymaps, title, &error_name);
 #else /* MSDOS and X11 */
+  /* Assume last_event_timestamp is the timestamp of the button event.
+     Is this assumption ever violated?  We can't use the timestamp
+     stored within POSITION because there the top bits from the actual
+     timestamp may be truncated away (Bug#4930).  */
   selection = xmenu_show (f, xpos, ypos, for_click,
 			  keymaps, title, &error_name,
-			  INTEGERP (timestamp) ? XUINT (timestamp) : 0);
+			  last_event_timestamp);
 #endif
 
   UNBLOCK_INPUT;

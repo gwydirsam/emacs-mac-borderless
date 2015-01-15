@@ -61,6 +61,8 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 Lisp_Object Qdebug_on_next_call;
 
+Lisp_Object Vmac_help_topics;
+
 extern Lisp_Object Qmenu_bar, Qmac_apple_event;
 
 extern Lisp_Object QCtoggle, QCradio;
@@ -1077,6 +1079,15 @@ syms_of_macmenu ()
 #ifdef HAVE_MENUS
   defsubr (&Sx_popup_dialog);
 #endif
+
+  DEFVAR_LISP ("mac-help-topics", &Vmac_help_topics,
+    doc: /* List of strings shown as Help topics by Help menu search.
+Each element should be a unibyte string in UTF-8.  The special value t
+means not to recalculate help topics.  This customizable Help menu
+search feature works only when compiled and run on Mac OS X 10.6 and
+later, and otherwise the value is kept to t so as to avoid needless
+recalculation.  */);
+  Vmac_help_topics = Qt;
 }
 
 /* arch-tag: 40b2c6c7-b8a9-4a49-b930-1b2707184cce

@@ -3047,7 +3047,7 @@ mac_ctfont_shape (font, string, glyph_layouts, glyph_len)
 
 /* The function below seems to cause a memory leak for the CFString
    created by CFStringCreateWithCharacters as of Mac OS X 10.5.8 and
-   10.6.2.  For now, we use the NSGlyphInfo version instead.  */
+   10.6.3.  For now, we use the NSGlyphInfo version instead.  */
 #if USE_CT_GLYPH_INFO
 CGGlyph
 mac_ctfont_get_glyph_for_cid (font, collection, cid)

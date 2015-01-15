@@ -818,7 +818,7 @@ It records the Apple event in `mac-startup-options' as a value
 for the key symbol `apple-event' so it can be inspected later."
   (interactive "e")
   (push (cons 'apple-event (mac-event-ae event)) mac-startup-options))
-  
+
 (defun mac-ae-reopen-application (event)
   "Show some frame in response to the Apple event EVENT.
 The frame to be shown is chosen from visible or iconified frames
@@ -1172,12 +1172,57 @@ modifiers, it changes the global tool-bar visibility setting."
  'mac-handle-toolbar-pill-button-clicked)
 (define-key mac-apple-event-map [action zoom] 'mac-handle-zoom)
 
+;;; Spotlight for Help (Mac OS X 10.6 and later, experimental)
+
+(eval-when-compile
+  (require 'info))
+
+(defvar mac-help-topics)
+
+(defun mac-setup-help-topics ()
+  (unless mac-help-topics
+    (require 'info)
+    (info-initialize)
+    (let ((filename (Info-find-file "Emacs" t)))
+      (if (null filename)
+	  (setq mac-help-topics t)
+	(setq mac-help-topics
+	      (mapcar (lambda (node-info)
+			(encode-coding-string (car node-info) 'utf-8))
+		      (Info-toc-build filename)))))))
+
+(defun mac-handle-select-help-topic (event)
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (tag-data (cdr (mac-ae-parameter ae "selectedHelpTopic"))))
+    (if (eq (car tag-data) 'string)
+	(info (format "(Emacs)%s"
+		      (decode-coding-string (cdr tag-data) 'utf-8))))))
+
+(define-key mac-apple-event-map [action select-help-topic]
+ 'mac-handle-select-help-topic)
+(put 'select-help-topic 'mac-action-key-paths '("selectedHelpTopic"))
+
+(defun mac-handle-show-all-help-topics (event)
+  (interactive "e")
+  (let* ((ae (mac-event-ae event))
+	 (tag-data (cdr (mac-ae-parameter ae "searchStringForAllHelpTopics"))))
+    (when (eq (car tag-data) 'string)
+      (info "Emacs")
+      (Info-virtual-index (decode-coding-string (cdr tag-data) 'utf-8)))))
+
+(define-key mac-apple-event-map [action show-all-help-topics]
+ 'mac-handle-show-all-help-topics)
+(put 'show-all-help-topics 'mac-action-key-paths
+     '("searchStringForAllHelpTopics"))
+
 ;;; Services
 (defun mac-service-open-file ()
   "Open the file specified by the selection value for Services."
   (interactive)
   ;; The selection seems not to contain the file name as
-  ;; NSStringPboardType data on Mac OS X 10.4.
+  ;; NSStringPboardType data on Mac OS X 10.4, when the selected items
+  ;; are file icons.
   (let (data file-urls)
     (setq data
 	  (condition-case nil
@@ -1186,6 +1231,28 @@ modifiers, it changes the global tool-bar visibility setting."
     (if data
 	(setq file-urls
 	      (mac-pasteboard-filenames-to-file-urls data)))
+    (when (null file-urls)
+      (setq data (condition-case nil
+		     (x-get-selection mac-service-selection
+				      'NSStringPboardType)
+		   (error nil)))
+      (when data
+	(if (string-match "\\`[[:space:]\n]*[^[:space:]\n]" data)
+	    (setq data (substring data (1- (match-end 0)))))
+	(if (string-match "[^[:space:]\n][[:space:]\n]*\\'" data)
+	    (setq data (substring data 0 (1+ (match-beginning 0)))))
+	(when (file-name-absolute-p data)
+	  (let ((filename (expand-file-name data "/"))
+		(coding (or file-name-coding-system
+			    default-file-name-coding-system)))
+	    (unless (and (eq (aref data 0) ?~)
+			 (string-match "\\`/~" filename))
+	      (setq filename (encode-coding-string filename coding))
+	      (setq file-urls
+		    (list
+		     (concat "file://localhost"
+			     (mapconcat 'url-hexify-string
+					(split-string filename "/") "/")))))))))
     (when file-urls
       (dolist (file-url file-urls)
 	(dnd-open-file file-url nil))
@@ -1489,6 +1556,8 @@ standard ones in `x-handle-args'."
 							  first-option))))
 				(eq (frame-visible-p (selected-frame)) t))
 			   (x-focus-frame (selected-frame)))))
+
+  (add-hook 'menu-bar-update-hook 'mac-setup-help-topics)
 
   (setq mac-initialized t))
 

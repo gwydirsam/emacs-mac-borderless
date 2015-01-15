@@ -1,3 +1,173 @@
+2010-04-02  Juanma Barranquero  <lekktu@gmail.com>
+
+	* cedet/semantic/imenu.el (semantic-imenu-bucketize-type-members)
+	(semantic-create-imenu-directory-index): Fix typos in docstrings.
+	(semantic-imenu-goto-function): Reflow docstring.
+
+2010-03-30  Tomas Abrahamsson  <tab@lysator.liu.se>
+
+	* textmodes/artist.el (artist-mode): Fix typo in docstring.
+	Reported by Alex Schröder <kensanata@gmail.com>.  (Bug#5807)
+
+2010-03-30  Kenichi Handa  <handa@m17n.org>
+
+	* language/sinhala.el (composition-function-table): Fix regexp for
+	the new Unicode specification.
+
+	* language/indian.el (devanagari-composable-pattern)
+	(tamil-composable-pattern, kannada-composable-pattern)
+	(malayalam-composable-pattern): Adjust for the new Unicode
+	specification.
+	(bengali-composable-pattern, gurmukhi-composable-pattern)
+	(gujarati-composable-pattern, oriya-composable-pattern)
+	(telugu-composable-pattern): New variables to cope with the new
+	Unicode specification.  Use them in composition-function-table.
+
+2010-03-29  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	Make tmm-menubar work for the Buffers menu again.
+	* tmm.el (tmm-prompt): Also handle keymap entries in the form of
+	vectors rather than cons cells, as used in menu-bar-update-buffers.
+
+2010-03-28  Chong Yidong  <cyd@stupidchicken.com>
+
+	* progmodes/js.el (js-auto-indent-flag, js-mode-map)
+	(js-insert-and-indent): Revert 2009-08-15 change, restoring
+	electric punctuation for "{}();,:" (Bug#5586).
+
+	* mail/sendmail.el (mail-default-directory): Doc fix.
+
+2010-03-27  Chong Yidong  <cyd@stupidchicken.com>
+
+	* mail/sendmail.el (mail-default-directory): Doc fix.
+
+2010-03-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* subr.el (version-regexp-alist, version-to-list)
+	(version-list-<, version-list-=, version-list-<=)
+	(version-list-not-zero, version<, version<=, version=): Doc fix.
+	(Bug#5744).
+
+2010-03-26  YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
+            Nick Roberts  <nickrob@snap.net.nz>
+
+	* progmodes/gdb-ui.el (gdb-apple-test): New function.
+	(gdb-init-1): Use it.
+
+2010-02-10  Dan Nicolaescu  <dann@ics.uci.edu>
+
+	* vc.el (vc-root-diff): Doc fix.
+
+2010-03-25  Chong Yidong  <cyd@stupidchicken.com>
+
+	* vc.el (vc-print-log, vc-print-root-log): Doc fix.
+
+	* simple.el (append-to-buffer): Fix last change.
+
+2010-03-24  Chong Yidong  <cyd@stupidchicken.com>
+
+	* simple.el (append-to-buffer): Ensure that point is preserved if
+	BUFFER is the current buffer.  Suggested by YAMAMOTO Mitsuharu.
+	(Bug#5749)
+
+2010-03-24  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* progmodes/make-mode.el (makefile-rule-action-regex): Backtrack less.
+	(makefile-make-font-lock-keywords): Adjust rule since submatch 1 may
+	not be present any more.
+
+2010-03-24  Juanma Barranquero  <lekktu@gmail.com>
+
+	* faces.el (set-face-attribute): Fix typo in docstring.
+	(face-valid-attribute-values): Reflow docstring.
+
+	* cedet/srecode/table.el (srecode-template-table): Fix docstring typo.
+
+2010-03-23  Glenn Morris  <rgm@gnu.org>
+
+	* textmodes/flyspell.el (sgml-lexical-context): Autoload it (Bug#5752).
+
+2010-03-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* indent.el (indent-for-tab-command): Doc fix.
+
+2010-03-22  Alan Mackenzie  <acm@muc.de>
+
+	* progmodes/cc-engine.el (c-remove-stale-state-cache):
+	Fix off-by-one error.  Fixes bug #5747.
+
+2010-03-22  Juanma Barranquero  <lekktu@gmail.com>
+
+	* image-dired.el (image-dired-display-thumbs): Fix typo in docstring.
+	(image-dired-read-comment): Doc fix.
+
+	* json.el (json-object-type, json-array-type, json-key-type)
+	(json-false, json-null, json-read-number):
+	* minibuffer.el (completion-in-region-functions):
+	* calendar/cal-tex.el (cal-tex-daily-end, cal-tex-number-weeks)
+	(cal-tex-cursor-week):
+	* emacs-lisp/trace.el (trace-function):
+	* eshell/em-basic.el (eshell/printnl):
+	* eshell/em-dirs.el (eshell-last-dir-ring, eshell-parse-drive-letter)
+	(eshell-read-last-dir-ring, eshell-write-last-dir-ring):
+	* obsolete/levents.el (allocate-event, event-key, event-object)
+	(event-point, event-process, event-timestamp, event-to-character)
+	(event-window, event-x, event-x-pixel, event-y, event-y-pixel):
+	* textmodes/reftex-vars.el (reftex-index-macros-builtin)
+	(reftex-section-levels, reftex-auto-recenter-toc, reftex-toc-mode-hook)
+	(reftex-cite-punctuation, reftex-search-unrecursed-path-first)
+	(reftex-highlight-selection): Fix typos in docstrings.
+
+2010-03-19  Juanma Barranquero  <lekktu@gmail.com>
+
+	* minibuffer.el (completion-in-region-functions): Fix docstring typos.
+
+2010-03-18  Glenn Morris  <rgm@gnu.org>
+
+	* mail/rmail.el (rmail-highlight-face): Restore option deleted
+	2008-02-13 without comment; mark it obsolete.
+	(rmail-highlight-headers): Use rmail-highlight-face once more.
+
+2010-03-16  Chong Yidong  <cyd@stupidchicken.com>
+
+	* woman.el (woman2-process-escapes): Only consume the newline if
+	the filler character is on a line by itself (Bug#5729).
+
+2010-03-16  Kenichi Handa  <handa@m17n.org>
+
+	* language/indian.el (devanagari-composable-pattern): Add more
+	consonants.
+
+2010-03-14  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/trampver.el: Update release number.
+
+2010-03-13  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (ELCFILES): Add cedet/semantic/imenu.el.
+
+2010-03-13  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el (tramp-find-executable):
+	Use `tramp-get-connection-buffer'.  Make the regexp for checking
+	output of "wc -l" more robust.
+	(tramp-find-shell): Use another shell but /bin/sh on OpenSolaris.
+	(tramp-open-connection-setup-interactive-shell): Remove workaround
+	for OpenSolaris bug, it is not needed anymore.
+
+2010-03-13  Eric M. Ludlam  <zappo@gnu.org>
+
+	* cedet/semantic/imenu.el: New file, from the CEDET repository
+	(Bug#5412).
+
+2010-03-12  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-lisp/cl-macs.el (defsubst*): Add autoload cookie.  (Bug#4427)
+
+2010-03-11  Wilson Snyder  <wsnyder@wsnyder.org>
+
+	* files.el (auto-mode-alist): Accept more verilog file patterns.
+
 2010-03-09  Miles Bader  <miles@gnu.org>>
 
 	* vc-git.el (vc-git-print-log): Use "tformat:" for shortlog,
@@ -3160,7 +3330,7 @@
 	* bookmark.el: Formatting and doc fixes only:
 	(bookmark-search-delay): Shorten doc string to fit in 80 columns.
 	(bookmark-bmenu-search): Wrap to fit within 80 columns.
-	  Minor grammar and punctuation fixes in doc string.
+	Minor grammar and punctuation fixes in doc string.
 	(bookmark-read-search-input): Adjust to fit within 80 columns.
 
 2009-11-20  Tassilo Horn  <tassilo@member.fsf.org>
@@ -5915,12 +6085,12 @@
 2009-10-05  Karl Fogel  <kfogel@red-bean.com>
 
 	* bookmark.el (bookmark-handle-bookmark): If bookmark has no file,
-	  don't do anything related to relocating, just return nil.
+	don't do anything related to relocating, just return nil.
 	(bookmark-error-no-filename): New error.
 	(bookmark-default-handler): Signal `bookmark-error-no-filename' if
-	  bookmark has no file.  Don't even attempt to handle things that
-	  are not files; the whole point of custom handlers is to keep that
-	  knowledge elsewhere anyway.  Tighten some comments.
+	bookmark has no file.  Don't even attempt to handle things that
+	are not files; the whole point of custom handlers is to keep that
+	knowledge elsewhere anyway.  Tighten some comments.
 	(bookmark-file-or-variation-thereof): Remove now-unused function.
 	(bookmark-location): Doc string fix.
 	(Bug#4250)
@@ -5950,8 +6120,8 @@
 	(bookmark-relocate, bookmark-insert-location, bookmark-rename)
 	(bookmark-insert, bookmark-delete, bookmark-time-to-save-p)
 	(bookmark-edit-annotation-mode, bookmark-edit-annotation):
-	   Improve doc strings to say whether bookmark can be a string or
-	   a record or both, and make other consistency and clarity fixes.
+	Improve doc strings to say whether bookmark can be a string or
+	a record or both, and make other consistency and clarity fixes.
 	(bookmark-get-handler, bookmark--jump-via, bookmark-write-file)
 	(bookmark-default-annotation-text, bookmark-yank-word)
 	(bookmark-maybe-load-default-file, bookmark-maybe-sort-alist)
@@ -5959,12 +6129,12 @@
 	(bookmark-bmenu-show-filenames, bookmark-bmenu-hide-filenames)
 	(bookmark-bmenu-bookmark): Give these doc strings.
 	(bookmark-bmenu-check-position): Give this a doc string, but also
-	   add a FIXME comment about how the function may be pointless.
+	add a FIXME comment about how the function may be pointless.
 	(bookmark-default-handler): Rework doc string and change a
-	   parameter name, to clarify that this takes a bookmark record
-	   not a bookmark name.
+	parameter name, to clarify that this takes a bookmark record
+	not a bookmark name.
 	(bookmark-set): Change a parameter name to indicate its meaning,
-	   and improve the doc string a bit.
+	and improve the doc string a bit.
 	(Bug#4188)
 
 2009-10-04  Karl Fogel  <kfogel@red-bean.com>

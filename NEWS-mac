@@ -1,3 +1,32 @@
+* emacs-23.1.95-mac-1.990 [experimental/hackers-only] (2010-04-03)
+Based on Emacs 23.1.95
+
+** Fixed bugs
+
+*** Crash when showing a tooltip on a secondary monitor.
+
+*** Can't quit while establishing a TCP connection.
+Apply a fix for Bug#5723 as well as Helmut Eller's fix for Bug#5173.
+
+** Improvements
+
+*** When a maximized frame is moved with title bar dragging on a
+multiple monitor environment, the destination monitor is determined by
+the mouse position at the end of dragging.  If such a frame is moved
+programmatically, the destination monitor is determined by the maximum
+area of the contained part of the frame as before.
+
+*** Menu item "Open Selected File in Emacs" is shown in Services or
+context menu of other applications by default on Mac OS X 10.6 when
+absolute pathname-like text is selected.
+
+*** Emacs info nodes are accessible via search field in the Help menu
+if compiled and run on Mac OS X 10.6.
+
+*** "Click in the scroll bar to: Jump to the spot that's clicked"
+setting in the System Preferences is supported.
+
+
 * emacs-23.1.94-mac-1.99 [experimental/hackers-only] (2010-03-11)
 Based on Emacs 23.1.94
 

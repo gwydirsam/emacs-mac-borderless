@@ -327,6 +327,19 @@ NSRectToCGRect (nsrect)
 
 @implementation NSScreen (Emacs)
 
++ (NSScreen *)screenContainingPoint:(NSPoint)aPoint
+{
+  NSArray *screens = [NSScreen screens];
+  NSEnumerator *enumerator = [screens objectEnumerator];
+  NSScreen *screen;
+
+  while ((screen = [enumerator nextObject]) != nil)
+    if (NSMouseInRect (aPoint, [screen frame], NO))
+      return screen;
+
+  return nil;
+}
+
 + (NSScreen *)closestScreenForRect:(NSRect)aRect
 {
   NSArray *screens = [NSScreen screens];
@@ -638,6 +651,7 @@ mac_appkit_version ()
 
 extern int mac_pass_command_to_system;
 extern int mac_pass_control_to_system;
+extern Lisp_Object Vmac_help_topics;
 
 static void init_menu_bar P_ ((void));
 static void init_apple_event_handler P_ ((void));
@@ -856,6 +870,14 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 	   name:@"NSAntialiasThresholdChangedNotification"
 #endif
 	 object:nil];
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+  if ([NSApp respondsToSelector:@selector(registerUserInterfaceItemSearchHandler:)])
+    {
+      [NSApp registerUserInterfaceItemSearchHandler:self];
+      Vmac_help_topics = Qnil;
+    }
+#endif
 
   /* Exit from the main event loop.  */
   [NSApp stop:nil];
@@ -1684,7 +1706,11 @@ extern void mac_save_keyboard_input_source P_ ((void));
     {
       [window setAcceptsMouseMovedEvents:YES];
       if (!(windowManagerState & WM_STATE_FULLSCREEN))
-	[self setupToolBar];
+	{
+	  BOOL visible = (oldWindow == nil && FRAME_EXTERNAL_TOOL_BAR (f));
+
+	  [self setupToolBarWithVisibility:visible];
+	}
     }
   else
     {
@@ -1759,7 +1785,24 @@ extern void mac_save_keyboard_input_source P_ ((void));
 			    | WM_STATE_FULLSCREEN))
     {
       if (screen == nil)
-	screen = [NSScreen closestScreenForRect:frameRect];
+	{
+	  NSEvent *currentEvent = [NSApp currentEvent];
+
+	  if ([currentEvent type] == NSLeftMouseUp)
+	    {
+	      /* Probably end of title bar dragging.  */
+	      NSWindow *eventWindow = [currentEvent window];
+	      NSPoint location = [currentEvent locationInWindow];
+
+	      if (eventWindow)
+		location = [eventWindow convertBaseToScreen:location];
+
+	      screen = [NSScreen screenContainingPoint:location];
+	    }
+
+	  if (screen == nil)
+	    screen = [NSScreen closestScreenForRect:frameRect];
+	}
 
       if (windowManagerState & WM_STATE_FULLSCREEN)
 	frameRect = [screen frame];
@@ -2533,13 +2576,27 @@ mac_create_frame_window (f)
      struct frame *f;
 {
   NSWindow *window, *mainWindow = [NSApp mainWindow];
+  int left_pos, top_pos;
+
+  /* Save possibly negative position values because they might be
+     changed by `setToolbar' -> `windowDidResize:' if the toolbar is
+     visible.  */
+  if (f->size_hint_flags & (USPosition | PPosition))
+    {
+      left_pos = f->left_pos;
+      top_pos = f->top_pos;
+    }
 
   [[EmacsFrameController alloc] initWithEmacsFrame:f];
   window = FRAME_MAC_WINDOW (f);
 
   if (f->size_hint_flags & (USPosition | PPosition))
-    mac_move_frame_window_structure (f, f->left_pos, f->top_pos);
-  else
+    {
+      f->left_pos = left_pos;
+      f->top_pos = top_pos;
+      mac_move_frame_window_structure (f, f->left_pos, f->top_pos);
+    }
+  else if (!FRAME_TOOLTIP_P (f))
     {
       if (mainWindow == nil)
 	[window center];
@@ -3753,10 +3810,43 @@ mac_scroll_area (f, gc, src_x, src_y, width, height, dest_x, dest_y)
  ************************************************************************/
 extern Time last_mouse_movement_time;
 
-#define SCROLL_BAR_FIRST_DELAY 0.5
-#define SCROLL_BAR_CONTINUOUS_DELAY (1.0 / 15)
-
 @implementation NonmodalScroller
+
+static NSTimeInterval NonmodalScrollerButtonDelay = 0.5;
+static NSTimeInterval NonmodalScrollerButtonPeriod = 1.0 / 20;
+static BOOL NonmodalScrollerPagingBehavior;
+
++ (void)initialize
+{
+  if (self == [NonmodalScroller class])
+    {
+      [self updateBehavioralParameters];
+      [[NSDistributedNotificationCenter defaultCenter]
+	addObserver:self
+	   selector:@selector(pagingBehaviorDidChange:)
+	       name:@"AppleNoRedisplayAppearancePreferenceChanged"
+	     object:nil
+	suspensionBehavior:NSNotificationSuspensionBehaviorCoalesce];
+    }
+}
+
++ (void)updateBehavioralParameters
+{
+  NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
+
+  [userDefaults synchronize];
+  NonmodalScrollerButtonDelay =
+    [userDefaults floatForKey:@"NSScrollerButtonDelay"];
+  NonmodalScrollerButtonPeriod =
+    [userDefaults floatForKey:@"NSScrollerButtonPeriod"];
+  NonmodalScrollerPagingBehavior =
+    [userDefaults boolForKey:@"AppleScrollerPagingBehavior"];
+}
+
++ (void)pagingBehaviorDidChange:(NSNotification *)notification
+{
+  [self updateBehavioralParameters];
+}
 
 - (void)dealloc
 {
@@ -3775,17 +3865,25 @@ extern Time last_mouse_movement_time;
 /* First delay in seconds for mouse tracking.  Subclass may override
    the definition.  */
 
-- (NSTimeInterval)firstDelay
+- (NSTimeInterval)buttonDelay
 {
-  return SCROLL_BAR_FIRST_DELAY;
+  return NonmodalScrollerButtonDelay;
 }
 
 /* Continuous delay in seconds for mouse tracking.  Subclass may
    override the definition.  */
 
-- (NSTimeInterval)continuousDelay
+- (NSTimeInterval)buttonPeriod
 {
-  return SCROLL_BAR_CONTINUOUS_DELAY;
+  return NonmodalScrollerButtonPeriod;
+}
+
+/* Whether a click in the knob slot above/below the knob jumps to the
+   spot that's clicked.  Subclass may override the definition.  */
+
+- (BOOL)pagingBehavior
+{
+  return NonmodalScrollerPagingBehavior;
 }
 
 - (NSScrollerPart)hitPart
@@ -3854,14 +3952,20 @@ extern Time last_mouse_movement_time;
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
+  BOOL jumpsToClickedSpot;
+
   hitPart = [self testPart:[theEvent locationInWindow]];
 
   if (hitPart == NSScrollerNoPart)
     return;
 
-  if (hitPart != NSScrollerKnob)
+  jumpsToClickedSpot = ([self pagingBehavior]
+		       && (hitPart == NSScrollerIncrementPage
+			   || hitPart == NSScrollerDecrementPage));
+
+  if (hitPart != NSScrollerKnob && !jumpsToClickedSpot)
     {
-      [self rescheduleTimer:[self firstDelay]];
+      [self rescheduleTimer:[self buttonDelay]];
       [self highlight:YES];
       [self sendAction:[self action] to:[self target]];
     }
@@ -3874,10 +3978,40 @@ extern Time last_mouse_movement_time;
       frameRect = [self frame];
       knobRect = [self rectForPart:NSScrollerKnob];
 
+      if (jumpsToClickedSpot)
+	{
+	  NSRect knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
+
+	  if (NSHeight (frameRect) >= NSWidth (frameRect))
+	    {
+	      knobRect.origin.y = point.y - round (NSHeight (knobRect) / 2);
+	      if (NSMinY (knobRect) < NSMinY (knobSlotRect))
+		knobRect.origin.y = knobSlotRect.origin.y;
+#if 0		      /* This might be better if no overscrolling.  */
+	      else if (NSMaxY (knobRect) > NSMaxY (knobSlotRect))
+	      	knobRect.origin.y = NSMaxY (knobSlotRect) - NSHeight (knobRect);
+#endif
+	    }
+	  else
+	    {
+	      knobRect.origin.x = point.x - round (NSWidth (knobRect) / 2);
+	      if (NSMinX (knobRect) < NSMinX (knobSlotRect))
+		knobRect.origin.x = knobSlotRect.origin.x;
+#if 0
+	      else if (NSMaxX (knobRect) > NSMaxX (knobSlotRect))
+		knobRect.origin.x = NSMaxX (knobSlotRect) - NSWidth (knobRect);
+#endif
+	    }
+	  hitPart = NSScrollerKnob;
+	}
+
       if (NSHeight (frameRect) >= NSWidth (frameRect))
 	knobGrabOffset = - (point.y - NSMinY (knobRect)) - 1;
       else
 	knobGrabOffset = - (point.x - NSMinX (knobRect)) - 1;
+
+      if (jumpsToClickedSpot)
+	[self mouseDragged:theEvent];
     }
 }
 
@@ -3987,7 +4121,7 @@ extern Time last_mouse_movement_time;
       else if (part != hitPart || timer == nil)
 	{
 	  hitPart = part;
-	  [self rescheduleTimer:[self continuousDelay]];
+	  [self rescheduleTimer:[self buttonPeriod]];
 	  [self highlight:YES];
 	  [self sendAction:[self action] to:[self target]];
 	}
@@ -4459,6 +4593,7 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 	       autorelease];
       [item setTarget:self];
       [item setAction:@selector(storeToolBarEvent:)];
+      [item setEnabled:NO];
     }
 
   return item;
@@ -4466,12 +4601,13 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
 - (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
 {
-  return [NSArray arrayWithObject:TOOLBAR_ICON_ITEM_IDENTIFIER];
+  return [NSArray arrayWithObjects:TOOLBAR_ICON_ITEM_IDENTIFIER,
+		  NSToolbarSeparatorItemIdentifier, nil];
 }
 
 - (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar
 {
-  return [NSArray array];
+  return [NSArray arrayWithObject:TOOLBAR_ICON_ITEM_IDENTIFIER];
 }
 
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem
@@ -4481,7 +4617,7 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
 /* Create a tool bar for the frame.  */
 
-- (void)setupToolBar
+- (void)setupToolBarWithVisibility:(BOOL)visible
 {
   struct frame *f = emacsFrame;
   NSString *identifier =
@@ -4498,7 +4634,7 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
   [toolbar setAllowsUserCustomization:NO];
   [toolbar setAutosavesConfiguration:NO];
   [toolbar setDelegate:self];
-  [toolbar setVisible:NO];
+  [toolbar setVisible:visible];
 
   [window setToolbar:toolbar];
   [toolbar release];
@@ -4749,9 +4885,14 @@ free_frame_tool_bar (f)
      FRAME_PTR f;
 {
   NSWindow *window = FRAME_MAC_WINDOW (f);
+  short rx, ry;
   NSToolbar *toolbar;
+  int win_gravity = f->output_data.mac->toolbar_win_gravity;
 
   BLOCK_INPUT;
+
+  if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
+    mac_get_window_gravity_reference_point (f, win_gravity, &rx, &ry);
 
   toolbar = [window toolbar];
   if ([toolbar isVisible])
@@ -4761,6 +4902,10 @@ free_frame_tool_bar (f)
   if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_3)
     [window setFrame:[window constrainFrameRect:[window frame] toScreen:nil]
 	     display:YES];
+
+  if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
+    mac_move_window_to_gravity_reference_point (f, win_gravity, rx, ry);
+  f->output_data.mac->toolbar_win_gravity = 0;
 
   UNBLOCK_INPUT;
 }
@@ -6308,6 +6453,58 @@ restore_show_help_function (old_show_help_function)
 
   return [menu autorelease];
 }
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+/* Methods for the NSUserInterfaceItemSearching protocol.  */
+
+/* This might be called from a non-main thread.  */
+- (void)searchForItemsWithSearchString:(NSString *)searchString
+			   resultLimit:(NSInteger)resultLimit
+		    matchedItemHandler:(void (^)(NSArray *items))handleMatchedItems
+{
+  NSMutableArray *items = [NSMutableArray arrayWithCapacity:resultLimit];
+  Lisp_Object rest;
+
+  for (rest = Vmac_help_topics; CONSP (rest); rest = XCDR (rest))
+    if (STRINGP (XCAR (rest)))
+      {
+	NSString *string = [NSString stringWithUTF8LispString:(XCAR (rest))];
+	NSRange searchRange = NSMakeRange (0, [string length]);
+	NSRange foundRange;
+
+	if ([NSApp searchString:searchString inUserInterfaceItemString:string
+		    searchRange:searchRange foundRange:&foundRange])
+	  {
+	    [items addObject:string];
+	    if ([items count] == resultLimit)
+	      break;
+	  }
+      }
+
+  handleMatchedItems (items);
+}
+
+- (NSArray *)localizedTitlesForItem:(id)item
+{
+  return [NSArray arrayWithObject:item];
+}
+
+- (void)performActionForItem:(id)item
+{
+  selectedHelpTopic = item;
+  [NSApp sendAction:(NSSelectorFromString (@"select-help-topic:"))
+		 to:nil from:self];
+  selectedHelpTopic = nil;
+}
+
+- (void)showAllHelpTopicsForSearchString:(NSString *)searchString
+{
+  searchStringForAllHelpTopics = searchString;
+  [NSApp sendAction:(NSSelectorFromString (@"show-all-help-topics:"))
+		 to:nil from:self];
+  searchStringForAllHelpTopics = nil;
+}
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1060 */
 
 @end				// EmacsController (Menu)
 
