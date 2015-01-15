@@ -1,5 +1,5 @@
 /* Functions for GUI implemented with Cocoa AppKit on the Mac OS.
-   Copyright (C) 2008 YAMAMOTO Mitsuharu
+   Copyright (C) 2008, 2009 YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Carbon+AppKit port.
 
@@ -899,7 +899,8 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 }
 
 static BOOL
-emacs_windows_need_display_p ()
+emacs_windows_need_display_p (with_resize_control_p)
+     int with_resize_control_p;
 {
   Lisp_Object tail, frame;
 
@@ -909,9 +910,10 @@ emacs_windows_need_display_p ()
 
       if (FRAME_MAC_P (f))
 	{
-	  NSWindow *window = FRAME_MAC_WINDOW (f);
+	  EmacsWindow *window = FRAME_MAC_WINDOW (f);
 
-	  if ([window viewsNeedDisplay])
+	  if ((with_resize_control_p && [window resizeControlNeedsDisplay])
+	      || [window viewsNeedDisplay])
 	    return YES;
 	}
     }
@@ -923,7 +925,7 @@ emacs_windows_need_display_p ()
 {
   if (![NSApp isRunning])
     {
-      if (peek_next_event () || emacs_windows_need_display_p ())
+      if (peek_next_event () || emacs_windows_need_display_p (1))
 	[NSApp postDummyEvent];
       else
 	x_flush (NULL);
@@ -996,7 +998,8 @@ install_application_handler ()
 
 /* Emacs frame containing the globally focused NSView.  */
 
-static struct frame *global_focus_view_frame;
+static void set_global_focus_view_frame P_ ((struct frame *));
+static void unset_global_focus_view_frame P_ ((void));
 
 extern void mac_handle_visibility_change P_ ((struct frame *));
 extern void mac_handle_origin_change P_ ((struct frame *));
@@ -1081,6 +1084,29 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
     [self setupResizeTracking:event];
 
   [super sendEvent:event];
+}
+
+- (BOOL)resizeControlNeedsDisplay
+{
+  return resizeControlNeedsDisplay;
+}
+
+- (void)setResizeControlNeedsDisplay:(BOOL)flag
+{
+  resizeControlNeedsDisplay = flag;
+}
+
+- (void)displayResizeControlIfNeeded
+{
+  if (resizeControlNeedsDisplay)
+    {
+      NSView *frameView = [[self contentView] superview];
+      NSRect rect = [frameView convertRect:[self resizeControlFrame]
+			       fromView:nil];
+
+      [frameView displayRect:rect];
+      resizeControlNeedsDisplay = NO;
+    }
 }
 
 @end				// EmacsWindow
@@ -1666,8 +1692,8 @@ mac_update_begin (f)
   EmacsView *emacsView = FRAME_EMACS_VIEW (f);
 
   [window disableFlushWindow];
-  global_focus_view_frame = f;
   [emacsView lockFocus];
+  set_global_focus_view_frame (f);
 }
 
 void
@@ -1677,9 +1703,9 @@ mac_update_end (f)
   NSWindow *window = FRAME_MAC_WINDOW (f);
   EmacsView *emacsView = FRAME_EMACS_VIEW (f);
 
-  [window enableFlushWindow];
+  unset_global_focus_view_frame ();
   [emacsView unlockFocus];
-  global_focus_view_frame = NULL;
+  [window enableFlushWindow];
 }
 
 void
@@ -1690,14 +1716,8 @@ mac_frame_up_to_date (f)
   if (NILP (tip_frame) || XFRAME (tip_frame) != f)
     {
       EmacsWindow *window = FRAME_MAC_WINDOW (f);
-      NSView *frameView;
-      NSRect rect;
 
-      BLOCK_INPUT;
-      frameView = [[window contentView] superview];
-      rect = [frameView convertRect:[window resizeControlFrame] fromView:nil];
-      [frameView setNeedsDisplayInRect:rect];
-      UNBLOCK_INPUT;
+      [window setResizeControlNeedsDisplay:YES];
     }
 }
 
@@ -1881,10 +1901,10 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   DisposeRgn (new_region);
 #endif
 
-  global_focus_view_frame = f;
+  set_global_focus_view_frame (f);
   mac_clear_area (f, x, y, width, height);
   expose_frame (f, x, y, width, height);
-  global_focus_view_frame = NULL;
+  unset_global_focus_view_frame ();
 #if USE_QUICKDRAW
   SetPort ([self qdPort]);
   SetClip (saved_clip_region);
@@ -2068,8 +2088,12 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   struct frame *f = [self emacsFrame];
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
 
-  if (f != mac_focus_frame (&one_mac_display_info)
-      || [theEvent deltaY] == 0.0f)
+  if (
+#if 0 /* We let the framework decide whether events to non-focus frame
+	 get accepted.  */
+      f != mac_focus_frame (&one_mac_display_info) ||
+#endif
+      [theEvent deltaY] == 0.0f)
     return;
 
   if (point.x < 0 || point.y < 0
@@ -2702,6 +2726,38 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 #define FRAME_CG_CONTEXT(f)	((f)->output_data.mac->cg_context)
 
+static struct frame *global_focus_view_frame;
+/* -[EmacsTipView drawRect:] might be called during update_frame.  */
+static struct frame *saved_focus_view_frame;
+static CGContextRef saved_focus_view_context;
+
+static void
+set_global_focus_view_frame (f)
+     struct frame *f;
+{
+  saved_focus_view_frame = global_focus_view_frame;
+  if (f != global_focus_view_frame)
+    {
+      if (saved_focus_view_frame)
+	saved_focus_view_context = FRAME_CG_CONTEXT (saved_focus_view_frame);
+      global_focus_view_frame = f;
+      FRAME_CG_CONTEXT (f) = [[NSGraphicsContext currentContext] graphicsPort];
+    }
+}
+
+static void
+unset_global_focus_view_frame ()
+{
+  if (global_focus_view_frame != saved_focus_view_frame)
+    {
+      FRAME_CG_CONTEXT (global_focus_view_frame) = NULL;
+      global_focus_view_frame = saved_focus_view_frame;
+      if (global_focus_view_frame)
+	FRAME_CG_CONTEXT (global_focus_view_frame) = saved_focus_view_context;
+    }
+  saved_focus_view_frame = NULL;
+}
+
 CGContextRef
 mac_begin_cg_clip (f, gc)
      struct frame *f;
@@ -2714,9 +2770,11 @@ mac_begin_cg_clip (f, gc)
       EmacsView *emacsView = FRAME_EMACS_VIEW (f);
 
       [emacsView lockFocus];
+      context = [[NSGraphicsContext currentContext] graphicsPort];
+      FRAME_CG_CONTEXT (f) = context;
     }
-  context = [[NSGraphicsContext currentContext] graphicsPort];
-  FRAME_CG_CONTEXT (f) = context;
+  else
+    context = FRAME_CG_CONTEXT (f);
 
   CGContextSaveGState (context);
   if (gc && gc->n_clip_rects)
@@ -2730,12 +2788,12 @@ mac_end_cg_clip (f)
      struct frame *f;
 {
   CGContextRestoreGState (FRAME_CG_CONTEXT (f));
-  FRAME_CG_CONTEXT (f) = NULL;
   if (global_focus_view_frame != f)
     {
       EmacsView *emacsView = FRAME_EMACS_VIEW (f);
 
       [emacsView unlockFocus];
+      FRAME_CG_CONTEXT (f) = NULL;
     }
 }
 
@@ -3532,7 +3590,7 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
 - (NSToolbarItem *)toolbar:(NSToolbar *)toolbar
      itemForItemIdentifier:(NSString *)itemIdentifier
-     willBeInsertedIntoToolbar:(BOOL)flag
+ willBeInsertedIntoToolbar:(BOOL)flag
 {
   NSToolbarItem *item = nil;
 
@@ -4029,7 +4087,6 @@ enum {
     return nil;
 }
 
-
 /* Called when the user has chosen a font from the font panel.  */
 
 - (void)changeFont:(id)sender
@@ -4408,9 +4465,10 @@ XTread_socket (sd, expected, hold_quit)
 
   pool = [[NSAutoreleasePool alloc] init];
 
-  if (lastCallDate &&
-      (timeInterval = - [lastCallDate timeIntervalSinceNow],
-       timeInterval < READ_SOCKET_MIN_INTERVAL))
+  if (lastCallDate
+      && (timeInterval = - [lastCallDate timeIntervalSinceNow],
+	  timeInterval < READ_SOCKET_MIN_INTERVAL)
+      && !emacs_windows_need_display_p (0))
     {
       if (![timer isValid])
 	{
@@ -4425,8 +4483,13 @@ XTread_socket (sd, expected, hold_quit)
     }
   else
     {
+      Lisp_Object tail, frame;
+
       [lastCallDate release];
       lastCallDate = [[NSDate alloc] init];
+      [timer invalidate];
+      [timer release];
+      timer = nil;
 
       /* Maybe these should be done at some redisplay timing.  */
       update_apple_event_handler ();
@@ -4458,39 +4521,35 @@ XTread_socket (sd, expected, hold_quit)
 	  mac_screen_config_changed = 0;
 	}
 
-      x_flush (NULL);
+      FOR_EACH_FRAME (tail, frame)
+	{
+	  struct frame *f = XFRAME (frame);
 
-      /* Check which frames are still visible.  We do this here
-	 because there doesn't seem to be any direct notification that
-	 the visibility of a window has changed (at least, not in all
-	 cases.  Or are there any counterparts of
-	 kEventWindowShown/Hidden?).  */
-      {
-	Lisp_Object tail, frame;
+	  /* The tooltip has been drawn already.  Avoid the
+	     SET_FRAME_GARBAGED in mac_handle_visibility_change.  */
+	  if (EQ (frame, tip_frame))
+	    continue;
 
-	FOR_EACH_FRAME (tail, frame)
-	  {
-	    struct frame *f = XFRAME (frame);
+	  if (FRAME_MAC_P (f))
+	    {
+	      EmacsWindow *window = FRAME_MAC_WINDOW (f);
 
-	    /* The tooltip has been drawn already.  Avoid the
-	       SET_FRAME_GARBAGED in mac_handle_visibility_change.  */
-	    if (EQ (frame, tip_frame))
-	      continue;
-
-	    if (FRAME_MAC_P (f))
-	      {
-		mac_handle_visibility_change (f);
+	      [window displayResizeControlIfNeeded];
+	      x_flush (f);
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
-		if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4)
-		  {
-		    NSWindow *window = FRAME_MAC_WINDOW (f);
-
-		    [window setViewsNeedDisplay:NO];
-		  }
+	      /* Mac OS X 10.4 seems not to reset the flag
+		 `viewsNeedDisplay' on autodisplay.  */
+	      if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4)
+		[window setViewsNeedDisplay:NO];
 #endif
-	      }
-	  }
-      }
+	      /* Check which frames are still visible.  We do this
+		 here because there doesn't seem to be any direct
+		 notification that the visibility of a window has
+		 changed (at least, not in all cases.  Or are there
+		 any counterparts of kEventWindowShown/Hidden?).  */
+	      mac_handle_visibility_change (f);
+	    }
+	}
     }
 
   [pool release];

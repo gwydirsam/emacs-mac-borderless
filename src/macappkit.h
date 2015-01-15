@@ -1,5 +1,5 @@
 /* Definitions and headers for AppKit framework on the Mac OS.
-   Copyright (C) 2008 YAMAMOTO Mitsuharu
+   Copyright (C) 2008, 2009 YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Carbon+AppKit port.
 
@@ -124,10 +124,15 @@ typedef unsigned int NSUInteger;
   /* Offset of mouse position for the event that initiated mouse
      tracking.  */
   NSPoint resizeTrackingOffset;
+
+  /* Whether window's resize control needs display.  */
+  BOOL resizeControlNeedsDisplay;
 }
-- (NSRect)resizeControlFrame;
 - (void)suspendResizeTracking:(NSEvent *)event;
 - (void)resumeResizeTracking;
+- (BOOL)resizeControlNeedsDisplay;
+- (void)setResizeControlNeedsDisplay:(BOOL)flag;
+- (void)displayResizeControlIfNeeded;
 @end
 
 /* Class for delegate of NSWindow and NSToolbar (see its Toolbar
@@ -277,7 +282,7 @@ typedef unsigned int NSUInteger;
 @interface EmacsFrameController (Toolbar)
 - (NSToolbarItem *)toolbar:(NSToolbar *)toolbar
      itemForItemIdentifier:(NSString *)itemIdentifier
-     willBeInsertedIntoToolbar:(BOOL)flag;
+ willBeInsertedIntoToolbar:(BOOL)flag;
 - (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar;
 - (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar;
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;

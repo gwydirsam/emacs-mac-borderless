@@ -4679,7 +4679,10 @@ component.  */)
   {
     extern long mac_appkit_do_applescript P_ ((Lisp_Object, Lisp_Object *));
 
-    status = mac_appkit_do_applescript (script, &result);
+    if (!inhibit_window_system)
+      status = mac_appkit_do_applescript (script, &result);
+    else
+      status = do_applescript (script, &result);
   }
 #else
   status = do_applescript (script, &result);
@@ -4914,7 +4917,7 @@ get_cfstring_encoding_from_lisp (obj)
 
       coding_spec = Fget (obj, Qcoding_system);
       plist = XVECTOR (coding_spec)->contents[3];
-      obj = Fplist_get (XVECTOR (coding_spec)->contents[3], Qmime_charset);
+      obj = Fplist_get (plist, Qmime_charset);
     }
 
   if (SYMBOLP (obj))
@@ -5226,6 +5229,61 @@ static CFMutableDictionaryRef cfsockets_for_select;
 
 /* Process ID of Emacs.  */
 static pid_t mac_emacs_pid;
+
+static int wakeup_fds[2];
+
+static void
+wakeup_callback (s, type, address, data, info)
+     CFSocketRef s;
+     CFSocketCallBackType type;
+     CFDataRef address;
+     const void *data;
+     void *info;
+{
+  char buf[64];
+
+  while (emacs_read (CFSocketGetNative (s), buf, sizeof (buf)) > 0)
+    ;
+}
+
+int
+init_wakeup_fds ()
+{
+  int result, i;
+  int flags;
+  CFSocketRef socket;
+  CFRunLoopSourceRef source;
+
+  result = pipe (wakeup_fds);
+  if (result < 0)
+    return result;
+  for (i = 0; i < 2; i++)
+    {
+      flags = fcntl (wakeup_fds[i], F_GETFL, 0);
+      result = fcntl (wakeup_fds[i], F_SETFL, flags | O_NONBLOCK);
+      if (result < 0)
+	return result;
+    }
+  socket = CFSocketCreateWithNative (NULL, wakeup_fds[0],
+				     kCFSocketReadCallBack,
+				     wakeup_callback, NULL);
+  if (socket == NULL)
+    return -1;
+  source = CFSocketCreateRunLoopSource (NULL, socket, 0);
+  CFRelease (socket);
+  if (source == NULL)
+    return -1;
+  CFRunLoopAddSource ((CFRunLoopRef)
+		      GetCFRunLoopFromEventLoop (GetCurrentEventLoop ()),
+		      source, kCFRunLoopDefaultMode);
+  CFRelease (source);
+  return 0;
+}
+
+void mac_wakeup_from_run_loop_run_once ()
+{
+  emacs_write (wakeup_fds[1], "", 1);
+}
 
 static void
 socket_callback (s, type, address, data, info)

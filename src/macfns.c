@@ -4462,7 +4462,7 @@ Chinese, Japanese, and Korean.  */);
   {
     OSErr err;
     UInt32 response;
-    char carbon_version[16] = "Unknown";
+    char carbon_version[40] = "Unknown";
 
     err = Gestalt (gestaltCarbonVersion, &response);
     if (err == noErr)
@@ -4472,8 +4472,9 @@ Chinese, Japanese, and Korean.  */);
     {
       extern double mac_appkit_version P_ ((void));
 
-      sprintf (carbon_version + strlen (carbon_version),
-	       " AppKit %g", mac_appkit_version ());
+      snprintf (carbon_version + strlen (carbon_version),
+		sizeof (carbon_version) - strlen (carbon_version),
+		" AppKit %g", mac_appkit_version ());
     }
 #endif
     Vmac_carbon_version_string = build_string (carbon_version);

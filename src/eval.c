@@ -281,7 +281,7 @@ call_debugger (arg)
   if (SPECPDL_INDEX () + 100 > max_specpdl_size)
     max_specpdl_size = SPECPDL_INDEX () + 100;
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif

@@ -3227,7 +3227,7 @@ is nil and `use-dialog-box' is non-nil.  */)
   xprompt = prompt;
   GCPRO2 (prompt, xprompt);
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif

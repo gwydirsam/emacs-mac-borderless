@@ -174,8 +174,6 @@ Lisp_Object last_mouse_scroll_bar;
 
 Time last_mouse_movement_time;
 
-struct scroll_bar *tracked_scroll_bar = NULL;
-
 /* Incremented by XTread_socket whenever it really tries to read
    events.  */
 
@@ -9644,6 +9642,17 @@ x_delete_display (dpyinfo)
 }
 
 
+#ifdef MAC_OSX
+void
+mac_handle_user_signal (sig)
+     int sig;
+{
+  extern void mac_wakeup_from_run_loop_run_once P_ ((void));
+
+  mac_wakeup_from_run_loop_run_once ();
+}
+#endif	/* MAC_OSX */
+
 /* Set up use of X before we make the first connection.  */
 
 extern frame_parm_handler mac_frame_parm_handlers[];
@@ -9730,6 +9739,11 @@ mac_initialize ()
 
 #if TARGET_API_MAC_CARBON
 #ifdef MAC_OSX
+  if (init_wakeup_fds () < 0)
+    abort ();
+
+  handle_user_signal_hook = mac_handle_user_signal;
+
   init_coercion_handler ();
 
   init_dm_notification_handler ();

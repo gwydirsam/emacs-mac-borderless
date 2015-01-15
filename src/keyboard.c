@@ -984,7 +984,7 @@ recursive_edit_1 ()
       specbind (Qstandard_input, Qt);
     }
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   /* The command loop has started an hourglass timer, so we have to
      cancel it here, otherwise it will fire because the recursive edit
      can take some time.  Do not check for display_hourglass_p here,
@@ -1180,7 +1180,7 @@ cmd_error (data)
   Lisp_Object old_level, old_length;
   char macroerror[50];
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif
@@ -1370,7 +1370,7 @@ DEFUN ("top-level", Ftop_level, Stop_level, 0, 0, "",
        doc: /* Exit all recursive editing levels.  */)
      ()
 {
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif
@@ -1493,7 +1493,7 @@ static void adjust_point_for_property P_ ((int, int));
 
 /* Cancel hourglass from protect_unwind.
    ARG is not used.  */
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
 static Lisp_Object
 cancel_hourglass_unwind (arg)
      Lisp_Object arg;
@@ -1874,7 +1874,7 @@ command_loop_1 ()
 	  /* Here for a command that isn't executed directly */
 
           {
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
             int scount = SPECPDL_INDEX ();
 
             if (display_hourglass_p
@@ -1890,7 +1890,7 @@ command_loop_1 ()
               Fundo_boundary ();
             Fcommand_execute (Vthis_command, Qnil, Qnil, Qnil);
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
 	  /* Do not check display_hourglass_p here, because
 	     Fcommand_execute could change it, but we should cancel
 	     hourglass cursor anyway.
@@ -7107,6 +7107,8 @@ struct user_signal_info
 /* List of user signals. */
 static struct user_signal_info *user_signals = NULL;
 
+void (*handle_user_signal_hook) P_ ((int));
+
 void
 add_user_signal (sig, name)
      int sig;
@@ -7148,6 +7150,8 @@ handle_user_signal (sig)
     if (p->sig == sig)
       {
 	p->npending++;
+	if (handle_user_signal_hook)
+	  (*handle_user_signal_hook) (sig);
 #ifdef SIGIO
 	if (interrupt_input)
 	  kill (getpid (), SIGIO);
@@ -9897,7 +9901,7 @@ will read just one key sequence.  */)
       this_single_command_key_start = 0;
     }
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif
@@ -9957,7 +9961,7 @@ DEFUN ("read-key-sequence-vector", Fread_key_sequence_vector,
       this_single_command_key_start = 0;
     }
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif
@@ -9966,7 +9970,7 @@ DEFUN ("read-key-sequence-vector", Fread_key_sequence_vector,
 			 prompt, ! NILP (dont_downcase_last),
 			 ! NILP (can_return_switch_frame), 0);
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     start_hourglass ();
 #endif
@@ -10099,7 +10103,7 @@ give to the command you invoke, if it asks for an argument.  */)
   Lisp_Object saved_keys, saved_last_point_position_buffer;
   Lisp_Object bindings, value;
   struct gcpro gcpro1, gcpro2, gcpro3;
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   /* The call to Fcompleting_read wil start and cancel the hourglass,
      but if the hourglass was already scheduled, this means that no
      hourglass will be shown for the actual M-x command itself.
@@ -10139,7 +10143,7 @@ give to the command you invoke, if it asks for an argument.  */)
 			       Qt, Qnil, Qextended_command_history, Qnil,
 			       Qnil);
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (hstarted) start_hourglass ();
 #endif
 

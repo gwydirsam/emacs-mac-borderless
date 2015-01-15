@@ -133,6 +133,8 @@ x_own_selection (selection_name, selection_value)
 	  if (!NILP (handler_fn))
 	    value = call3 (handler_fn, selection_name,
 			   target_type, selection_value);
+	  else
+	    value = Qnil;
 
 	  if (NILP (value))
 	    continue;

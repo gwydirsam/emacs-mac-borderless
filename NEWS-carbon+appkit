@@ -1,3 +1,30 @@
+* emacs-22.3-appkit-1.2 (2009-01-24)
+
+** Fixed bugs
+
+*** do-applescript crashes with -nw due to the previous fix for
+(do-applescript "choose file") hang.
+
+*** Cursor erasure sometimes fails on Mac OS X 10.5 due to the
+previous change for flyspell-small-region slowness.
+
+*** Buffer overrun in creation of Vmac_carbon_version_string.
+
+** Improvements
+
+*** Untag Lisp_Object by subtraction instead of masking.
+http://lists.gnu.org/archive/html/emacs-devel/2008-01/msg01876.html
+
+*** `select' emulation waits for user signal delivery as well as
+window system events and process outputs via sockets.
+http://lists.gnu.org/archive/html/emacs-devel/2008-10/msg00198.html
+
+*** Hourglass display is enabled.
+
+*** Let the framework decide whether wheel events to non-focus frames
+are accepted or not.
+
+
 * emacs-22.3-appkit-1.1 (2008-11-27)
 
 ** Fixed bugs

@@ -1405,7 +1405,7 @@ correspoinding TextEncodingBase value."
   "The value of the CLIPBOARD selection last time we selected or
 pasted text.")
 (defvar x-last-selected-text-primary nil
-  "The value of the PRIMARY X selection last time we selected or
+  "The value of the PRIMARY selection last time we selected or
 pasted text.")
 
 (defcustom x-select-enable-clipboard t
@@ -1414,7 +1414,7 @@ This is in addition to the primary selection."
   :type 'boolean
   :group 'killing)
 
-;;; Make TEXT, a string, the primary X selection.
+;;; Make TEXT, a string, the primary selection.
 (defun x-select-text (text &optional push)
   (x-set-selection 'PRIMARY text)
   (setq x-last-selected-text-primary text)

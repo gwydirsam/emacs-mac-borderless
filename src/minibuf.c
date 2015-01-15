@@ -493,7 +493,7 @@ read_minibuf (map, initial, prompt, backup_n, expflag,
     Vminibuffer_completing_file_name = Qnil;
 
   single_kboard_state ();
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (MAC_OS)
   if (display_hourglass_p)
     cancel_hourglass ();
 #endif

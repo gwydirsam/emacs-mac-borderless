@@ -2008,7 +2008,7 @@ mac_scroll_area (f, gc, src_x, src_y, width, height, dest_x, dest_y)
 			     Scroll bars
  ************************************************************************/
 
-extern struct scroll_bar *tracked_scroll_bar;
+static struct scroll_bar *tracked_scroll_bar = NULL;
 extern Lisp_Object last_mouse_scroll_bar;
 extern Time last_mouse_movement_time;
 
