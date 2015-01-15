@@ -257,6 +257,8 @@ extern CGFloat mac_screen_font_get_advance_width_for_glyph P_ ((ScreenFontRef,
 								CGGlyph));
 Boolean mac_screen_font_get_metrics P_ ((ScreenFontRef, CGFloat *,
 					 CGFloat *, CGFloat *));
+CFIndex mac_screen_font_shape P_ ((ScreenFontRef, CFStringRef,
+				   struct mac_glyph_layout *, CFIndex));
 extern void mac_register_font_driver P_ ((struct frame *));
 #if USE_CORE_TEXT
 extern Boolean mac_ctfont_descriptor_supports_languages P_ ((CTFontDescriptorRef,

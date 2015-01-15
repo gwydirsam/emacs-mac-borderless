@@ -1,4 +1,19 @@
+* emacs-23.2-mac-1.997 [experimental/hackers-only] (2010-09-27)
+
+** Fixed bugs
+
+*** Text shaping does not respect the :destination setting.
+
+** Improvements
+
+*** One can send an Apple event and handle its reply asynchronously.
+ODB Editor Suite support is added as an example.  (Only tested with
+QuickCursor.  Add "<string>org.gnu.Emacs</string>" to the elements of
+QCEditInChoices in QuickCursor.app/Contents/Info.plist.)
+
+
 * emacs-23.2-mac-1.996 [experimental/hackers-only] (2010-07-31)
+http://lists.gnu.org/archive/html/emacs-devel/2010-07/msg01457.html
 
 ** Fixed bugs
 

@@ -1077,6 +1077,62 @@ nil, which means the event is already resumed or expired.  */)
   return result;
 }
 
+DEFUN ("mac-send-apple-event-internal", Fmac_send_apple_event_internal, Smac_send_apple_event_internal, 1, 2, 0,
+       doc: /* Send APPLE-EVENT with SEND-MODE.
+This is for internal use only.  Use `mac-send-apple-event' instead.  
+
+APPLE-EVENT is a Lisp representation of an Apple event.  SEND-MODE
+specifies a send mode for the Apple event.  It must be either an
+integer, nil for kAENoReply, or t for kAEQueueReply.
+
+If sent successfully, return the Lisp representation of the sent event
+so the reply handler can use the value of the `return-id' attribute.
+Otherwise, return the error code as an integer.  */)
+     (apple_event, send_mode)
+     Lisp_Object apple_event, send_mode;
+{
+  OSStatus err;
+  Lisp_Object result;
+  AESendMode mode;
+  AppleEvent event;
+
+  CHECK_CONS (apple_event);
+  CHECK_STRING_CAR (apple_event);
+  if (SBYTES (XCAR (apple_event)) != 4
+      || strcmp (SDATA (XCAR (apple_event)), "aevt") != 0)
+    error ("Not an apple event");
+
+  if (NILP (send_mode))
+    mode = kAENoReply;
+  else if (EQ (send_mode, Qt))
+    mode = kAEQueueReply;
+  else
+    {
+      CHECK_NUMBER (send_mode);
+      mode = XINT (send_mode);
+      mode &= ~kAEWaitReply;
+      if ((mode & (kAENoReply | kAEQueueReply)) == 0)
+	mode |= kAENoReply;
+    }
+
+  BLOCK_INPUT;
+  err = create_apple_event_from_lisp (apple_event, &event);
+  if (err == noErr)
+    {
+      err = AESendMessage (&event, NULL, mode, kAEDefaultTimeout);
+      if (err == noErr)
+	result = mac_aedesc_to_lisp (&event);
+      else
+	result = make_number (err);
+      AEDisposeDesc (&event);
+    }
+  else
+    result = make_number (err);
+  UNBLOCK_INPUT;
+
+  return result;
+}
+
 
 /***********************************************************************
                       Drag and drop support
@@ -1103,6 +1159,7 @@ syms_of_macselect ()
   defsubr (&Smac_cleanup_expired_apple_events);
   defsubr (&Smac_resume_apple_event);
   defsubr (&Smac_ae_set_reply_parameter);
+  defsubr (&Smac_send_apple_event_internal);
 
   Vselection_alist = Qnil;
   staticpro (&Vselection_alist);

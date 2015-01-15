@@ -3444,7 +3444,10 @@ usage: (make-network-process &rest ARGS)  */)
       /* SERVICE can either be a string or int.
 	 Convert to a C string for later use by getaddrinfo.  */
       if (EQ (service, Qt))
-	portstring = "0";
+	/* We pass NULL for unspecified port, because some versions of
+	   Darwin return EAI_NONAME for getaddrinfo ("localhost", "0",
+	   ...).  */
+	portstring = NULL;
       else if (INTEGERP (service))
 	{
 	  sprintf (portbuf, "%ld", (long) XINT (service));
@@ -3470,11 +3473,19 @@ usage: (make-network-process &rest ARGS)  */)
 
       ret = getaddrinfo (SDATA (host), portstring, &hints, &res);
       if (ret)
+	{
 #ifdef HAVE_GAI_STRERROR
-	error ("%s/%s %s", SDATA (host), portstring, gai_strerror(ret));
+	  if (portstring)
+	    error ("%s/%s %s", SDATA (host), portstring, gai_strerror(ret));
+	  else
+	    error ("%s %s", SDATA (host), gai_strerror(ret));
 #else
-	error ("%s/%s getaddrinfo error %d", SDATA (host), portstring, ret);
+	  if (portstring)
+	    error ("%s/%s getaddrinfo error %d", SDATA (host), portstring, ret);
+	  else
+	    error ("%s getaddrinfo error %d", SDATA (host), ret);
 #endif
+	}
       immediate_quit = 0;
 
       goto open_socket;

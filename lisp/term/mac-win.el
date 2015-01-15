@@ -685,6 +685,7 @@ OPTION-TYPE is a symbol specifying the type of startup options:
 ;;; Event classes
 (put 'core-event     'mac-apple-event-class "aevt") ; kCoreEventClass
 (put 'internet-event 'mac-apple-event-class "GURL") ; kAEInternetEventClass
+(put 'odb-editor-suite  'mac-apple-event-class "R*ch") ; kODBEditorSuite
 
 ;;; Event IDs
 ;; kCoreEventClass
@@ -697,8 +698,12 @@ OPTION-TYPE is a symbol specifying the type of startup options:
 (put 'application-died     'mac-apple-event-id "obit") ; kAEApplicationDied
 (put 'show-preferences     'mac-apple-event-id "pref") ; kAEShowPreferences
 (put 'autosave-now         'mac-apple-event-id "asav") ; kAEAutosaveNow
+(put 'answer               'mac-apple-event-id "ansr") ; kAEAnswer
 ;; kAEInternetEventClass
 (put 'get-url              'mac-apple-event-id "GURL") ; kAEGetURL
+;; kODBEditorSuite
+(put 'modified-file        'mac-apple-event-id "FMod") ; kAEModifiedFile
+(put 'closed-file          'mac-apple-event-id "FCls") ; kAEClosedFile
 
 (defmacro mac-event-spec (event)
   `(nth 1 ,event))
@@ -873,7 +878,8 @@ if possible.  If there's no such frame, a new frame is created."
 	    ((stringp search-text)
 	     (re-search-forward
 	      (mapconcat 'regexp-quote (split-string search-text) "\\|")
-	      nil t)))))
+	      nil t))))
+    (mac-odb-setup-buffer ae))
   (select-frame-set-input-focus (selected-frame)))
 
 (declare-function mac-resume-apple-event "macselect.c"
@@ -887,6 +893,125 @@ if possible.  If there's no such frame, a new frame is created."
 	(save-buffers-kill-emacs)
       ;; Reaches here if the user has canceled the quit.
       (mac-resume-apple-event ae -128)))) ; userCanceledErr
+
+(defun mac-type-string-to-bytes (type-string)
+  (unless (and (stringp type-string) (= (string-bytes type-string) 4))
+    (error "Invalid type string (not a 4-byte string): %S" type-string))
+  (if (eq (byteorder) ?l)
+      (setq type-string
+	    (apply 'unibyte-string (nreverse (append type-string '())))))
+  type-string)
+
+(defun mac-create-apple-event (event-class event-id target)
+  "Create a Lisp representation of an Apple event.
+EVENT-CLASS (or EVENT-ID) represents the Apple event class (or
+ID, resp.).  It should be either a 4-byte string or a symbol
+whose `mac-apple-event-class' (or `mac-apple-event-id', resp.)
+property is a 4-byte string.
+
+TARGET specifies the target application for the event.  It should
+be either a Lisp representation of the target address Apple event
+descriptor (e.g., (cons \"sign\" (mac-type-string-to-bytes
+\"MACS\")) for Finder), an integer specifying the process ID, or
+a string specifying bundle ID on Mac OS X 10.3 and later (e.g.,
+\"com.apple.Finder\") or an application URL with the `eppc'
+scheme."
+  (if (symbolp event-class)
+      (setq event-class (get event-class 'mac-apple-event-class)))
+  (if (symbolp event-id)
+      (setq event-id (get event-id 'mac-apple-event-id)))
+  (if (not (and (stringp event-class) (= (string-bytes event-class) 4)))
+      (error "Not an event class: %S" event-class))
+  (if (not (and (stringp event-id) (= (string-bytes event-id) 4)))
+      (error "Not an event ID: %S" event-id))
+  (cond ((numberp target)
+	 (setq target (cons "kpid"	; typeKernelProcessID
+			    (mac-coerce-ae-data
+			     "TEXT" (number-to-string target) "long"))))
+	((stringp target)
+	 (if (string-match "\\`eppc://" target)
+	     (setq target (cons "aprl"	; typeApplicationURL
+				(encode-coding-string target 'utf-8)))
+	   (setq target (cons "bund"	; typeApplicationBundleID
+			      (encode-coding-string target 'utf-8)))))
+	((not (and (consp target) (stringp (car target))
+		   (= (string-bytes (car target)) 4)))
+	 (error "Not an address descriptor: %S" target)))
+  `("aevt" . ((event-class . ("type" . ,(mac-type-string-to-bytes event-class)))
+	      (event-id . ("type" . ,(mac-type-string-to-bytes event-id)))
+	      (address . ,target))))
+
+(defun mac-ae-set-parameter (apple-event keyword descriptor)
+  "Set parameter KEYWORD to DESCRIPTOR on APPLE-EVENT.
+APPLE-EVENT is a Lisp representation of an Apple event,
+preferably created with `mac-create-apple-event'.  See
+`mac-ae-set-reply-parameter' for the formats of KEYWORD and
+DESCRIPTOR.  If KEYWORD is a symbol starting with `:', then
+DESCRIPTOR can be any Lisp value.  In that case, the value is not
+sent as an Apple event, but you can use it in the reply handler.
+See `mac-send-apple-event' for such usage.  This function
+modifies APPLE-EVENT as a side effect and returns APPLE-EVENT."
+  (if (not (and (consp apple-event) (equal (car apple-event) "aevt")))
+      (error "Not an Apple event: %S" apple-event)
+    (setcdr apple-event
+	    (cons (cons keyword descriptor)
+		  (delete keyword (cdr apple-event))))
+    apple-event))
+
+(defvar mac-sent-apple-events nil
+  "List of previously sent Apple events.")
+
+(defun mac-send-apple-event (apple-event &optional callback)
+  "Send APPLE-EVENT.  CALLBACK is called when its reply arrives.
+APPLE-EVENT is a Lisp representation of an Apple event,
+preferably created with `mac-create-apple-event' and
+`mac-ae-set-parameter'.
+
+If CALLBACK is nil, then the reply is not requested.  Otherwise,
+CALLBACK is called with two arguments, the reply event and the
+original event, when the reply arrives.
+
+Each event parameter whose keyword is a symbol starting with `:'
+is not sent as an Apple event, but given as a parameter of the
+original event to CALLBACK.  So, you can pass context information
+through this without \"emulated closures\".  For example,
+
+  (let ((apple-event (mac-create-apple-event ...)))
+    (mac-ae-set-parameter apple-event :context1 SOME-LISP-VALUE1)
+    (mac-ae-set-parameter apple-event :context2 SOME-LISP-VALUE2)
+    (mac-send-apple-event
+     apple-event
+     (lambda (reply-ae orig-ae)
+       (let ((context1-value (mac-ae-parameter orig-ae :context1))
+	     (context2-value (mac-ae-parameter orig-ae :context2)))
+	 ...))))"
+  (let ((ae (mac-send-apple-event-internal apple-event (and callback t))))
+    (when (consp ae)
+      (let ((params (cdr ae)))
+	(dolist (param (cdr apple-event))
+	  (if (not (assoc (car param) params))
+	      (setcdr ae (cons param (cdr ae))))))
+      (if callback
+	  (push (mac-ae-set-parameter ae 'callback callback)
+		mac-sent-apple-events)))
+    ae))
+
+(defun mac-ae-answer (event)
+  "Handle the reply EVENT for a previously sent Apple event."
+  (interactive "e")
+  (let* ((reply-ae (mac-event-ae event))
+	 (return-id (mac-ae-parameter reply-ae 'return-id))
+	 (rest mac-sent-apple-events)
+	 prev)
+    (while (and rest
+		(not (equal (mac-ae-parameter (car rest) 'return-id)
+			    return-id)))
+      (setq rest (cdr (setq prev rest))))
+    (when rest
+      (if prev (setcdr prev (cdr rest))
+	(setq mac-sent-apple-events (cdr mac-sent-apple-events)))
+      (funcall (mac-ae-parameter (car rest) 'callback)
+	       reply-ae (car rest)))))
 
 ;; url-generic-parse-url is autoloaded from url-parse.
 (declare-function url-type "url-parse" t t) ; defstruct
@@ -926,8 +1051,83 @@ Currently the `mailto' scheme is supported."
 (define-key mac-apple-event-map [core-event show-preferences] 'customize)
 (define-key mac-apple-event-map [core-event quit-application]
   'mac-ae-quit-application)
+(define-key mac-apple-event-map [core-event answer] 'mac-ae-answer)
 
 (define-key mac-apple-event-map [internet-event get-url] 'mac-ae-get-url)
+
+;;; ODB Editor Suite
+(defvar mac-odb-received-apple-events nil
+  "List of received Apple Events containing ODB Editor Suite parameters.")
+
+(defun mac-odb-setup-buffer (apple-event)
+  (when (or (mac-ae-parameter apple-event "FSnd") ; keyFileSender
+	    ;; (mac-ae-parameter apple-event "FSfd") ; keyFileSenderDesc
+	    )
+    (make-local-variable 'mac-odb-received-apple-events)
+    (let ((custom-path (mac-ae-parameter apple-event "Burl" "utxt")))
+      (if custom-path
+	  (rename-buffer (mac-utxt-to-string (cdr custom-path)) t)))
+    (mac-ae-set-parameter apple-event :original-file-name buffer-file-name)
+    (push apple-event mac-odb-received-apple-events)
+    (add-hook 'after-save-hook 'mac-odb-send-modified-file-events nil t)
+    (add-hook 'kill-buffer-hook 'mac-odb-send-closed-file-events nil t)
+    (add-hook 'kill-emacs-hook 'mac-odb-send-closed-file-events-all-buffers)
+    (run-hooks 'mac-odb-setup-buffer-hook)))
+
+(defun mac-odb-cleanup-buffer ()
+  (run-hooks 'mac-odb-cleanup-buffer-hook)
+  (remove-hook 'after-save-hook 'mac-odb-send-modified-file-events t)
+  (remove-hook 'kill-buffer-hook 'mac-odb-send-closed-file-events t)
+  (kill-local-variable 'mac-odb-received-apple-events))
+
+(defun mac-odb-file-sender-desc (apple-event)
+  (or ;; (mac-ae-parameter apple-event "FSfd")
+      (let ((sign-bytes (cdr (mac-ae-parameter apple-event "FSnd" "type"))))
+	(and sign-bytes (cons "sign" sign-bytes)))))
+
+(defun mac-odb-send-modified-file-events ()
+  (dolist (orig-ae mac-odb-received-apple-events)
+    (let ((original-file (mac-ae-parameter orig-ae))
+	  (sender-token (mac-ae-parameter orig-ae "FTok"))
+	  (original-file-name (mac-ae-parameter orig-ae :original-file-name))
+	  (apple-event
+	   (mac-create-apple-event 'odb-editor-suite 'modified-file
+				   (mac-odb-file-sender-desc orig-ae))))
+      (mac-ae-set-parameter apple-event "----" original-file)
+      (if (not (equal original-file-name buffer-file-name))
+	  (let* ((coding (or file-name-coding-system
+			     default-file-name-coding-system))
+		 (file-desc-type (car original-file))
+		 (new-location
+		  (cons file-desc-type
+			(mac-coerce-ae-data 'undecoded-file-name
+					    (encode-coding-string
+					     buffer-file-name coding)
+					    file-desc-type))))
+	    (mac-ae-set-parameter apple-event "New?" new-location)))
+      (if sender-token
+	  (mac-ae-set-parameter apple-event "FTok" sender-token))
+      (mac-send-apple-event apple-event))))
+
+(defun mac-odb-send-closed-file-events ()
+  (dolist (orig-ae mac-odb-received-apple-events)
+    (let ((original-file (mac-ae-parameter orig-ae))
+	  (sender-token (mac-ae-parameter orig-ae "FTok"))
+	  (apple-event
+	   (mac-create-apple-event 'odb-editor-suite 'closed-file
+				   (mac-odb-file-sender-desc orig-ae))))
+      (mac-ae-set-parameter apple-event "----" original-file)
+      (if sender-token
+	  (mac-ae-set-parameter apple-event "FTok" sender-token))
+      (mac-send-apple-event apple-event)))
+  (mac-odb-cleanup-buffer))
+
+(defun mac-odb-send-closed-file-events-all-buffers ()
+  (save-excursion
+    (dolist (buffer (buffer-list))
+      (set-buffer buffer)
+      (if mac-odb-received-apple-events
+	  (mac-odb-send-closed-file-events)))))
 
 ;;; Font panel
 (declare-function mac-set-font-panel-visible-p "macfns.c" (flag))
@@ -1536,12 +1736,15 @@ non-nil, and the input device supports it."
 		       (when (eq (car-safe transient-mark-mode) 'only)
 			 (point))))
 	     (first-y (or (car header-line-height) 0))
-	     (first-height-sans-hidden-top (+ (if (null header-line-height)
-						  (car first-height)
-						(- (car first-height)
-						   (- (car header-line-height)
-						      (nth 2 first-height))))
-					      (nth 3 first-height)))
+	     (first-height-sans-hidden-top
+	      (cond ((= (car first-height) 0) ; completely invisible.
+		     0)
+		    ((null header-line-height) ; no header line.
+		     (+ (car first-height) (nth 3 first-height)))
+		    (t	  ; might be partly hidden by the header line.
+		     (+ (- (car first-height)
+			   (- (car header-line-height) (nth 2 first-height)))
+			(nth 3 first-height)))))
 	     (scroll-amount (nth 3 event))
 	     (delta-y (- (round (nth 4 scroll-amount))))
 	     auto-window-vscroll
@@ -1794,6 +1997,7 @@ Return non-nil if the new state is enabled."
 
 ;;; Trackpad events
 (defvar text-scale-mode-step) ;; in face-remap.el
+(defvar text-scale-mode-amount) ;; in face-remap.el
 
 (defvar mac-text-scale-magnification 1.0
   "Magnification value for text scaling.

@@ -1595,7 +1595,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
     }
 }
 
-- (BOOL)needsOrderFrontOnUnhide;
+- (BOOL)needsOrderFrontOnUnhide
 {
   return needsOrderFrontOnUnhide;
 }
@@ -3288,7 +3288,7 @@ get_text_input_script_language (slrec)
   return err;
 }
 
-- (void)insertText:(id)aString replacementRange:(NSRange)replacementRange;
+- (void)insertText:(id)aString replacementRange:(NSRange)replacementRange
 {
   OSStatus err;
   struct frame *f = [self emacsFrame];
@@ -3423,7 +3423,7 @@ get_text_input_script_language (slrec)
 }
 
 - (void)setMarkedText:(id)aString selectedRange:(NSRange)selectedRange
-     replacementRange:(NSRange)replacementRange;
+     replacementRange:(NSRange)replacementRange
 {
   OSStatus err;
   struct frame *f = [self emacsFrame];
@@ -3519,7 +3519,7 @@ extern CFStringRef mac_ax_string_for_range P_ ((struct frame *,
 						const CFRange *, CFRange *));
 
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)aRange
-						actualRange:(NSRangePointer)actualRange;
+						actualRange:(NSRangePointer)actualRange
 {
   NSRange markedRange = [self markedRange];
   NSAttributedString *result = nil;
@@ -4105,7 +4105,7 @@ static BOOL NonmodalScrollerPagingBehavior;
 /* This method is not documented but Cocoa seems to use this for
    drawing highlighted arrow.  */
 
-- (void)drawArrow:(NSUInteger)position highlightPart:(NSInteger)part;
+- (void)drawArrow:(NSUInteger)position highlightPart:(NSInteger)part
 {
   if (hilightsHitPart)
     part = (hitPart == NSScrollerIncrementLine ? 0 : 1);
@@ -4468,7 +4468,7 @@ static BOOL NonmodalScrollerPagingBehavior;
   return inputEventCode;
 }
 
-- (void)mouseClick:(NSEvent *)theEvent;
+- (void)mouseClick:(NSEvent *)theEvent
 {
   NSPoint point = [theEvent locationInWindow];
   NSRect bounds = [self bounds];
@@ -7675,7 +7675,7 @@ static NSMutableSet *registered_apple_event_specs;
 @implementation EmacsController (AppleEvent)
 
 - (void)handleAppleEvent:(NSAppleEventDescriptor *)event
-	  withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
+	  withReplyEvent:(NSAppleEventDescriptor *)replyEvent
 {
   OSErr err;
   AEDesc reply;
@@ -9279,6 +9279,9 @@ mac_update_accessibility_status (f)
 				Fonts
 ***********************************************************************/
 
+static CFIndex mac_font_shape_1 P_ ((NSFont *, NSString *,
+				     struct mac_glyph_layout *, CFIndex, BOOL));
+
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
 
 #define FONT_NAME_ATTRIBUTE (@"NSFontNameAttribute")
@@ -9726,7 +9729,7 @@ get_glyphs_for_characters (font, characters, glyphs, count)
   return result;
 }
 
-- (id)objectForKey:(NSString *)anAttribute;
+- (id)objectForKey:(NSString *)anAttribute
 {
   id result = [fontDescriptor objectForKey:anAttribute];
 
@@ -9881,7 +9884,7 @@ get_glyphs_for_characters (font, characters, glyphs, count)
   return result;
 }
 
-- (id)objectForKey:(NSString *)anAttribute;
+- (id)objectForKey:(NSString *)anAttribute
 {
   id result = [fontAttributes objectForKey:anAttribute];
 
@@ -10426,140 +10429,13 @@ mac_font_shape (font, string, glyph_layouts, glyph_len)
      struct mac_glyph_layout *glyph_layouts;
      CFIndex glyph_len;
 {
-  NSUInteger i;
-  CFIndex result = 0;
-  NSFont *nsFont;
-  NSTextStorage *textStorage;
-  NSLayoutManager *layoutManager;
-  NSTextContainer *textContainer;
-  NSUInteger stringLength;
-  NSPoint spaceLocation;
-  NSUInteger used, numberOfGlyphs;
-
 #if USE_CORE_TEXT
   if (EQ (macfont_driver_type, Qmac_ct))
     return mac_ctfont_shape ((CTFontRef) font, string,
 			     glyph_layouts, glyph_len);
 #endif
-  nsFont = (NSFont *) font;
-
-  textStorage = [[NSTextStorage alloc] initWithString:((NSString *) string)];
-  layoutManager = [[NSLayoutManager alloc] init];
-  textContainer = [[NSTextContainer alloc] init];
-
-  /* Append a trailing space to measure baseline position.  */
-  [textStorage appendAttributedString:[[[NSAttributedString alloc]
-					 initWithString:@" "] autorelease]];
-  [textStorage setFont:nsFont];
-  [textContainer setLineFragmentPadding:0];
-
-  [layoutManager addTextContainer:textContainer];
-  [textContainer release];
-  [textStorage addLayoutManager:layoutManager];
-  [layoutManager release];
-
-  if (!(textStorage && layoutManager && textContainer))
-    {
-      [textStorage release];
-
-      return 0;
-    }
-
-  stringLength = CFStringGetLength (string);
-
-  /* Force layout.  */
-  (void) [layoutManager glyphRangeForTextContainer:textContainer];
-
-  spaceLocation = [layoutManager locationForGlyphAtIndex:stringLength];
-
-  i = 0;
-  while (i < stringLength)
-    {
-      NSRange range;
-      NSFont *fontInTextStorage =
-	[textStorage attribute:NSFontAttributeName atIndex:i
-		     longestEffectiveRange:&range
-		       inRange:(NSMakeRange (0, stringLength))];
-
-      if (!(fontInTextStorage == nsFont
-	    || [[fontInTextStorage fontName]
-		 isEqualToString:[nsFont fontName]]))
-	break;
-      i = NSMaxRange (range);
-    }
-  if (i < stringLength)
-    /* Make the test `used <= glyph_len' below fail if textStorage
-       contained some fonts other than the specified one.  */
-    used = glyph_len + 1;
-  else
-    {
-      NSRange range = NSMakeRange (0, stringLength);
-
-      range = [layoutManager glyphRangeForCharacterRange:range
-				    actualCharacterRange:NULL];
-      numberOfGlyphs = NSMaxRange (range);
-      used = numberOfGlyphs;
-      for (i = 0; i < numberOfGlyphs; i++)
-	if ([layoutManager notShownAttributeForGlyphAtIndex:i])
-	  used--;
-    }
-
-  if (used <= glyph_len)
-    {
-      NSUInteger glyphIndex = 0;
-      NSRange compRange = NSMakeRange (0, 0);
-      CGFloat totalAdvance = 0;
-
-      while ([layoutManager notShownAttributeForGlyphAtIndex:glyphIndex])
-	glyphIndex++;
-
-      for (i = 0; i < used; i++)
-	{
-	  struct mac_glyph_layout *gl = glyph_layouts + i;
-	  NSUInteger characterIndex;
-	  NSPoint location;
-	  NSRect *glyphRects;
-	  NSUInteger nrects;
-
-	  characterIndex = [layoutManager
-			     characterIndexForGlyphAtIndex:glyphIndex];
-	  if (characterIndex >= NSMaxRange (compRange))
-	    {
-	      compRange.location = NSMaxRange (compRange);
-	      compRange.length =
-		(NSMaxRange
-		 ([((NSString *) string)
-		    rangeOfComposedCharacterSequenceAtIndex:characterIndex])
-		 - compRange.location);
-	    }
-
-	  gl->comp_range.location = compRange.location;
-	  gl->comp_range.length = compRange.length;
-	  gl->glyph_id = [layoutManager glyphAtIndex:glyphIndex];
-	  gl->string_index = characterIndex;
-
-	  location = [layoutManager locationForGlyphAtIndex:glyphIndex];
-	  gl->advance_delta = location.x - totalAdvance;
-	  gl->baseline_delta = spaceLocation.y - location.y;
-
-	  while (glyphIndex + 1 < numberOfGlyphs
-		 && [layoutManager
-		      notShownAttributeForGlyphAtIndex:(glyphIndex + 1)])
-	    glyphIndex++;
-	  glyphRects = [layoutManager
-			 rectArrayForGlyphRange:(NSMakeRange (glyphIndex, 1))
-			 withinSelectedGlyphRange:(NSMakeRange (NSNotFound, 0))
-			 inTextContainer:textContainer rectCount:&nrects];
-	  gl->advance = NSMaxX (glyphRects[0]) - totalAdvance;
-	  totalAdvance = NSMaxX (glyphRects[0]);
-
-	  glyphIndex++;
-	}
-      result = used;
-    }
-  [textStorage release];
-
-  return result;
+  return mac_font_shape_1 ((NSFont *) font, (NSString *) string,
+			   glyph_layouts, glyph_len, NO);
 }
 
 #endif	/* MAC_OS_X_VERSION_MIN_REQUIRED < 1050 */
@@ -10648,8 +10524,8 @@ mac_screen_font_get_advance_width_for_glyph (font, glyph)
 
 Boolean
 mac_screen_font_get_metrics (font, ascent, descent, leading)
-    ScreenFontRef font;
-    CGFloat *ascent, *descent, *leading;
+     ScreenFontRef font;
+     CGFloat *ascent, *descent, *leading;
 {
   NSFont *nsFont = [(NSFont *)font printerFont];
   NSTextStorage *textStorage;
@@ -10695,4 +10571,151 @@ mac_screen_font_get_metrics (font, ascent, descent, leading)
     }
 
   return true;
+}
+
+CFIndex
+mac_screen_font_shape (font, string, glyph_layouts, glyph_len)
+     ScreenFontRef font;
+     CFStringRef string;
+     struct mac_glyph_layout *glyph_layouts;
+     CFIndex glyph_len;
+{
+  return mac_font_shape_1 ([(NSFont *)font printerFont], (NSString *) string,
+			   glyph_layouts, glyph_len, YES);
+}
+
+static CFIndex
+mac_font_shape_1 (font, string, glyph_layouts, glyph_len, screen_font_p)
+     NSFont *font;
+     NSString *string;
+     struct mac_glyph_layout *glyph_layouts;
+     CFIndex glyph_len;
+     BOOL screen_font_p;
+{
+  NSUInteger i;
+  CFIndex result = 0;
+  NSTextStorage *textStorage;
+  NSLayoutManager *layoutManager;
+  NSTextContainer *textContainer;
+  NSUInteger stringLength;
+  NSPoint spaceLocation;
+  NSUInteger used, numberOfGlyphs;
+
+  textStorage = [[NSTextStorage alloc] initWithString:string];
+  layoutManager = [[NSLayoutManager alloc] init];
+  textContainer = [[NSTextContainer alloc] init];
+
+  /* Append a trailing space to measure baseline position.  */
+  [textStorage appendAttributedString:[[[NSAttributedString alloc]
+					 initWithString:@" "] autorelease]];
+  [textStorage setFont:font];
+  [textContainer setLineFragmentPadding:0];
+  [layoutManager setUsesScreenFonts:screen_font_p];
+
+  [layoutManager addTextContainer:textContainer];
+  [textContainer release];
+  [textStorage addLayoutManager:layoutManager];
+  [layoutManager release];
+
+  if (!(textStorage && layoutManager && textContainer))
+    {
+      [textStorage release];
+
+      return 0;
+    }
+
+  stringLength = [string length];
+
+  /* Force layout.  */
+  (void) [layoutManager glyphRangeForTextContainer:textContainer];
+
+  spaceLocation = [layoutManager locationForGlyphAtIndex:stringLength];
+
+  i = 0;
+  while (i < stringLength)
+    {
+      NSRange range;
+      NSFont *fontInTextStorage =
+	[textStorage attribute:NSFontAttributeName atIndex:i
+		     longestEffectiveRange:&range
+		       inRange:(NSMakeRange (0, stringLength))];
+
+      if (!(fontInTextStorage == font
+	    || [[fontInTextStorage fontName] isEqualToString:[font fontName]]))
+	break;
+      i = NSMaxRange (range);
+    }
+  if (i < stringLength)
+    /* Make the test `used <= glyph_len' below fail if textStorage
+       contained some fonts other than the specified one.  */
+    used = glyph_len + 1;
+  else
+    {
+      NSRange range = NSMakeRange (0, stringLength);
+
+      range = [layoutManager glyphRangeForCharacterRange:range
+				    actualCharacterRange:NULL];
+      numberOfGlyphs = NSMaxRange (range);
+      used = numberOfGlyphs;
+      for (i = 0; i < numberOfGlyphs; i++)
+	if ([layoutManager notShownAttributeForGlyphAtIndex:i])
+	  used--;
+    }
+
+  if (used <= glyph_len)
+    {
+      NSUInteger glyphIndex = 0;
+      NSRange compRange = NSMakeRange (0, 0);
+      CGFloat totalAdvance = 0;
+
+      while ([layoutManager notShownAttributeForGlyphAtIndex:glyphIndex])
+	glyphIndex++;
+
+      for (i = 0; i < used; i++)
+	{
+	  struct mac_glyph_layout *gl = glyph_layouts + i;
+	  NSUInteger characterIndex;
+	  NSPoint location;
+	  NSRect *glyphRects;
+	  NSUInteger nrects;
+
+	  characterIndex = [layoutManager
+			     characterIndexForGlyphAtIndex:glyphIndex];
+	  if (characterIndex >= NSMaxRange (compRange))
+	    {
+	      compRange.location = NSMaxRange (compRange);
+	      compRange.length =
+		(NSMaxRange
+		 ([string
+		    rangeOfComposedCharacterSequenceAtIndex:characterIndex])
+		 - compRange.location);
+	    }
+
+	  gl->comp_range.location = compRange.location;
+	  gl->comp_range.length = compRange.length;
+	  gl->glyph_id = [layoutManager glyphAtIndex:glyphIndex];
+	  gl->string_index = characterIndex;
+
+	  location = [layoutManager locationForGlyphAtIndex:glyphIndex];
+	  gl->advance_delta = location.x - totalAdvance;
+	  gl->baseline_delta = spaceLocation.y - location.y;
+
+	  while (glyphIndex + 1 < numberOfGlyphs
+		 && [layoutManager
+		      notShownAttributeForGlyphAtIndex:(glyphIndex + 1)])
+	    glyphIndex++;
+	  glyphRects = [layoutManager
+			 rectArrayForGlyphRange:(NSMakeRange (glyphIndex, 1))
+			 withinSelectedGlyphRange:(NSMakeRange (NSNotFound, 0))
+			 inTextContainer:textContainer rectCount:&nrects];
+	  gl->advance = NSMaxX (glyphRects[0]) - totalAdvance;
+	  totalAdvance = NSMaxX (glyphRects[0]);
+
+	  glyphIndex++;
+	}
+      result = used;
+    }
+  [textStorage release];
+
+  return result;
 }

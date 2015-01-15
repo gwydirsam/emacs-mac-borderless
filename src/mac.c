@@ -347,6 +347,64 @@ mac_ae_put_lisp (desc, keyword_or_index, obj)
   return err;
 }
 
+OSErr
+create_apple_event_from_lisp (apple_event, result)
+     Lisp_Object apple_event;
+     AppleEvent *result;
+{
+  OSErr err;
+
+  if (!(CONSP (apple_event) && STRINGP (XCAR (apple_event))
+	&& SBYTES (XCAR (apple_event)) == 4
+	&& strcmp (SDATA (XCAR (apple_event)), "aevt") == 0))
+    return errAEBuildSyntaxError;
+
+  err = create_apple_event (0, 0, result);
+  if (err == noErr)
+    {
+      Lisp_Object rest;
+
+      for (rest = XCDR (apple_event); CONSP (rest); rest = XCDR (rest))
+	{
+	  Lisp_Object attr = XCAR (rest), name, type, data;
+	  int i;
+
+	  if (!(CONSP (attr) && SYMBOLP (XCAR (attr)) && CONSP (XCDR (attr))))
+	    continue;
+	  name = XCAR (attr);
+	  type = XCAR (XCDR (attr));
+	  data = XCDR (XCDR (attr));
+	  if (!(STRINGP (type) && SBYTES (type) == 4
+		/* We assume there's no composite attribute value.  */
+		&& STRINGP (data)))
+	    continue;
+	  for (i = 0; i < sizeof (ae_attr_table) / sizeof (ae_attr_table[0]);
+	       i++)
+	    if (EQ (name, ae_attr_table[i].symbol))
+	      {
+		AEPutAttributePtr (result, ae_attr_table[i].keyword,
+				   EndianU32_BtoN (*((UInt32 *) SDATA (type))),
+				   SDATA (data), SBYTES (data));
+		break;
+	      }
+	}
+
+      for (rest = XCDR (apple_event); CONSP (rest); rest = XCDR (rest))
+	{
+	  Lisp_Object param = XCAR (rest);
+
+	  if (!(CONSP (param) && STRINGP (XCAR (param))
+		&& SBYTES (XCAR (param)) == 4))
+	    continue;
+	  mac_ae_put_lisp (result,
+			   EndianU32_BtoN (*((UInt32 *) SDATA (XCAR (param)))),
+			   XCDR (param));
+	}
+    }
+
+  return err;
+}
+
 static pascal OSErr
 mac_coerce_file_name_ptr (type_code, data_ptr, data_size,
 			  to_type, handler_refcon, result)

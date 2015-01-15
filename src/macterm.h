@@ -600,6 +600,7 @@ extern Lisp_Object x_get_focus_frame P_ ((struct frame *));
 
 extern Lisp_Object mac_aedesc_to_lisp P_ ((const AEDesc *));
 extern OSErr mac_ae_put_lisp P_ ((AEDescList *, UInt32, Lisp_Object));
+extern OSErr create_apple_event_from_lisp P_ ((Lisp_Object, AppleEvent *));
 extern OSErr create_apple_event P_ ((AEEventClass, AEEventID, AppleEvent *));
 extern Lisp_Object mac_event_parameters_to_lisp P_ ((EventRef, UInt32,
 						     const EventParamName *,

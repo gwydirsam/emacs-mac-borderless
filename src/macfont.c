@@ -2320,9 +2320,12 @@ macfont_shape (lgstring)
       UTF32Char c = LGLYPH_CHAR (LGSTRING_GLYPH (lgstring, i));
 
       if (macfont_store_utf32char_to_unichars (c, unichars + i + j) > 1)
-	nonbmp_indices[j++] = i;
+	{
+	  nonbmp_indices[j] = i + j;
+	  j++;
+	}
     }
-  nonbmp_indices[j] = len;	/* sentinel */
+  nonbmp_indices[j] = len + j;	/* sentinel */
 
   BLOCK_INPUT;
 
@@ -2331,7 +2334,11 @@ macfont_shape (lgstring)
   if (string)
     {
       glyph_layouts = alloca (sizeof (struct mac_glyph_layout) * glyph_len);
-      used = mac_font_shape (macfont, string, glyph_layouts, glyph_len);
+      if (macfont_info->screen_font)
+	used = mac_screen_font_shape (macfont_info->screen_font, string,
+				      glyph_layouts, glyph_len);
+      else
+	used = mac_font_shape (macfont, string, glyph_layouts, glyph_len);
       CFRelease (string);
     }
 
@@ -2358,14 +2365,17 @@ macfont_shape (lgstring)
 
       from = gl->comp_range.location;
       /* Convert UTF-16 index to UTF-32.  */
-      for (j = 0; nonbmp_indices[j] < from; j++)
-	from--;
+      j = 0;
+      while (nonbmp_indices[j] < from)
+	j++;
+      from -= j;
       LGLYPH_SET_FROM (lglyph, from);
 
-      to = from + gl->comp_range.length;
+      to = gl->comp_range.location + gl->comp_range.length;
       /* Convert UTF-16 index to UTF-32.  */
-      for (; nonbmp_indices[j] < to; j++)
-	to--;
+      while (nonbmp_indices[j] < to)
+	j++;
+      to -= j;
       LGLYPH_SET_TO (lglyph, to - 1);
 
       if (unichars[gl->string_index] >= 0xD800
