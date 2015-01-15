@@ -34,7 +34,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "intervals.h"
 #include "keymap.h"
 
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 || !USE_CT_GLYPH_INFO
 #include "macfont.h"
 #endif
 
@@ -130,7 +130,7 @@ NSRectToCGRect (nsrect)
 
 + (id)stringWithUTF8String:(const char *)bytes fallback:(BOOL)flag
 {
-  id string = [[self class] stringWithUTF8String:bytes];
+  id string = [self stringWithUTF8String:bytes];
 
   if (string == nil && flag)
     {
@@ -239,15 +239,31 @@ NSRectToCGRect (nsrect)
 
 + (id)imageWithCGImage:(CGImageRef)cgImage
 {
-  NSRect rect = NSMakeRect (0, 0, CGImageGetWidth (cgImage),
-			    CGImageGetHeight (cgImage));
-  id image = [[[self class] alloc] initWithSize:rect.size];
-  CGContextRef context;
+  NSImage *image;
 
-  [image lockFocus];
-  context = [[NSGraphicsContext currentContext] graphicsPort];
-  CGContextDrawImage (context, NSRectToCGRect (rect), cgImage);
-  [image unlockFocus];
+  if ([NSBitmapImageRep instancesRespondToSelector:@selector(initWithCGImage:)])
+    {
+      NSBitmapImageRep *rep =
+	[[NSBitmapImageRep alloc] initWithCGImage:cgImage];
+
+      image = [[self alloc] initWithSize:[rep size]];
+      [image addRepresentation:rep];
+      [rep release];
+
+      return [image autorelease];
+    }
+  else
+    {
+      NSRect rect = NSMakeRect (0, 0, CGImageGetWidth (cgImage),
+				CGImageGetHeight (cgImage));
+      CGContextRef context;
+
+      image = [[self alloc] initWithSize:rect.size];
+      [image lockFocus];
+      context = [[NSGraphicsContext currentContext] graphicsPort];
+      CGContextDrawImage (context, NSRectToCGRect (rect), cgImage);
+      [image unlockFocus];
+    }
 
   return [image autorelease];
 }
@@ -1725,6 +1741,14 @@ mac_rect_make (f, x, y, w, h)
      struct frame *f;
      CGFloat x, y, w, h;
 {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  NSRect rect = NSMakeRect (x, y, w, h);
+
+  /* The behavior of -[NSView centerScanRect:] depends on whether or
+     not the binary is linked on Mac OS X 10.5 or later.  */
+  return NSRectToCGRect ([emacsView centerScanRect:rect]);
+#else
   NSWindow *window = FRAME_MAC_WINDOW (f);
   CGFloat scaleFactor;
 
@@ -1751,6 +1775,7 @@ mac_rect_make (f, x, y, w, h)
 
       return NSRectToCGRect (rect);
     }
+#endif
 }
 
 void
@@ -1792,8 +1817,8 @@ mac_set_frame_window_background (f, color)
   green = GREEN_FROM_ULONG (color) / 255.0;
   blue = BLUE_FROM_ULONG (color) / 255.0;
 
-  [window setBackgroundColor:[NSColor colorWithCalibratedRed:red
-				      green:green blue:blue alpha:1.0]];
+  [window setBackgroundColor:[NSColor colorWithDeviceRed:red green:green
+						    blue:blue alpha:1.0]];
 }
 
 /* Flush display of frame F, or of all frames if F is null.  */
@@ -2689,22 +2714,46 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
   struct glyph *glyph;
   struct glyph_row *row;
   int hpos, vpos, x, y, h;
+  NSRange markedRange = [self markedRange];
 
-  if (theRange.location >= NSNotFound)
+  if (theRange.location >= NSNotFound
+      || ([self hasMarkedText]
+	  && NSEqualRanges (NSUnionRange (markedRange, theRange), markedRange)))
     {
-      /* Probably asking the location of the marked text in the echo area.  */
-      if ([self hasMarkedText] && WINDOWP (echo_area_window))
+      /* Probably asking the location of the marked text.  Strictly
+	 speaking, it is impossible to get the correct one in general
+	 because events pending in the Lisp queue may change some
+	 states about display.  In particular, this method might be
+	 called before displaying the marked text.
+
+	 We return the current cursor position either in the selected
+	 window or in the echo area as an approximate value.  We first
+	 try the echo area when Vmac_ts_active_input_overlay doesn't
+	 have the before-string property, and if the cursor glyph is
+	 not found there, then return the cursor position of the
+	 selected window.  */
+      glyph = NULL;
+      if (!(OVERLAYP (Vmac_ts_active_input_overlay)
+	    && !NILP (Foverlay_get (Vmac_ts_active_input_overlay,
+				    Qbefore_string)))
+	  && WINDOWP (echo_area_window))
 	{
 	  w = XWINDOW (echo_area_window);
 	  f = WINDOW_XFRAME (w);
 	  glyph = get_phys_cursor_glyph (w);
-	  if (glyph)
-	    {
-	      row = MATRIX_ROW (w->current_matrix, w->phys_cursor.vpos);
-	      get_phys_cursor_geometry (w, row, glyph, &x, &y, &h);
+	}
+      if (glyph == NULL)
+	{
+	  f = [self emacsFrame];
+	  w = XWINDOW (f->selected_window);
+	  glyph = get_phys_cursor_glyph (w);
+	}
+      if (glyph)
+	{
+	  row = MATRIX_ROW (w->current_matrix, w->phys_cursor.vpos);
+	  get_phys_cursor_geometry (w, row, glyph, &x, &y, &h);
 
-	      rect = NSMakeRect (x, y, w->phys_cursor_width, h);
-	    }
+	  rect = NSMakeRect (x, y, w->phys_cursor_width, h);
 	}
     }
   else
@@ -2730,7 +2779,8 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 	      rect = NSMakeRect (WINDOW_TEXT_TO_FRAME_PIXEL_X (w, x),
 				 WINDOW_TO_FRAME_PIXEL_Y (w, y),
-				 glyph->pixel_width, row->visible_height);
+				 theRange.length == 0 ? 0 : glyph->pixel_width,
+				 row->visible_height);
 	    }
 	}
     }
@@ -2784,7 +2834,8 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
       /* Find the glyph under X/Y.  */
       glyph = x_y_to_hpos_vpos (w, x, y, &hpos, &vpos, 0, 0, &area);
 
-      if (glyph != NULL && area == TEXT_AREA)
+      if (glyph != NULL && area == TEXT_AREA
+	  && BUFFERP (glyph->object) && glyph->charpos <= BUF_Z (b))
 	result = glyph->charpos - BUF_BEGV (b);
     }
 
@@ -6970,6 +7021,211 @@ mac_appkit_do_applescript (script, result)
 
 
 /***********************************************************************
+			    Image support
+***********************************************************************/
+
+#if USE_MAC_IMAGE_IO
+@implementation NSView (Emacs)
+
+- (XImagePtr)createXImageFromRect:(NSRect)rect backgroundColor:(NSColor *)color
+{
+  XImagePtr ximg;
+  CGContextRef context;
+  NSGraphicsContext *gcontext;
+
+  /* The first arg `display' and the second `w' are dummy in the case
+     of USE_MAC_IMAGE_IO.  */
+  ximg = XCreatePixmap (NULL, NULL, NSWidth (rect), NSHeight (rect), 0);
+  context = CGBitmapContextCreate (ximg->data, ximg->width, ximg->height, 8,
+				   ximg->bytes_per_line,
+				   mac_cg_color_space_rgb,
+				   kCGImageAlphaNoneSkipFirst
+				   | kCGBitmapByteOrder32Host);
+  if (context == NULL)
+    {
+      XFreePixmap (NULL, ximg);
+
+      return NULL;
+    }
+  gcontext = [NSGraphicsContext graphicsContextWithGraphicsPort:context
+							flipped:NO];
+  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
+    {
+      NSAffineTransform *transform;
+
+      [NSGraphicsContext saveGraphicsState];
+      [NSGraphicsContext setCurrentContext:gcontext];
+      transform = [NSAffineTransform transform];
+      [transform translateXBy:(- NSMinX (rect)) yBy:(- NSMinY (rect))];
+      [transform concat];
+      if (![self isOpaque])
+	{
+	  [NSGraphicsContext saveGraphicsState];
+	  [(color ? color : [NSColor clearColor]) set];
+	  NSRectFill (rect);
+	  [NSGraphicsContext restoreGraphicsState];
+	}
+      /* This does not work on Mac OS X 10.5 especially for WebView,
+	 because of missing viewWillDraw calls in the case of
+	 non-window contexts?  */
+      [self displayRectIgnoringOpacity:rect inContext:gcontext];
+      [NSGraphicsContext restoreGraphicsState];
+    }
+  else
+    {
+      NSWindow *window =
+	[[NSWindow alloc] initWithContentRect:rect
+				    styleMask:(NSBorderlessWindowMask
+					       | NSUnscaledWindowMask)
+				      backing:NSBackingStoreBuffered
+					defer:NO];
+      NSBitmapImageRep *rep;
+
+      if (![self isOpaque])
+	{
+	  if (color && [color alphaComponent] == 1.0)
+	    [window setBackgroundColor:color];
+	  else
+	    {
+	      [window setOpaque:NO];
+	      [window setBackgroundColor:(color ? color
+					  : [NSColor clearColor])];
+	    }
+	}
+      [window setContentView:self];
+      [self display];
+      [self lockFocus];
+      rep = [[NSBitmapImageRep alloc]
+	      initWithFocusedViewRect:[self convertRect:rect toView:nil]];
+      [self unlockFocus];
+      [window release];
+
+      [NSGraphicsContext saveGraphicsState];
+      [NSGraphicsContext setCurrentContext:gcontext];
+      [rep draw];
+      [rep release];
+      [NSGraphicsContext restoreGraphicsState];
+    }
+  CGContextRelease (context);
+
+  return ximg;
+}
+
+@end				// NSView (Emacs)
+
+@implementation EmacsSVGLoadDelegate
+
+- (Boolean)isLoaded
+{
+  return isLoaded;
+}
+
+- (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
+{
+  isLoaded = YES;
+}
+
+@end				// EmacsSVGLoadDelegate
+
+int
+mac_webkit_supports_svg_p ()
+{
+  int result;
+
+  BLOCK_INPUT;
+  result = [WebView canShowMIMEType:@"image/svg+xml"];
+  UNBLOCK_INPUT;
+
+  return result;
+}
+
+int
+mac_svg_load_image (f, img, contents, size, color,
+		    check_image_size_func, image_error_func)
+     struct frame *f;
+     struct image *img;
+     unsigned char *contents;
+     unsigned int size;
+     XColor *color;
+     int (*check_image_size_func) P_ ((struct frame *, int, int));
+     void (*image_error_func) P_ ((char *, Lisp_Object, Lisp_Object));
+{
+  NSRect frameRect;
+  WebView *webView;
+  EmacsSVGLoadDelegate *delegate;
+  NSData *data;
+  NSNumber *widthNum, *heightNum;
+  int width, height;
+
+  frameRect = NSMakeRect (0, 0, 100, 100); /* Adjusted later.  */
+  webView = [[WebView alloc] initWithFrame:frameRect
+				 frameName:nil groupName:nil];
+  [webView setValue:[NSColor colorWithDeviceRed:(color->red / 65535.0)
+					  green:(color->green / 65535.0)
+					   blue:(color->blue / 65535.0)
+					  alpha:1.0]
+	     forKey:@"backgroundColor"];
+  delegate = [[EmacsSVGLoadDelegate alloc] init];
+  [webView setFrameLoadDelegate:delegate];
+  data = [NSData dataWithBytesNoCopy:contents length:size freeWhenDone:NO];
+  [[webView mainFrame] loadData:data MIMEType:@"image/svg+xml"
+	       textEncodingName:nil baseURL:nil];
+
+  /* [webView isLoading] is not sufficient if we have <image
+     xlink:href=... /> */
+  while (![delegate isLoaded])
+    mac_run_loop_run_once (0);
+
+  @try
+    {
+      widthNum = [webView valueForKeyPath:@"mainFrame.DOMDocument.rootElement.width.baseVal.value"];
+      heightNum = [webView valueForKeyPath:@"mainFrame.DOMDocument.rootElement.height.baseVal.value"];
+    }
+  @catch (NSException *exception)
+    {
+      widthNum = nil;
+      heightNum = nil;
+    }
+
+  if ([widthNum isKindOfClass:[NSNumber class]]
+      && [heightNum isKindOfClass:[NSNumber class]])
+    {
+      width = [widthNum intValue];
+      height = [heightNum intValue];
+    }
+  else
+    {
+      [webView release];
+      [delegate release];
+      (*image_error_func) ("Error reading SVG image `%s'", img->spec, Qnil);
+
+      return 0;
+    }
+
+  if (!(*check_image_size_func) (f, width, height))
+    {
+      [webView release];
+      [delegate release];
+      (*image_error_func) ("Invalid image size", Qnil, Qnil);
+
+      return 0;
+    }
+
+  frameRect.size.width = width;
+  frameRect.size.height = height;
+  img->width = width;
+  img->height = height;
+  [webView setFrame:frameRect];
+  img->pixmap = [webView createXImageFromRect:frameRect backgroundColor:nil];
+  [webView release];
+  [delegate release];
+
+  return 1;
+}
+#endif	/* USE_MAC_IMAGE_IO */
+
+
+/***********************************************************************
 				Fonts
 ***********************************************************************/
 
@@ -7024,14 +7280,10 @@ static const struct
   NSString *fontName;
   const float weight;
 } mac_font_weight_overrides [] =
-  {{@"HiraKakuPro-W3", 0},	/* -0.23 in 10.4 */
-   {@"HiraMinPro-W3", 0},	/* -0.23 in 10.4 */
-   {@"HiraKakuPro-W6", 0.4},	/* 0.3 in 10.4 */
+  {{@"HiraKakuPro-W6", 0.4},	/* 0.3 in 10.4 */
    {@"HiraMinPro-W6", 0.4},	/* 0.3 in 10.4 */
    {@"STFangsong", -0.4},	/* (5 - 5) * 0.1 in 10.3 */
-   {@"STHeiti", 0.24},		/* (5 - 5) * 0.1 in 10.3 */
-   {@"STXihei", -0.1},		/* (3 - 5) * 0.1 in 10.3 */
-   {@"LiHeiPro", 0}};		/* 0.23 in 10.4 */
+   {@"STHeiti", 0.24}};		/* (5 - 5) * 0.1 in 10.3 */
 
 static NSNumber *
 mac_font_weight_override_for_name (fontName)
@@ -7093,7 +7345,8 @@ get_glyphs_for_characters (font, characters, glyphs, count)
       [textStorage setAttributedString:attributedSubstring];
       fontInTextStorage = [textStorage attribute:NSFontAttributeName atIndex:0
 				       effectiveRange:NULL];
-      if ([fontName isEqualToString:[fontInTextStorage fontName]])
+      if (fontInTextStorage == font
+	  || [[fontInTextStorage fontName] isEqualToString:fontName])
 	glyphs[i] = [layoutManager glyphAtIndex:0];
       else
 	{
@@ -7563,7 +7816,8 @@ get_glyphs_for_characters (font, characters, glyphs, count)
 			  fontDescriptorWithFontAttributes:attributes]];
     }
 
-  if (family == nil && [result count] == 0)
+  if ((family == nil || [family isEqualToString:@"LastResort"])
+      && [result count] == 0)
     {
       NSDictionary *lastResort =
 	[NSDictionary
@@ -7956,7 +8210,7 @@ mac_font_copy_graphics_font (font)
 }
 
 CFDataRef
-mac_font_copy_table (font, table)
+mac_font_copy_non_synthetic_table (font, table)
      FontRef font;
      FourCharCode table;
 {
@@ -7968,24 +8222,95 @@ mac_font_copy_table (font, table)
   {
     OSStatus err;
     CFMutableDataRef result = NULL;
-    ByteCount size;
-    ATSFontRef atsfont =
+    ATSFontRef atsfont;
+    FSSpec fss;
+    FSRef fref;
+    HFSUniStr255 data_fork_name;
+    SInt16 fork_ref_num;
+
+    atsfont =
       ATSFontFindFromPostScriptName ((CFStringRef) [(NSFont *)font fontName],
 				     kATSOptionFlagsDefault);
-
-    /* This is not useful for getting a UVS subtable as it returns a
-       synthetic cmap table.  */
-    err = ATSFontGetTable (atsfont, table, 0, 0, NULL, &size);
+    /* ATSFontGetTable is not useful for getting a UVS subtable of a
+       PostScript OpenType font as it returns a synthetic cmap table.
+       So we try to read a font file ourselves.  */
+    err = ATSFontGetFileSpecification (atsfont, &fss);
     if (err == noErr)
-      result = CFDataCreateMutable (NULL, size);
-    if (result)
+      err = FSpMakeFSRef (&fss, &fref);
+    if (err == noErr)
+      err = FSGetDataForkName (&data_fork_name);
+    if (err == noErr)
+      err = FSOpenFork (&fref, data_fork_name.length, data_fork_name.unicode,
+			fsRdPerm, &fork_ref_num);
+    if (err == noErr)
       {
-	err = ATSFontGetTable (atsfont, table, 0, size,
-			       CFDataGetMutableBytePtr (result), &size);
-	if (err != noErr)
+	struct sfntDirectory dir;
+	ByteCount actual_count;
+
+	err = FSReadFork (fork_ref_num, fsFromStart, 0, sizeof_sfntDirectory,
+			  &dir, &actual_count);
+	if (err == noErr && actual_count == sizeof_sfntDirectory
+	    && dir.format == EndianU32_NtoB ('OTTO'))
 	  {
-	    CFRelease (result);
-	    result = NULL;
+	    int i, num_offsets = EndianU16_BtoN (dir.numOffsets);
+
+	    for (i = 0; i < num_offsets; i++)
+	      {
+		struct sfntDirectoryEntry dir_entry;
+		UInt32 tag, offset, length;
+
+		err = FSReadFork (fork_ref_num, fsAtMark, 0,
+				  sizeof (struct sfntDirectoryEntry),
+				  &dir_entry, &actual_count);
+		if (!(err == noErr
+		      && actual_count == sizeof (struct sfntDirectoryEntry)))
+		  break;
+
+		tag = EndianU32_BtoN (dir_entry.tableTag);
+		if (tag > table)
+		  break;
+		else if (tag < table)
+		  continue;
+
+		/* tag == table */
+		offset = EndianU32_BtoN (dir_entry.offset);
+		length = EndianU32_BtoN (dir_entry.length);
+		result = CFDataCreateMutable (NULL, length);
+		if (result)
+		  {
+		    CFDataSetLength (result, length);
+		    err = FSReadFork (fork_ref_num, fsFromStart, offset, length,
+				      CFDataGetMutableBytePtr (result),
+				      &actual_count);
+		    if (!(err == noErr && actual_count == length))
+		      {
+			CFRelease (result);
+			result = NULL;
+		      }
+		  }
+		break;
+	      }
+	  }
+	FSCloseFork (fork_ref_num);
+      }
+
+    if (result == NULL)
+      {
+	ByteCount size;
+
+	err = ATSFontGetTable (atsfont, table, 0, 0, NULL, &size);
+	if (err == noErr)
+	  result = CFDataCreateMutable (NULL, size);
+	if (result)
+	  {
+	    CFDataSetLength (result, size);
+	    err = ATSFontGetTable (atsfont, table, 0, size,
+				   CFDataGetMutableBytePtr (result), &size);
+	    if (err != noErr)
+	      {
+		CFRelease (result);
+		result = NULL;
+	      }
 	  }
       }
 
@@ -8098,20 +8423,37 @@ mac_font_shape (font, string, glyph_layouts, glyph_len)
 
   spaceLocation = [layoutManager locationForGlyphAtIndex:stringLength];
 
-  {
-    NSRange range = NSMakeRange (0, stringLength);
+  i = 0;
+  while (i < stringLength)
+    {
+      NSRange range;
+      NSFont *fontInTextStorage =
+	[textStorage attribute:NSFontAttributeName atIndex:i
+		     longestEffectiveRange:&range
+		       inRange:(NSMakeRange (0, stringLength))];
 
-    range = [layoutManager glyphRangeForCharacterRange:range
-			   actualCharacterRange:NULL];
-    numberOfGlyphs = NSMaxRange (range);
-  }
+      if (!(fontInTextStorage == nsFont
+	    || [[fontInTextStorage fontName]
+		 isEqualToString:[nsFont fontName]]))
+	break;
+      i = NSMaxRange (range);
+    }
+  if (i < stringLength)
+    /* Make the test `used <= glyph_len' below fail if textStorage
+       contained some fonts other than the specified one.  */
+    used = glyph_len + 1;
+  else
+    {
+      NSRange range = NSMakeRange (0, stringLength);
 
-  // XXX: Check fonts in textStorage.
-
-  used = numberOfGlyphs;
-  for (i = 0; i < numberOfGlyphs; i++)
-    if ([layoutManager notShownAttributeForGlyphAtIndex:i])
-      used--;
+      range = [layoutManager glyphRangeForCharacterRange:range
+				    actualCharacterRange:NULL];
+      numberOfGlyphs = NSMaxRange (range);
+      used = numberOfGlyphs;
+      for (i = 0; i < numberOfGlyphs; i++)
+	if ([layoutManager notShownAttributeForGlyphAtIndex:i])
+	  used--;
+    }
 
   if (used <= glyph_len)
     {
@@ -8172,3 +8514,62 @@ mac_font_shape (font, string, glyph_layouts, glyph_len)
 }
 
 #endif	/* MAC_OS_X_VERSION_MIN_REQUIRED < 1050 */
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 || !USE_CT_GLYPH_INFO
+CGGlyph
+mac_font_get_glyph_for_cid (font, collection, cid)
+     FontRef font;
+     CharacterCollection collection;
+     CGFontIndex cid;
+{
+#if USE_CORE_TEXT && USE_CT_GLYPH_INFO
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return mac_ctfont_get_glyph_for_cid ((CTFontRef) font, collection, cid);
+#endif
+  {
+    CGGlyph result = kCGFontIndexInvalid;
+    NSFont *nsFont = (NSFont *) font;
+    unichar characters[] = {0xfffd};
+    NSString *string =
+      [NSString stringWithCharacters:characters
+			      length:(sizeof (characters)
+				      / sizeof (characters[0]))];
+    NSGlyphInfo *glyphInfo =
+      [NSGlyphInfo glyphInfoWithCharacterIdentifier:cid
+					 collection:collection
+					 baseString:string];
+    NSDictionary *attributes =
+      [NSDictionary dictionaryWithObjectsAndKeys:nsFont,NSFontAttributeName,
+		    glyphInfo,NSGlyphInfoAttributeName,nil];
+    NSTextStorage *textStorage =
+      [[NSTextStorage alloc] initWithString:string
+				 attributes:attributes];
+    NSLayoutManager *layoutManager = [[NSLayoutManager alloc] init];
+    NSTextContainer *textContainer = [[NSTextContainer alloc] init];
+    NSFont *fontInTextStorage;
+
+    [layoutManager addTextContainer:textContainer];
+    [textContainer release];
+    [textStorage addLayoutManager:layoutManager];
+    [layoutManager release];
+
+    /* Force layout.  */
+    (void) [layoutManager glyphRangeForTextContainer:textContainer];
+
+    fontInTextStorage = [textStorage attribute:NSFontAttributeName atIndex:0
+				effectiveRange:NULL];
+    if (fontInTextStorage == nsFont
+	|| [[fontInTextStorage fontName] isEqualToString:[nsFont fontName]])
+      {
+	NSGlyph glyph = [layoutManager glyphAtIndex:0];
+
+	if (glyph < [nsFont numberOfGlyphs])
+	  result = glyph;
+      }
+
+    [textStorage release];
+
+    return result;
+  }
+}
+#endif

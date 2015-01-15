@@ -4933,7 +4933,7 @@ mac_store_buffer_text_to_unicode_chars (buf, start, end, characters)
       int c;
 
       BUF_FETCH_CHAR_ADVANCE (c, buf, start, start_byte);
-      *characters++ = c < 0x10000 ? c : 0xfffd;
+      *characters++ = (c < 0xD800 || (c > 0xDFFF && c < 0x10000)) ? c : 0xfffd;
     }
 
   return 1;

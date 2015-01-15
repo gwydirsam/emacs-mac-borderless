@@ -29,6 +29,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "fontset.h"
 #include "font.h"
 #include "macfont.h"
+#include "macuvs.h"
 
 #include <libkern/OSByteOrder.h>
 
@@ -42,6 +43,7 @@ Lisp_Object Qmac_ct;
 static double mac_ctfont_get_advance_width_for_glyph P_ ((CTFontRef, CGGlyph));
 static CGRect mac_ctfont_get_bounding_rect_for_glyph P_ ((CTFontRef, CGGlyph));
 static CFArrayRef mac_ctfont_create_available_families P_ ((void));
+static Boolean mac_ctfont_equal_in_postscript_name P_ ((CTFontRef, CTFontRef));
 static CTLineRef mac_ctfont_create_line_with_string_and_font P_ ((CFStringRef,
 								  CTFontRef));
 #endif
@@ -107,7 +109,9 @@ static Boolean macfont_supports_charset_and_languages_p P_ ((FontDescriptorRef,
 static CFIndex macfont_closest_traits_index P_ ((CFArrayRef,
 						 FontSymbolicTraits));
 static CFDataRef mac_font_copy_uvs_table P_ ((FontRef));
-static CGGlyph mac_font_get_uvs_glyph P_ ((CFDataRef, UTF32Char, UTF32Char));
+static void mac_font_get_glyphs_for_variants P_ ((CFDataRef, UTF32Char,
+						  const UTF32Char [],
+						  CGGlyph [], CFIndex));
 
 
 /* Mac font driver.  */
@@ -372,39 +376,43 @@ macfont_create_family_with_symbol (symbol)
     }
 #endif
 
-  while (1)
-    {
-      CFIndex i, count;
+  if ((*family_name_comparator) (family_name, CFSTR ("LastResort"), NULL)
+      == kCFCompareEqualTo)
+    result = CFSTR ("LastResort");
+  else
+    while (1)
+      {
+	CFIndex i, count;
 
-      if (families == NULL)
-	{
-	  families = mac_font_create_available_families ();
-	  using_cache_p = 0;
-	  if (families == NULL)
-	    break;
-	}
+	if (families == NULL)
+	  {
+	    families = mac_font_create_available_families ();
+	    using_cache_p = 0;
+	    if (families == NULL)
+	      break;
+	  }
 
-      count = CFArrayGetCount (families);
-      i = CFArrayBSearchValues (families, CFRangeMake (0, count),
-				(const void *) family_name,
-				family_name_comparator, 0);
-      if (i < count)
-	{
-	  CFStringRef name = CFArrayGetValueAtIndex (families, i);
+	count = CFArrayGetCount (families);
+	i = CFArrayBSearchValues (families, CFRangeMake (0, count),
+				  (const void *) family_name,
+				  family_name_comparator, NULL);
+	if (i < count)
+	  {
+	    CFStringRef name = CFArrayGetValueAtIndex (families, i);
 
-	  if ((*family_name_comparator) (name, family_name, 0)
-	      == kCFCompareEqualTo)
-	    result = CFRetain (name);
-	}
+	    if ((*family_name_comparator) (name, family_name, NULL)
+		== kCFCompareEqualTo)
+	      result = CFRetain (name);
+	  }
 
-      if (result || !using_cache_p)
-	break;
-      else
-	{
-	  CFRelease (families);
-	  families = NULL;
-	}
-    }
+	if (result || !using_cache_p)
+	  break;
+	else
+	  {
+	    CFRelease (families);
+	    families = NULL;
+	  }
+      }
 
   CFRelease (family_name);
 
@@ -533,16 +541,32 @@ struct macfont_cache
     CFMutableDictionaryRef dictionary;
   } glyph;
 
-  /* UVS (Unicode Variation Sequences) subtable data, which is of type
-     CFDataRef if available.  NULL means it is not initialized yet.
-     kCFNull means the subtable is not found for this font.  */
-  CFTypeRef uvs_table;
+  struct {
+    /* UVS (Unicode Variation Sequence) subtable data, which is of
+       type CFDataRef if available.  NULL means it is not initialized
+       yet.  kCFNull means the subtable is not found and there is no
+       suitable fallback table for this font.  */
+    CFTypeRef table;
+
+    /* Character collection specifying the destination of the mapping
+       provided by `table' above.  If `table' is obtained from the UVS
+       subtable in the font cmap table, then the value of this member
+       should be MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION.  */
+    CharacterCollection collection;
+  } uvs;
 };
 
 static struct macfont_cache *macfont_lookup_cache P_ ((CFStringRef));
 static struct macfont_cache *macfont_retain_cache P_ ((struct macfont_cache *));
 static void macfont_release_cache P_ ((struct macfont_cache *));
+static CFCharacterSetRef macfont_get_cf_charset P_ ((struct font *));
+static CFCharacterSetRef macfont_get_cf_charset_for_name P_ ((CFStringRef));
 static CGGlyph macfont_get_glyph_for_character P_ ((struct font *, UTF32Char));
+static CGGlyph macfont_get_glyph_for_cid P_ ((struct font *font,
+					      CharacterCollection,
+					      CGFontIndex));
+static CFDataRef macfont_get_uvs_table P_ ((struct font *,
+					    CharacterCollection *));
 
 static struct macfont_cache *
 macfont_lookup_cache (key)
@@ -569,7 +593,21 @@ macfont_lookup_cache (key)
 	{
 	  cache = xmalloc (sizeof (struct macfont_cache));
 	  bzero (cache, sizeof (struct macfont_cache));
-	  cache->cf_charset = mac_font_copy_character_set (macfont);
+	  /* Treat the LastResort font as if it contained glyphs for
+	     all characters.  This may look too rough, but neither
+	     CTFontCopyCharacterSet nor -[NSFont coveredCharacterSet]
+	     for this font is correct for non-BMP characters on Mac OS
+	     X 10.5, anyway.  */
+	  if (CFStringCompare (key, CFSTR ("LastResort"), 0)
+	      == kCFCompareEqualTo)
+	    {
+	      CFRange range = CFRangeMake (0, MAX_UNICODE_CHAR + 1);
+
+	      cache->cf_charset =
+		CFCharacterSetCreateWithCharactersInRange (NULL, range);
+	    }
+	  if (cache->cf_charset == NULL)
+	    cache->cf_charset = mac_font_copy_character_set (macfont);
 	  CFDictionaryAddValue (macfont_cache_dictionary, key,
 				(const void *) cache);
 	  CFRelease (macfont);
@@ -602,12 +640,28 @@ macfont_release_cache (cache)
       if (cache->glyph.dictionary)
 	CFRelease (cache->glyph.dictionary);
       bzero (&cache->glyph, sizeof (cache->glyph));
-      if (cache->uvs_table)
-	{
-	  CFRelease (cache->uvs_table);
-	  cache->uvs_table = NULL;
-	}
+      if (cache->uvs.table)
+	CFRelease (cache->uvs.table);
+      bzero (&cache->uvs, sizeof (cache->uvs));
     }
+}
+
+static CFCharacterSetRef
+macfont_get_cf_charset (font)
+     struct font *font;
+{
+  struct macfont_info *macfont_info = (struct macfont_info *) font;
+
+  return macfont_info->cache->cf_charset;
+}
+
+static CFCharacterSetRef
+macfont_get_cf_charset_for_name (name)
+     CFStringRef name;
+{
+  struct macfont_cache *cache = macfont_lookup_cache (name);
+
+  return cache->cf_charset;
 }
 
 static CGGlyph
@@ -619,7 +673,7 @@ macfont_get_glyph_for_character (font, c)
   FontRef macfont = macfont_info->macfont;
   struct macfont_cache *cache = macfont_info->cache;
 
-  if (c < 0x10000)
+  if (c < 0xD800 || (c > 0xDFFF && c < 0x10000))
     {
       int row = c / 256;
       int nkeys_or_perm = cache->glyph.row_nkeys_or_perm[row];
@@ -722,10 +776,10 @@ macfont_get_glyph_for_character (font, c)
 	{
 	  UniChar unichars[2];
 	  CGGlyph glyphs[2];
+	  CFIndex count = macfont_store_utf32char_to_unichars (c, unichars);
 
-	  unichars[0] = ((c - 0x10000) >> 10) + 0xD800;
-	  unichars[1] = (c & 0x3FF) + 0xDC00;
-	  if (mac_font_get_glyphs_for_characters (macfont, unichars, glyphs, 2))
+	  if (mac_font_get_glyphs_for_characters (macfont, unichars, glyphs,
+						  count))
 	    glyph = glyphs[0];
 	  else
 	    glyph = kCGFontIndexInvalid;
@@ -737,6 +791,73 @@ macfont_get_glyph_for_character (font, c)
 
       return glyph;
     }
+}
+
+static CGGlyph
+macfont_get_glyph_for_cid (font, collection, cid)
+     struct font *font;
+     CharacterCollection collection;
+     CGFontIndex cid;
+{
+  struct macfont_info *macfont_info = (struct macfont_info *) font;
+  FontRef macfont = macfont_info->macfont;
+
+  /* Cache it? */
+  return mac_font_get_glyph_for_cid (macfont, collection, cid);
+}
+
+static CFDataRef
+macfont_get_uvs_table (font, collection)
+     struct font *font;
+     CharacterCollection *collection;
+{
+  struct macfont_info *macfont_info = (struct macfont_info *) font;
+  FontRef macfont = macfont_info->macfont;
+  struct macfont_cache *cache = macfont_info->cache;
+  CFDataRef result = NULL;
+
+  if (cache->uvs.table == NULL)
+    {
+      CFDataRef uvs_table = mac_font_copy_uvs_table (macfont);
+      CharacterCollection uvs_collection =
+	MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION;
+
+      if (uvs_table == NULL
+	  && mac_font_get_glyph_for_cid (macfont,
+					 MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION,
+					 6480) != kCGFontIndexInvalid)
+	{
+	  /* If the glyph for U+4E55 is accesible via its CID 6480,
+	     then we use the Adobe-Japan1 UVS table, which maps a
+	     variation sequence to a CID, as a fallback.  */
+	  static CFDataRef mac_uvs_table_adobe_japan1 = NULL;
+
+	  if (mac_uvs_table_adobe_japan1 == NULL)
+	    mac_uvs_table_adobe_japan1 =
+	      CFDataCreateWithBytesNoCopy (NULL,
+					   mac_uvs_table_adobe_japan1_bytes,
+					   sizeof (mac_uvs_table_adobe_japan1_bytes),
+					   kCFAllocatorNull);
+	  if (mac_uvs_table_adobe_japan1)
+	    {
+	      uvs_table = CFRetain (mac_uvs_table_adobe_japan1);
+	      uvs_collection = MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION;
+	    }
+	}
+      if (uvs_table == NULL)
+	cache->uvs.table = kCFNull;
+      else
+	cache->uvs.table = uvs_table;
+      cache->uvs.collection = uvs_collection;
+    }
+
+  if (cache->uvs.table != kCFNull)
+    {
+      result = cache->uvs.table;
+      *collection = cache->uvs.collection;
+    }
+
+  return result;
 }
 
 static Lisp_Object macfont_get_cache P_ ((FRAME_PTR));
@@ -1267,7 +1388,7 @@ macfont_list (frame, spec)
   int spacing = -1;
   FontSymbolicTraits synth_sym_traits = 0;
   CFArrayRef families;
-  CFIndex families_count, last_resort_index = -1;
+  CFIndex families_count;
   CFCharacterSetRef charset = NULL;
   CFArrayRef languages = NULL;
 
@@ -1352,42 +1473,43 @@ macfont_list (frame, spec)
 			      1, &kCFTypeArrayCallBacks);
   else
     {
-      CFStringRef preferred_family;
-      CFIndex families_count, preferred_family_index = -1;
+      CFStringRef pref_family;
+      CFIndex families_count, pref_family_index = -1;
 
       families = mac_font_create_available_families ();
       if (families == NULL)
 	goto err;
 
       families_count = CFArrayGetCount (families);
-      if (EQ (AREF (spec, FONT_REGISTRY_INDEX), Qiso10646_1))
-	last_resort_index = families_count;
 
       /* Move preferred family to the front if exists.  */
-      preferred_family =
+      pref_family =
 	mac_font_create_preferred_family_for_attributes (attributes);
-      if (preferred_family)
+      if (pref_family)
 	{
-	  preferred_family_index =
+	  pref_family_index =
 	    CFArrayGetFirstIndexOfValue (families,
 					 CFRangeMake (0, families_count),
-					 preferred_family);
-	  CFRelease (preferred_family);
+					 pref_family);
+	  CFRelease (pref_family);
 	}
-      if (last_resort_index >= 0 || preferred_family_index > 0)
+      if (pref_family_index > 0)
 	{
 	  CFMutableArrayRef mutable_families =
-	    CFArrayCreateMutableCopy (NULL,
-				      (last_resort_index >= 0
-				       ? families_count + 1 : families_count),
-				      families);
+	    CFArrayCreateMutable (NULL, families_count, &kCFTypeArrayCallBacks);
+
 	  if (mutable_families)
 	    {
-	      if (last_resort_index >= 0)
-		CFArrayAppendValue (mutable_families, CFSTR ("LastResort"));
-	      if (preferred_family_index > 0)
-		CFArrayExchangeValuesAtIndices (mutable_families,
-						0, preferred_family_index);
+	      CFArrayAppendValue (mutable_families,
+				  CFArrayGetValueAtIndex (families,
+							  pref_family_index));
+	      CFArrayAppendArray (mutable_families, families,
+				  CFRangeMake (0, pref_family_index));
+	      if (pref_family_index + 1 < families_count)
+		CFArrayAppendArray (mutable_families, families,
+				    CFRangeMake (pref_family_index + 1,
+						 families_count
+						 - (pref_family_index + 1)));
 	      CFRelease (families);
 	      families = mutable_families;
 	    }
@@ -1407,9 +1529,6 @@ macfont_list (frame, spec)
       Lisp_Object entity;
       int j;
 
-      if (i == last_resort_index && !NILP (val))
-	break;
-
       CFDictionarySetValue (attributes, MAC_FONT_FAMILY_NAME_ATTRIBUTE,
 			    family_name);
       pat_desc = mac_font_descriptor_create_with_attributes (attributes);
@@ -1424,10 +1543,9 @@ macfont_list (frame, spec)
 
       descs_count = CFArrayGetCount (descs);
       if (descs_count == 0
-	  || (i != last_resort_index
-	      && !macfont_supports_charset_and_languages_p (CFArrayGetValueAtIndex (descs, 0),
-							    charset, chars,
-							    languages)))
+	  || !macfont_supports_charset_and_languages_p (CFArrayGetValueAtIndex (descs, 0),
+							charset, chars,
+							languages))
 	{
 	  CFRelease (descs);
 	  continue;
@@ -1460,7 +1578,7 @@ macfont_list (frame, spec)
 		  != (spacing >= FONT_SPACING_MONO)))
 	    continue;
 
-	  if (i != last_resort_index && j > 0
+	  if (j > 0
 	      && !macfont_supports_charset_and_languages_p (desc, charset,
 							    chars, languages))
 	    continue;
@@ -1810,32 +1928,24 @@ macfont_has_char (font, c)
      Lisp_Object font;
      int c;
 {
-  int result = -1;
+  int result;
+  CFCharacterSetRef charset;
 
   BLOCK_INPUT;
   if (FONT_ENTITY_P (font))
     {
       Lisp_Object val;
       CFStringRef name;
-      struct macfont_cache *cache;
-      CFCharacterSetRef charset = NULL;
 
       val = assq_no_quit (QCfont_entity, AREF (font, FONT_EXTRA_INDEX));
       val = XCDR (val);
       name = XSAVE_VALUE (val)->pointer;
-      cache = macfont_lookup_cache (name);
-      result = CFCharacterSetIsLongCharacterMember (cache->cf_charset,
-						    (UTF32Char) c);
+      charset = macfont_get_cf_charset_for_name (name);
     }
   else
-    {
-      struct macfont_info *macfont_info;
+    charset = macfont_get_cf_charset (XFONT_OBJECT (font));
 
-      macfont_info = (struct macfont_info *) XFONT_OBJECT (font);
-      result =
-	CFCharacterSetIsLongCharacterMember (macfont_info->cache->cf_charset,
-					     (UTF32Char) c);
-    }
+  result = CFCharacterSetIsLongCharacterMember (charset, c);
   UNBLOCK_INPUT;
 
   return result;
@@ -1983,8 +2093,469 @@ macfont_draw (s, from, to, x, y, with_background)
   return len;
 }
 
-#if USE_CORE_TEXT
+Lisp_Object
+macfont_shape (lgstring)
+     Lisp_Object lgstring;
+{
+  struct font *font;
+  struct macfont_info *macfont_info;
+  FontRef macfont;
+  EMACS_UINT glyph_len, len, i, j;
+  CFIndex nonbmp_len;
+  UniChar *unichars;
+  CFIndex *nonbmp_indices;
+  CFStringRef string;
+  CFIndex used = 0;
+  struct mac_glyph_layout *glyph_layouts;
 
+  CHECK_FONT_GET_OBJECT (LGSTRING_FONT (lgstring), font);
+  macfont_info = (struct macfont_info *) font;
+  macfont = macfont_info->macfont;
+
+  glyph_len = LGSTRING_GLYPH_LEN (lgstring);
+  nonbmp_len = 0;
+  for (i = 0; i < glyph_len; i++)
+    {
+      Lisp_Object lglyph = LGSTRING_GLYPH (lgstring, i);
+
+      if (NILP (lglyph))
+	break;
+      if (LGLYPH_CHAR (lglyph) >= 0x10000)
+	nonbmp_len++;
+    }
+  len = i;
+
+  unichars = alloca (sizeof (UniChar) * (len + nonbmp_len));
+  nonbmp_indices = alloca (sizeof (CFIndex) * (nonbmp_len + 1));
+  for (i = j = 0; i < len; i++)
+    {
+      UTF32Char c = LGLYPH_CHAR (LGSTRING_GLYPH (lgstring, i));
+
+      if (macfont_store_utf32char_to_unichars (c, unichars + i + j) > 1)
+	nonbmp_indices[j++] = i;
+    }
+  nonbmp_indices[j] = len;	/* sentinel */
+
+  BLOCK_INPUT;
+
+  string = CFStringCreateWithCharactersNoCopy (NULL, unichars, len + nonbmp_len,
+					       kCFAllocatorNull);
+  if (string)
+    {
+      glyph_layouts = alloca (sizeof (struct mac_glyph_layout) * glyph_len);
+      used = mac_font_shape (macfont, string, glyph_layouts, glyph_len);
+      CFRelease (string);
+    }
+
+  UNBLOCK_INPUT;
+
+  if (used == 0)
+    return Qnil;
+
+  BLOCK_INPUT;
+
+  for (i = 0; i < used; i++)
+    {
+      Lisp_Object lglyph = LGSTRING_GLYPH (lgstring, i);
+      struct mac_glyph_layout *gl = glyph_layouts + i;
+      EMACS_UINT from, to;
+      struct font_metrics metrics;
+      int xoff, yoff, wadjust;
+
+      if (NILP (lglyph))
+	{
+	  lglyph = Fmake_vector (make_number (LGLYPH_SIZE), Qnil);
+	  LGSTRING_SET_GLYPH (lgstring, i, lglyph);
+	}
+
+      from = gl->comp_range.location;
+      /* Convert UTF-16 index to UTF-32.  */
+      for (j = 0; nonbmp_indices[j] < from; j++)
+	from--;
+      LGLYPH_SET_FROM (lglyph, from);
+
+      to = from + gl->comp_range.length;
+      /* Convert UTF-16 index to UTF-32.  */
+      for (; nonbmp_indices[j] < to; j++)
+	to--;
+      LGLYPH_SET_TO (lglyph, to - 1);
+
+      if (unichars[gl->string_index] >= 0xD800
+	  && unichars[gl->string_index] < 0xDC00)
+	LGLYPH_SET_CHAR (lglyph, (((unichars[gl->string_index] - 0xD800) << 10)
+				  + (unichars[gl->string_index + 1] - 0xDC00)
+				  + 0x10000));
+      else
+	LGLYPH_SET_CHAR (lglyph, unichars[gl->string_index]);
+
+      LGLYPH_SET_CODE (lglyph, gl->glyph_id);
+
+      macfont_glyph_extents (font, gl->glyph_id, &metrics, NULL);
+      LGLYPH_SET_WIDTH (lglyph, metrics.width);
+      LGLYPH_SET_LBEARING (lglyph, metrics.lbearing);
+      LGLYPH_SET_RBEARING (lglyph, metrics.rbearing);
+      LGLYPH_SET_ASCENT (lglyph, metrics.ascent);
+      LGLYPH_SET_DESCENT (lglyph, metrics.descent);
+
+      xoff = lround (gl->advance_delta);
+      yoff = lround (- gl->baseline_delta);
+      wadjust = lround (gl->advance);
+      if (xoff != 0 || yoff != 0 || wadjust != metrics.width)
+	{
+	  Lisp_Object vec;
+
+	  vec = Fmake_vector (make_number (3), Qnil);
+	  ASET (vec, 0, make_number (xoff));
+	  ASET (vec, 1, make_number (yoff));
+	  ASET (vec, 2, make_number (wadjust));
+	  LGLYPH_SET_ADJUSTMENT (lglyph, vec);
+	}
+    }
+
+  UNBLOCK_INPUT;
+
+  return make_number (used);
+}
+
+/* Structures for the UVS subtable (format 14) in the cmap table.  */
+typedef UInt8 UINT24[3];
+
+#pragma pack(push, 1)
+struct variation_selector_record
+{
+  UINT24 var_selector;
+  UInt32 default_uvs_offset, non_default_uvs_offset;
+};
+struct uvs_table
+{
+  UInt16 format;
+  UInt32 length, num_var_selector_records;
+  struct variation_selector_record variation_selector_records[1];
+};
+#define SIZEOF_UVS_TABLE_HEADER \
+  (sizeof (struct uvs_table) - sizeof (struct variation_selector_record))
+
+struct unicode_value_range
+{
+  UINT24 start_unicode_value;
+  UInt8 additional_count;
+};
+struct default_uvs_table {
+  UInt32 num_unicode_value_ranges;
+  struct unicode_value_range unicode_value_ranges[1];
+};
+#define SIZEOF_DEFAULT_UVS_TABLE_HEADER \
+  (sizeof (struct default_uvs_table) - sizeof (struct unicode_value_range))
+
+struct uvs_mapping
+{
+  UINT24 unicode_value;
+  UInt16 glyph_id;
+};
+struct non_default_uvs_table
+{
+  UInt32 num_uvs_mappings;
+  struct uvs_mapping uvs_mappings[1];
+};
+#define SIZEOF_NON_DEFAULT_UVS_TABLE_HEADER \
+  (sizeof (struct non_default_uvs_table) - sizeof (struct uvs_mapping))
+#pragma pack(pop)
+
+/* Read big endian values.  The argument LVAL must be an lvalue.  */
+/* I suppose OSReadBigInt* takes care of unaligned data.  At least, we
+   can find "... = OSReadBigInt32(cdb, 2);" followed by "... =
+   OSReadBigInt16(cdb, 7);" in a sample code by Apple.  */
+#define BUINT8_VALUE(lval)	(*((UInt8 *) &(lval)))
+#define BUINT16_VALUE(lval)	OSReadBigInt16 (&(lval), 0)
+/* Succeeding one byte should also be accessible.  */
+#define BUINT24_VALUE(lval)	(OSReadBigInt32 (&(lval), 0) >> 8)
+#define BUINT32_VALUE(lval)	OSReadBigInt32 (&(lval), 0)
+
+/* Return UVS subtable for the specified FONT.  If the subtable is not
+   found or ill-formated, then return NULL.  */
+
+static CFDataRef
+mac_font_copy_uvs_table (font)
+     FontRef font;
+{
+  CFDataRef cmap_table, uvs_table = NULL;
+
+  cmap_table = mac_font_copy_non_synthetic_table (font, cmapFontTableTag);
+  if (cmap_table)
+    {
+      sfntCMapHeader *cmap = (sfntCMapHeader *) CFDataGetBytePtr (cmap_table);
+      struct uvs_table *uvs;
+      struct variation_selector_record *records;
+      UInt32 cmap_len, ntables, i, uvs_offset, uvs_len, nrecords;
+
+#if __LP64__
+      if (CFDataGetLength (cmap_table) > UINT32_MAX)
+	goto finish;
+#endif
+
+      cmap_len = CFDataGetLength (cmap_table);
+      if (sizeof_sfntCMapHeader > cmap_len)
+	goto finish;
+
+      ntables = BUINT16_VALUE (cmap->numTables);
+      if (ntables > ((cmap_len - sizeof_sfntCMapHeader)
+		     / sizeof_sfntCMapEncoding))
+	goto finish;
+
+      for (i = 0; i < ntables; i++)
+	if ((BUINT16_VALUE (cmap->encoding[i].platformID)
+	     == kFontUnicodePlatform)
+	    && (BUINT16_VALUE (cmap->encoding[i].scriptID)
+		== 5)) /* kFontUnicodeV4_0VariationSequenceSemantics */
+	  {
+	    uvs_offset = BUINT32_VALUE (cmap->encoding[i].offset);
+	    break;
+	  }
+      if (i == ntables
+	  || uvs_offset > cmap_len
+	  || SIZEOF_UVS_TABLE_HEADER > cmap_len - uvs_offset)
+	goto finish;
+
+      uvs = (struct uvs_table *) ((UInt8 *) cmap + uvs_offset);
+      uvs_len = BUINT32_VALUE (uvs->length);
+      if (uvs_len > cmap_len - uvs_offset
+	  || SIZEOF_UVS_TABLE_HEADER > uvs_len)
+	goto finish;
+
+      if (BUINT16_VALUE (uvs->format) != 14)
+	goto finish;
+
+      nrecords = BUINT32_VALUE (uvs->num_var_selector_records);
+      if (nrecords > ((uvs_len - SIZEOF_UVS_TABLE_HEADER)
+		      / sizeof (struct variation_selector_record)))
+	goto finish;
+
+      records = uvs->variation_selector_records;
+      for (i = 0; i < nrecords; i++)
+	{
+	  UInt32 default_uvs_offset, non_default_uvs_offset;
+
+	  default_uvs_offset = BUINT32_VALUE (records[i].default_uvs_offset);
+	  if (default_uvs_offset)
+	    {
+	      struct default_uvs_table *default_uvs;
+	      UInt32 nranges;
+
+	      if (default_uvs_offset > uvs_len
+		  || (SIZEOF_DEFAULT_UVS_TABLE_HEADER
+		      > uvs_len - default_uvs_offset))
+		goto finish;
+
+	      default_uvs = ((struct default_uvs_table *)
+			     ((UInt8 *) uvs + default_uvs_offset));
+	      nranges = BUINT32_VALUE (default_uvs->num_unicode_value_ranges);
+	      if (nranges > ((uvs_len - default_uvs_offset
+			      - SIZEOF_DEFAULT_UVS_TABLE_HEADER)
+			     / sizeof (struct unicode_value_range)))
+		goto finish;
+	      /* Now 2 * nranges can't overflow, so we can safely use
+		 `(lo + hi) / 2' instead of `lo + (hi - lo) / 2' in
+		 mac_font_get_glyphs_for_variants.  */
+	    }
+
+	  non_default_uvs_offset =
+	    BUINT32_VALUE (records[i].non_default_uvs_offset);
+	  if (non_default_uvs_offset)
+	    {
+	      struct non_default_uvs_table *non_default_uvs;
+	      UInt32 nmappings;
+
+	      if (non_default_uvs_offset > uvs_len
+		  || (SIZEOF_NON_DEFAULT_UVS_TABLE_HEADER
+		      > uvs_len - non_default_uvs_offset))
+		goto finish;
+
+	      non_default_uvs = ((struct non_default_uvs_table *)
+				 ((UInt8 *) uvs + non_default_uvs_offset));
+	      nmappings = BUINT32_VALUE (non_default_uvs->num_uvs_mappings);
+	      if (nmappings > ((uvs_len - non_default_uvs_offset
+				- SIZEOF_NON_DEFAULT_UVS_TABLE_HEADER)
+			       / sizeof (struct uvs_mapping)))
+		goto finish;
+	      /* Now 2 * nmappings can't overflow, so we can safely
+		 use `(lo + hi) / 2' instead of `lo + (hi - lo) / 2'
+		 in mac_font_get_glyphs_for_variants.  */
+	    }
+	}
+
+      uvs_table = CFDataCreate (NULL, (UInt8 *) uvs, uvs_len);
+
+    finish:
+      CFRelease (cmap_table);
+    }
+
+  return uvs_table;
+}
+
+/* Find an entry in the given UVS subtable UVS_TABLE for a variation
+   sequence consisting of the given base character C and each
+   variation selector SELECTORS[i] for 0 <= i < COUNT, and store the
+   result (explained below) into the corresponding GLYPHS[i].  If the
+   entry is found in the Default UVS Table, then the result is 0.  If
+   the entry is found in the Non-Default UVS Table, then the result is
+   the associated glyph ID.  Otherwise, kCGFontIndexInvalid.  The
+   elements in SELECTORS must be sorted in strictly increasing
+   order.  */
+
+static void
+mac_font_get_glyphs_for_variants (uvs_table, c, selectors, glyphs, count)
+     CFDataRef uvs_table;
+     UTF32Char c;
+     const UTF32Char selectors[];
+     CGGlyph glyphs[];
+     CFIndex count;
+{
+  struct uvs_table *uvs = (struct uvs_table *) CFDataGetBytePtr (uvs_table);
+  struct variation_selector_record *records = uvs->variation_selector_records;
+  CFIndex i;
+  UInt32 ir, nrecords;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+  dispatch_queue_t queue =
+    dispatch_get_global_queue (DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+  dispatch_group_t group = dispatch_group_create ();
+#endif
+
+  nrecords = BUINT32_VALUE (uvs->num_var_selector_records);
+  i = 0;
+  ir = 0;
+  while (i < count && ir < nrecords)
+    {
+      UInt32 default_uvs_offset, non_default_uvs_offset;
+
+      if (selectors[i] < BUINT24_VALUE (records[ir].var_selector))
+	{
+	  glyphs[i++] = kCGFontIndexInvalid;
+	  continue;
+	}
+      else if (selectors[i] > BUINT24_VALUE (records[ir].var_selector))
+	{
+	  ir++;
+	  continue;
+	}
+
+      /* selectors[i] == BUINT24_VALUE (records[ir].var_selector) */
+      default_uvs_offset = BUINT32_VALUE (records[ir].default_uvs_offset);
+      non_default_uvs_offset =
+	BUINT32_VALUE (records[ir].non_default_uvs_offset);
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      dispatch_group_async (group, queue, ^{
+#endif
+	  glyphs[i] = kCGFontIndexInvalid;
+
+	  if (default_uvs_offset)
+	    {
+	      struct default_uvs_table *default_uvs =
+		(struct default_uvs_table *) ((UInt8 *) uvs
+					      + default_uvs_offset);
+	      struct unicode_value_range *ranges =
+		default_uvs->unicode_value_ranges;
+	      UInt32 lo, hi;
+
+	      lo = 0;
+	      hi = BUINT32_VALUE (default_uvs->num_unicode_value_ranges);
+	      while (lo < hi)
+		{
+		  UInt32 mid = (lo + hi) / 2;
+
+		  if (c < BUINT24_VALUE (ranges[mid].start_unicode_value))
+		    hi = mid;
+		  else
+		    lo = mid + 1;
+		}
+	      if (hi > 0
+		  && (c <= (BUINT24_VALUE (ranges[hi - 1].start_unicode_value)
+			    + BUINT8_VALUE (ranges[hi - 1].additional_count))))
+		glyphs[i] = 0;
+	    }
+
+	  if (glyphs[i] == kCGFontIndexInvalid && non_default_uvs_offset)
+	    {
+	      struct non_default_uvs_table *non_default_uvs =
+		(struct non_default_uvs_table *) ((UInt8 *) uvs
+						  + non_default_uvs_offset);
+	      struct uvs_mapping *mappings = non_default_uvs->uvs_mappings;
+	      UInt32 lo, hi;
+
+	      lo = 0;
+	      hi = BUINT32_VALUE (non_default_uvs->num_uvs_mappings);
+	      while (lo < hi)
+		{
+		  UInt32 mid = (lo + hi) / 2;
+
+		  if (c < BUINT24_VALUE (mappings[mid].unicode_value))
+		    hi = mid;
+		  else
+		    lo = mid + 1;
+		}
+	      if (hi > 0 &&
+		  BUINT24_VALUE (mappings[hi - 1].unicode_value) == c)
+		glyphs[i] = BUINT16_VALUE (mappings[hi - 1].glyph_id);
+	    }
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+	});
+#endif
+      i++;
+      ir++;
+    }
+  while (i < count)
+    glyphs[i++] = kCGFontIndexInvalid;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+  dispatch_group_wait (group, DISPATCH_TIME_FOREVER);
+  dispatch_release (group);
+#endif
+}
+
+static int
+macfont_variation_glyphs (font, c, variations)
+     struct font *font;
+     int c;
+     unsigned variations[256];
+{
+  CFDataRef uvs_table;
+  CharacterCollection uvs_collection;
+  int i, n = 0;
+
+  BLOCK_INPUT;
+  uvs_table = macfont_get_uvs_table (font, &uvs_collection);
+
+  if (uvs_table)
+    {
+      UTF32Char selectors[256];
+      CGGlyph glyphs[256];
+
+      for (i = 0; i < 16; i++)
+	selectors[i] = 0xFE00 + i;
+      for (; i < 256; i++)
+	selectors[i] = 0xE0100 + (i - 16);
+      mac_font_get_glyphs_for_variants (uvs_table, c, selectors, glyphs, 256);
+      for (i = 0; i < 256; i++)
+	{
+	  CGGlyph glyph = glyphs[i];
+
+	  if (uvs_collection != MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION
+	      && glyph != kCGFontIndexInvalid)
+	    glyph = macfont_get_glyph_for_cid (font, uvs_collection, glyph);
+	  if (glyph == kCGFontIndexInvalid)
+	    variations[i] = 0;
+	  else
+	    {
+	      variations[i] = (glyph ? glyph
+			       : macfont_get_glyph_for_character (font, c));
+	      n++;
+	    }
+	}
+    }
+  UNBLOCK_INPUT;
+
+  return n;
+}
+
+#if USE_CORE_TEXT
 Boolean
 mac_ctfont_descriptor_supports_languages (descriptor, languages)
      CTFontDescriptorRef descriptor;
@@ -2139,13 +2710,12 @@ mac_ctfont_create_available_families ()
 
 		    p = CFArrayBSearchValues (families, CFRangeMake (0, limit),
 					      (const void *) name,
-					      mac_font_family_compare,
-					      0);
+					      mac_font_family_compare, NULL);
 		    if (p >= limit)
 		      CFArrayAppendValue (families, name);
 		    else if (mac_font_family_compare
 			     (CFArrayGetValueAtIndex (families, p),
-			      name, 0) != kCFCompareEqualTo)
+			      name, NULL) != kCFCompareEqualTo)
 		      CFArrayInsertValueAtIndex (families, p, name);
 		    CFRelease (name);
 		  }
@@ -2156,6 +2726,32 @@ mac_ctfont_create_available_families ()
 #endif
 
   return families;
+}
+
+static Boolean
+mac_ctfont_equal_in_postscript_name (font1, font2)
+     CTFontRef font1, font2;
+{
+  Boolean result;
+  CFStringRef name1, name2;
+
+  if (font1 == font2)
+    return true;
+
+  result = false;
+  name1 = CTFontCopyPostScriptName (font1);
+  if (name1)
+    {
+      name2 = CTFontCopyPostScriptName (font2);
+      if (name2)
+	{
+	  result = (CFStringCompare (name1, name2, 0) == kCFCompareEqualTo);
+	  CFRelease (name2);
+	}
+      CFRelease (name1);
+    }
+
+  return result;
 }
 
 static CTLineRef
@@ -2190,6 +2786,34 @@ mac_ctfont_create_line_with_string_and_font (string, macfont)
     {
       ctline = CTLineCreateWithAttributedString (attr_string);
       CFRelease (attr_string);
+    }
+  if (ctline)
+    {
+      /* Abandon if ctline contains some fonts other than the
+	 specified one.  */
+      CFArrayRef runs = CTLineGetGlyphRuns (ctline);
+      CFIndex i, nruns = CFArrayGetCount (runs);
+
+      for (i = 0; i < nruns; i++)
+	{
+	  CTRunRef run = CFArrayGetValueAtIndex (runs, i);
+	  CFDictionaryRef attributes = CTRunGetAttributes (run);
+	  CTFontRef font_in_run;
+
+	  if (attributes == NULL)
+	    break;
+	  font_in_run =
+	    CFDictionaryGetValue (attributes, kCTFontAttributeName);
+	  if (font_in_run == NULL)
+	    break;
+	  if (!mac_ctfont_equal_in_postscript_name (macfont, font_in_run))
+	    break;
+	}
+      if (i < nruns)
+	{
+	  CFRelease (ctline);
+	  ctline = NULL;
+	}
     }
 
   return ctline;
@@ -2270,486 +2894,86 @@ mac_ctfont_shape (font, string, glyph_layouts, glyph_len)
   return result;
 }
 
-#endif	/* USE_CORE_TEXT */
-
-Lisp_Object
-macfont_shape (lgstring)
-     Lisp_Object lgstring;
+/* The function below seems to cause a memory leak for the CFString
+   created by CFStringCreateWithCharacters as of Mac OS X 10.5.8 and
+   10.6.1.  For now, we use the NSGlyphInfo version instead.  */
+#if USE_CT_GLYPH_INFO
+CGGlyph
+mac_ctfont_get_glyph_for_cid (font, collection, cid)
+     CTFontRef font;
+     CTCharacterCollection collection;
+     CGFontIndex cid;
 {
-  struct font *font;
-  struct macfont_info *macfont_info;
-  FontRef macfont;
-  EMACS_UINT glyph_len, len, i, j;
-  CFIndex nonbmp_len;
-  UniChar *unichars;
-  CFIndex *nonbmp_indices;
+  CGGlyph result = kCGFontIndexInvalid;
+  UniChar characters[] = {0xfffd};
   CFStringRef string;
-  CFIndex used = 0;
-  struct mac_glyph_layout *glyph_layouts;
+  CFAttributedStringRef attr_string = NULL;
+  CTLineRef ctline = NULL;
 
-  CHECK_FONT_GET_OBJECT (LGSTRING_FONT (lgstring), font);
-  macfont_info = (struct macfont_info *) font;
-  macfont = macfont_info->macfont;
-
-  glyph_len = LGSTRING_GLYPH_LEN (lgstring);
-  nonbmp_len = 0;
-  for (i = 0; i < glyph_len; i++)
-    {
-      Lisp_Object lglyph = LGSTRING_GLYPH (lgstring, i);
-
-      if (NILP (lglyph))
-	break;
-      if (LGLYPH_CHAR (lglyph) >= 0x10000)
-	nonbmp_len++;
-    }
-  len = i;
-
-  unichars = alloca (sizeof (UniChar) * (len + nonbmp_len));
-  nonbmp_indices = alloca (sizeof (CFIndex) * (nonbmp_len + 1));
-  for (i = j = 0; i < len; i++)
-    {
-      UTF32Char c = LGLYPH_CHAR (LGSTRING_GLYPH (lgstring, i));
-
-      if (c < 0x10000)
-	unichars[i + j] = c;
-      else
-	{
-	  c -= 0x10000;
-	  unichars[i + j] = (c >> 10) + 0xD800;
-	  nonbmp_indices[j++] = i;
-	  unichars[i + j] = (c & 0x3FF) + 0xDC00;
-	}
-    }
-  nonbmp_indices[j] = len;	/* sentinel */
-
-  BLOCK_INPUT;
-
-  string = CFStringCreateWithCharactersNoCopy (NULL, unichars, len + nonbmp_len,
-					       kCFAllocatorNull);
+  string = CFStringCreateWithCharacters (NULL, characters,
+					 sizeof (characters)
+					 / sizeof (characters[0]));
   if (string)
     {
-      glyph_layouts = alloca (sizeof (struct mac_glyph_layout) * glyph_len);
-      used = mac_font_shape (macfont, string, glyph_layouts, glyph_len);
+      CTGlyphInfoRef glyph_info =
+	CTGlyphInfoCreateWithCharacterIdentifier (cid, collection, string);
+      CFDictionaryRef attributes = NULL;
+
+      if (glyph_info)
+	{
+	  CFStringRef keys[] = {kCTFontAttributeName,
+				kCTGlyphInfoAttributeName};
+	  CFTypeRef values[] = {font, glyph_info};
+
+	  attributes = CFDictionaryCreate (NULL, (const void **) keys,
+					   (const void **) values,
+					   sizeof (keys) / sizeof (keys[0]),
+					   &kCFTypeDictionaryKeyCallBacks,
+					   &kCFTypeDictionaryValueCallBacks);
+	  CFRelease (glyph_info);
+	}
+      if (attributes)
+	{
+	  attr_string = CFAttributedStringCreate (NULL, string, attributes);
+	  CFRelease (attributes);
+	}
       CFRelease (string);
     }
-
-  UNBLOCK_INPUT;
-
-  if (used == 0)
-    return Qnil;
-
-  BLOCK_INPUT;
-
-  for (i = 0; i < used; i++)
+  if (attr_string)
     {
-      Lisp_Object lglyph = LGSTRING_GLYPH (lgstring, i);
-      struct mac_glyph_layout *gl = glyph_layouts + i;
-      EMACS_UINT from, to;
-      struct font_metrics metrics;
-      int xoff, yoff, wadjust;
-
-      if (NILP (lglyph))
-	{
-	  lglyph = Fmake_vector (make_number (LGLYPH_SIZE), Qnil);
-	  LGSTRING_SET_GLYPH (lgstring, i, lglyph);
-	}
-
-      from = gl->comp_range.location;
-      /* Convert UTF-16 index to UTF-32.  */
-      for (j = 0; nonbmp_indices[j] < from; j++)
-	from--;
-      LGLYPH_SET_FROM (lglyph, from);
-
-      to = from + gl->comp_range.length;
-      /* Convert UTF-16 index to UTF-32.  */
-      for (; nonbmp_indices[j] < to; j++)
-	to--;
-      LGLYPH_SET_TO (lglyph, to - 1);
-
-      if (unichars[gl->string_index] >= 0xD800
-	  && unichars[gl->string_index] < 0xDC00)
-	LGLYPH_SET_CHAR (lglyph, (((unichars[gl->string_index] - 0xD800) << 10)
-				  + (unichars[gl->string_index + 1] - 0xDC00)
-				  + 0x10000));
-      else
-	LGLYPH_SET_CHAR (lglyph, unichars[gl->string_index]);
-
-      LGLYPH_SET_CODE (lglyph, gl->glyph_id);
-
-      macfont_glyph_extents (font, gl->glyph_id, &metrics, NULL);
-      LGLYPH_SET_WIDTH (lglyph, metrics.width);
-      LGLYPH_SET_LBEARING (lglyph, metrics.lbearing);
-      LGLYPH_SET_RBEARING (lglyph, metrics.rbearing);
-      LGLYPH_SET_ASCENT (lglyph, metrics.ascent);
-      LGLYPH_SET_DESCENT (lglyph, metrics.descent);
-
-      xoff = lround (gl->advance_delta);
-      yoff = lround (- gl->baseline_delta);
-      wadjust = lround (gl->advance);
-      if (xoff != 0 || yoff != 0 || wadjust != metrics.width)
-	{
-	  Lisp_Object vec;
-
-	  vec = Fmake_vector (make_number (3), Qnil);
-	  ASET (vec, 0, make_number (xoff));
-	  ASET (vec, 1, make_number (yoff));
-	  ASET (vec, 2, make_number (wadjust));
-	  LGLYPH_SET_ADJUSTMENT (lglyph, vec);
-	}
+      ctline = CTLineCreateWithAttributedString (attr_string);
+      CFRelease (attr_string);
     }
-
-  UNBLOCK_INPUT;
-
-  return make_number (used);
-}
-
-/* Structures for the UVS subtable (format 14) in the cmap table.  */
-typedef UInt8 UINT24[3];
-
-#pragma pack(push, 1)
-struct variation_selector_record
-{
-  UINT24 var_selector;
-  UInt32 default_uvs_offset, non_default_uvs_offset;
-};
-struct uvs_table
-{
-  UInt16 format;
-  UInt32 length, num_var_selector_records;
-  struct variation_selector_record variation_selector_records[1];
-};
-#define SIZEOF_UVS_TABLE_HEADER \
-  (sizeof (struct uvs_table) - sizeof (struct variation_selector_record))
-
-struct unicode_value_range
-{
-  UINT24 start_unicode_value;
-  UInt8 additional_count;
-};
-struct default_uvs_table {
-  UInt32 num_unicode_value_ranges;
-  struct unicode_value_range unicode_value_ranges[1];
-};
-#define SIZEOF_DEFAULT_UVS_TABLE_HEADER \
-  (sizeof (struct default_uvs_table) - sizeof (struct unicode_value_range))
-
-struct uvs_mapping
-{
-  UINT24 unicode_value;
-  UInt16 glyph_id;
-};
-struct non_default_uvs_table
-{
-  UInt32 num_uvs_mappings;
-  struct uvs_mapping uvs_mappings[1];
-};
-#define SIZEOF_NON_DEFAULT_UVS_TABLE_HEADER \
-  (sizeof (struct non_default_uvs_table) - sizeof (struct uvs_mapping))
-#pragma pack(pop)
-
-/* Read big endian values.  The argument LVAL must be an lvalue.  */
-/* I suppose OSReadBigInt* takes care of unaligned data.  At least, we
-   can find "... = OSReadBigInt32(cdb, 2);" followed by "... =
-   OSReadBigInt16(cdb, 7);" in a sample code by Apple.  */
-#define BUINT8_VALUE(lval)	(*((UInt8 *) &(lval)))
-#define BUINT16_VALUE(lval)	OSReadBigInt16 (&(lval), 0)
-/* Succeeding one byte should also be accessible.  */
-#define BUINT24_VALUE(lval)	(OSReadBigInt32 (&(lval), 0) >> 8)
-#define BUINT32_VALUE(lval)	OSReadBigInt32 (&(lval), 0)
-
-/* Return UVS subtable for the specified FONT.  If the subtable is not
-   found or ill-formated, then return NULL.  */
-
-static CFDataRef
-mac_font_copy_uvs_table (font)
-     FontRef font;
-{
-  CFDataRef cmap_table, uvs_table = NULL;
-
-  cmap_table = mac_font_copy_table (font, cmapFontTableTag);
-  if (cmap_table)
+  if (ctline)
     {
-      sfntCMapHeader *cmap = (sfntCMapHeader *) CFDataGetBytePtr (cmap_table);
-      struct uvs_table *uvs;
-      struct variation_selector_record *records;
-      UInt32 cmap_len, ntables, i, uvs_offset, uvs_len, nrecords;
+      CFArrayRef runs = CTLineGetGlyphRuns (ctline);
 
-#if __LP64__
-      if (CFDataGetLength (cmap_table) > UINT32_MAX)
-	goto finish;
-#endif
-
-      cmap_len = CFDataGetLength (cmap_table);
-      if (sizeof_sfntCMapHeader > cmap_len)
-	goto finish;
-
-      ntables = BUINT16_VALUE (cmap->numTables);
-      if (ntables > ((cmap_len - sizeof_sfntCMapHeader)
-		     / sizeof_sfntCMapEncoding))
-	goto finish;
-
-      for (i = 0; i < ntables; i++)
-	if ((BUINT16_VALUE (cmap->encoding[i].platformID)
-	     == kFontUnicodePlatform)
-	    && (BUINT16_VALUE (cmap->encoding[i].scriptID)
-		== 5)) /* kFontUnicodeV4_0VariationSequenceSemantics */
-	  {
-	    uvs_offset = BUINT32_VALUE (cmap->encoding[i].offset);
-	    break;
-	  }
-      if (i == ntables
-	  || uvs_offset > cmap_len
-	  || SIZEOF_UVS_TABLE_HEADER > cmap_len - uvs_offset)
-	goto finish;
-
-      uvs = (struct uvs_table *) ((UInt8 *) cmap + uvs_offset);
-      uvs_len = BUINT32_VALUE (uvs->length);
-      if (uvs_len > cmap_len - uvs_offset
-	  || SIZEOF_UVS_TABLE_HEADER > uvs_len)
-	goto finish;
-
-      if (BUINT16_VALUE (uvs->format) != 14)
-	goto finish;
-
-      nrecords = BUINT32_VALUE (uvs->num_var_selector_records);
-      if (nrecords > ((uvs_len - SIZEOF_UVS_TABLE_HEADER)
-		      / sizeof (struct variation_selector_record)))
-	goto finish;
-
-      records = uvs->variation_selector_records;
-      for (i = 0; i < nrecords; i++)
+      if (CFArrayGetCount (runs) > 0)
 	{
-	  UInt32 default_uvs_offset, non_default_uvs_offset;
+	  CTRunRef run = CFArrayGetValueAtIndex (runs, 0);
+	  CFDictionaryRef attributes = CTRunGetAttributes (run);
 
-	  default_uvs_offset = BUINT32_VALUE (records[i].default_uvs_offset);
-	  if (default_uvs_offset)
+	  if (attributes)
 	    {
-	      struct default_uvs_table *default_uvs;
-	      UInt32 nranges;
+	      CTFontRef font_in_run =
+		CFDictionaryGetValue (attributes, kCTFontAttributeName);
 
-	      if (default_uvs_offset > uvs_len
-		  || (SIZEOF_DEFAULT_UVS_TABLE_HEADER
-		      > uvs_len - default_uvs_offset))
-		goto finish;
-
-	      default_uvs = ((struct default_uvs_table *)
-			     ((UInt8 *) uvs + default_uvs_offset));
-	      nranges = BUINT32_VALUE (default_uvs->num_unicode_value_ranges);
-	      if (nranges > ((uvs_len - default_uvs_offset
-			      - SIZEOF_DEFAULT_UVS_TABLE_HEADER)
-			     / sizeof (struct unicode_value_range)))
-		goto finish;
-	      /* Now 2 * nranges can't overflow, so we can safely use
-		 `(lo + hi) / 2' instead of `lo + (hi - lo) / 2' in
-		 mac_font_get_uvs_glyph.  */
-	    }
-
-	  non_default_uvs_offset =
-	    BUINT32_VALUE (records[i].non_default_uvs_offset);
-	  if (non_default_uvs_offset)
-	    {
-	      struct non_default_uvs_table *non_default_uvs;
-	      UInt32 nmappings;
-
-	      if (non_default_uvs_offset > uvs_len
-		  || (SIZEOF_NON_DEFAULT_UVS_TABLE_HEADER
-		      > uvs_len - non_default_uvs_offset))
-		goto finish;
-
-	      non_default_uvs = ((struct non_default_uvs_table *)
-				 ((UInt8 *) uvs + non_default_uvs_offset));
-	      nmappings = BUINT32_VALUE (non_default_uvs->num_uvs_mappings);
-	      if (nmappings > ((uvs_len - non_default_uvs_offset
-				- SIZEOF_NON_DEFAULT_UVS_TABLE_HEADER)
-			       / sizeof (struct uvs_mapping)))
-		goto finish;
-	      /* Now 2 * nmappings can't overflow, so we can safely
-		 use `(lo + hi) / 2' instead of `lo + (hi - lo) / 2'
-		 in mac_font_get_uvs_glyph.  */
-	    }
-	}
-
-      uvs_table = CFDataCreate (NULL, (UInt8 *) uvs, uvs_len);
-
-    finish:
-      CFRelease (cmap_table);
-    }
-
-  return uvs_table;
-}
-
-static void mac_font_get_glyphs_for_variants P_ ((CFDataRef, UTF32Char,
-						  const UTF32Char [],
-						  CGGlyph [], CFIndex));
-
-/* Find an entry in the given UVS subtable UVS_TABLE for a variation
-   sequence consisting of the given base character C and each
-   variation selector SELECTORS[i] for 0 <= i < COUNT, and store the
-   result (explained below) into the corresponding GLYPHS[i].  If the
-   entry is found in the Default UVS Table, then the result is 0.  If
-   the entry is found in the Non-Default UVS Table, then the result is
-   the associated glyph ID.  Otherwise, kCGFontIndexInvalid.  The
-   elements in SELECTORS must be sorted in strictly increasing
-   order.  */
-
-static void
-mac_font_get_glyphs_for_variants (uvs_table, c, selectors, glyphs, count)
-     CFDataRef uvs_table;
-     UTF32Char c;
-     const UTF32Char selectors[];
-     CGGlyph glyphs[];
-     CFIndex count;
-{
-  struct uvs_table *uvs = (struct uvs_table *) CFDataGetBytePtr (uvs_table);
-  struct variation_selector_record *records = uvs->variation_selector_records;
-  CFIndex i;
-  UInt32 ir, nrecords;
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-  dispatch_queue_t queue =
-    dispatch_get_global_queue (DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-  dispatch_group_t group = dispatch_group_create ();
-#endif
-
-  nrecords = BUINT32_VALUE (uvs->num_var_selector_records);
-  i = 0;
-  ir = 0;
-  while (i < count && ir < nrecords)
-    {
-      UInt32 default_uvs_offset, non_default_uvs_offset;
-
-      if (selectors[i] < BUINT24_VALUE (records[ir].var_selector))
-	{
-	  glyphs[i++] = kCGFontIndexInvalid;
-	  continue;
-	}
-      else if (selectors[i] > BUINT24_VALUE (records[ir].var_selector))
-	{
-	  ir++;
-	  continue;
-	}
-
-      /* selectors[i] == BUINT24_VALUE (records[ir].var_selector) */
-      default_uvs_offset = BUINT32_VALUE (records[ir].default_uvs_offset);
-      non_default_uvs_offset =
-	BUINT32_VALUE (records[ir].non_default_uvs_offset);
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-      dispatch_group_async (group, queue, ^{
-#endif
-	  glyphs[i] = kCGFontIndexInvalid;
-
-	  if (default_uvs_offset)
-	    {
-	      struct default_uvs_table *default_uvs =
-		(struct default_uvs_table *) ((UInt8 *) uvs
-					      + default_uvs_offset);
-	      struct unicode_value_range *ranges =
-		default_uvs->unicode_value_ranges;
-	      UInt32 lo, hi;
-
-	      lo = 0;
-	      hi = BUINT32_VALUE (default_uvs->num_unicode_value_ranges);
-	      while (lo < hi)
+	      if (font_in_run
+		  && mac_ctfont_equal_in_postscript_name (font_in_run, font))
 		{
-		  UInt32 mid = (lo + hi) / 2;
-
-		  if (c < BUINT24_VALUE (ranges[mid].start_unicode_value))
-		    hi = mid;
-		  else
-		    lo = mid + 1;
+		  CTRunGetGlyphs (run, CFRangeMake (0, 1), &result);
+		  if (result >= CTFontGetGlyphCount (font))
+		    result = kCGFontIndexInvalid;
 		}
-	      if (hi > 0
-		  && (c <= (BUINT24_VALUE (ranges[hi - 1].start_unicode_value)
-			    + BUINT8_VALUE (ranges[hi - 1].additional_count))))
-		glyphs[i] = 0;
 	    }
-
-	  if (glyphs[i] == kCGFontIndexInvalid && non_default_uvs_offset)
-	    {
-	      struct non_default_uvs_table *non_default_uvs =
-		(struct non_default_uvs_table *) ((UInt8 *) uvs
-						  + non_default_uvs_offset);
-	      struct uvs_mapping *mappings = non_default_uvs->uvs_mappings;
-	      UInt32 lo, hi;
-
-	      lo = 0;
-	      hi = BUINT32_VALUE (non_default_uvs->num_uvs_mappings);
-	      while (lo < hi)
-		{
-		  UInt32 mid = (lo + hi) / 2;
-
-		  if (c < BUINT24_VALUE (mappings[mid].unicode_value))
-		    hi = mid;
-		  else
-		    lo = mid + 1;
-		}
-	      if (hi > 0 &&
-		  BUINT24_VALUE (mappings[hi - 1].unicode_value) == c)
-		glyphs[i] = BUINT16_VALUE (mappings[hi - 1].glyph_id);
-	    }
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-	});
-#endif
-      i++;
-      ir++;
+	}
+      CFRelease (ctline);
     }
-  while (i < count)
-    glyphs[i++] = kCGFontIndexInvalid;
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-  dispatch_group_wait (group, DISPATCH_TIME_FOREVER);
-  dispatch_release (group);
-#endif
+
+  return result;
 }
-
-static int
-macfont_variation_glyphs (font, c, variations)
-     struct font *font;
-     int c;
-     unsigned variations[256];
-{
-  struct macfont_info *macfont_info = (struct macfont_info *) font;
-  FontRef macfont = macfont_info->macfont;
-  struct macfont_cache *cache = macfont_info->cache;
-  int i, n = 0;
-  CFDataRef uvs_table;
-
-  BLOCK_INPUT;
-  if (cache->uvs_table == NULL)
-    {
-      uvs_table = mac_font_copy_uvs_table (macfont);
-      if (uvs_table == NULL)
-	cache->uvs_table = kCFNull;
-      else
-	cache->uvs_table = uvs_table;
-    }
-  else if (cache->uvs_table == kCFNull)
-    uvs_table = NULL;
-  else
-    uvs_table = cache->uvs_table;
-
-  if (uvs_table)
-    {
-      UTF32Char selectors[256];
-      CGGlyph glyphs[256];
-
-      for (i = 0; i < 16; i++)
-	selectors[i] = 0xFE00 + i;
-      for (; i < 256; i++)
-	selectors[i] = 0xE0100 + (i - 16);
-      mac_font_get_glyphs_for_variants (uvs_table, c, selectors, glyphs, 256);
-      for (i = 0; i < 256; i++)
-	if (glyphs[i] == kCGFontIndexInvalid)
-	  variations[i] = 0;
-	else
-	  {
-	    variations[i] = (glyphs[i] ? glyphs[i]
-			     : macfont_get_glyph_for_character (font, c));
-	    n++;
-	  }
-    }
-  UNBLOCK_INPUT;
-
-  return n;
-}
+#endif
+#endif	/* USE_CORE_TEXT */
 
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
 static INLINE int

@@ -79,6 +79,7 @@ struct mac_glyph_layout
 typedef CTFontDescriptorRef FontDescriptorRef;
 typedef CTFontRef FontRef;
 typedef CTFontSymbolicTraits FontSymbolicTraits;
+typedef CTCharacterCollection CharacterCollection;
 
 #define MAC_FONT_NAME_ATTRIBUTE kCTFontNameAttribute
 #define MAC_FONT_FAMILY_NAME_ATTRIBUTE kCTFontFamilyNameAttribute
@@ -111,6 +112,15 @@ enum {
 #endif
 };
 
+enum {
+  MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION = kCTIdentityMappingCharacterCollection,
+  MAC_ADOBE_CNS1_CHARACTER_COLLECTION = kCTAdobeCNS1CharacterCollection,
+  MAC_ADOBE_GB1_CHARACTER_COLLECTION = kCTAdobeGB1CharacterCollection,
+  MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION = kCTAdobeJapan1CharacterCollection,
+  MAC_ADOBE_JAPAN2_CHARACTER_COLLECTION = kCTAdobeJapan2CharacterCollection,
+  MAC_ADOBE_KOREA1_CHARACTER_COLLECTION = kCTAdobeKorea1CharacterCollection
+};
+
 #define mac_font_descriptor_create_with_attributes \
   CTFontDescriptorCreateWithAttributes
 #define mac_font_descriptor_create_matching_font_descriptors \
@@ -132,7 +142,7 @@ enum {
 #define mac_font_get_underline_position CTFontGetUnderlinePosition
 #define mac_font_get_underline_thickness CTFontGetUnderlineThickness
 #define mac_font_copy_graphics_font(font) CTFontCopyGraphicsFont (font, NULL)
-#define mac_font_copy_table(font, table) \
+#define mac_font_copy_non_synthetic_table(font, table) \
   CTFontCopyTable (font, table, kCTFontTableOptionExcludeSynthetic)
 
 #define mac_font_create_preferred_family_for_attributes \
@@ -143,6 +153,12 @@ enum {
   mac_ctfont_get_bounding_rect_for_glyph
 #define mac_font_create_available_families mac_ctfont_create_available_families
 #define mac_font_shape mac_ctfont_shape
+#if USE_CT_GLYPH_INFO
+#define mac_font_get_glyph_for_cid mac_ctfont_get_glyph_for_cid
+#else
+extern CGGlyph mac_font_get_glyph_for_cid P_ ((FontRef, CharacterCollection,
+					       CGFontIndex));
+#endif
 
 #define mac_nsctfont_copy_font_descriptor CTFontCopyFontDescriptor
 
@@ -151,6 +167,7 @@ enum {
 typedef const struct _EmacsFont *FontRef;		      /* opaque */
 typedef const struct _EmacsFontDescriptor *FontDescriptorRef; /* opaque */
 typedef uint32_t FontSymbolicTraits;
+typedef uint16_t CharacterCollection;
 
 extern const CFStringRef MAC_FONT_NAME_ATTRIBUTE;
 extern const CFStringRef MAC_FONT_FAMILY_NAME_ATTRIBUTE;
@@ -177,6 +194,15 @@ enum {
   MAC_FONT_FORMAT_BITMAP = 5
 };
 
+enum {
+  MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION = 0,
+  MAC_ADOBE_CNS1_CHARACTER_COLLECTION = 1,
+  MAC_ADOBE_GB1_CHARACTER_COLLECTION = 2,
+  MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION = 3,
+  MAC_ADOBE_JAPAN2_CHARACTER_COLLECTION = 4,
+  MAC_ADOBE_KOREA1_CHARACTER_COLLECTION = 5
+};
+
 extern FontDescriptorRef mac_font_descriptor_create_with_attributes P_ ((CFDictionaryRef));
 extern CFArrayRef mac_font_descriptor_create_matching_font_descriptors P_ ((FontDescriptorRef,
 									    CFSetRef));
@@ -199,7 +225,7 @@ extern CGFloat mac_font_get_leading P_ ((FontRef));
 extern CGFloat mac_font_get_underline_position P_ ((FontRef));
 extern CGFloat mac_font_get_underline_thickness P_ ((FontRef));
 extern CGFontRef mac_font_copy_graphics_font P_ ((FontRef));
-extern CFDataRef mac_font_copy_table P_ ((FontRef, FourCharCode));
+extern CFDataRef mac_font_copy_non_synthetic_table P_ ((FontRef, FourCharCode));
 extern ATSUTextLayout mac_font_get_text_layout_for_text_ptr P_ ((FontRef,
 								 ConstUniCharArrayPtr,
 								 UniCharCount));
@@ -210,7 +236,10 @@ extern CGRect mac_font_get_bounding_rect_for_glyph P_ ((FontRef, CGGlyph));
 extern CFArrayRef mac_font_create_available_families P_ ((void));
 extern CFIndex mac_font_shape P_ ((FontRef, CFStringRef,
 				   struct mac_glyph_layout *, CFIndex));
+extern CGGlyph mac_font_get_glyph_for_cid P_ ((FontRef, CharacterCollection,
+					       CGFontIndex));
 
+extern void *mac_font_get_nsctfont P_ ((FontRef));
 extern FontDescriptorRef mac_nsctfont_copy_font_descriptor P_ ((void *));
 
 #endif	/* MAC_OS_X_VERSION_MIN_REQUIRED < 1050 */
@@ -227,4 +256,9 @@ extern Boolean mac_ctfont_descriptor_supports_languages P_ ((CTFontDescriptorRef
 extern CFStringRef mac_ctfont_create_preferred_family_for_attributes P_ ((CFDictionaryRef));
 extern CFIndex mac_ctfont_shape P_ ((CTFontRef, CFStringRef,
 				     struct mac_glyph_layout *, CFIndex));
+#if USE_CT_GLYPH_INFO
+extern CGGlyph mac_ctfont_get_glyph_for_cid P_ ((CTFontRef,
+						 CTCharacterCollection,
+						 CGFontIndex));
+#endif
 #endif

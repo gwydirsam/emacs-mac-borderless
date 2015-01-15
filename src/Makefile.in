@@ -1274,7 +1274,7 @@ buffer.o callint.o cmds.o dispnew.o editfns.o fileio.o frame.o \
 mac.o: mac.c process.h sysselect.h blockinput.h atimer.h systime.h charset.h \
   coding.h ccl.h $(config_h)
 macfont.o: dispextern.h macterm.h macgui.h frame.h blockinput.h character.h \
-  charset.h composite.h fontset.h font.h macfont.h $(config_h)
+  charset.h composite.h fontset.h font.h macfont.h macuvs.h $(config_h)
 macfns.o: macfns.c charset.h macterm.h macgui.h frame.h window.h buffer.h \
   dispextern.h macgui.h fontset.h $(INTERVAL_SRC) keyboard.h blockinput.h \
   atimer.h systime.h epaths.h termhooks.h coding.h $(config_h)

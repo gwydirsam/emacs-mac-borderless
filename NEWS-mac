@@ -1,3 +1,33 @@
+* emacs-23.1-mac-1.94 [experimental/hackers-only] (2009-11-01)
+
+** Fixed bugs
+
+*** Kill/yank in tty frames causes an error.
+
+** Improvements
+
+*** When delete-selection-mode is enabled, then the active region is
+hidden while the marked text is being shown (so "Reverse conversion"
+in Kotoeri looks better).
+
+*** The current cursor position may be returned for a character
+position query for text input even if the marked text is not displayed
+or handled at the Lisp level yet (so auxiliary windows in AquaSKK 4
+are placed better.)
+
+*** SVG images are supported via WebKit on Mac OS X 10.4 and later.
+If you have librsvg installed and you want to use WebKit for rendering
+SVG images, then you need to specify --without-rsvg as a configure
+option.
+
+*** The Mac font backend driver now supports `get_variation_glyphs'
+also on Mac OS X 10.4 and earlier.
+
+*** Ideographic Variation Sequences (IVSes) also work for Hiragino
+fonts, which don't have a format 14 (Unicode Variation Sequences)
+subtable in their cmap table.
+
+
 * emacs-23.1-mac-1.93 [experimental/hackers-only] (2009-09-27)
 
 ** Fixed bugs

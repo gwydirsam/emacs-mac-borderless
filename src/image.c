@@ -8756,7 +8756,7 @@ gif_load (struct frame *f, struct image *img)
 				 SVG
  ***********************************************************************/
 
-#if defined (HAVE_RSVG)
+#if defined (HAVE_RSVG) || USE_MAC_IMAGE_IO
 
 /* Function prototypes.  */
 
@@ -8842,6 +8842,7 @@ svg_image_p (object)
   return fmt[SVG_FILE].count + fmt[SVG_DATA].count == 1;
 }
 
+#if defined (HAVE_RSVG)
 #include <librsvg/rsvg.h>
 
 #ifdef HAVE_NTGUI
@@ -9146,8 +9147,88 @@ svg_load_image (f, img, contents, size)
   fn_g_error_free (error);
   return 0;
 }
+#else  /* USE_MAC_IMAGE_IO */
+static int
+svg_load (f, img)
+     struct frame *f;
+     struct image *img;
+{
+  extern int mac_svg_load_image P_ ((struct frame *, struct image *,
+				     unsigned char *, unsigned int, XColor *,
+				     int (*) P_ ((struct frame *, int, int)),
+				     void (*) P_ ((char *, Lisp_Object,
+						   Lisp_Object))));
+  Lisp_Object specified_bg;
+  XColor background;
+  int success_p = 0;
+  Lisp_Object file_name;
 
-#endif	/* defined (HAVE_RSVG) */
+  specified_bg = image_spec_value (img->spec, QCbackground, NULL);
+  if (!STRINGP (specified_bg)
+      || !mac_defined_color (f, SDATA (specified_bg), &background, 0))
+    {
+      background.pixel = FRAME_BACKGROUND_PIXEL (f);
+      background.red = RED16_FROM_ULONG (background.pixel);
+      background.green = GREEN16_FROM_ULONG (background.pixel);
+      background.blue = BLUE16_FROM_ULONG (background.pixel);
+    }
+
+  /* If IMG->spec specifies a file name, create a non-file spec from it.  */
+  file_name = image_spec_value (img->spec, QCfile, NULL);
+  if (STRINGP (file_name))
+    {
+      Lisp_Object file;
+      unsigned char *contents;
+      int size;
+      struct gcpro gcpro1;
+
+      file = x_find_image_file (file_name);
+      GCPRO1 (file);
+      if (!STRINGP (file))
+	{
+	  image_error ("Cannot find image file `%s'", file_name, Qnil);
+	  UNGCPRO;
+	  return 0;
+	}
+
+      /* Read the entire file into memory.  */
+      contents = slurp_file (SDATA (file), &size);
+      if (contents == NULL)
+	{
+	  image_error ("Error loading SVG image `%s'", img->spec, Qnil);
+	  UNGCPRO;
+	  return 0;
+	}
+      /* If the file was slurped into memory properly, parse it.  */
+      success_p = mac_svg_load_image (f, img, contents, size, &background,
+				      check_image_size, image_error);
+      xfree (contents);
+      UNGCPRO;
+    }
+  /* Else its not a file, its a lisp object.  Load the image from a
+     lisp object rather than a file.  */
+  else
+    {
+      Lisp_Object data;
+
+      data = image_spec_value (img->spec, QCdata, NULL);
+      success_p = mac_svg_load_image (f, img, SDATA (data), SBYTES (data),
+				      &background,
+				      check_image_size, image_error);
+    }
+
+  if (success_p)
+    {
+      /* Maybe fill in the background field while we have ximg handy. */
+      if (NILP (image_spec_value (img->spec, QCbackground, NULL)))
+	IMAGE_BACKGROUND (img, f, img->pixmap);
+    }
+
+  return success_p;
+}
+#endif /* USE_MAC_IMAGE_IO */
+
+#endif	/* defined (HAVE_RSVG) || USE_MAC_IMAGE_IO */
 
 
 
@@ -9543,8 +9624,12 @@ of `image-library-alist', which see).  */)
     return CHECK_LIB_AVAILABLE (&png_type, init_png_functions, libraries);
 #endif
 
-#if defined (HAVE_RSVG)
-  if (EQ (type, Qsvg))
+#if defined (HAVE_RSVG) || USE_MAC_IMAGE_IO
+  if (EQ (type, Qsvg)
+#if !defined (HAVE_RSVG)
+      && mac_webkit_supports_svg_p ()
+#endif
+      )
     return CHECK_LIB_AVAILABLE (&svg_type, init_svg_functions, libraries);
 #endif
 
@@ -9693,7 +9778,7 @@ non-numeric, there is no explicit limit on the size of images.  */);
   ADD_IMAGE_TYPE (Qpng);
 #endif
 
-#if defined (HAVE_RSVG)
+#if defined (HAVE_RSVG) || USE_MAC_IMAGE_IO
   Qsvg = intern ("svg");
   staticpro (&Qsvg);
   ADD_IMAGE_TYPE (Qsvg);
@@ -9706,7 +9791,7 @@ non-numeric, there is no explicit limit on the size of images.  */);
   Qgobject = intern ("gobject");
   staticpro (&Qgobject);
 #endif /* HAVE_NTGUI  */
-#endif /* HAVE_RSVG  */
+#endif /* HAVE_RSVG || USE_MAC_IMAGE_IO */
 
   defsubr (&Sinit_image_library);
   defsubr (&Sclear_image_cache);

@@ -496,12 +496,14 @@ On Windows, make TEXT the current selection.  If
 clipboard as well.  The argument PUSH is ignored.
 
 On Nextstep, put TEXT in the pasteboard; PUSH is ignored."
-  (when x-select-enable-primary
-    (x-set-selection 'PRIMARY text)
-    (setq x-last-selected-text-primary text))
-  (when x-select-enable-clipboard
-    (x-set-selection 'CLIPBOARD text)
-    (setq x-last-selected-text-clipboard text)))
+  ;; With multi-tty, this function may be called from a tty frame.
+  (when (eq (framep (selected-frame)) 'mac)
+    (when x-select-enable-primary
+      (x-set-selection 'PRIMARY text)
+      (setq x-last-selected-text-primary text))
+    (when x-select-enable-clipboard
+      (x-set-selection 'CLIPBOARD text)
+      (setq x-last-selected-text-clipboard text))))
 
 (declare-function x-get-selection-internal "macselect.c"
 		  (selection-symbol target-type &optional time-stamp))
@@ -555,54 +557,56 @@ in `selection-converter-alist', which see."
 ;; it returns nil the second time.  This is so that a single
 ;; selection won't be added to the kill ring over and over.
 (defun x-get-selection-value ()
-  (let (clip-text primary-text)
-    (when x-select-enable-clipboard
-      (setq clip-text (x-selection-value 'CLIPBOARD))
-      (if (string= clip-text "") (setq clip-text nil))
+  ;; With multi-tty, this function may be called from a tty frame.
+  (when (eq (framep (selected-frame)) 'mac)
+    (let (clip-text primary-text)
+      (when x-select-enable-clipboard
+	(setq clip-text (x-selection-value 'CLIPBOARD))
+	(if (string= clip-text "") (setq clip-text nil))
 
-      ;; Check the CLIPBOARD selection for 'newness', is it different
-      ;; from what we remebered them to be last time we did a
-      ;; cut/paste operation.
-      (setq clip-text
-	    (cond ;; check clipboard
-	     ((or (not clip-text) (string= clip-text ""))
-	      (setq x-last-selected-text-clipboard nil))
-	     ((eq      clip-text x-last-selected-text-clipboard) nil)
-	     ((string= clip-text x-last-selected-text-clipboard)
-	      ;; Record the newer string,
-	      ;; so subsequent calls can use the `eq' test.
-	      (setq x-last-selected-text-clipboard clip-text)
-	      nil)
-	     (t
-	      (setq x-last-selected-text-clipboard clip-text)))))
+	;; Check the CLIPBOARD selection for 'newness', is it different
+	;; from what we remebered them to be last time we did a
+	;; cut/paste operation.
+	(setq clip-text
+	      (cond ;; check clipboard
+	       ((or (not clip-text) (string= clip-text ""))
+		(setq x-last-selected-text-clipboard nil))
+	       ((eq      clip-text x-last-selected-text-clipboard) nil)
+	       ((string= clip-text x-last-selected-text-clipboard)
+		;; Record the newer string,
+		;; so subsequent calls can use the `eq' test.
+		(setq x-last-selected-text-clipboard clip-text)
+		nil)
+	       (t
+		(setq x-last-selected-text-clipboard clip-text)))))
 
-    (when x-select-enable-primary
-      (setq primary-text (x-selection-value 'PRIMARY))
-      ;; Check the PRIMARY selection for 'newness', is it different
-      ;; from what we remebered them to be last time we did a
-      ;; cut/paste operation.
-      (setq primary-text
-	    (cond ;; check primary selection
-	     ((or (not primary-text) (string= primary-text ""))
-	      (setq x-last-selected-text-primary nil))
-	     ((eq      primary-text x-last-selected-text-primary) nil)
-	     ((string= primary-text x-last-selected-text-primary)
-	      ;; Record the newer string,
-	      ;; so subsequent calls can use the `eq' test.
-	      (setq x-last-selected-text-primary primary-text)
-	      nil)
-	     (t
-	      (setq x-last-selected-text-primary primary-text)))))
+      (when x-select-enable-primary
+	(setq primary-text (x-selection-value 'PRIMARY))
+	;; Check the PRIMARY selection for 'newness', is it different
+	;; from what we remebered them to be last time we did a
+	;; cut/paste operation.
+	(setq primary-text
+	      (cond ;; check primary selection
+	       ((or (not primary-text) (string= primary-text ""))
+		(setq x-last-selected-text-primary nil))
+	       ((eq      primary-text x-last-selected-text-primary) nil)
+	       ((string= primary-text x-last-selected-text-primary)
+		;; Record the newer string,
+		;; so subsequent calls can use the `eq' test.
+		(setq x-last-selected-text-primary primary-text)
+		nil)
+	       (t
+		(setq x-last-selected-text-primary primary-text)))))
 
-    ;; As we have done one selection, clear this now.
-    (setq next-selection-coding-system nil)
+      ;; As we have done one selection, clear this now.
+      (setq next-selection-coding-system nil)
 
-    ;; At this point we have recorded the current values for the
-    ;; selection from clipboard (if we are supposed to) and primary,
-    ;; So return the first one that has changed (which is the first
-    ;; non-null one).
-    (or clip-text primary-text)
-    ))
+      ;; At this point we have recorded the current values for the
+      ;; selection from clipboard (if we are supposed to) and primary,
+      ;; So return the first one that has changed (which is the first
+      ;; non-null one).
+      (or clip-text primary-text)
+      )))
 
 ;; Arrange for the kill and yank functions to set and check the clipboard.
 (setq interprogram-cut-function 'x-select-text)
@@ -940,7 +944,8 @@ With numeric ARG, display the font panel if and only if ARG is positive."
   'showhide-speedbar)
 
 ;;; Text Services
-(setq mac-ts-active-input-overlay (make-overlay 0 0))
+(setq mac-ts-active-input-overlay (make-overlay 1 1))
+(overlay-put mac-ts-active-input-overlay 'display "")
 
 (defface mac-ts-caret-position
   '((t :inverse-video t))
@@ -1065,9 +1070,15 @@ the echo area or in a buffer where the cursor is not displayed."
 				      (concat msg active-input-string)))
 	      (setq msg active-input-string))
 	    (message "%s" msg)
+	    (move-overlay mac-ts-active-input-overlay 1 1)
 	    (overlay-put mac-ts-active-input-overlay 'before-string nil))
 	(move-overlay mac-ts-active-input-overlay
-		      (point) (point) (current-buffer))
+		      (point)
+		      (if (and delete-selection-mode transient-mark-mode
+			       mark-active (not buffer-read-only))
+			  (mark)
+			(point))
+		      (current-buffer))
 	(overlay-put mac-ts-active-input-overlay 'before-string
 		     active-input-string)))))
 
@@ -1080,6 +1091,7 @@ the echo area or in a buffer where the cursor is not displayed."
 		      (or (cdr (assq (car script-language)
 				     mac-script-code-coding-systems))
 			  'mac-roman))))
+    (move-overlay mac-ts-active-input-overlay 1 1)
     (overlay-put mac-ts-active-input-overlay 'before-string nil)
     (let ((msg (current-message))
 	  message-log-max)
@@ -1344,6 +1356,7 @@ symbol `command-line' and forwards the remaining ones to
   (create-default-fontset)
 
   (set-fontset-font t nil (font-spec :family "Apple Symbols") nil 'prepend)
+  (set-fontset-font t nil (font-spec :family "LastResort") nil 'append)
 
   ;; Create fontset specified in X resources "Fontset-N" (N is 0, 1, ...).
   (create-fontset-from-x-resource)

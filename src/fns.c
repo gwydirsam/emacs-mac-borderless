@@ -49,8 +49,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifdef HAVE_MENUS
 #if defined (HAVE_X_WINDOWS)
 #include "xterm.h"
-#elif defined (HAVE_MACGUI)
-#include "macterm.h"
 #endif
 #endif
 

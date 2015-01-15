@@ -184,7 +184,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* If the Image I/O framework is not used, fall back on QuickTime.  */
 #if USE_MAC_IMAGE_IO
-#define LIBS_IMAGE
+#define LIBS_IMAGE -framework WebKit
 #else
 #define LIBS_IMAGE -framework QuickTime
 #endif

@@ -18,6 +18,9 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #undef Z
 #import <Cocoa/Cocoa.h>
+#if USE_MAC_IMAGE_IO
+#import <WebKit/WebKit.h>
+#endif
 #define Z (current_buffer->text->z)
 
 #ifndef NSAppKitVersionNumber10_3
@@ -33,6 +36,13 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifndef NSINTEGER_DEFINED
 typedef int NSInteger;
 typedef unsigned int NSUInteger;
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+@protocol NSApplicationDelegate <NSObject> @end
+@protocol NSWindowDelegate <NSObject> @end
+@protocol NSToolbarDelegate <NSObject> @end
+@protocol NSMenuDelegate <NSObject> @end
 #endif
 
 @interface NSData (Emacs)
@@ -85,7 +95,7 @@ typedef unsigned int NSUInteger;
    of several actions such as those from EmacsView, menus, dialogs,
    and actions/services bound in the mac-apple-event keymap.  */
 
-@interface EmacsController : NSObject
+@interface EmacsController : NSObject <NSApplicationDelegate>
 {
   /* Points to HOLD_QUIT arg passed to read_socket_hook.  */
   struct input_event *hold_quit;
@@ -161,7 +171,7 @@ typedef unsigned int NSUInteger;
    category declared later).  It also becomes that target of
    frame-dependent actions such as those from font panels.  */
 
-@interface EmacsFrameController : NSObject
+@interface EmacsFrameController : NSObject <NSWindowDelegate>
 {
   /* The Emacs frame corresponding to the NSWindow that
      EmacsFrameController object is associated with as delegate.  */
@@ -296,7 +306,7 @@ typedef unsigned int NSUInteger;
 - (void)setCoreGraphicsImage:(CGImageRef)cgImage;
 @end
 
-@interface EmacsFrameController (Toolbar)
+@interface EmacsFrameController (Toolbar) <NSToolbarDelegate>
 - (NSToolbarItem *)toolbar:(NSToolbar *)toolbar
      itemForItemIdentifier:(NSString *)itemIdentifier
  willBeInsertedIntoToolbar:(BOOL)flag;
@@ -336,7 +346,7 @@ typedef unsigned int NSUInteger;
 @interface EmacsOpenPanel : NSOpenPanel
 @end
 
-@interface EmacsFontDialogController : NSObject
+@interface EmacsFontDialogController : NSObject <NSWindowDelegate>
 @end
 
 @interface NSFontPanel (Emacs)
@@ -351,7 +361,7 @@ typedef unsigned int NSUInteger;
 @interface EmacsMenu : NSMenu
 @end
 
-@interface EmacsController (Menu)
+@interface EmacsController (Menu) <NSMenuDelegate>
 - (void)trackMenubar;
 @end
 
@@ -371,6 +381,21 @@ typedef unsigned int NSUInteger;
 @interface EmacsController (AppleScript)
 - (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
 @end
+
+#if USE_MAC_IMAGE_IO
+@interface NSView (Emacs)
+- (XImagePtr)createXImageFromRect:(NSRect)rect backgroundColor:(NSColor *)color;
+@end
+
+/* Class for SVG frame load delegate.  */
+@interface EmacsSVGLoadDelegate : NSObject
+{
+  /* Whether a page load has completed.  */
+  Boolean isLoaded;
+}
+- (Boolean)isLoaded;
+@end
+#endif
 
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
 
@@ -435,6 +460,12 @@ typedef unsigned int NSUInteger;
 
 /* Some methods that are not declared in older versions.  Should be
    used with some runtime check such as `respondsToSelector:'. */
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@interface NSBitmapImageRep (AvailableOn1050AndLater)
+- (id)initWithCGImage:(CGImageRef)cgImage;
+@end
+#endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1040
 @interface NSWindow (AvailableOn1040AndLater)
