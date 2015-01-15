@@ -1,7 +1,7 @@
 /* Unix emulation routines for GNU Emacs on the Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
                  2008  Free Software Foundation, Inc.
-   Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
+   Copyright (C) 2009, 2010, 2011  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -68,6 +68,75 @@ static Lisp_Object Vmac_system_locale;
 static ComponentInstance as_scripting_component;
 /* The single script context used for all script executions.  */
 static OSAID as_script_context;
+
+
+/***********************************************************************
+			  Utility functions
+ ***********************************************************************/
+
+/* Return the length of the cdr chain of the given LIST.  Return -1 if
+   LIST is circular.  */
+
+static EMACS_INT
+cdr_chain_length (list)
+     Lisp_Object list;
+{
+  EMACS_INT result = 0;
+  Lisp_Object tortoise, hare;
+
+  hare = tortoise = list;
+
+  while (CONSP (hare))
+    {
+      hare = XCDR (hare);
+      result++;
+      if (!CONSP (hare))
+	break;
+
+      hare = XCDR (hare);
+      result++;
+      tortoise = XCDR (tortoise);
+
+      if (EQ (hare, tortoise))
+	return -1;
+    }
+
+  return result;
+}
+
+/* Binary search tree to record Lisp objects on the traversal stack,
+   used for checking circularity in the conversion from a Lisp object.
+   We assume deletion of a node happens only if its children are
+   leaves. */
+
+struct bstree_node
+{
+  Lisp_Object obj;
+  struct bstree_node *left, *right;
+};
+
+/* Find OBJ in the binary search tree *BSTREE.  If found, the return
+   value points to the variable whose value points to the node
+   containing OBJ.  Otherwise, the return value points to the variable
+   whose value would point to a new node containing OBJ if we added it
+   to *BSTREE.  In the latter case, the variable pointed to by the
+   return value contains NULL.  */
+
+static struct bstree_node **
+bstree_find (bstree, obj)
+     struct bstree_node **bstree;
+     Lisp_Object obj;
+{
+  while (*bstree)
+    if (XHASH (obj) < XHASH ((*bstree)->obj))
+      bstree = &(*bstree)->left;
+    else if (XHASH (obj) > XHASH ((*bstree)->obj))
+      bstree = &(*bstree)->right;
+    else
+      break;
+
+  return bstree;
+}
 
 
 /***********************************************************************
@@ -260,24 +329,21 @@ mac_aedesc_to_lisp (desc)
   return Fcons (make_unibyte_string ((char *) &desc_type, 4), result);
 }
 
-OSErr
-mac_ae_put_lisp (desc, keyword_or_index, obj)
+static OSErr
+mac_ae_put_lisp_1 (desc, keyword_or_index, obj, ancestors)
      AEDescList *desc;
      UInt32 keyword_or_index;
      Lisp_Object obj;
+     struct bstree_node **ancestors;
 {
   OSErr err;
-
-  if (!(desc->descriptorType == typeAppleEvent
-	|| desc->descriptorType == typeAERecord
-	|| desc->descriptorType == typeAEList))
-    return errAEWrongDataType;
 
   if (CONSP (obj) && STRINGP (XCAR (obj)) && SBYTES (XCAR (obj)) == 4)
     {
       DescType desc_type1 = EndianU32_BtoN (*((UInt32 *) SDATA (XCAR (obj))));
       Lisp_Object data = XCDR (obj), rest;
       AEDesc desc1;
+      struct bstree_node **bstree_ref;
 
       switch (desc_type1)
 	{
@@ -287,42 +353,59 @@ mac_ae_put_lisp (desc, keyword_or_index, obj)
 
 	case typeAEList:
 	case typeAERecord:
-	  err = AECreateList (NULL, 0, desc_type1 == typeAERecord, &desc1);
-	  if (err == noErr)
+	  if (cdr_chain_length (data) < 0)
+	    break;
+	  bstree_ref = bstree_find (ancestors, obj);
+	  if (*bstree_ref)
+	    break;
+	  else
 	    {
-	      for (rest = data; CONSP (rest); rest = XCDR (rest))
-		{
-		  UInt32 keyword_or_index1 = 0;
-		  Lisp_Object elem = XCAR (rest);
+	      struct bstree_node node;
 
-		  if (desc_type1 == typeAERecord)
-		    {
-		      if (CONSP (elem) && STRINGP (XCAR (elem))
-			  && SBYTES (XCAR (elem)) == 4)
-			{
-			  keyword_or_index1 =
-			    EndianU32_BtoN (*((UInt32 *)
-					      SDATA (XCAR (elem))));
-			  elem = XCDR (elem);
-			}
-		      else
-			continue;
-		    }
+	      node.obj = obj;
+	      node.left = node.right = NULL;
+	      *bstree_ref = &node;
 
-		  err = mac_ae_put_lisp (&desc1, keyword_or_index1, elem);
-		  if (err != noErr)
-		    break;
-		}
-
+	      err = AECreateList (NULL, 0, desc_type1 == typeAERecord, &desc1);
 	      if (err == noErr)
 		{
-		  if (desc->descriptorType == typeAEList)
-		    err = AEPutDesc (desc, keyword_or_index, &desc1);
-		  else
-		    err = AEPutParamDesc (desc, keyword_or_index, &desc1);
+		  for (rest = data; CONSP (rest); rest = XCDR (rest))
+		    {
+		      UInt32 keyword_or_index1 = 0;
+		      Lisp_Object elem = XCAR (rest);
+
+		      if (desc_type1 == typeAERecord)
+			{
+			  if (CONSP (elem) && STRINGP (XCAR (elem))
+			      && SBYTES (XCAR (elem)) == 4)
+			    {
+			      keyword_or_index1 =
+				EndianU32_BtoN (*((UInt32 *)
+						  SDATA (XCAR (elem))));
+			      elem = XCDR (elem);
+			    }
+			  else
+			    continue;
+			}
+
+		      err = mac_ae_put_lisp_1 (&desc1, keyword_or_index1, elem,
+					       ancestors);
+		      if (err != noErr)
+			break;
+		    }
+
+		  if (err == noErr)
+		    {
+		      if (desc->descriptorType == typeAEList)
+			err = AEPutDesc (desc, keyword_or_index, &desc1);
+		      else
+			err = AEPutParamDesc (desc, keyword_or_index, &desc1);
+		    }
+
+		  AEDisposeDesc (&desc1);
 		}
 
-	      AEDisposeDesc (&desc1);
+	      *bstree_ref = NULL;
 	    }
 	  return err;
 
@@ -348,6 +431,22 @@ mac_ae_put_lisp (desc, keyword_or_index, obj)
 }
 
 OSErr
+mac_ae_put_lisp (desc, keyword_or_index, obj)
+     AEDescList *desc;
+     UInt32 keyword_or_index;
+     Lisp_Object obj;
+{
+  struct bstree_node *root = NULL;
+
+  if (!(desc->descriptorType == typeAppleEvent
+	|| desc->descriptorType == typeAERecord
+	|| desc->descriptorType == typeAEList))
+    return errAEWrongDataType;
+
+  return mac_ae_put_lisp_1 (desc, keyword_or_index, obj, &root);
+}
+
+OSErr
 create_apple_event_from_lisp (apple_event, result)
      Lisp_Object apple_event;
      AppleEvent *result;
@@ -356,7 +455,8 @@ create_apple_event_from_lisp (apple_event, result)
 
   if (!(CONSP (apple_event) && STRINGP (XCAR (apple_event))
 	&& SBYTES (XCAR (apple_event)) == 4
-	&& strcmp (SDATA (XCAR (apple_event)), "aevt") == 0))
+	&& strcmp (SDATA (XCAR (apple_event)), "aevt") == 0
+	&& cdr_chain_length (XCDR (apple_event)) >= 0))
     return errAEBuildSyntaxError;
 
   err = create_apple_event (0, 0, result);
@@ -1177,157 +1277,327 @@ cfproperty_list_to_lisp (plist, with_tag, hash_bound)
 			   hash_bound);
 }
 
-/* Create CFPropertyList from a Lisp object OBJ, which must be a form
-   of a return value of cfproperty_list_to_lisp with with_tag set.  */
-
-CFPropertyListRef
-cfproperty_list_create_with_lisp_data (obj)
+static CFPropertyListRef
+cfproperty_list_create_with_lisp_1 (obj, ancestors)
      Lisp_Object obj;
+     struct bstree_node **ancestors;
 {
   CFPropertyListRef result = NULL;
+  Lisp_Object type, data;
+  struct bstree_node **bstree_ref;
 
-  if (CONSP (obj))
+  if (!CONSP (obj))
+    return NULL;
+
+  type = XCAR (obj);
+  data = XCDR (obj);
+  if (EQ (type, Qstring))
     {
-      Lisp_Object type = XCAR (obj), data = XCDR (obj);
-
-      if (EQ (type, Qstring))
+      if (STRINGP (data))
+	result = cfstring_create_with_string (data);
+    }
+  else if (EQ (type, Qnumber))
+    {
+      if (INTEGERP (data))
 	{
-	  if (STRINGP (data))
-	    result = cfstring_create_with_string (data);
-	}
-      else if (EQ (type, Qnumber))
-	{
-	  if (INTEGERP (data))
-	    {
-	      long value = XINT (data);
+	  long value = XINT (data);
 
-	      result = CFNumberCreate (NULL, kCFNumberLongType, &value);
-	    }
-	  else if (FLOATP (data))
-	    {
-	      double value = XFLOAT_DATA (data);
-
-	      result = CFNumberCreate (NULL, kCFNumberDoubleType, &value);
-	    }
-	  else if (STRINGP (data))
-	    {
-	      SInt64 value = strtoll (SDATA (data), NULL, 0);
-
-	      result = CFNumberCreate (NULL, kCFNumberSInt64Type, &value);
-	    }
+	  result = CFNumberCreate (NULL, kCFNumberLongType, &value);
 	}
-      else if (EQ (type, Qboolean))
+      else if (FLOATP (data))
 	{
-	  if (NILP (data))
-	    result = kCFBooleanFalse;
-	  else if (EQ (data, Qt))
-	    result = kCFBooleanTrue;
-	}
-      else if (EQ (type, Qdate))
-	{
-	  if (CONSP (data) && INTEGERP (XCAR (data))
-	      && CONSP (XCDR (data)) && INTEGERP (XCAR (XCDR (data)))
-	      && CONSP (XCDR (XCDR (data)))
-	      && INTEGERP (XCAR (XCDR (XCDR (data)))))
-	    {
-	      CFAbsoluteTime at;
+	  double value = XFLOAT_DATA (data);
 
-	      at = (XINT (XCAR (data)) * 65536.0 + XINT (XCAR (XCDR (data)))
-		    + XINT (XCAR (XCDR (XCDR (data)))) * 0.000001
-		    - kCFAbsoluteTimeIntervalSince1970);
-	      result = CFDateCreate (NULL, at);
-	    }
+	  result = CFNumberCreate (NULL, kCFNumberDoubleType, &value);
 	}
-      else if (EQ (type, Qdata))
+      else if (STRINGP (data))
 	{
-	  if (STRINGP (data))
-	    result = CFDataCreate (NULL, SDATA (data), SBYTES (data));
+	  SInt64 value = strtoll (SDATA (data), NULL, 0);
+
+	  result = CFNumberCreate (NULL, kCFNumberSInt64Type, &value);
 	}
-      else if (EQ (type, Qarray))
+    }
+  else if (EQ (type, Qboolean))
+    {
+      if (NILP (data))
+	result = kCFBooleanFalse;
+      else if (EQ (data, Qt))
+	result = kCFBooleanTrue;
+    }
+  else if (EQ (type, Qdate))
+    {
+      if (CONSP (data) && INTEGERP (XCAR (data))
+	  && CONSP (XCDR (data)) && INTEGERP (XCAR (XCDR (data)))
+	  && CONSP (XCDR (XCDR (data)))
+	  && INTEGERP (XCAR (XCDR (XCDR (data)))))
+	{
+	  CFAbsoluteTime at;
+
+	  at = (XINT (XCAR (data)) * 65536.0 + XINT (XCAR (XCDR (data)))
+		+ XINT (XCAR (XCDR (XCDR (data)))) * 0.000001
+		- kCFAbsoluteTimeIntervalSince1970);
+	  result = CFDateCreate (NULL, at);
+	}
+    }
+  else if (EQ (type, Qdata))
+    {
+      if (STRINGP (data))
+	result = CFDataCreate (NULL, SDATA (data), SBYTES (data));
+    }
+  /* Recursive cases follow.  */
+  else if ((bstree_ref = bstree_find (ancestors, obj),
+	    *bstree_ref == NULL))
+    {
+      struct bstree_node node;
+
+      node.obj = obj;
+      node.left = node.right = NULL;
+      *bstree_ref = &node;
+
+      if (EQ (type, Qarray))
 	{
 	  if (VECTORP (data))
 	    {
-	      int size = ASIZE (data);
+	      EMACS_INT size = ASIZE (data);
 	      CFMutableArrayRef array =
 		CFArrayCreateMutable (NULL, size, &kCFTypeArrayCallBacks);
 
 	      if (array)
 		{
-		  int i;
+		  EMACS_INT i;
 
 		  for (i = 0; i < size; i++)
 		    {
 		      CFPropertyListRef value =
-			cfproperty_list_create_with_lisp_data (AREF (data, i));
+			cfproperty_list_create_with_lisp_1 (AREF (data, i),
+							    ancestors);
 
 		      if (value)
 			{
 			  CFArrayAppendValue (array, value);
 			  CFRelease (value);
 			}
+		      else
+			break;
 		    }
-
-		  result = CFArrayCreateCopy (NULL, array);
-		  CFRelease (array);
+		  if (i < size)
+		    {
+		      CFRelease (array);
+		      array = NULL;
+		    }
 		}
+	      result = array;
 	    }
 	}
       else if (EQ (type, Qdictionary))
 	{
-	  if (NILP (data) || CONSP (data) || HASH_TABLE_P (data))
+	  CFMutableDictionaryRef dictionary = NULL;
+
+	  if (CONSP (data) || NILP (data))
 	    {
-	      CFMutableDictionaryRef dictionary =
-		CFDictionaryCreateMutable (NULL, 0,
+	      EMACS_INT size = cdr_chain_length (data);
+
+	      if (size >= 0)
+		dictionary =
+		  CFDictionaryCreateMutable (NULL, size,
+					     &kCFTypeDictionaryKeyCallBacks,
+					     &kCFTypeDictionaryValueCallBacks);
+	      if (dictionary)
+		{
+		  for (; CONSP (data); data = XCDR (data))
+		    {
+		      CFPropertyListRef value = NULL;
+
+		      if (CONSP (XCAR (data)) && STRINGP (XCAR (XCAR (data))))
+			{
+			  CFStringRef key =
+			    cfstring_create_with_string (XCAR (XCAR (data)));
+
+			  if (key)
+			    {
+			      value = cfproperty_list_create_with_lisp_1 (XCDR (XCAR (data)),
+									  ancestors);
+			      if (value)
+				{
+				  CFDictionaryAddValue (dictionary, key, value);
+				  CFRelease (value);
+				}
+			      CFRelease (key);
+			    }
+			}
+		      if (value == NULL)
+			break;
+		    }
+		  if (!NILP (data))
+		    {
+		      CFRelease (dictionary);
+		      dictionary = NULL;
+		    }
+		}
+	    }
+	  else if (HASH_TABLE_P (data))
+	    {
+	      struct Lisp_Hash_Table *h = XHASH_TABLE (data);
+
+	      dictionary =
+		CFDictionaryCreateMutable (NULL,
+					   XINT (Fhash_table_count (data)),
 					   &kCFTypeDictionaryKeyCallBacks,
 					   &kCFTypeDictionaryValueCallBacks);
 	      if (dictionary)
 		{
-		  if (!HASH_TABLE_P (data))
-		    for (; CONSP (data); data = XCDR (data))
+		  int i, size = HASH_TABLE_SIZE (h);
+
+		  for (i = 0; i < size; ++i)
+		    if (!NILP (HASH_HASH (h, i)))
 		      {
-			if (CONSP (XCAR (data))
-			    && STRINGP (XCAR (XCAR (data))))
-			  {
-			    CFStringRef key =
-			      cfstring_create_with_string (XCAR (XCAR (data)));
-			    CFPropertyListRef value =
-			      cfproperty_list_create_with_lisp_data (XCDR (XCAR (data)));
+			CFPropertyListRef value = NULL;
 
-			    if (value)
-			      {
-				CFDictionaryAddValue (dictionary, key, value);
-				CFRelease (value);
-			      }
-			    CFRelease (key);
-			  }
-		      }
-		  else		/* HASH_TABLE_P (data) */
-		    {
-		      struct Lisp_Hash_Table *h = XHASH_TABLE (data);
-		      int i;
-
-		      for (i = 0; i < HASH_TABLE_SIZE (h); ++i)
-			if (!NILP (HASH_HASH (h, i)))
+			if (STRINGP (HASH_KEY (h, i)))
 			  {
 			    CFStringRef key =
 			      cfstring_create_with_string (HASH_KEY (h, i));
-			    CFPropertyListRef value =
-			      cfproperty_list_create_with_lisp_data (HASH_VALUE (h, i));
 
-			    if (value)
+			    if (key)
 			      {
-				CFDictionaryAddValue (dictionary, key, value);
-				CFRelease (value);
+				value = cfproperty_list_create_with_lisp_1 (HASH_VALUE (h, i),
+									    ancestors);
+				if (value)
+				  {
+				    CFDictionaryAddValue (dictionary,
+							  key, value);
+				    CFRelease (value);
+				  }
+				CFRelease (key);
 			      }
-			    CFRelease (key);
 			  }
+			if (value == NULL)
+			  break;
+		      }
+		  if (i < size)
+		    {
+		      CFRelease (dictionary);
+		      dictionary = NULL;
 		    }
-
-		  result = CFDictionaryCreateCopy (NULL, dictionary);
-		  CFRelease (dictionary);
 		}
 	    }
+	  result = dictionary;
 	}
+
+      *bstree_ref = NULL;
+    }
+
+  return result;
+}
+
+/* Create CFPropertyList from a Lisp object OBJ, which must be a form
+   of a return value of cfproperty_list_to_lisp with with_tag set.  */
+
+CFPropertyListRef
+cfproperty_list_create_with_lisp (obj)
+     Lisp_Object obj;
+{
+  struct bstree_node *root = NULL;
+
+  return cfproperty_list_create_with_lisp_1 (obj, &root);
+}
+
+/* Convert CFPropertyList PLIST to a unibyte string in FORMAT, which
+   is either kCFPropertyListXMLFormat_v1_0 or
+   kCFPropertyListBinaryFormat_v1_0.  Return nil if an error has
+   occurred.  */
+
+Lisp_Object
+cfproperty_list_to_string (plist, format)
+     CFPropertyListRef plist;
+     CFPropertyListFormat format;
+{
+  Lisp_Object result = Qnil;
+  CFDataRef data = NULL;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+  if (CFPropertyListCreateData != NULL)
+#endif
+    {
+      data = CFPropertyListCreateData (NULL, plist, format, 0, NULL);
+    }
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+  else				/* CFPropertyListCreateData == NULL */
+#endif
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1060 */
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+    {
+      CFWriteStreamRef stream;
+
+      switch (format)
+	{
+	case kCFPropertyListXMLFormat_v1_0:
+	  data = CFPropertyListCreateXMLData (NULL, plist);
+	  break;
+
+	case kCFPropertyListBinaryFormat_v1_0:
+	  stream = CFWriteStreamCreateWithAllocatedBuffers (NULL, NULL);
+
+	  if (stream)
+	    {
+	      CFWriteStreamOpen (stream);
+	      if (CFPropertyListWriteToStream (plist, stream, format, NULL) > 0)
+		data = CFWriteStreamCopyProperty (stream,
+						  kCFStreamPropertyDataWritten);
+	      CFWriteStreamClose (stream);
+	      CFRelease (stream);
+	    }
+	  break;
+	}
+    }
+#endif
+  if (data)
+    {
+      result = cfdata_to_lisp (data);
+      CFRelease (data);
+    }
+
+  return result;
+}
+
+/* Create CFPropertyList from a Lisp string in either
+   kCFPropertyListXMLFormat_v1_0 or kCFPropertyListBinaryFormat_v1_0.
+   Return NULL if an error has occurred.  */
+
+CFPropertyListRef
+cfproperty_list_create_with_string (string)
+     Lisp_Object string;
+{
+  CFPropertyListRef result = NULL;
+  CFDataRef data;
+
+  string = Fstring_as_unibyte (string);
+  data = CFDataCreateWithBytesNoCopy (NULL, SDATA (string), SBYTES (string),
+				      kCFAllocatorNull);
+  if (data)
+    {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+      if (CFPropertyListCreateWithData != NULL)
+#endif
+	{
+	  result = CFPropertyListCreateWithData (NULL, data,
+						 kCFPropertyListImmutable,
+						 NULL, NULL);
+	}
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+      else		    /* CFPropertyListCreateWithData == NULL */
+#endif
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1060 */
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+	{
+	  result = CFPropertyListCreateFromXMLData (NULL, data,
+						    kCFPropertyListImmutable,
+						    NULL);
+	}
+#endif
+      CFRelease (data);
     }
 
   return result;
@@ -1638,7 +1908,8 @@ xrm_q_put_resource (database, quarks, value)
 {
   struct Lisp_Hash_Table *h = XHASH_TABLE (database);
   unsigned hash_code;
-  int max_nid, i;
+  int i;
+  EMACS_INT max_nid;
   Lisp_Object node_id, key;
 
   max_nid = XINT (Fgethash (HASHKEY_MAX_NID, database, Qnil));
@@ -2561,7 +2832,7 @@ Each type should be a string of length 4 or the symbol
 }
 
 
-static Lisp_Object Qxml, QCmime_charset;
+static Lisp_Object Qxml, Qxml1, Qbinary1, QCmime_charset;
 static Lisp_Object QNFD, QNFKD, QNFC, QNFKC, QHFS_plus_D, QHFS_plus_C;
 
 DEFUN ("mac-get-preference", Fmac_get_preference, Smac_get_preference, 1, 4, 0,
@@ -2574,32 +2845,9 @@ lookup is failed at some stage.
 Optional arg APPLICATION is an application ID string.  If omitted or
 nil, that stands for the current application.
 
-Optional arg FORMAT specifies the data format of the return value.  If
-omitted or nil, each Core Foundation object is converted into a
-corresponding Lisp object as follows:
-
-  Core Foundation    Lisp                           Tag
-  ------------------------------------------------------------
-  CFString           Multibyte string               string
-  CFNumber           Integer, float, or string      number
-  CFBoolean          Symbol (t or nil)              boolean
-  CFDate             List of three integers         date
-                       (cf. `current-time')
-  CFData             Unibyte string                 data
-  CFArray            Vector                         array
-  CFDictionary       Alist or hash table            dictionary
-                       (depending on HASH-BOUND)
-
-If it is t, a symbol that represents the type of the original Core
-Foundation object is prepended.  If it is `xml', the value is returned
-as an XML representation.
-
-Optional arg HASH-BOUND specifies which kinds of the list objects,
-alists or hash tables, are used as the targets of the conversion from
-CFDictionary.  If HASH-BOUND is a negative integer or nil, always
-generate alists.  If HASH-BOUND >= 0, generate an alist if the number
-of keys in the dictionary is smaller than HASH-BOUND, and a hash table
-otherwise.  */)
+Optional args FORMAT and HASH-BOUND specify the data format of the
+return value (see `mac-convert-property-list').  FORMAT also accepts
+`xml' as a synonym of `xml1' for compatibility.  */)
      (key, application, format, hash_bound)
      Lisp_Object key, application, format, hash_bound;
 {
@@ -2614,7 +2862,10 @@ otherwise.  */)
     {
       CHECK_CONS (key);
       for (tmp = key; CONSP (tmp); tmp = XCDR (tmp))
-	CHECK_STRING_CAR (tmp);
+	{
+	  CHECK_STRING_CAR (tmp);
+	  QUIT;
+	}
       CHECK_LIST_END (tmp, key);
     }
   if (!NILP (application))
@@ -2661,14 +2912,12 @@ otherwise.  */)
 
   if (NILP (key))
     {
-      if (EQ (format, Qxml))
-	{
-	  CFDataRef data = CFPropertyListCreateXMLData (NULL, plist);
-	  if (data == NULL)
-	    goto out;
-	  result = cfdata_to_lisp (data);
-	  CFRelease (data);
-	}
+      if (EQ (format, Qxml) || EQ (format, Qxml1))
+	result = cfproperty_list_to_string (plist,
+					    kCFPropertyListXMLFormat_v1_0);
+      else if (EQ (format, Qbinary1))
+	result = cfproperty_list_to_string (plist,
+					    kCFPropertyListBinaryFormat_v1_0);
       else
 	result =
 	  cfproperty_list_to_lisp (plist, EQ (format, Qt),
@@ -2687,6 +2936,84 @@ otherwise.  */)
   return result;
 }
 
+DEFUN ("mac-convert-property-list", Fmac_convert_property_list, Smac_convert_property_list, 1, 3, 0,
+       doc: /* Convert Core Foundation PROPERTY-LIST to FORMAT.
+PROPERTY-LIST should be either a string whose data is in some Core
+Foundation property list file format (e.g., XML or binary version 1),
+or a Lisp representation of a property list with type tags.  Return
+nil if PROPERTY-LIST is ill-formatted.
+
+In the Lisp representation of a property list, each Core Foundation
+object is converted into a corresponding Lisp object as follows:
+
+  Core Foundation    Lisp                           Tag
+  ------------------------------------------------------------
+  CFString           Multibyte string               string
+  CFNumber           Integer, float, or string      number
+  CFBoolean          Symbol (t or nil)              boolean
+  CFDate             List of three integers         date
+                       (cf. `current-time')
+  CFData             Unibyte string                 data
+  CFArray            Vector                         array
+  CFDictionary       Alist or hash table            dictionary
+                       (depending on HASH-BOUND)
+
+If the representation has type tags, each object is a cons of the tag
+symbol in the `Tag' row and a value of the type in the `Lisp' row.
+
+Optional arg FORMAT specifies the data format of the return value.  If
+omitted or nil, a Lisp representation without tags is returned.  If
+FORMAT is t, a Lisp representation with tags is returned.  If FORMAT
+is `xml1' or `binary1', a unibyte string is returned as an XML or
+binary representation version 1, respectively.
+
+Optional arg HASH-BOUND specifies which kinds of the Lisp objects,
+alists or hash tables, are used as the targets of the conversion from
+CFDictionary.  If HASH-BOUND is a negative integer or nil, always
+generate alists.  If HASH-BOUND >= 0, generate an alist if the number
+of keys in the dictionary is smaller than HASH-BOUND, and a hash table
+otherwise.  */)
+     (property_list, format, hash_bound)
+     Lisp_Object property_list, format, hash_bound;
+{
+  Lisp_Object result = Qnil;
+  CFPropertyListRef plist;
+  struct gcpro gcpro1, gcpro2;
+
+  if (!CONSP (property_list))
+    CHECK_STRING (property_list);
+  if (!NILP (hash_bound))
+    CHECK_NUMBER (hash_bound);
+
+  GCPRO2 (property_list, format);
+
+  BLOCK_INPUT;
+
+  if (CONSP (property_list))
+    plist = cfproperty_list_create_with_lisp (property_list);
+  else
+    plist = cfproperty_list_create_with_string (property_list);
+  if (plist)
+    {
+      if (EQ (format, Qxml1))
+	result = cfproperty_list_to_string (plist,
+					    kCFPropertyListXMLFormat_v1_0);
+      else if (EQ (format, Qbinary1))
+	result = cfproperty_list_to_string (plist,
+					    kCFPropertyListBinaryFormat_v1_0);
+      else
+	result =
+	  cfproperty_list_to_lisp (plist, EQ (format, Qt),
+				   NILP (hash_bound) ? -1 : XINT (hash_bound));
+      CFRelease (plist);
+    }
+
+  UNBLOCK_INPUT;
+
+  UNGCPRO;
+
+  return result;
+}
 
 static CFStringEncoding
 get_cfstring_encoding_from_lisp (obj)
@@ -3613,6 +3940,10 @@ syms_of_mac ()
 
   Qxml = intern_c_string ("xml");
   staticpro (&Qxml);
+  Qxml1 = intern_c_string ("xml1");
+  staticpro (&Qxml1);
+  Qbinary1 = intern_c_string ("binary1");
+  staticpro (&Qbinary1);
 
   QCmime_charset = intern_c_string (":mime-charset");
   staticpro (&QCmime_charset);
@@ -3636,6 +3967,7 @@ syms_of_mac ()
 
   defsubr (&Smac_coerce_ae_data);
   defsubr (&Smac_get_preference);
+  defsubr (&Smac_convert_property_list);
   defsubr (&Smac_code_convert_string);
   defsubr (&Smac_process_hi_command);
 

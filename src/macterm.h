@@ -1,7 +1,7 @@
 /* Display module for Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004,
                  2005, 2006, 2007, 2008 Free Software Foundation, Inc.
-   Copyright (C) 2009, 2010  YAMAMOTO Mitsuharu
+   Copyright (C) 2009, 2010, 2011  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -618,7 +618,10 @@ extern Lisp_Object cfboolean_to_lisp P_ ((CFBooleanRef));
 extern Lisp_Object cfobject_desc_to_lisp P_ ((CFTypeRef));
 extern Lisp_Object cfobject_to_lisp P_ ((CFTypeRef, int, int));
 extern Lisp_Object cfproperty_list_to_lisp P_ ((CFPropertyListRef, int, int));
-extern CFPropertyListRef cfproperty_list_create_with_lisp_data P_ ((Lisp_Object));
+extern CFPropertyListRef cfproperty_list_create_with_lisp P_ ((Lisp_Object));
+extern Lisp_Object cfproperty_list_to_string P_ ((CFPropertyListRef,
+						  CFPropertyListFormat));
+extern CFPropertyListRef cfproperty_list_create_with_string P_ ((Lisp_Object));
 extern void xrm_merge_string_database P_ ((XrmDatabase, const char *));
 extern Lisp_Object xrm_get_resource P_ ((XrmDatabase, const char *,
 					 const char *));

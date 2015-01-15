@@ -1,3 +1,33 @@
+2011-01-08  Chong Yidong  <cyd@stupidchicken.com>
+
+	* files.texi (Directory Names): Move directory-abbrev-alist doc to
+	Emacs manual.
+
+2011-01-07  Eli Zaretskii  <eliz@gnu.org>
+
+	* files.texi (Directory Names): Explain why FROM in
+	directory-abbrev-alist should begin with \`.  (Bug#7777)
+
+2010-12-25  Eli Zaretskii  <eliz@gnu.org>
+
+	* modes.texi (Emulating Mode Line): Fix last change.
+
+2010-12-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* modes.texi (Emulating Mode Line): Update documentation of
+	format-mode-line according to changes that fixed bug #7587.
+
+2010-12-11  Eli Zaretskii  <eliz@gnu.org>
+
+	* processes.texi (Shell Arguments):
+	* strings.texi (Creating Strings): Don't mention "shell commands";
+	make it explicit that `split-string-and-unquote' and
+	`combine-and-quote-strings' are mainly for working with arguments
+	to call-process and start-process.
+
+	* processes.texi (Shell Arguments): Fix documentation of
+	`split-string-and-unquote'.  Add indexing.  (Bug#7563)
+
 2010-12-07  Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* modes.texi (Auto-Indentation): New section to document SMIE.
@@ -8635,7 +8665,7 @@
 ;; End:
 
     Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
-      2007, 2008, 2009, 2010  Free Software Foundation, Inc.
+      2007, 2008, 2009, 2010, 2011  Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

@@ -1,5 +1,5 @@
 /* Functions for GUI implemented with Cocoa AppKit on the Mac OS.
-   Copyright (C) 2008, 2009, 2010  YAMAMOTO Mitsuharu
+   Copyright (C) 2008, 2009, 2010, 2011  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -7379,7 +7379,7 @@ extern Lisp_Object Vselection_converter_alist;
 
   if ([dataType isEqualToString:NSFilenamesPboardType])
     {
-      id propertyList = (id) cfproperty_list_create_with_lisp_data (lispObject);
+      id propertyList = (id) cfproperty_list_create_with_lisp (lispObject);
 
       result = [self setPropertyList:propertyList forType:dataType];
     }

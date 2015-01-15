@@ -151,7 +151,9 @@ the following Mac-specific ones:
   * Apple event sending with (a)synchronous reply handling.  ODB
     Editor Suite support is added as an example.  (Only tested with
     QuickCursor.  Add "<string>org.gnu.Emacs</string>" to the elements
-    of QCEditInChoices in QuickCursor.app/Contents/Info.plist.)
+    of QCEditInChoices in QuickCursor.app/Contents/Info.plist.  On
+    QuickCursor 2.0, you need to kill the buffer after saving it in
+    order to reflect the changes to the original text area.)
   * "Click in the scroll bar to: Jump to the spot that's clicked"
     setting in the System Preferences is supported.
   * Change of text smoothing threshold setting in the Appearance pane

@@ -1,7 +1,7 @@
 /* Window creation, deletion and examination for GNU Emacs.
    Does not include redisplay.
    Copyright (C) 1985, 1986, 1987, 1993, 1994, 1995, 1996, 1997, 1998, 2000,
-                 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+                 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
                  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -161,6 +161,11 @@ static int sequence_number;
 
 static int window_initialized;
 
+/* Set in `set-window-configuration' to prevent "swapping out point"
+   in the old selected window.  */
+
+static int inhibit_point_swap;
+
 /* Hook to run when window config changes.  */
 
 static Lisp_Object Qwindow_configuration_change_hook;
@@ -188,11 +193,6 @@ static int window_scroll_pixel_based_preserve_y;
 
 static int window_scroll_preserve_hpos;
 static int window_scroll_preserve_vpos;
-
-#if 0 /* This isn't used anywhere.  */
-/* Nonzero means we can split a frame even if it is "unsplittable".  */
-static int inhibit_frame_unsplittable;
-#endif /* 0 */
 
 extern EMACS_INT scroll_margin;
 
@@ -3641,7 +3641,9 @@ selected window before each command.  */)
   /* Store the current buffer's actual point into the
      old selected window.  It belongs to that window,
      and when the window is not selected, must be in the window.  */
-  if (!NILP (selected_window))
+  if (inhibit_point_swap)
+    inhibit_point_swap = 0;
+  else
     {
       ow = XWINDOW (selected_window);
       if (! NILP (ow->buffer))
@@ -5859,6 +5861,12 @@ zero means top of window, negative means relative to bottom of window.  */)
   int this_scroll_margin;
 #endif
 
+  if (!(BUFFERP (w->buffer)
+	&& XBUFFER (w->buffer) == current_buffer))
+    /* This test is needed to make sure PT/PT_BYTE make sense in w->buffer
+       when passed below to set_marker_both.  */
+    error ("move-to-window-line called from unrelated buffer");
+
   window = selected_window;
   start = marker_position (w->start);
   if (start < BEGV || start > ZV)
@@ -6238,10 +6246,6 @@ the return value is nil.  Otherwise the value is t.  */)
 	}
 
       FRAME_ROOT_WINDOW (f) = data->root_window;
-      /* Prevent "swapping out point" in the old selected window
-	 using the buffer that has been restored into it.
-	 We already swapped out point that from that window's old buffer.  */
-      selected_window = Qnil;
 
       /* Arrange *not* to restore point in the buffer that was
 	 current when the window configuration was saved.  */
@@ -6250,6 +6254,11 @@ the return value is nil.  Otherwise the value is t.  */)
 			       make_number (old_point),
 			       XWINDOW (data->current_window)->buffer);
 
+      /* In the following call to `select-window, prevent "swapping
+	 out point" in the old selected window using the buffer that
+	 has been restored into it.  We already swapped out that point
+	 from that window's old buffer.  */
+      inhibit_point_swap = 1;
       Fselect_window (data->current_window, Qnil);
       XBUFFER (XWINDOW (selected_window)->buffer)->last_selected_window
 	= selected_window;
@@ -6258,13 +6267,6 @@ the return value is nil.  Otherwise the value is t.  */)
 	  || (FRAMEP (data->focus_frame)
 	      && FRAME_LIVE_P (XFRAME (data->focus_frame))))
 	Fredirect_frame_focus (frame, data->focus_frame);
-
-#if 0 /* I don't understand why this is needed, and it causes problems
-         when the frame's old selected window has been deleted.  */
-      if (f != selected_frame && FRAME_WINDOW_P (f))
-	do_switch_frame (WINDOW_FRAME (XWINDOW (data->root_window)),
-			 0, 0, Qnil);
-#endif
 
       /* Set the screen height to the value it had before this function.  */
       if (previous_frame_lines != FRAME_LINES (f)
@@ -7214,6 +7216,8 @@ syms_of_window ()
   window_scroll_pixel_based_preserve_y = -1;
   window_scroll_preserve_hpos = -1;
   window_scroll_preserve_vpos = -1;
+
+  inhibit_point_swap = 0;
 
   DEFVAR_LISP ("temp-buffer-show-function", &Vtemp_buffer_show_function,
 	       doc: /* Non-nil means call as function to display a help buffer.
