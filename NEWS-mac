@@ -1,4 +1,17 @@
+* emacs-23.2-mac-1.996 [experimental/hackers-only] (2010-07-31)
+
+** Fixed bugs
+
+*** Boundary indicators in fringes are scrolled out if vscrolled.
+Apply a fix for Bug#5634 and Bug#6325.
+Now that this annoying problem is fixed, pixel-based mouse wheel
+smooth scrolling is enabled by default.  Note that it still has
+several glitches and you can turn it off by setting
+`mac-mouse-wheel-smooth-scroll' to nil.
+
+
 * emacs-23.2-mac-1.995 [experimental/hackers-only] (2010-06-26)
+http://lists.gnu.org/archive/html/emacs-devel/2010-06/msg01000.html
 
 ** Fixed bugs
 

@@ -1848,7 +1848,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
   struct frame *f = emacsFrame;
   XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
   EmacsWindow *window = FRAME_MAC_WINDOW (f);
-  NSRect windowFrame, emacsViewFrame;
+  NSRect windowFrame, emacsViewBounds;
   NSSize emacsViewSizeInPixels, emacsViewSize;
   CGFloat dw, dh;
 
@@ -1856,8 +1856,8 @@ extern void mac_save_keyboard_input_source P_ ((void));
   if (size_hints == NULL)
     return windowFrame.size;
 
-  emacsViewFrame = [emacsView frame];
-  emacsViewSizeInPixels = [emacsView convertSize:emacsViewFrame.size
+  emacsViewBounds = [emacsView bounds];
+  emacsViewSizeInPixels = [emacsView convertSize:emacsViewBounds.size
 				     toView:nil];
   dw = NSWidth (windowFrame) - emacsViewSizeInPixels.width;
   dh = NSHeight (windowFrame) - emacsViewSizeInPixels.height;
@@ -2249,15 +2249,15 @@ extern void mac_save_keyboard_input_source P_ ((void));
 			defaultFrame:(NSRect)defaultFrame
 {
   struct frame *f = emacsFrame;
-  NSRect windowFrame, emacsViewFrame;
+  NSRect windowFrame, emacsViewBounds;
   NSSize emacsViewSizeInPixels, emacsViewSize;
   CGFloat dw, dh, dx, dy;
   int columns, rows;
 
   windowFrame = [sender frame];
-  emacsViewFrame = [emacsView frame];
-  emacsViewSizeInPixels = [emacsView convertSize:emacsViewFrame.size
-				     toView:nil];
+  emacsViewBounds = [emacsView bounds];
+  emacsViewSizeInPixels = [emacsView convertSize:emacsViewBounds.size
+					  toView:nil];
   dw = NSWidth (windowFrame) - emacsViewSizeInPixels.width;
   dh = NSHeight (windowFrame) - emacsViewSizeInPixels.height;
   emacsViewSize =
@@ -2450,7 +2450,7 @@ mac_move_frame_window (f, h, v, front)
   NSRect contentViewFrame, baseScreenFrame;
   NSPoint windowFrameOrigin;
 
-  contentViewFrame = [contentView convertRect:[contentView frame] toView:nil];
+  contentViewFrame = [contentView convertRect:[contentView bounds] toView:nil];
   baseScreenFrame = mac_get_base_screen_frame ();
   windowFrameOrigin.x = (h - NSMinX (contentViewFrame)
 			 + NSMinX (baseScreenFrame));
@@ -2468,7 +2468,7 @@ mac_size_frame_window (f, w, h, update)
 {
   NSWindow *window = FRAME_MAC_WINDOW (f);
   NSView *contentView;
-  NSRect contentViewFrame, windowFrame;
+  NSRect contentViewBounds, windowFrame;
   NSSize oldSizeInPixels, newSizeInPixels;
   CGFloat dw, dh;
 
@@ -2476,8 +2476,8 @@ mac_size_frame_window (f, w, h, update)
      the same as those in device space coordinates if scaling is in
      effect.  */
   contentView = [window contentView];
-  contentViewFrame = [contentView frame];
-  oldSizeInPixels = [contentView convertSize:contentViewFrame.size toView:nil];
+  contentViewBounds = [contentView bounds];
+  oldSizeInPixels = [contentView convertSize:contentViewBounds.size toView:nil];
   newSizeInPixels = [contentView convertSize:(NSMakeSize (w, h)) toView:nil];
   dw = newSizeInPixels.width - oldSizeInPixels.width;
   dh = newSizeInPixels.height - oldSizeInPixels.height;
@@ -4172,16 +4172,16 @@ static BOOL NonmodalScrollerPagingBehavior;
     {
       NSPoint point = [self convertPoint:[theEvent locationInWindow]
 			    fromView:nil];
-      NSRect frameRect, knobRect;
+      NSRect bounds, knobRect;
 
-      frameRect = [self frame];
+      bounds = [self bounds];
       knobRect = [self rectForPart:NSScrollerKnob];
 
       if (jumpsToClickedSpot)
 	{
 	  NSRect knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
 
-	  if (NSHeight (frameRect) >= NSWidth (frameRect))
+	  if (NSHeight (bounds) >= NSWidth (bounds))
 	    {
 	      knobRect.origin.y = point.y - round (NSHeight (knobRect) / 2);
 	      if (NSMinY (knobRect) < NSMinY (knobSlotRect))
@@ -4204,7 +4204,7 @@ static BOOL NonmodalScrollerPagingBehavior;
 	  hitPart = NSScrollerKnob;
 	}
 
-      if (NSHeight (frameRect) >= NSWidth (frameRect))
+      if (NSHeight (bounds) >= NSWidth (bounds))
 	knobGrabOffset = - (point.y - NSMinY (knobRect)) - 1;
       else
 	knobGrabOffset = - (point.x - NSMinX (knobRect)) - 1;
@@ -4255,14 +4255,14 @@ static BOOL NonmodalScrollerPagingBehavior;
     {
       NSPoint point = [self convertPoint:[theEvent locationInWindow]
 			    fromView:nil];
-      NSRect frameRect, knobSlotRect;
+      NSRect bounds, knobSlotRect;
 
       if (knobGrabOffset <= -1)
 	knobGrabOffset = - (knobGrabOffset + 1);
 
-      frameRect = [self frame];
+      bounds = [self bounds];
       knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
-      if (NSHeight (frameRect) >= NSWidth (frameRect))
+      if (NSHeight (bounds) >= NSWidth (bounds))
 	knobMinEdgeInSlot = point.y - knobGrabOffset - NSMinY (knobSlotRect);
       else
 	knobMinEdgeInSlot = point.x - knobGrabOffset - NSMinX (knobSlotRect);
@@ -4272,7 +4272,7 @@ static BOOL NonmodalScrollerPagingBehavior;
 	  CGFloat maximum, minEdge;
 	  NSRect KnobRect = [self rectForPart:NSScrollerKnob];
 
-	  if (NSHeight (frameRect) >= NSWidth (frameRect))
+	  if (NSHeight (bounds) >= NSWidth (bounds))
 	    maximum = NSHeight (knobSlotRect) - NSHeight (KnobRect);
 	  else
 	    maximum = NSWidth (knobSlotRect) - NSWidth (KnobRect);
@@ -4336,23 +4336,23 @@ static BOOL NonmodalScrollerPagingBehavior;
   BOOL enabled = [self isEnabled], tooSmall = NO;
   float floatValue = [self floatValue];
   CGFloat knobProportion = [self knobProportion];
-  NSRect frameRect, knobSlotRect, KnobRect;
+  NSRect bounds, knobSlotRect, KnobRect;
 
-  frameRect = [self frame];
-  if (NSHeight (frameRect) >= NSWidth (frameRect))
+  bounds = [self bounds];
+  if (NSHeight (bounds) >= NSWidth (bounds))
     {
-      if (NSWidth (frameRect) >= MAC_AQUA_VERTICAL_SCROLL_BAR_WIDTH)
+      if (NSWidth (bounds) >= MAC_AQUA_VERTICAL_SCROLL_BAR_WIDTH)
 	[self setControlSize:NSRegularControlSize];
-      else if (NSWidth (frameRect) >= MAC_AQUA_SMALL_VERTICAL_SCROLL_BAR_WIDTH)
+      else if (NSWidth (bounds) >= MAC_AQUA_SMALL_VERTICAL_SCROLL_BAR_WIDTH)
 	[self setControlSize:NSSmallControlSize];
       else
 	tooSmall = YES;
     }
   else
     {
-      if (NSHeight (frameRect) >= MAC_AQUA_VERTICAL_SCROLL_BAR_WIDTH)
+      if (NSHeight (bounds) >= MAC_AQUA_VERTICAL_SCROLL_BAR_WIDTH)
 	[self setControlSize:NSRegularControlSize];
-      else if (NSHeight (frameRect) >= MAC_AQUA_SMALL_VERTICAL_SCROLL_BAR_WIDTH)
+      else if (NSHeight (bounds) >= MAC_AQUA_SMALL_VERTICAL_SCROLL_BAR_WIDTH)
 	[self setControlSize:NSSmallControlSize];
       else
 	tooSmall = YES;
@@ -4367,7 +4367,7 @@ static BOOL NonmodalScrollerPagingBehavior;
   [self setEnabled:YES];
   knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
   KnobRect = [self rectForPart:NSScrollerKnob];
-  if (NSHeight (frameRect) >= NSWidth (frameRect))
+  if (NSHeight (bounds) >= NSWidth (bounds))
     {
       knobSlotSpan = NSHeight (knobSlotRect);
       minKnobSpan = NSHeight (KnobRect);
@@ -4471,18 +4471,18 @@ static BOOL NonmodalScrollerPagingBehavior;
 - (void)mouseClick:(NSEvent *)theEvent;
 {
   NSPoint point = [theEvent locationInWindow];
-  NSRect frameRect = [self frame];
+  NSRect bounds = [self bounds];
 
   hitPart = [self testPart:point];
   point = [self convertPoint:point fromView:nil];
-  if (NSHeight (frameRect) >= NSWidth (frameRect))
+  if (NSHeight (bounds) >= NSWidth (bounds))
     {
-      frameSpan = NSHeight (frameRect);
+      frameSpan = NSHeight (bounds);
       clickPositionInFrame = point.y;
     }
   else
     {
-      frameSpan = NSWidth (frameRect);
+      frameSpan = NSWidth (bounds);
       clickPositionInFrame = point.x;
     }
   inputEventCode = mac_get_mouse_btn (theEvent);
@@ -4899,9 +4899,9 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 
 	  if (i < f->n_tool_bar_items)
 	    {
-	      NSRect viewFrame = [hitView frame];
+	      NSRect viewFrame;
 
-	      viewFrame = [hitView convertRect:viewFrame toView:nil];
+	      viewFrame = [hitView convertRect:[hitView bounds] toView:nil];
 	      viewFrame = [emacsView convertRect:viewFrame fromView:nil];
 	      STORE_NATIVE_RECT (last_mouse_glyph,
 				 NSMinX (viewFrame), NSMinY (viewFrame),
@@ -5414,14 +5414,14 @@ static void update_dragged_types P_ ((void));
 {
   struct frame *f = emacsFrame;
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  NSRect emacsViewFrame = [emacsView frame];
+  NSRect emacsViewBounds = [emacsView bounds];
   int x, y;
 
   last_mouse_movement_time = TickCount () * (1000 / 60);  /* to milliseconds */
 
   if (f == dpyinfo->mouse_face_mouse_frame
-      && ! (point.x >= 0 && point.x < NSMaxX (emacsViewFrame)
-	    && point.y >= 0 && point.y < NSMaxY (emacsViewFrame)))
+      && ! (point.x >= 0 && point.x < NSMaxX (emacsViewBounds)
+	    && point.y >= 0 && point.y < NSMaxY (emacsViewBounds)))
     {
       /* This case corresponds to LeaveNotify in X11.  If we move
 	 outside the frame, then we're certainly no longer on any text
@@ -5442,9 +5442,9 @@ static void update_dragged_types P_ ((void));
   /* Has the mouse moved off the glyph it was on at the last sighting?  */
   if (f != last_mouse_glyph_frame
       || x < last_mouse_glyph.x
-      || x >= last_mouse_glyph.x + last_mouse_glyph.width
+      || x - last_mouse_glyph.x >= last_mouse_glyph.width
       || y < last_mouse_glyph.y
-      || y >= last_mouse_glyph.y + last_mouse_glyph.height)
+      || y - last_mouse_glyph.y >= last_mouse_glyph.height)
     {
       f->mouse_moved = 1;
       [emacsView lockFocus];

@@ -1490,7 +1490,7 @@ See also `mac-dnd-known-types'."
 
 ;;; Mouse wheel smooth scroll (experimental)
 
-(defcustom mac-mouse-wheel-smooth-scroll nil
+(defcustom mac-mouse-wheel-smooth-scroll t
   "Non-nil means the mouse wheel should scroll by pixel unit if possible."
   :group 'mac
   :type 'boolean)
