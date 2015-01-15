@@ -2,8 +2,9 @@
 
 This is "Mac port" addition to GNU Emacs 23.  This provides a native
 GUI support for Mac OS X 10.2 - 10.6.  Note that Emacs 23 already
-contains the official GUI support via the NS (Cocoa) port.  So if it
-is good enough for you, then you don't need to try this.
+contains the official GUI support via the NS (Cocoa) port for Mac OS X
+10.4 and later.  So if it is good enough for you, then you don't need
+to try this.
 
   *** IMPORTANT NOTE ***
 

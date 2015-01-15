@@ -6134,10 +6134,17 @@ make_lispy_event (event)
 				      ASIZE (wheel_syms));
 	}
 
-	if (event->modifiers & (double_modifier | triple_modifier))
+	if (event->modifiers & (double_modifier | triple_modifier)
+#ifdef HAVE_MACGUI
+	    || !NILP (event->arg)
+#endif
+	    )
 	  return Fcons (head,
 			Fcons (position,
 			       Fcons (make_number (double_click_count),
+#ifdef HAVE_MACGUI
+				      !NILP (event->arg) ? Fcons (event->arg, Qnil) :
+#endif
 				      Qnil)));
 	else
 	  return Fcons (head,

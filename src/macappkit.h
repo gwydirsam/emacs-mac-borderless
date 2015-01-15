@@ -283,6 +283,12 @@ typedef unsigned int NSUInteger;
 
   /* Saved marked text passed by setMarkedText:selectedRange:.  */
   id markedText;
+
+  /* Position in the last normal (non-momentum) wheel event.  */
+  NSPoint savedWheelPoint;
+
+  /* Modifers in the last normal (non-momentum) wheel event.  */
+  int savedWheelModifiers;
 }
 - (id)target;
 - (SEL)action;
@@ -453,6 +459,11 @@ typedef unsigned int NSUInteger;
 
 @interface NSEvent (Undocumented)
 - (EventRef)_eventRef;
+- (BOOL)_continuousScroll;
+- (NSInteger)_scrollPhase;
+- (CGFloat)deviceDeltaX;
+- (CGFloat)deviceDeltaY;
+- (CGFloat)deviceDeltaZ;
 @end
 
 @interface EmacsController (Menu) <NSMenuDelegate, NSUserInterfaceItemSearching>

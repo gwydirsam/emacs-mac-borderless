@@ -13424,10 +13424,16 @@ redisplay_window (window, just_this_one_p)
   if (!NILP (w->force_start)
       || w->frozen_window_start_p)
     {
+#ifdef HAVE_MACGUI
+      extern int mac_redisplay_dont_reset_vscroll;
+#endif
       /* We set this later on if we have to adjust point.  */
       int new_vpos = -1;
 
       w->force_start = Qnil;
+#ifdef HAVE_MACGUI
+      if (!mac_redisplay_dont_reset_vscroll)
+#endif
       w->vscroll = 0;
       w->window_end_valid = Qnil;
 

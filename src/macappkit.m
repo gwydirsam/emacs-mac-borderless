@@ -2702,6 +2702,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
 @implementation EmacsView
 
+#if 0
 + (void)initialize
 {
   if (self == [EmacsView class])
@@ -2714,6 +2715,7 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       [defaults registerDefaults:appDefaults];
     }
 }
+#endif
 
 - (id)initWithFrame:(NSRect)frameRect
 {
@@ -2876,14 +2878,45 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 {
   struct frame *f = [self emacsFrame];
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+  int modifiers = mac_event_to_emacs_modifiers (theEvent);
   CGFloat deltaX = [theEvent deltaX], deltaY = [theEvent deltaY];
+  CGFloat deltaZ = [theEvent deltaZ];
+  CGFloat deviceDeltaX = 0, deviceDeltaY = 0, deviceDeltaZ = 0;
+  Lisp_Object scrollPhase = Qnil;
+
+  if ([theEvent type] == NSScrollWheel)
+    {
+      if ([theEvent respondsToSelector:@selector(_continuousScroll)]
+	  && [theEvent _continuousScroll])
+	{
+	  deviceDeltaX = [theEvent deviceDeltaX];
+	  deviceDeltaY = [theEvent deviceDeltaY];
+	  deviceDeltaZ = [theEvent deviceDeltaZ];
+	}
+      if ([theEvent respondsToSelector:@selector(_scrollPhase)])
+	{
+	  scrollPhase = make_number ([theEvent _scrollPhase]);
+	  if (EQ (scrollPhase, make_number (0)))
+	    {
+	      savedWheelPoint = point;
+	      savedWheelModifiers = modifiers;
+	    }
+	  else
+	    {
+	      point = savedWheelPoint;
+	      modifiers = savedWheelModifiers;
+	    }
+	}
+    }
 
   if (
 #if 0 /* We let the framework decide whether events to non-focus frame
 	 get accepted.  */
       f != mac_focus_frame (&one_mac_display_info) ||
 #endif
-      deltaX == 0 && deltaY == 0)
+      deltaX == 0 && deltaY == 0 && deltaZ == 0
+      && deviceDeltaX == 0 && deviceDeltaY == 0 && deviceDeltaZ == 0
+      && NILP (scrollPhase))
     return;
 
   if (point.x < 0 || point.y < 0
@@ -2892,16 +2925,33 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
     return;
 
   EVENT_INIT (inputEvent);
-  inputEvent.arg = Qnil;
-  inputEvent.kind = deltaY == 0 ? HORIZ_WHEEL_EVENT : WHEEL_EVENT;
+  if ([theEvent type] != NSScrollWheel)
+    inputEvent.arg = Qnil;
+  else
+    {
+      inputEvent.arg = list3 (make_float (deltaX), make_float (deltaY),
+			      make_float (deltaZ));
+      if (deviceDeltaX != 0 || deviceDeltaY != 0 || deviceDeltaZ != 0)
+	inputEvent.arg = nconc2 (inputEvent.arg,
+				 list3 (make_float (deviceDeltaX),
+					make_float (deviceDeltaY),
+					make_float (deviceDeltaZ)));
+      else if (!NILP (scrollPhase))
+	inputEvent.arg = nconc2 (inputEvent.arg,
+				 list3 (Qnil, Qnil, Qnil));
+      if (!NILP (scrollPhase))
+	inputEvent.arg = nconc2 (inputEvent.arg, Fcons (scrollPhase, Qnil));
+    }
+  inputEvent.kind = (deltaY != 0 || deviceDeltaY != 0
+		     ? WHEEL_EVENT : HORIZ_WHEEL_EVENT);
   inputEvent.code = 0;
-  inputEvent.modifiers = (mac_event_to_emacs_modifiers (theEvent)
-			  | (deltaY < 0 ? down_modifier
-			     : (deltaY > 0 ? up_modifier
-				: (deltaX < 0 ? down_modifier
-				   : up_modifier)))
-			  | ([theEvent type] == NSScrollWheel
-			     ? 0 : drag_modifier));
+  inputEvent.modifiers =
+    (modifiers
+     | (deltaY < 0 || deviceDeltaY < 0 ? down_modifier
+	: (deltaY > 0 || deviceDeltaY > 0 ? up_modifier
+	   : (deltaX < 0 || deviceDeltaX < 0 ? down_modifier
+	      : up_modifier)))
+     | ([theEvent type] == NSScrollWheel ? 0 : drag_modifier));
   XSETINT (inputEvent.x, point.x);
   XSETINT (inputEvent.y, point.y);
   XSETFRAME (inputEvent.frame_or_window, f);

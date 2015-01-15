@@ -155,6 +155,9 @@ int volatile input_signal_count;
 int input_signal_count;
 #endif
 
+/* Non-nil means update doesn't reset vscroll.  */
+int mac_redisplay_dont_reset_vscroll;
+
 extern Lisp_Object Vsystem_name;
 
 extern Lisp_Object Qeql;
@@ -6000,6 +6003,10 @@ baseline level.  The default value is nil.  */);
   DEFVAR_LISP ("x-toolkit-scroll-bars", &Vx_toolkit_scroll_bars,
     doc: /* If not nil, Emacs uses toolkit scroll bars.  */);
   Vx_toolkit_scroll_bars = Qt;
+
+  DEFVAR_BOOL ("mac-redisplay-dont-reset-vscroll", &mac_redisplay_dont_reset_vscroll,
+	       doc: /* Non-nil means update doesn't reset vscroll.  */);
+  mac_redisplay_dont_reset_vscroll = 0;
 
 /* Variables to configure modifier key assignment.  */
 
