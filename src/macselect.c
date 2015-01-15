@@ -1,22 +1,21 @@
 /* Selection processing for Emacs on Mac OS.
    Copyright (C) 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs is distributed in the hope that it will be useful,
+GNU Emacs Mac port is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to
-the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
@@ -24,10 +23,6 @@ Boston, MA 02110-1301, USA.  */
 #include "macterm.h"
 #include "blockinput.h"
 #include "keymap.h"
-
-#if !TARGET_API_MAC_CARBON
-#include <Endian.h>
-#endif
 
 static void x_own_selection P_ ((Lisp_Object, Lisp_Object));
 static Lisp_Object x_get_local_selection P_ ((Lisp_Object, Lisp_Object, int));
@@ -38,11 +33,6 @@ static Lisp_Object x_get_foreign_selection P_ ((Lisp_Object,
 Lisp_Object QPRIMARY, QSECONDARY, QTIMESTAMP, QTARGETS;
 
 static Lisp_Object Vx_lost_selection_functions;
-/* Coding system for communicating with other programs via selections.  */
-static Lisp_Object Vselection_coding_system;
-
-/* Coding system for the next communicating with other programs.  */
-static Lisp_Object Vnext_selection_coding_system;
 
 static Lisp_Object Qforeign_selection;
 
@@ -77,18 +67,11 @@ static Lisp_Object Vselection_alist;
    handling.  */
 Lisp_Object Vselection_converter_alist;
 
-#if USE_APPKIT
 /* A selection name (represented as a Lisp symbol) can be associated
    with a pasteboard via `mac-pasteboard-name' property.  Likewise for
    a selection type with a pasteboard data type via
    `mac-pasteboard-data-type'.  */
 Lisp_Object Qmac_pasteboard_name, Qmac_pasteboard_data_type;
-#else  /* !USE_APPKIT */
-/* A selection name (represented as a Lisp symbol) can be associated
-   with a named scrap via `mac-scrap-name' property.  Likewise for a
-   selection type with a scrap flavor type via `mac-ostype'.  */
-Lisp_Object Qmac_scrap_name, Qmac_ostype;
-#endif	/* !USE_APPKIT */
 
 
 /* Do protocol to assert ourself as a selection owner.
@@ -104,6 +87,9 @@ x_own_selection (selection_name, selection_value)
   struct gcpro gcpro1, gcpro2;
   Lisp_Object rest, handler_fn, value, target_type;
   int count;
+
+  if (! FRAME_MAC_P (SELECTED_FRAME ()))
+    return;
 
   CHECK_SYMBOL (selection_name);
 
@@ -189,7 +175,7 @@ x_own_selection (selection_name, selection_value)
     if (!NILP (prev_value))
       {
 	Lisp_Object rest;	/* we know it's not the CAR, so it's easy.  */
-	for (rest = Vselection_alist; !NILP (rest); rest = Fcdr (rest))
+	for (rest = Vselection_alist; CONSP (rest); rest = XCDR (rest))
 	  if (EQ (prev_value, Fcar (XCDR (rest))))
 	    {
 	      XSETCDR (rest, Fcdr (XCDR (rest)));
@@ -321,7 +307,7 @@ x_clear_frame_selections (f)
     }
 
   /* Delete elements after the beginning of Vselection_alist.  */
-  for (rest = Vselection_alist; !NILP (rest); rest = Fcdr (rest))
+  for (rest = Vselection_alist; CONSP (rest); rest = XCDR (rest))
     if (EQ (frame, Fcar (Fcdr (Fcdr (Fcdr (Fcar (XCDR (rest))))))))
       {
 	/* Let random Lisp code notice that the selection has been stolen.  */
@@ -354,6 +340,9 @@ x_get_foreign_selection (selection_symbol, target_type, time_stamp)
   OSStatus err;
   Selection sel;
   Lisp_Object result = Qnil;
+
+  if (! FRAME_MAC_P (SELECTED_FRAME ()))
+    return Qnil;
 
   BLOCK_INPUT;
 
@@ -450,6 +439,9 @@ Disowning it means there is no such selection.  */)
   Lisp_Object local_selection_data;
 
   check_mac ();
+  if (! FRAME_MAC_P (SELECTED_FRAME ()))
+    return Qnil;
+
   CHECK_SYMBOL (selection);
 
   if (NILP (Fx_selection_owner_p (selection)))
@@ -464,7 +456,7 @@ Disowning it means there is no such selection.  */)
   else
     {
       Lisp_Object rest;
-      for (rest = Vselection_alist; !NILP (rest); rest = Fcdr (rest))
+      for (rest = Vselection_alist; CONSP (rest); rest = XCDR (rest))
 	if (EQ (local_selection_data, Fcar (XCDR (rest))))
 	  {
 	    XSETCDR (rest, Fcdr (XCDR (rest)));
@@ -1068,21 +1060,15 @@ nil, which means the event is already resumed or expired.  */)
 /***********************************************************************
                       Drag and drop support
 ***********************************************************************/
-#if TARGET_API_MAC_CARBON
 Lisp_Object Vmac_dnd_known_types;
-#if USE_APPKIT
 Lisp_Object QCactions, Qcopy, Qlink, Qgeneric, Qprivate, Qmove, Qdelete;
-#endif	/* USE_APPKIT */
-#endif	/* TARGET_API_MAC_CARBON */
 
 
 /***********************************************************************
 			Services menu support
 ***********************************************************************/
-#ifdef MAC_OSX
 /* Selection name for communication via Services menu.  */
 Lisp_Object Vmac_service_selection;
-#endif
 
 void
 syms_of_macselect ()
@@ -1119,37 +1105,18 @@ The functions are called with one argument, the selection type
 \(a symbol, typically `PRIMARY', `SECONDARY', or `CLIPBOARD').  */);
   Vx_lost_selection_functions = Qnil;
 
-  DEFVAR_LISP ("selection-coding-system", &Vselection_coding_system,
-	       doc: /* Coding system for communicating with other programs.
-When sending or receiving text via cut_buffer, selection, and clipboard,
-the text is encoded or decoded by this coding system.
-The default value is determined by the system script code.  */);
-  Vselection_coding_system = Qnil;
-
-  DEFVAR_LISP ("next-selection-coding-system", &Vnext_selection_coding_system,
-	       doc: /* Coding system for the next communication with other programs.
-Usually, `selection-coding-system' is used for communicating with
-other programs.  But, if this variable is set, it is used for the
-next communication only.  After the communication, this variable is
-set to nil.  */);
-  Vnext_selection_coding_system = Qnil;
-
   DEFVAR_LISP ("mac-apple-event-map", &Vmac_apple_event_map,
 	       doc: /* Keymap for Apple events handled by Emacs.  */);
   Vmac_apple_event_map = Qnil;
 
-#if TARGET_API_MAC_CARBON
   DEFVAR_LISP ("mac-dnd-known-types", &Vmac_dnd_known_types,
 	       doc: /* The types accepted by default for dropped data.
 The types are chosen in the order they appear in the list.  */);
   Vmac_dnd_known_types = mac_dnd_default_known_types ();
-#endif
 
-#ifdef MAC_OSX
   DEFVAR_LISP ("mac-service-selection", &Vmac_service_selection,
 	       doc: /* Selection name for communication via Services menu.  */);
   Vmac_service_selection = intern ("PRIMARY");
-#endif
 
   QPRIMARY   = intern ("PRIMARY");	staticpro (&QPRIMARY);
   QSECONDARY = intern ("SECONDARY");	staticpro (&QSECONDARY);
@@ -1159,19 +1126,11 @@ The types are chosen in the order they appear in the list.  */);
   Qforeign_selection = intern ("foreign-selection");
   staticpro (&Qforeign_selection);
 
-#if USE_APPKIT
   Qmac_pasteboard_name = intern ("mac-pasteboard-name");
   staticpro (&Qmac_pasteboard_name);
 
   Qmac_pasteboard_data_type = intern ("mac-pasteboard-data-type");
   staticpro (&Qmac_pasteboard_data_type);
-#else  /* !USE_APPKIT */
-  Qmac_scrap_name = intern ("mac-scrap-name");
-  staticpro (&Qmac_scrap_name);
-
-  Qmac_ostype = intern ("mac-ostype");
-  staticpro (&Qmac_ostype);
-#endif	/* !USE_APPKIT */
 
   Qmac_apple_event_class = intern ("mac-apple-event-class");
   staticpro (&Qmac_apple_event_class);
@@ -1182,7 +1141,6 @@ The types are chosen in the order they appear in the list.  */);
   Qemacs_suspension_id = intern ("emacs-suspension-id");
   staticpro (&Qemacs_suspension_id);
 
-#if USE_APPKIT
   QCactions = intern (":actions");	staticpro (&QCactions);
   Qcopy	    = intern ("copy");		staticpro (&Qcopy);
   Qlink	    = intern ("link");		staticpro (&Qlink);
@@ -1190,7 +1148,6 @@ The types are chosen in the order they appear in the list.  */);
   Qprivate  = intern ("private");	staticpro (&Qprivate);
   Qmove	    = intern ("move");		staticpro (&Qmove);
   Qdelete   = intern ("delete");	staticpro (&Qdelete);
-#endif	/* USE_APPKIT */
 }
 
 /* arch-tag: f3c91ad8-99e0-4bd6-9eef-251b2f848732

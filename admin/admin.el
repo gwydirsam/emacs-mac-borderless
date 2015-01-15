@@ -1,14 +1,14 @@
 ;;; admin.el --- utilities for Emacs administration
 
-;; Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+;; Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
 ;;   Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
-;; GNU Emacs is free software; you can redistribute it and/or modify
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 3, or (at your option)
-;; any later version.
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 
 ;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,33 +16,16 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs; see the file COPYING.  If not, write to the
-;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-;; Boston, MA 02110-1301, USA.
+;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
 ;; add-release-logs	Add ``Version X released'' change log entries.
 ;; set-version		Change Emacs version number in source tree.
+;; set-copyright        Change emacs short copyright string (eg as
+;;                      printed by --version) in source tree.
 
 ;;; Code:
-
-(defun process-lines (program &rest args)
-  "Execute PROGRAM with ARGS, returning its output as a list of lines.
-Signal an error if the program returns with a non-zero exit status."
-  (with-temp-buffer
-    (let ((status (apply 'call-process program nil (current-buffer) nil args)))
-      (unless (eq status 0)
-	(error "%s exited with status %s" program status))
-      (goto-char (point-min))
-      (let (lines)
-	(while (not (eobp))
-	  (setq lines (cons (buffer-substring-no-properties
-			     (line-beginning-position)
-			     (line-end-position))
-			    lines))
-	  (forward-line 1))
-	(nreverse lines)))))
 
 (defun add-release-logs (root version)
   "Add \"Version VERSION released.\" change log entries in ROOT.
@@ -83,11 +66,31 @@ Root must be the root of an Emacs source tree."
   (set-version-in-file root "README" version
 		       (rx (and "version" (1+ space)
 				(submatch (1+ (in "0-9."))))))
-  (set-version-in-file root "man/emacs.texi" version
+  (set-version-in-file root "configure.in" version
+		       (rx (and "AC_INIT" (1+ (not (in ?,)))
+                                ?, (0+ space)
+                                (submatch (1+ (in "0-9."))))))
+  (set-version-in-file root "doc/emacs/emacs.texi" version
 		       (rx (and "EMACSVER" (1+ space)
 				(submatch (1+ (in "0-9."))))))
-  (set-version-in-file root "lispref/elisp.texi" version
+  (set-version-in-file root "doc/lispref/elisp.texi" version
 		       (rx (and "EMACSVER" (1+ space)
+				(submatch (1+ (in "0-9."))))))
+  (set-version-in-file root "doc/lispref/vol1.texi" version
+		       (rx (and "EMACSVER" (1+ space)
+				(submatch (1+ (in "0-9."))))))
+  (set-version-in-file root "doc/lispref/vol2.texi" version
+		       (rx (and "EMACSVER" (1+ space)
+				(submatch (1+ (in "0-9."))))))
+  (set-version-in-file root "doc/lispref/book-spine.texinfo" version
+		       (rx (and "Emacs Version" (1+ space)
+				(submatch (1+ (in "0-9."))))))
+  (set-version-in-file root "doc/man/emacs.1" version
+		       (rx (and ".TH EMACS" (1+ not-newline)
+                                "GNU Emacs" (1+ space)
+				(submatch (1+ (in "0-9."))))))
+  (set-version-in-file root "doc/misc/faq.texi" version
+		       (rx (and "VER" (1+ space)
 				(submatch (1+ (in "0-9."))))))
   (set-version-in-file root "lib-src/makefile.w32-in" version
 		       (rx (and "VERSION" (0+ space) "=" (0+ space)
@@ -134,43 +137,83 @@ Root must be the root of an Emacs source tree."
     (set-version-in-file root "nt/emacsclient.rc" comma-space-version
 			 (rx (and "\"ProductVersion\"" (0+ space) ?,
 				  (0+ space) ?\" (submatch (1+ (in "0-9, ")))
-				  "\\0\"")))
-    ;; Some files in the "mac" subdirectory also contain the version
-    ;; number.
-    (set-version-in-file
-     root "mac/Emacs.app/Contents/Resources/English.lproj/InfoPlist.strings"
-     version (rx (and "CFBundleShortVersionString" (0+ space) ?= (0+ space) ?\"
-		      (submatch (1+ (in "0-9."))))))
-    (set-version-in-file
-     root "mac/Emacs.app/Contents/Resources/English.lproj/InfoPlist.strings"
-     version (rx (and "CFBundleGetInfoString" (0+ space) ?= (0+ space) ?\"
-		      (submatch (1+ (in "0-9."))))))
-    (set-version-in-file root "mac/src/Emacs.r" (car version-components)
-			 (rx (and "GNU Emacs " (submatch (1+ (in "0-9")))
-				  " for Mac OS")))
-    (set-version-in-file root "mac/src/Emacs.r" (car version-components)
-			 (rx (and (submatch (1+ (in "0-9"))) (0+ space) ?\,
-				  (0+ space) "/* Major revision in BCD */")))
-    (set-version-in-file root "mac/src/Emacs.r" (cadr version-components)
-			 (rx (and (submatch (1+ (in "0-9"))) (0+ space) ?\,
-				  (0+ space) "/* Minor revision in BCD */")))
-    (set-version-in-file root "mac/src/Emacs.r" (cadr (cdr version-components))
-			 (rx (and (submatch (1+ (in "0-9"))) (0+ space) ?\,
-				  (0+ space) "/* Non-final release # */")))
-    (set-version-in-file root "mac/src/Emacs.r" version
-			 (rx (and (submatch (1+ (in "0-9."))) (0+ space) ?\" ?\,
-				  (0+ space) "/* Short version number */")))
-    (set-version-in-file root "mac/src/Emacs.r" version
-			 (rx (and "/* Short version number */" (0+ space) ?\"
-				  (submatch (1+ (in "0-9."))))))
-    (let* ((third-component (string-to-number (cadr (cdr version-components))))
-	   (release (cond ((>= third-component 90) "alpha")
-			  ((>= third-component 50) "development")
-			  (t "final"))))
-      (set-version-in-file
-       root "mac/src/Emacs.r" release
-       (rx (and (submatch (1+ (in "a-z"))) (0+ space) ?\, (0+ space)
-		"/* development, alpha, beta, or final (release) */"))))))
+				  "\\0\""))))
+  ;; nextstep.
+  (set-version-in-file
+   root "nextstep/Cocoa/Emacs.base/Contents/Info.plist"
+   version (rx (and "CFBundleGetInfoString" (1+ anything) "Emacs" (1+ space)
+                    (submatch (1+ (in "0-9."))))))
+  (set-version-in-file
+   root "nextstep/Cocoa/Emacs.base/Contents/Info.plist"
+   version (rx (and "CFBundleShortVersionString" (1+ not-newline) ?\n
+                    (0+ not-newline) "<string>" (0+ space)
+                    (submatch (1+ (in "0-9."))))))
+  (set-version-in-file
+   root "nextstep/Cocoa/Emacs.base/Contents/Resources/English.lproj/InfoPlist.strings"
+   version (rx (and "CFBundleShortVersionString" (0+ space) ?= (0+ space)
+                    ?\" (0+ space) "Version" (1+ space)
+                    (submatch (1+ (in "0-9."))))))
+  (set-version-in-file
+   root "nextstep/Cocoa/Emacs.base/Contents/Resources/English.lproj/InfoPlist.strings"
+   version (rx (and "CFBundleGetInfoString" (0+ space) ?= (0+ space)
+                    ?\" (0+ space) "Emacs version" (1+ space)
+                    (submatch (1+ (in "0-9."))))))
+  (set-version-in-file
+   root "nextstep/GNUstep/Emacs.base/Resources/Info-gnustep.plist"
+   version (rx (and "ApplicationRelease" (0+ space) ?= (0+ space)
+                    ?\" (0+ space) (submatch (1+ (in "0-9."))))))
+  (set-version-in-file
+   root "nextstep/GNUstep/Emacs.base/Resources/Info-gnustep.plist"
+   version (rx (and "FullVersionID" (0+ space) ?= (0+ space)
+                    ?\" (0+ space) "Emacs" (1+ space)
+                    (submatch (1+ (in "0-9."))))))
+  (set-version-in-file
+   root "nextstep/GNUstep/Emacs.base/Resources/Emacs.desktop"
+   version (rx (and "Version=" (submatch (1+ (in "0-9.")))))))
 
-;;; arch-tag: 4ea83636-2293-408b-884e-ad64f22a3bf5
-;; admin.el ends here.
+;; Note this makes some assumptions about form of short copyright.
+;; FIXME add the \year in the refcards/*.tex files.
+(defun set-copyright (root copyright)
+  "Set Emacs short copyright to COPYRIGHT in relevant files under ROOT.
+Root must be the root of an Emacs source tree."
+  (interactive (list
+                (read-directory-name "Emacs root directory: " nil nil t)
+                (read-string
+                 "Short copyright string: "
+                 (format "Copyright (C) %s Free Software Foundation, Inc."
+                         (format-time-string "%Y")))))
+  (unless (file-exists-p (expand-file-name "src/emacs.c" root))
+    (error "%s doesn't seem to be the root of an Emacs source tree" root))
+  (set-version-in-file root "lisp/version.el" copyright
+		       (rx (and "emacs-copyright" (0+ space)
+				?\" (submatch (1+ (not (in ?\")))) ?\")))
+  (set-version-in-file root "lib-src/ebrowse.c" copyright
+                       (rx (and "emacs_copyright" (0+ (not (in ?\")))
+				?\" (submatch (1+ (not (in ?\")))) ?\")))
+  (set-version-in-file root "lib-src/etags.c" copyright
+                       (rx (and "emacs_copyright" (0+ (not (in ?\")))
+				?\" (submatch (1+ (not (in ?\")))) ?\")))
+  (set-version-in-file root "lib-src/rcs2log" copyright
+		       (rx (and "Copyright" (0+ space) ?= (0+ space)
+				?\' (submatch (1+ nonl)))))
+  ;; This one is a nuisance, as it needs to be split over two lines.
+  (string-match "\\(.*[0-9]\\{4\\} *\\)\\(.*\\)" copyright)
+  ;; nextstep.
+  (set-version-in-file
+   root "nextstep/Cocoa/Emacs.base/Contents/Info.plist"
+   copyright (rx (and "CFBundleGetInfoString" (1+ anything) "Emacs" (1+ space)
+                    (1+ (in "0-9.")) (1+ space)
+                    (submatch (1+ (not (in ?\<)))))))
+  (set-version-in-file
+   root "nextstep/Cocoa/Emacs.base/Contents/Resources/English.lproj/InfoPlist.strings"
+   copyright (rx (and "NSHumanReadableCopyright" (0+ space) ?\= (0+ space)
+                    ?\" (submatch (1+ (not (in ?\")))))))
+  (set-version-in-file
+   root "nextstep/GNUstep/Emacs.base/Resources/Info-gnustep.plist"
+   copyright (rx (and "Copyright" (0+ space) ?\= (0+ space)
+                      ?\" (submatch (1+ (not (in ?\"))))))))
+
+(provide 'admin)
+
+;; arch-tag: 4ea83636-2293-408b-884e-ad64f22a3bf5
+;;; admin.el ends here

@@ -110,7 +110,7 @@ tparam (string, outstring, len, arg0, arg1, arg2, arg3)
 
 /* These are already defined in the System framework in Mac OS X and
    cause prebinding to fail.  */
-#ifndef MAC_OSX
+#ifndef DARWIN_OS
 char *BC;
 char *UP;
 

@@ -1,0 +1,84 @@
+2009-07-29  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Version 23.1 released.
+
+2009-01-25  Ulf Jasper  <ulf.jasper@web.de>
+
+	* icalendar-testsuite.el
+	(icalendar-testsuite--run-function-tests): Added
+	icalendar-testsuite--test-diarytime-to-isotime.
+	(icalendar-testsuite--test-parse-summary-and-rest): Adjusted to
+	recent icalendar fixes.
+	(icalendar-testsuite--test-diarytime-to-isotime): New.
+	(icalendar-testsuite--test-create-uid): Adjusted to recent
+	icalendar changes.
+
+2008-11-30  Shigeru Fukaya  <shigeru.fukaya@gmail.com>
+
+	* bytecomp-testsuite.el: New file.
+
+2008-10-31  Ulf Jasper  <ulf.jasper@web.de>
+
+	* icalendar-testsuite.el (icalendar-testsuite--run-function-tests):
+	Added `icalendar-testsuite--test-create-uid'.
+	(icalendar-testsuite--test-create-uid): New.
+
+2008-06-14  Ulf Jasper  <ulf.jasper@web.de>
+
+	* newsticker-testsuite.el: New file.
+
+2008-05-24  Ulf Jasper  <ulf.jasper@web.de>
+
+	* icalendar-testsuite.el (icalendar-testsuite--run-function-tests):
+	Add icalendar-testsuite--test-datestring-to-isodate,
+	icalendar-testsuite--test-datetime-to-diary-date, and
+	icalendar-testsuite--test-calendar-style.
+	(icalendar-testsuite--test-format-ical-event):
+	(icalendar-testsuite--test-parse-summary-and-rest):
+	Doc fix.  Remove european-calendar-style.
+	(icalendar-testsuite--get-ical-event): Doc fix.
+	(icalendar-testsuite--test-first-weekday-of-year):
+	(icalendar-testsuite--run-cycle-tests): Add doc string.
+	(icalendar-testsuite--test-datestring-to-isodate):
+	(icalendar-testsuite--test-datetime-to-diary-date):
+	(icalendar-testsuite--test-calendar-style): New functions.
+	(icalendar-testsuite--test-export): Handle iso date style.
+	New arg INPUT-ISO.  Use calendar-date-style.
+	(icalendar-testsuite--test-import): Handle iso date style.
+	New arg EXPECTED-ISO.  Use calendar-date-style.
+	(icalendar-testsuite--test-cycle): Handle iso date style.
+	(icalendar-testsuite--run-import-tests):
+	(icalendar-testsuite--run-export-tests):
+	(icalendar-testsuite--run-real-world-tests): Add iso style tests.
+
+2008-02-29  Glenn Morris  <rgm@gnu.org>
+
+	* README: New file.
+
+2008-02-29  Ulf Jasper  <ulf.jasper@web.de>
+
+	* icalendar-testsuite.el: New file.
+
+;; Local Variables:
+;; coding: utf-8
+;; add-log-time-zone-rule: t
+;; End:
+
+    Copyright (C) 2008, 2009  Free Software Foundation, Inc.
+
+  This file is part of GNU Emacs.
+
+  GNU Emacs is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  GNU Emacs is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; arch-tag: 6f0d1c86-c141-46da-b387-cf17e38c7bf7

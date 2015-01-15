@@ -1,25 +1,24 @@
 /* Implementation of GUI terminal on the Mac OS.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
+                 2008  Free Software Foundation, Inc.
+   Copyright (C) 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs is distributed in the hope that it will be useful,
+GNU Emacs Mac port is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to
-the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
-/* Contributed by Andrew Choi (akochoi@mac.com).  */
+/* Originally contributed by Andrew Choi (akochoi@mac.com) for Emacs 21.  */
 
 #include <config.h>
 #include <signal.h>
@@ -31,32 +30,6 @@ Boston, MA 02110-1301, USA.  */
 
 #include "macterm.h"
 
-#ifndef MAC_OSX
-#include <alloca.h>
-#endif
-
-#if !TARGET_API_MAC_CARBON
-#include <Quickdraw.h>
-#include <ToolUtils.h>
-#include <Sound.h>
-#include <Events.h>
-#include <Script.h>
-#include <Resources.h>
-#include <Fonts.h>
-#include <TextUtils.h>
-#include <LowMem.h>
-#include <Controls.h>
-#include <Windows.h>
-#include <Displays.h>
-#if defined (__MRC__) || (__MSL__ >= 0x6000)
-#include <ControlDefinitions.h>
-#endif
-
-#if __profile__
-#include <profiler.h>
-#endif
-#endif /* not TARGET_API_MAC_CARBON */
-
 #include "systty.h"
 #include "systime.h"
 
@@ -66,6 +39,7 @@ Boston, MA 02110-1301, USA.  */
 #include <sys/stat.h>
 
 #include "charset.h"
+#include "character.h"
 #include "coding.h"
 #include "frame.h"
 #include "dispextern.h"
@@ -80,6 +54,7 @@ Boston, MA 02110-1301, USA.  */
 #include "intervals.h"
 #include "atimer.h"
 #include "keymap.h"
+#include "font.h"
 
 
 
@@ -87,12 +62,8 @@ Boston, MA 02110-1301, USA.  */
 
 Lisp_Object Vx_toolkit_scroll_bars;
 
-/* If non-zero, the text will be rendered using Core Graphics text
-   rendering which may anti-alias the text.  */
-int mac_use_core_graphics;
+/* Non-zero means make use of UNDERLINE_POSITION font properties.  */
 
-/* Non-zero means make use of UNDERLINE_POSITION font properties.
-   (Not yet supported.)  */
 int x_use_underline_position_properties;
 
 /* Non-zero means to draw the underline at the same place as the descent line.  */
@@ -105,14 +76,17 @@ int x_underline_at_descent_line;
 struct x_display_info *x_display_list;
 
 /* This is a list of cons cells, each of the form (NAME
-   FONT-LIST-CACHE . RESOURCE-DATABASE), one for each element of
-   x_display_list and in the same order.  NAME is the name of the
-   frame.  FONT-LIST-CACHE records previous values returned by
-   x-list-fonts.  RESOURCE-DATABASE preserves the X Resource Database
-   equivalent, which is implemented with a Lisp object, for the
-   display. */
+   . FONT-LIST-CACHE), one for each element of x_display_list and in
+   the same order.  NAME is the name of the frame.  FONT-LIST-CACHE
+   records previous values returned by x-list-fonts.  */
 
 Lisp_Object x_display_name_list;
+
+/* This is a list of X Resource Database equivalents, each of which is
+   implemented with a Lisp object.  They are stored in parallel with
+   x_display_name_list.  */
+
+static Lisp_Object x_display_rdb_list;
 
 /* This is display since Mac does not support multiple ones.  */
 struct mac_display_info one_mac_display_info;
@@ -163,8 +137,6 @@ FRAME_PTR last_mouse_glyph_frame;
    this to Qnil, to tell XTmouse_position to return an ordinary motion
    event.  */
 
-Lisp_Object last_mouse_scroll_bar;
-
 /* This is a hack.  We would really prefer that XTmouse_position would
    return the time associated with the position it returns, but there
    doesn't seem to be any way to wrest the time-stamp from the server
@@ -197,11 +169,6 @@ static Lisp_Object Qalt, Qhyper, Qsuper, Qcontrol, Qmeta, Qmodifier_value;
 
 extern int inhibit_window_system;
 
-#if __MRC__ && !TARGET_API_MAC_CARBON
-QDGlobals qd;  /* QuickDraw global information structure.  */
-#endif
-
-struct mac_display_info *mac_display_info_for_display (Display *);
 static void x_update_window_end P_ ((struct window *, int, int));
 int x_catch_errors P_ ((Display *));
 void x_uncatch_errors P_ ((Display *, int));
@@ -214,13 +181,11 @@ void x_set_window_size P_ ((struct frame *, int, int, int));
 void x_wm_set_window_state P_ ((struct frame *, int));
 void x_wm_set_icon_pixmap P_ ((struct frame *, int));
 void mac_initialize P_ ((void));
-static void x_font_min_bounds P_ ((XFontStruct *, int *, int *));
-static int x_compute_min_glyph_bounds P_ ((struct frame *));
 static void x_update_end P_ ((struct frame *));
 static void XTframe_up_to_date P_ ((struct frame *));
-static void XTset_terminal_modes P_ ((void));
-static void XTreset_terminal_modes P_ ((void));
-static void x_clear_frame P_ ((void));
+static void XTset_terminal_modes P_ ((struct terminal *));
+static void XTreset_terminal_modes P_ ((struct terminal *));
+static void x_clear_frame P_ ((struct frame *));
 static void frame_highlight P_ ((struct frame *));
 static void frame_unhighlight P_ ((struct frame *));
 static void x_new_focus_frame P_ ((struct x_display_info *, struct frame *));
@@ -235,24 +200,10 @@ static void x_update_begin P_ ((struct frame *));
 static void x_update_window_begin P_ ((struct window *));
 static void x_after_update_window_line P_ ((struct glyph_row *));
 
-static XCharStruct *mac_per_char_metric P_ ((XFontStruct *, XChar2b *, int));
-static void XSetFont P_ ((Display *, GC, XFontStruct *));
+void x_delete_terminal P_ ((struct terminal *));
+static struct terminal *mac_create_terminal P_ ((struct mac_display_info *dpyinfo));
 
-#if !USE_APPKIT
-extern void mac_toolbox_initialize P_ ((void));
-extern void x_scroll_bar_report_motion P_ ((struct frame **, Lisp_Object *,
-					    enum scroll_bar_part *,
-					    Lisp_Object *, Lisp_Object *,
-					    unsigned long *));
-#if USE_CG_DRAWING
-extern void mac_flush_display_optional P_ ((struct frame *));
-#endif
-#endif
-
-#if USE_QUICKDRAW
-#define GC_FORE_COLOR(gc)	(&(gc)->fore_color)
-#define GC_BACK_COLOR(gc)	(&(gc)->back_color)
-#elif !USE_MAC_IMAGE_IO
+#if !USE_MAC_IMAGE_IO
 static RGBColor *
 GC_FORE_COLOR (gc)
      GC gc;
@@ -282,63 +233,6 @@ GC_BACK_COLOR (gc)
 #define GC_FONT(gc)		((gc)->xgcv.font)
 #define FRAME_NORMAL_GC(f)	((f)->output_data.mac->normal_gc)
 
-#define CG_SET_FILL_COLOR(context, color)				\
-  CGContextSetRGBFillColor (context,					\
-			    RED_FROM_ULONG (color) / 255.0f,		\
-			    GREEN_FROM_ULONG (color) / 255.0f,		\
-			    BLUE_FROM_ULONG (color) / 255.0f, 1.0f)
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
-#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-#define CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
-  do {								       \
-    if (CGColorGetTypeID != NULL)				       \
-      CGContextSetFillColorWithColor (context, cg_color);	       \
-    else							       \
-      CG_SET_FILL_COLOR (context, color);			       \
-  } while (0)
-#else
-#define CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color)	\
-  CGContextSetFillColorWithColor (context, cg_color)
-#endif
-#else
-#define CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color)	\
-  CG_SET_FILL_COLOR (context, color)
-#endif
-#define CG_SET_FILL_COLOR_WITH_GC_FOREGROUND(context, gc)		\
-  CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR (context, (gc)->xgcv.foreground,	\
-					(gc)->cg_fore_color)
-#define CG_SET_FILL_COLOR_WITH_GC_BACKGROUND(context, gc)		\
-  CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR (context, (gc)->xgcv.background,	\
-					(gc)->cg_back_color)
-
-
-#define CG_SET_STROKE_COLOR(context, color)				\
-  CGContextSetRGBStrokeColor (context,					\
-			      RED_FROM_ULONG (color) / 255.0f,		\
-			      GREEN_FROM_ULONG (color) / 255.0f,	\
-			      BLUE_FROM_ULONG (color) / 255.0f, 1.0f)
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
-#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-#define CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
-  do {								       \
-    if (CGColorGetTypeID != NULL)				       \
-      CGContextSetStrokeColorWithColor (context, cg_color);	       \
-    else							       \
-      CG_SET_STROKE_COLOR (context, color);			       \
-  } while (0)
-#else
-#define CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
-  CGContextSetStrokeColorWithColor (context, cg_color)
-#endif
-#else
-#define CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
-  CG_SET_STROKE_COLOR (context, color)
-#endif
-#define CG_SET_STROKE_COLOR_WITH_GC_FOREGROUND(context, gc) \
-  CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR (context, (gc)->xgcv.foreground, \
-					  (gc)->cg_fore_color)
-
-#if USE_CG_DRAWING
 /* Fringe bitmaps.  */
 
 static int max_fringe_bmp = 0;
@@ -366,66 +260,13 @@ init_cg_color ()
     }
 #endif
 }
-#endif	/* USE_CG_DRAWING */
 
 /* X display function emulation */
-
-#if !USE_APPKIT
-/* Mac version of XDrawLine.  */
-
-static void
-mac_draw_line (f, gc, x1, y1, x2, y2)
-     struct frame *f;
-     GC gc;
-     int x1, y1, x2, y2;
-{
-#if USE_CG_DRAWING
-  CGContextRef context;
-  CGFloat gx1 = x1, gy1 = y1, gx2 = x2, gy2 = y2;
-
-  if (y1 != y2)
-    gx1 += 0.5f, gx2 += 0.5f;
-  if (x1 != x2)
-    gy1 += 0.5f, gy2 += 0.5f;
-
-  context = mac_begin_cg_clip (f, gc);
-  CG_SET_STROKE_COLOR_WITH_GC_FOREGROUND (context, gc);
-  CGContextBeginPath (context);
-  CGContextMoveToPoint (context, gx1, gy1);
-  CGContextAddLineToPoint (context, gx2, gy2);
-  CGContextClosePath (context);
-  CGContextStrokePath (context);
-  mac_end_cg_clip (f);
-#else
-  if (x1 == x2)
-    {
-      if (y1 > y2)
-	y1--;
-      else if (y2 > y1)
-	y2--;
-    }
-  else if (y1 == y2)
-    {
-      if (x1 > x2)
-	x1--;
-      else
-	x2--;
-    }
-
-  mac_begin_clip (f, gc);
-  RGBForeColor (GC_FORE_COLOR (gc));
-  MoveTo (x1, y1);
-  LineTo (x2, y2);
-  mac_end_clip (f, gc);
-#endif
-}
-#endif
 
 /* Mac version of XDrawLine (to Pixmap).  */
 
 void
-XDrawLine (display, p, gc, x1, y1, x2, y2)
-     Display *display;
+mac_draw_line_to_pixmap (p, gc, x1, y1, x2, y2)
      Pixmap p;
      GC gc;
      int x1, y1, x2, y2;
@@ -505,23 +346,12 @@ mac_erase_rectangle (f, gc, x, y, width, height)
      int x, y;
      unsigned int width, height;
 {
-#if USE_CG_DRAWING
   CGContextRef context;
 
   context = mac_begin_cg_clip (f, gc);
   CG_SET_FILL_COLOR_WITH_GC_BACKGROUND (context, gc);
   CGContextFillRect (context, mac_rect_make (f, x, y, width, height));
   mac_end_cg_clip (f);
-#else
-  Rect r;
-
-  mac_begin_clip (f, gc);
-  RGBBackColor (GC_BACK_COLOR (gc));
-  SetRect (&r, x, y, x + width, y + height);
-  EraseRect (&r);
-  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-  mac_end_clip (f, gc);
-#endif
 }
 
 
@@ -542,7 +372,6 @@ static void
 mac_clear_window (f)
      struct frame *f;
 {
-#if USE_CG_DRAWING
   CGContextRef context;
   GC gc = FRAME_NORMAL_GC (f);
 
@@ -551,27 +380,11 @@ mac_clear_window (f)
   CGContextFillRect (context, CGRectMake (0, 0, FRAME_PIXEL_WIDTH (f),
 					  FRAME_PIXEL_HEIGHT (f)));
   mac_end_cg_clip (f);
-#else  /* !USE_CG_DRAWING */
-  mac_begin_clip (f, NULL);
-  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-#if TARGET_API_MAC_CARBON
-  {
-    Rect r;
-
-    GetWindowPortBounds (FRAME_MAC_WINDOW (f), &r);
-    EraseRect (&r);
-  }
-#else /* not TARGET_API_MAC_CARBON */
-  EraseRect (&(FRAME_MAC_WINDOW (f)->portRect));
-#endif /* not TARGET_API_MAC_CARBON */
-  mac_end_clip (f, NULL);
-#endif
 }
 
 
 /* Mac replacement for XCopyArea.  */
 
-#if USE_CG_DRAWING
 static void
 mac_draw_cg_image (image, f, gc, src_x, src_y, width, height,
 		   dest_x, dest_y, overlay_p)
@@ -604,46 +417,6 @@ mac_draw_cg_image (image, f, gc, src_x, src_y, width, height,
   CGContextDrawImage (context, bounds, image);
   mac_end_cg_clip (f);
 }
-
-#else  /* !USE_CG_DRAWING */
-
-static void
-mac_draw_bitmap (f, gc, x, y, width, height, bits, overlay_p)
-     struct frame *f;
-     GC gc;
-     int x, y, width, height;
-     unsigned short *bits;
-     int overlay_p;
-{
-  BitMap bitmap;
-  Rect r;
-
-  bitmap.rowBytes = sizeof(unsigned short);
-  bitmap.baseAddr = (char *)bits;
-  SetRect (&(bitmap.bounds), 0, 0, width, height);
-
-  mac_begin_clip (f, gc);
-  RGBForeColor (GC_FORE_COLOR (gc));
-  RGBBackColor (GC_BACK_COLOR (gc));
-  SetRect (&r, x, y, x + width, y + height);
-#if TARGET_API_MAC_CARBON
-  {
-    CGrafPtr port;
-
-    GetPort (&port);
-    LockPortBits (port);
-    CopyBits (&bitmap, GetPortBitMapForCopyBits (port),
-	      &(bitmap.bounds), &r, overlay_p ? srcOr : srcCopy, 0);
-    UnlockPortBits (port);
-  }
-#else /* not TARGET_API_MAC_CARBON */
-  CopyBits (&bitmap, &(FRAME_MAC_WINDOW (f)->portBits), &(bitmap.bounds), &r,
-	    overlay_p ? srcOr : srcCopy, 0);
-#endif /* not TARGET_API_MAC_CARBON */
-  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-  mac_end_clip (f, gc);
-}
-#endif	/* !USE_CG_DRAWING */
 
 
 /* Mac replacement for XCreateBitmapFromBitmapData.  */
@@ -691,8 +464,7 @@ mac_free_bitmap (bitmap)
 
 
 Pixmap
-XCreatePixmap (display, w, width, height, depth)
-     Display *display;
+mac_create_pixmap (w, width, height, depth)
      Window w;
      unsigned int width, height;
      unsigned int depth;
@@ -712,15 +484,12 @@ XCreatePixmap (display, w, width, height, depth)
   Rect r;
   QDErr err;
 
-#ifdef MAC_OS8
-  SetPortWindowPort (w);
-#endif
   SetRect (&r, 0, 0, width, height);
-#if !defined (WORDS_BIG_ENDIAN) && USE_CG_DRAWING
+#ifndef WORDS_BIG_ENDIAN
   if (depth == 1)
 #endif
     err = NewGWorld (&pixmap, depth, &r, NULL, NULL, 0);
-#if !defined (WORDS_BIG_ENDIAN) && USE_CG_DRAWING
+#ifndef WORDS_BIG_ENDIAN
   else
     /* CreateCGImageFromPixMaps requires ARGB format.  */
     err = QTNewGWorld (&pixmap, k32ARGBPixelFormat, &r, NULL, NULL, 0);
@@ -733,8 +502,7 @@ XCreatePixmap (display, w, width, height, depth)
 
 
 Pixmap
-XCreatePixmapFromBitmapData (display, w, data, width, height, fg, bg, depth)
-     Display *display;
+mac_create_pixmap_from_bitmap_data (w, data, width, height, fg, bg, depth)
      Window w;
      char *data;
      unsigned int width, height;
@@ -791,13 +559,8 @@ XCreatePixmapFromBitmapData (display, w, data, width, height, fg, bg, depth)
   RGBForeColor (GC_FORE_COLOR (gc));
   RGBBackColor (GC_BACK_COLOR (gc));
   LockPixels (GetGWorldPixMap (pixmap));
-#if TARGET_API_MAC_CARBON
   CopyBits (&bitmap, GetPortBitMapForCopyBits (pixmap),
 	    &bitmap.bounds, &bitmap.bounds, srcCopy, 0);
-#else /* not TARGET_API_MAC_CARBON */
-  CopyBits (&bitmap, &(((GrafPtr)pixmap)->portBits),
-	    &bitmap.bounds, &bitmap.bounds, srcCopy, 0);
-#endif /* not TARGET_API_MAC_CARBON */
   UnlockPixels (GetGWorldPixMap (pixmap));
   SetGWorld (old_port, old_gdh);
 #endif
@@ -808,15 +571,13 @@ XCreatePixmapFromBitmapData (display, w, data, width, height, fg, bg, depth)
 
 
 void
-XFreePixmap (display, pixmap)
-     Display *display;
+mac_free_pixmap (pixmap)
      Pixmap pixmap;
 {
 #if USE_MAC_IMAGE_IO
   if (pixmap)
     {
-      if (pixmap->data)
-	xfree (pixmap->data);
+      xfree (pixmap->data);
       xfree (pixmap);
     }
 #else
@@ -834,22 +595,12 @@ mac_fill_rectangle (f, gc, x, y, width, height)
      int x, y;
      unsigned int width, height;
 {
-#if USE_CG_DRAWING
   CGContextRef context;
 
   context = mac_begin_cg_clip (f, gc);
   CG_SET_FILL_COLOR_WITH_GC_FOREGROUND (context, gc);
   CGContextFillRect (context, mac_rect_make (f, x, y, width, height));
   mac_end_cg_clip (f);
-#else
-  Rect r;
-
-  mac_begin_clip (f, gc);
-  RGBForeColor (GC_FORE_COLOR (gc));
-  SetRect (&r, x, y, x + width, y + height);
-  PaintRect (&r); /* using foreground color of gc */
-  mac_end_clip (f, gc);
-#endif
 }
 
 
@@ -862,7 +613,6 @@ mac_draw_rectangle (f, gc, x, y, width, height)
      int x, y;
      unsigned int width, height;
 {
-#if USE_CG_DRAWING
   CGContextRef context;
   CGRect rect;
 
@@ -871,19 +621,9 @@ mac_draw_rectangle (f, gc, x, y, width, height)
   rect = mac_rect_make (f, x, y, width + 1, height + 1);
   CGContextStrokeRect (context, CGRectInset (rect, 0.5f, 0.5f));
   mac_end_cg_clip (f);
-#else
-  Rect r;
-
-  mac_begin_clip (f, gc);
-  RGBForeColor (GC_FORE_COLOR (gc));
-  SetRect (&r, x, y, x + width + 1, y + height + 1);
-  FrameRect (&r); /* using foreground color of gc */
-  mac_end_clip (f, gc);
-#endif
 }
 
 
-#if USE_APPKIT
 static void
 mac_fill_trapezoid_for_relief (f, gc, x, y, width, height, top_p)
      struct frame *f;
@@ -914,7 +654,6 @@ mac_fill_trapezoid_for_relief (f, gc, x, y, width, height, top_p)
   CGContextFillPath (context);
   mac_end_cg_clip (f);
 }
-#endif
 
 
 static void
@@ -923,7 +662,7 @@ mac_invert_rectangle (f, x, y, width, height)
      int x, y;
      unsigned int width, height;
 {
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
   if (CGContextSetBlendMode != NULL)
 #endif
@@ -939,759 +678,29 @@ mac_invert_rectangle (f, x, y, width, height)
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
   else				/* CGContextSetBlendMode == NULL */
 #endif
-#endif	/* USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1040 */
-#if !USE_CG_DRAWING || MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1040 */
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
     {
-#if USE_QUICKDRAW
-      Rect r;
-
-      mac_begin_clip (f, NULL);
-      SetRect (&r, x, y, x + width, y + height);
-      InvertRect (&r);
-      mac_end_clip (f, NULL);
-#elif USE_APPKIT
       extern void mac_appkit_invert_rectangle P_ ((struct frame *, int, int,
 						   unsigned int, unsigned int));
 
       mac_appkit_invert_rectangle (f, x, y, width, height);
-#endif
     }
 #endif
 }
-
-
-#if USE_ATSUI
-static OSStatus
-atsu_get_text_layout_with_text_ptr (text, text_length, style, text_layout)
-     ConstUniCharArrayPtr text;
-     UniCharCount text_length;
-     ATSUStyle style;
-     ATSUTextLayout *text_layout;
-{
-  OSStatus err;
-  static ATSUTextLayout saved_text_layout = NULL;
-
-  if (saved_text_layout == NULL)
-    {
-      static const UniCharCount lengths[] = {kATSUToTextEnd};
-      static const ATSUAttributeTag tags[] = {kATSULineLayoutOptionsTag};
-      static const ByteCount sizes[] = {sizeof (ATSLineLayoutOptions)};
-      static ATSLineLayoutOptions line_layout =
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-	kATSLineDisableAllLayoutOperations | kATSLineUseDeviceMetrics
-	| kATSLineUseQDRendering
-#else
-	kATSLineIsDisplayOnly | kATSLineFractDisable
-#endif
-	;
-      static const ATSUAttributeValuePtr values[] = {&line_layout};
-
-      err = ATSUCreateTextLayoutWithTextPtr (text,
-					     kATSUFromTextBeginning,
-					     kATSUToTextEnd,
-					     text_length,
-					     1, lengths, &style,
-					     &saved_text_layout);
-      if (err == noErr)
-	err = ATSUSetLayoutControls (saved_text_layout,
-				     sizeof (tags) / sizeof (tags[0]),
-				     tags, sizes, values);
-      if (err == noErr)
-	err = ATSUSetTransientFontMatching (saved_text_layout, true);
-    }
-  else
-    {
-      err = ATSUSetRunStyle (saved_text_layout, style,
-			     kATSUFromTextBeginning, kATSUToTextEnd);
-      if (err == noErr)
-	err = ATSUSetTextPointerLocation (saved_text_layout, text,
-					  kATSUFromTextBeginning,
-					  kATSUToTextEnd,
-					  text_length);
-    }
-
-  if (err == noErr)
-    *text_layout = saved_text_layout;
-  return err;
-}
-
-
-static void
-mac_draw_image_string_atsui (f, gc, x, y, buf, nchars, bg_width,
-			     overstrike_p, bytes_per_char)
-     struct frame *f;
-     GC gc;
-     int x, y;
-     char *buf;
-     int nchars, bg_width, overstrike_p, bytes_per_char;
-{
-  OSStatus err;
-  ATSUTextLayout text_layout;
-
-  xassert (bytes_per_char == 2);
-
-#ifndef WORDS_BIG_ENDIAN
-  {
-    int i;
-    UniChar *text = (UniChar *)buf;
-
-    for (i = 0; i < nchars; i++)
-      text[i] = EndianU16_BtoN (text[i]);
-  }
-#endif
-  err = atsu_get_text_layout_with_text_ptr ((ConstUniCharArrayPtr)buf,
-					    nchars,
-					    GC_FONT (gc)->mac_style,
-					    &text_layout);
-  if (err != noErr)
-    return;
-
-#if USE_QUICKDRAW
-#ifdef MAC_OSX
-  if (!mac_use_core_graphics)
-    {
-#endif
-      mac_begin_clip (f, gc);
-      RGBForeColor (GC_FORE_COLOR (gc));
-      if (bg_width)
-	{
-	  Rect r;
-
-	  SetRect (&r, x, y - FONT_BASE (GC_FONT (gc)),
-		   x + bg_width, y + FONT_DESCENT (GC_FONT (gc)));
-	  RGBBackColor (GC_BACK_COLOR (gc));
-	  EraseRect (&r);
-	  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-	}
-      MoveTo (x, y);
-      ATSUDrawText (text_layout,
-		    kATSUFromTextBeginning, kATSUToTextEnd,
-		    kATSUUseGrafPortPenLoc, kATSUUseGrafPortPenLoc);
-      if (overstrike_p)
-	{
-	  MoveTo (x + 1, y);
-	  ATSUDrawText (text_layout,
-			kATSUFromTextBeginning, kATSUToTextEnd,
-			kATSUUseGrafPortPenLoc, kATSUUseGrafPortPenLoc);
-	}
-      mac_end_clip (f, gc);
-#ifdef MAC_OSX
-    }
-  else
-#endif
-#endif	/* USE_QUICKDRAW */
-#ifdef MAC_OSX
-    {
-      static CGContextRef context;
-      static const ATSUAttributeTag tags[] = {kATSUCGContextTag};
-      static const ByteCount sizes[] = {sizeof (CGContextRef)};
-      static const ATSUAttributeValuePtr values[] = {&context};
-
-#if USE_CG_DRAWING
-      context = mac_begin_cg_clip (f, gc);
-#else
-      CGrafPtr port;
-
-      GetPort (&port);
-      QDBeginCGContext (port, &context);
-      CGContextTranslateCTM (context, 0, FRAME_PIXEL_HEIGHT (f));
-      if (gc->n_clip_rects || bg_width)
-	{
-	  CGContextScaleCTM (context, 1, -1);
-	  if (gc->n_clip_rects)
-	    CGContextClipToRects (context, gc->clip_rects,
-				  gc->n_clip_rects);
-#endif
-	  if (bg_width)
-	    {
-	      CG_SET_FILL_COLOR_WITH_GC_BACKGROUND (context, gc);
-	      CGContextFillRect	(context,
-				 mac_rect_make (f,
-						x, y - FONT_BASE (GC_FONT (gc)),
-						bg_width,
-						FONT_HEIGHT (GC_FONT (gc))));
-	    }
-	  CGContextScaleCTM (context, 1, -1);
-#if !USE_CG_DRAWING
-	}
-#endif
-      CG_SET_FILL_COLOR_WITH_GC_FOREGROUND (context, gc);
-      err = ATSUSetLayoutControls (text_layout,
-				   sizeof (tags) / sizeof (tags[0]),
-				   tags, sizes, values);
-      if (err == noErr)
-	{
-	  ATSUDrawText (text_layout,
-			kATSUFromTextBeginning, kATSUToTextEnd,
-			Long2Fix (x), Long2Fix (-y));
-	  if (overstrike_p)
-	    ATSUDrawText (text_layout,
-			  kATSUFromTextBeginning, kATSUToTextEnd,
-			  Long2Fix (x + 1), Long2Fix (-y));
-	}
-#if USE_CG_DRAWING
-      mac_end_cg_clip (f);
-      context = NULL;
-#else
-      CGContextSynchronize (context);
-      QDEndCGContext (port, &context);
-#endif
-#if 0
-      /* This doesn't work on Mac OS X 10.1.  */
-      ATSUClearLayoutControls (text_layout,
-			       sizeof (tags) / sizeof (tags[0]), tags);
-#else
-      ATSUSetLayoutControls (text_layout,
-			     sizeof (tags) / sizeof (tags[0]),
-			     tags, sizes, values);
-#endif
-    }
-#endif	/* MAC_OSX */
-}
-#endif	/* USE_ATSUI */
-
-
-#if USE_QUICKDRAW
-static void
-mac_draw_image_string_qd (f, gc, x, y, buf, nchars, bg_width,
-			  overstrike_p, bytes_per_char)
-     struct frame *f;
-     GC gc;
-     int x, y;
-     char *buf;
-     int nchars, bg_width, overstrike_p, bytes_per_char;
-{
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-  UInt32 savedFlags;
-#endif
-
-  mac_begin_clip (f, gc);
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-  if (mac_use_core_graphics)
-    savedFlags = SwapQDTextFlags (kQDUseCGTextRendering);
-#endif
-  RGBForeColor (GC_FORE_COLOR (gc));
-#ifdef MAC_OS8
-  if (bg_width)
-    {
-      RGBBackColor (GC_BACK_COLOR (gc));
-      TextMode (srcCopy);
-    }
-  else
-    TextMode (srcOr);
-#else
-  /* We prefer not to use srcCopy text transfer mode on Mac OS X
-     because:
-     - Screen is double-buffered.  (In srcCopy mode, a text is drawn
-       into an offscreen graphics world first.  So performance gain
-       cannot be expected.)
-     - It lowers rendering quality.
-     - Some fonts leave garbage on cursor movement.  */
-  if (bg_width)
-    {
-      Rect r;
-
-      RGBBackColor (GC_BACK_COLOR (gc));
-      SetRect (&r, x, y - FONT_BASE (GC_FONT (gc)),
-	       x + bg_width, y + FONT_DESCENT (GC_FONT (gc)));
-      EraseRect (&r);
-    }
-  TextMode (srcOr);
-#endif
-  TextFont (GC_FONT (gc)->mac_fontnum);
-  TextSize (GC_FONT (gc)->mac_fontsize);
-  TextFace (GC_FONT (gc)->mac_fontface);
-  MoveTo (x, y);
-  DrawText (buf, 0, nchars * bytes_per_char);
-  if (overstrike_p)
-    {
-      TextMode (srcOr);
-      MoveTo (x + 1, y);
-      DrawText (buf, 0, nchars * bytes_per_char);
-    }
-  if (bg_width)
-    RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-  mac_end_clip (f, gc);
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-  if (mac_use_core_graphics)
-    SwapQDTextFlags(savedFlags);
-#endif
-}
-#endif	/* USE_QUICKDRAW */
-
-
-static INLINE void
-mac_draw_string_common (f, gc, x, y, buf, nchars, bg_width,
-			overstrike_p, bytes_per_char)
-     struct frame *f;
-     GC gc;
-     int x, y;
-     char *buf;
-     int nchars, bg_width, overstrike_p, bytes_per_char;
-{
-#if USE_ATSUI
-  if (GC_FONT (gc)->mac_style)
-    mac_draw_image_string_atsui (f, gc, x, y, buf, nchars, bg_width,
-				 overstrike_p, bytes_per_char);
-  else
-#endif	/* USE_ATSUI */
-    {
-#if !USE_QUICKDRAW
-      abort ();
-#else  /* USE_QUICKDRAW */
-      mac_draw_image_string_qd (f, gc, x, y, buf, nchars, bg_width,
-				overstrike_p, bytes_per_char);
-#endif	/* USE_QUICKDRAW */
-    }
-}
-
-
-/* Mac replacement for XDrawImageString.  */
-
-static void
-mac_draw_image_string (f, gc, x, y, buf, nchars, bg_width, overstrike_p)
-     struct frame *f;
-     GC gc;
-     int x, y;
-     char *buf;
-     int nchars, bg_width, overstrike_p;
-{
-  mac_draw_string_common (f, gc, x, y, buf, nchars, bg_width,
-			  overstrike_p, 1);
-}
-
-
-/* Mac replacement for XDrawImageString16.  */
-
-static void
-mac_draw_image_string_16 (f, gc, x, y, buf, nchars, bg_width, overstrike_p)
-     struct frame *f;
-     GC gc;
-     int x, y;
-     XChar2b *buf;
-     int nchars, bg_width, overstrike_p;
-{
-  mac_draw_string_common (f, gc, x, y, (char *) buf, nchars, bg_width,
-			  overstrike_p, 2);
-}
-
-
-/* Mac replacement for XQueryTextExtents, but takes a character.  If
-   STYLE is NULL, measurement is done by QuickDraw Text routines for
-   the font of the current graphics port.  If CG_GLYPH is not NULL,
-   *CG_GLYPH is set to the glyph ID or 0 if it cannot be obtained.  */
-
-static OSStatus
-mac_query_char_extents (style, c,
-			font_ascent_return, font_descent_return,
-			overall_return, cg_glyph)
-#if USE_ATSUI
-     ATSUStyle style;
-#else
-     void *style;
-#endif
-     int c;
-     int *font_ascent_return, *font_descent_return;
-     XCharStruct *overall_return;
-#if USE_CG_TEXT_DRAWING
-     CGGlyph *cg_glyph;
-#else
-     void *cg_glyph;
-#endif
-{
-  OSStatus err = noErr;
-  int width;
-  Rect char_bounds;
-
-#if USE_ATSUI
-  if (style)
-    {
-      ATSUTextLayout text_layout;
-      UniChar ch = c;
-
-      err = atsu_get_text_layout_with_text_ptr (&ch, 1, style, &text_layout);
-      if (err == noErr
-	  && (font_ascent_return || font_descent_return || overall_return))
-	{
-	  ATSTrapezoid glyph_bounds;
-
-	  err = ATSUGetGlyphBounds (text_layout, 0, 0,
-				    kATSUFromTextBeginning, kATSUToTextEnd,
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-				    kATSUseFractionalOrigins,
-#else
-				    kATSUseDeviceOrigins,
-#endif
-				    1, &glyph_bounds, NULL);
-	  if (err == noErr)
-	    {
-	      xassert (glyph_bounds.lowerRight.x - glyph_bounds.lowerLeft.x
-		       == glyph_bounds.upperRight.x - glyph_bounds.upperLeft.x);
-
-	      width = Fix2Long (glyph_bounds.upperRight.x
-				- glyph_bounds.upperLeft.x);
-	      if (font_ascent_return)
-		*font_ascent_return = -Fix2Long (glyph_bounds.upperLeft.y);
-	      if (font_descent_return)
-		*font_descent_return = Fix2Long (glyph_bounds.lowerLeft.y);
-	    }
-	}
-      if (err == noErr && overall_return)
-	{
-	  err = ATSUMeasureTextImage (text_layout,
-				      kATSUFromTextBeginning, kATSUToTextEnd,
-				      0, 0, &char_bounds);
-	  if (err == noErr)
-	    STORE_XCHARSTRUCT (*overall_return, width, char_bounds);
-#if USE_CG_TEXT_DRAWING
-	  if (err == noErr && cg_glyph)
-	    {
-	      OSStatus err1;
-	      ATSUGlyphInfoArray glyph_info_array;
-	      ByteCount count = sizeof (ATSUGlyphInfoArray);
-
-	      err1 = ATSUMatchFontsToText (text_layout, kATSUFromTextBeginning,
-					   kATSUToTextEnd, NULL, NULL, NULL);
-	      if (err1 == noErr)
-		err1 = ATSUGetGlyphInfo (text_layout, kATSUFromTextBeginning,
-					 kATSUToTextEnd, &count,
-					 &glyph_info_array);
-	      if (err1 == noErr
-		  /* Make sure that we don't have to make layout
-		     adjustments.  */
-		  && glyph_info_array.glyphs[0].deltaY == 0.0f
-		  && glyph_info_array.glyphs[0].idealX == 0.0f
-		  && glyph_info_array.glyphs[0].screenX == 0)
-		{
-		  xassert (glyph_info_array.glyphs[0].glyphID);
-		  *cg_glyph = glyph_info_array.glyphs[0].glyphID;
-		}
-	      else
-		*cg_glyph = 0;
-	    }
-#endif
-	}
-    }
-  else
-#endif
-    {
-#if !USE_QUICKDRAW
-      abort ();
-#else  /* USE_QUICKDRAW */
-      if (font_ascent_return || font_descent_return)
-	{
-	  FontInfo font_info;
-
-	  GetFontInfo (&font_info);
-	  if (font_ascent_return)
-	    *font_ascent_return = font_info.ascent;
-	  if (font_descent_return)
-	    *font_descent_return = font_info.descent;
-	}
-      if (overall_return)
-	{
-	  char ch = c;
-
-	  width = CharWidth (ch);
-	  QDTextBounds (1, &ch, &char_bounds);
-	  STORE_XCHARSTRUCT (*overall_return, width, char_bounds);
-	}
-#endif   /* USE_QUICKDRAW */
-    }
-
-  return err;
-}
-
-
-/* Mac replacement for XTextExtents16.  Only sets horizontal metrics.  */
-
-static int
-mac_text_extents_16 (font_struct, string, nchars, overall_return)
-     XFontStruct *font_struct;
-     XChar2b *string;
-     int nchars;
-     XCharStruct *overall_return;
-{
-  int i;
-  short width = 0, lbearing = 0, rbearing = 0;
-  XCharStruct *pcm;
-
-  for (i = 0; i < nchars; i++)
-    {
-      pcm = mac_per_char_metric (font_struct, string, 0);
-      if (pcm == NULL)
-	width += FONT_WIDTH (font_struct);
-      else
-	{
-	  lbearing = min (lbearing, width + pcm->lbearing);
-	  rbearing = max (rbearing, width + pcm->rbearing);
-	  width += pcm->width;
-	}
-      string++;
-    }
-
-  overall_return->lbearing = lbearing;
-  overall_return->rbearing = rbearing;
-  overall_return->width = width;
-
-  /* What's the meaning of the return value of XTextExtents16?  */
-}
-
-
-#if USE_CG_TEXT_DRAWING
-static int cg_text_anti_aliasing_threshold = 8;
-
-static void
-init_cg_text_anti_aliasing_threshold ()
-{
-  int threshold;
-  Boolean valid_p;
-
-  threshold =
-    CFPreferencesGetAppIntegerValue (CFSTR ("AppleAntiAliasingThreshold"),
-				     kCFPreferencesCurrentApplication,
-				     &valid_p);
-  if (valid_p)
-    cg_text_anti_aliasing_threshold = threshold;
-}
-
-static int
-mac_draw_image_string_cg (f, gc, x, y, buf, nchars, bg_width, overstrike_p)
-     struct frame *f;
-     GC gc;
-     int x, y;
-     XChar2b *buf;
-     int nchars, bg_width, overstrike_p;
-{
-  CGFloat gx, gy;
-  int i;
-  CGContextRef context;
-  CGGlyph *glyphs;
-  CGSize *advances;
-
-  if (!mac_use_core_graphics || GC_FONT (gc)->cg_font == NULL)
-    return 0;
-
-  gx = x;
-  gy = -y;
-  glyphs = (CGGlyph *)buf;
-  advances = alloca (sizeof (CGSize) * nchars);
-  if (advances == NULL)
-    return 0;
-  for (i = 0; i < nchars; i++)
-    {
-      XCharStruct *pcm = mac_per_char_metric (GC_FONT (gc), buf, 0);
-
-      advances[i].width = pcm->width;
-      advances[i].height = 0;
-      glyphs[i] = GC_FONT (gc)->cg_glyphs[buf->byte2];
-      buf++;
-    }
-
-#if USE_CG_DRAWING
-  context = mac_begin_cg_clip (f, gc);
-#else
-  QDBeginCGContext (GetWindowPort (FRAME_MAC_WINDOW (f)), &context);
-  CGContextTranslateCTM (context, 0, FRAME_PIXEL_HEIGHT (f));
-  if (gc->n_clip_rects || bg_width)
-    {
-      CGContextScaleCTM (context, 1, -1);
-      if (gc->n_clip_rects)
-	CGContextClipToRects (context, gc->clip_rects, gc->n_clip_rects);
-#endif
-      if (bg_width)
-	{
-	  CG_SET_FILL_COLOR_WITH_GC_BACKGROUND (context, gc);
-	  CGContextFillRect
-	    (context,
-	     mac_rect_make (f, gx, y - FONT_BASE (GC_FONT (gc)),
-			    bg_width, FONT_HEIGHT (GC_FONT (gc))));
-	}
-      CGContextScaleCTM (context, 1, -1);
-#if !USE_CG_DRAWING
-    }
-#endif
-  CG_SET_FILL_COLOR_WITH_GC_FOREGROUND (context, gc);
-  CGContextSetFont (context, GC_FONT (gc)->cg_font);
-  CGContextSetFontSize (context, GC_FONT (gc)->mac_fontsize);
-  CGContextSetTextMatrix (context, CGAffineTransformIdentity);
-  if (GC_FONT (gc)->mac_fontsize <= cg_text_anti_aliasing_threshold)
-    CGContextSetShouldAntialias (context, false);
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
-#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-  if (CGContextShowGlyphsWithAdvances != NULL)
-#endif
-    {
-      CGContextSetTextPosition (context, gx, gy);
-      CGContextShowGlyphsWithAdvances (context, glyphs, advances, nchars);
-      if (overstrike_p)
-	{
-	  CGContextSetTextPosition (context, gx + 1.0f, gy);
-	  CGContextShowGlyphsWithAdvances (context, glyphs, advances, nchars);
-	}
-    }
-#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-  else			 /* CGContextShowGlyphsWithAdvances == NULL */
-#endif
-#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1030  */
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-    {
-      for (i = 0; i < nchars; i++)
-	{
-	  CGContextShowGlyphsAtPoint (context, gx, gy, glyphs + i, 1);
-	  if (overstrike_p)
-	    CGContextShowGlyphsAtPoint (context, gx + 1.0f, gy, glyphs + i, 1);
-	  gx += advances[i].width;
-	}
-    }
-#endif
-#if USE_CG_DRAWING
-  mac_end_cg_clip (f);
-#else
-  CGContextSynchronize (context);
-  QDEndCGContext (GetWindowPort (FRAME_MAC_WINDOW (f)), &context);
-#endif
-
-  return 1;
-}
-#endif
-
-
-#if !USE_CG_DRAWING
-/* Mac replacement for XCopyArea: dest must be window.  */
-
-static void
-mac_copy_area (src, f, gc, src_x, src_y, width, height, dest_x, dest_y)
-     Pixmap src;
-     struct frame *f;
-     GC gc;
-     int src_x, src_y;
-     unsigned int width, height;
-     int dest_x, dest_y;
-{
-  Rect src_r, dest_r;
-
-  mac_begin_clip (f, gc);
-
-  SetRect (&src_r, src_x, src_y, src_x + width, src_y + height);
-  SetRect (&dest_r, dest_x, dest_y, dest_x + width, dest_y + height);
-
-  ForeColor (blackColor);
-  BackColor (whiteColor);
-
-  LockPixels (GetGWorldPixMap (src));
-#if TARGET_API_MAC_CARBON
-  {
-    CGrafPtr port;
-
-    GetPort (&port);
-    LockPortBits (port);
-    CopyBits (GetPortBitMapForCopyBits (src),
-	      GetPortBitMapForCopyBits (port),
-	      &src_r, &dest_r, srcCopy, 0);
-    UnlockPortBits (port);
-  }
-#else /* not TARGET_API_MAC_CARBON */
-  CopyBits (&(((GrafPtr)src)->portBits), &(FRAME_MAC_WINDOW (f)->portBits),
-	    &src_r, &dest_r, srcCopy, 0);
-#endif /* not TARGET_API_MAC_CARBON */
-  UnlockPixels (GetGWorldPixMap (src));
-
-  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-
-  mac_end_clip (f, gc);
-}
-
-
-static void
-mac_copy_area_with_mask (src, mask, f, gc, src_x, src_y,
-			 width, height, dest_x, dest_y)
-     Pixmap src, mask;
-     struct frame *f;
-     GC gc;
-     int src_x, src_y;
-     unsigned int width, height;
-     int dest_x, dest_y;
-{
-  Rect src_r, dest_r;
-
-  mac_begin_clip (f, gc);
-
-  SetRect (&src_r, src_x, src_y, src_x + width, src_y + height);
-  SetRect (&dest_r, dest_x, dest_y, dest_x + width, dest_y + height);
-
-  ForeColor (blackColor);
-  BackColor (whiteColor);
-
-  LockPixels (GetGWorldPixMap (src));
-  LockPixels (GetGWorldPixMap (mask));
-#if TARGET_API_MAC_CARBON
-  {
-    CGrafPtr port;
-
-    GetPort (&port);
-    LockPortBits (port);
-    CopyMask (GetPortBitMapForCopyBits (src), GetPortBitMapForCopyBits (mask),
-	      GetPortBitMapForCopyBits (port),
-	      &src_r, &src_r, &dest_r);
-    UnlockPortBits (port);
-  }
-#else /* not TARGET_API_MAC_CARBON */
-  CopyMask (&(((GrafPtr)src)->portBits), &(((GrafPtr)mask)->portBits),
-	    &(FRAME_MAC_WINDOW (f)->portBits), &src_r, &src_r, &dest_r);
-#endif /* not TARGET_API_MAC_CARBON */
-  UnlockPixels (GetGWorldPixMap (mask));
-  UnlockPixels (GetGWorldPixMap (src));
-
-  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-
-  mac_end_clip (f, gc);
-}
-#endif	/* !USE_CG_DRAWING */
 
 
 /* Mac replacement for XCopyArea: used only for scrolling.  */
 
-#if TARGET_API_MAC_CARBON
-/* Defined in either mactoolbox.c or macappkit.m.  */
+/* Defined in macappkit.m.  */
 extern void mac_scroll_area P_ ((struct frame *, GC, int, int,
 				 unsigned int, unsigned int, int, int));
-#else  /* not TARGET_API_MAC_CARBON */
-static void
-mac_scroll_area (f, gc, src_x, src_y, width, height, dest_x, dest_y)
-     struct frame *f;
-     GC gc;
-     int src_x, src_y;
-     unsigned int width, height;
-     int dest_x, dest_y;
-{
-  Rect src_r, dest_r;
-  WindowRef w = FRAME_MAC_WINDOW (f);
-
-  mac_begin_clip (f, gc);
-
-  SetRect (&src_r, src_x, src_y, src_x + width, src_y + height);
-  SetRect (&dest_r, dest_x, dest_y, dest_x + width, dest_y + height);
-
-  /* In Color QuickDraw, set ForeColor and BackColor as follows to avoid
-     color mapping in CopyBits.  Otherwise, it will be slow.  */
-  ForeColor (blackColor);
-  BackColor (whiteColor);
-  CopyBits (&(w->portBits), &(w->portBits), &src_r, &dest_r, srcCopy, 0);
-
-  RGBBackColor (GC_BACK_COLOR (FRAME_NORMAL_GC (f)));
-
-  mac_end_clip (f, gc);
-}
-#endif	/* not TARGET_API_MAC_CARBON */
 
 
 /* Mac replacement for XChangeGC.  */
 
 static void
-XChangeGC (display, gc, mask, xgcv)
-     Display *display;
+mac_change_gc (gc, mask, xgcv)
      GC gc;
      unsigned long mask;
      XGCValues *xgcv;
@@ -1700,16 +709,13 @@ XChangeGC (display, gc, mask, xgcv)
     XSetForeground (display, gc, xgcv->foreground);
   if (mask & GCBackground)
     XSetBackground (display, gc, xgcv->background);
-  if (mask & GCFont)
-    XSetFont (display, gc, xgcv->font);
 }
 
 
 /* Mac replacement for XCreateGC.  */
 
 GC
-XCreateGC (display, d, mask, xgcv)
-     Display *display;
+mac_create_gc (d, mask, xgcv)
      void *d;
      unsigned long mask;
      XGCValues *xgcv;
@@ -1717,7 +723,7 @@ XCreateGC (display, d, mask, xgcv)
   GC gc = xmalloc (sizeof (*gc));
 
   bzero (gc, sizeof (*gc));
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
   if (CGColorGetTypeID != NULL)
 #endif
@@ -1736,15 +742,10 @@ XCreateGC (display, d, mask, xgcv)
 /* Used in xfaces.c.  */
 
 void
-XFreeGC (display, gc)
-     Display *display;
+mac_free_gc (gc)
      GC gc;
 {
-#if USE_QUICKDRAW
-  if (gc->clip_region)
-    DisposeRgn (gc->clip_region);
-#endif
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
   if (CGColorGetTypeID != NULL)
 #endif
@@ -1760,8 +761,7 @@ XFreeGC (display, gc)
 /* Mac replacement for XGetGCValues.  */
 
 static void
-XGetGCValues (display, gc, mask, xgcv)
-     Display *display;
+mac_get_gc_values (gc, mask, xgcv)
      GC gc;
      unsigned long mask;
      XGCValues *xgcv;
@@ -1770,28 +770,20 @@ XGetGCValues (display, gc, mask, xgcv)
     xgcv->foreground = gc->xgcv.foreground;
   if (mask & GCBackground)
     xgcv->background = gc->xgcv.background;
-  if (mask & GCFont)
-    xgcv->font = gc->xgcv.font;
 }
 
 
 /* Mac replacement for XSetForeground.  */
 
 void
-XSetForeground (display, gc, color)
-     Display *display;
+mac_set_foreground (gc, color)
      GC gc;
      unsigned long color;
 {
   if (gc->xgcv.foreground != color)
     {
       gc->xgcv.foreground = color;
-#if USE_QUICKDRAW
-      gc->fore_color.red = RED16_FROM_ULONG (color);
-      gc->fore_color.green = GREEN16_FROM_ULONG (color);
-      gc->fore_color.blue = BLUE16_FROM_ULONG (color);
-#endif
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
       if (CGColorGetTypeID != NULL)
 #endif
@@ -1821,20 +813,14 @@ XSetForeground (display, gc, color)
 /* Mac replacement for XSetBackground.  */
 
 void
-XSetBackground (display, gc, color)
-     Display *display;
+mac_set_background (gc, color)
      GC gc;
      unsigned long color;
 {
   if (gc->xgcv.background != color)
     {
       gc->xgcv.background = color;
-#if USE_QUICKDRAW
-      gc->back_color.red = RED16_FROM_ULONG (color);
-      gc->back_color.green = GREEN16_FROM_ULONG (color);
-      gc->back_color.blue = BLUE16_FROM_ULONG (color);
-#endif
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
       if (CGColorGetTypeID != NULL)
 #endif
@@ -1861,18 +847,6 @@ XSetBackground (display, gc, color)
 }
 
 
-/* Mac replacement for XSetFont.  */
-
-static void
-XSetFont (display, gc, font)
-     Display *display;
-     GC gc;
-     XFontStruct *font;
-{
-  gc->xgcv.font = font;
-}
-
-
 /* Mac replacement for XSetClipRectangles.  */
 
 static void
@@ -1887,26 +861,6 @@ mac_set_clip_rectangles (f, gc, rectangles, n)
   xassert (n >= 0 && n <= MAX_CLIP_RECTS);
 
   gc->n_clip_rects = n;
-#if USE_QUICKDRAW
-  if (n > 0)
-    {
-      if (gc->clip_region == NULL)
-	gc->clip_region = NewRgn ();
-      RectRgn (gc->clip_region, rectangles);
-      if (n > 1)
-	{
-	  RgnHandle region = NewRgn ();
-
-	  for (i = 1; i < n; i++)
-	    {
-	      RectRgn (region, rectangles + i);
-	      UnionRgn (gc->clip_region, region, gc->clip_region);
-	    }
-	  DisposeRgn (region);
-	}
-    }
-#endif
-#if defined (MAC_OSX) && (USE_ATSUI || USE_CG_DRAWING)
   for (i = 0; i < n; i++)
     {
       Rect *rect = rectangles + i;
@@ -1915,7 +869,6 @@ mac_set_clip_rectangles (f, gc, rectangles, n)
 					 rect->right - rect->left,
 					 rect->bottom - rect->top);
     }
-#endif
 }
 
 
@@ -1937,6 +890,35 @@ mac_reset_clip_rectangles (f, gc)
    performance.  */
 
 #define XFlush(DISPLAY)	(void) 0
+
+
+void
+x_set_frame_alpha (f)
+     struct frame *f;
+{
+  struct x_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+  double alpha = 1.0;
+  double alpha_min = 1.0;
+
+  if (dpyinfo->x_highlight_frame == f)
+    alpha = f->alpha[0];
+  else
+    alpha = f->alpha[1];
+
+  if (FLOATP (Vframe_alpha_lower_limit))
+    alpha_min = XFLOAT_DATA (Vframe_alpha_lower_limit);
+  else if (INTEGERP (Vframe_alpha_lower_limit))
+    alpha_min = (XINT (Vframe_alpha_lower_limit)) / 100.0;
+
+  if (alpha < 0.0)
+    return;
+  else if (alpha > 1.0)
+    alpha = 1.0;
+  else if (0.0 <= alpha && alpha < alpha_min && alpha_min <= 1.0)
+    alpha = alpha_min;
+
+  mac_set_window_alpha (FRAME_MAC_WINDOW (f), alpha);
+}
 
 
 /***********************************************************************
@@ -2030,11 +1012,7 @@ mac_draw_vertical_window_border (w, x, y0, y1)
     XSetForeground (FRAME_MAC_DISPLAY (f), f->output_data.mac->normal_gc,
 		    face->foreground);
 
-#if USE_APPKIT
   mac_fill_rectangle (f, f->output_data.mac->normal_gc, x, y0, 1, y1 - y0);
-#else
-  mac_draw_line (f, f->output_data.mac->normal_gc, x, y0, x, y1);
-#endif
 }
 
 /* End update of window W (which is equal to updated_window).
@@ -2197,7 +1175,6 @@ x_draw_fringe_bitmap (w, row, p)
   int rowY;
   int overlay_p = p->overlay_p;
 
-#ifdef MAC_OSX
   if (!overlay_p)
     {
       int bx = p->bx, by = p->by, nx = p->nx, ny = p->ny;
@@ -2269,7 +1246,6 @@ x_draw_fringe_bitmap (w, row, p)
 	XSetForeground (FRAME_X_DISPLAY (f), face->gc, face->foreground);
 #endif
     }
-#endif	/* MAC_OSX */
 
   /* Must clip because of partially visible lines.  */
   rowY = WINDOW_TO_FRAME_PIXEL_Y (w, row->y);
@@ -2288,34 +1264,7 @@ x_draw_fringe_bitmap (w, row, p)
   else
     x_clip_to_row (w, row, -1, face->gc);
 
-#ifndef MAC_OSX
-  if (p->bx >= 0 && !p->overlay_p)
-    {
-#if 0  /* MAC_TODO: stipple */
-      /* In case the same realized face is used for fringes and
-	 for something displayed in the text (e.g. face `region' on
-	 mono-displays, the fill style may have been changed to
-	 FillSolid in x_draw_glyph_string_background.  */
-      if (face->stipple)
-	XSetFillStyle (FRAME_X_DISPLAY (f), face->gc, FillOpaqueStippled);
-      else
-	XSetForeground (FRAME_X_DISPLAY (f), face->gc, face->background);
-#endif
-
-      mac_erase_rectangle (f, face->gc, p->bx, p->by, p->nx, p->ny);
-
-#if 0  /* MAC_TODO: stipple */
-      if (!face->stipple)
-	XSetForeground (FRAME_X_DISPLAY (f), face->gc, face->foreground);
-#endif
-    }
-#endif	/* !MAC_OSX */
-
-  if (p->which
-#if USE_CG_DRAWING
-      && p->which < max_fringe_bmp
-#endif
-      )
+  if (p->which && p->which < max_fringe_bmp)
     {
       XGCValues gcv;
 
@@ -2325,20 +1274,14 @@ x_draw_fringe_bitmap (w, row, p)
 		       ? (p->overlay_p ? face->background
 			  : f->output_data.mac->cursor_pixel)
 		       : face->foreground));
-#if USE_CG_DRAWING
       mac_draw_cg_image (fringe_bmp[p->which], f, face->gc, 0, p->dh,
 			 p->wd, p->h, p->x, p->y, overlay_p);
-#else
-      mac_draw_bitmap (f, face->gc, p->x, p->y,
-		       p->wd, p->h, p->bits + p->dh, overlay_p);
-#endif
       XSetForeground (display, face->gc, gcv.foreground);
     }
 
   mac_reset_clip_rectangles (f, face->gc);
 }
 
-#if USE_CG_DRAWING
 static void
 mac_define_fringe_bitmap (which, bits, h, wd)
      int which;
@@ -2390,7 +1333,7 @@ mac_destroy_fringe_bitmap (which)
     }
   fringe_bmp[which] = 0;
 }
-#endif
+
 
 
 /* This is called when starting Emacs and when restarting after
@@ -2399,7 +1342,7 @@ mac_destroy_fringe_bitmap (which)
    rarely happens).  */
 
 static void
-XTset_terminal_modes ()
+XTset_terminal_modes (struct terminal *terminal)
 {
 }
 
@@ -2407,232 +1350,9 @@ XTset_terminal_modes ()
    the windows go away, and suspending requires no action.  */
 
 static void
-XTreset_terminal_modes ()
+XTreset_terminal_modes (struct terminal *terminal)
 {
 }
-
-
-
-/***********************************************************************
-			   Display Iterator
- ***********************************************************************/
-
-/* Function prototypes of this page.  */
-
-static XCharStruct *x_per_char_metric P_ ((XFontStruct *, XChar2b *));
-static int mac_encode_char P_ ((int, XChar2b *, struct font_info *, int *));
-
-
-static void
-pcm_init (pcm, count)
-     XCharStruct *pcm;
-     int count;
-{
-  bzero (pcm, sizeof (XCharStruct) * count);
-  while (--count >= 0)
-    {
-      pcm->descent = PCM_INVALID;
-      pcm++;
-    }
-}
-
-static enum pcm_status
-pcm_get_status (pcm)
-     const XCharStruct *pcm;
-{
-  int height = pcm->ascent + pcm->descent;
-
-  /* Negative height means some special status.  */
-  return height >= 0 ? PCM_VALID : height;
-}
-
-/* Get metrics of character CHAR2B in FONT.  Value is null if CHAR2B
-   is not contained in the font.  */
-
-static INLINE XCharStruct *
-x_per_char_metric (font, char2b)
-     XFontStruct *font;
-     XChar2b *char2b;
-{
-  /* The result metric information.  */
-  XCharStruct *pcm = NULL;
-
-  xassert (font && char2b);
-
-#if USE_ATSUI
-  if (font->mac_style)
-    {
-      XCharStruct **row = font->bounds.rows + char2b->byte1;
-
-      if (*row == NULL)
-	{
-	  *row = xmalloc (sizeof (XCharStruct) * 0x100);
-	  pcm_init (*row, 0x100);
-	}
-      pcm = *row + char2b->byte2;
-      if (pcm_get_status (pcm) != PCM_VALID)
-	{
-	  BLOCK_INPUT;
-	  mac_query_char_extents (font->mac_style,
-				  (char2b->byte1 << 8) + char2b->byte2,
-				  NULL, NULL, pcm, NULL);
-	  UNBLOCK_INPUT;
-	}
-    }
-  else
-    {
-#endif
-  if (font->bounds.per_char != NULL)
-    {
-      if (font->min_byte1 == 0 && font->max_byte1 == 0)
-	{
-	  /* min_char_or_byte2 specifies the linear character index
-	     corresponding to the first element of the per_char array,
-	     max_char_or_byte2 is the index of the last character.  A
-	     character with non-zero CHAR2B->byte1 is not in the font.
-	     A character with byte2 less than min_char_or_byte2 or
-	     greater max_char_or_byte2 is not in the font.  */
-	  if (char2b->byte1 == 0
-	      && char2b->byte2 >= font->min_char_or_byte2
-	      && char2b->byte2 <= font->max_char_or_byte2)
-	    pcm = font->bounds.per_char
-	      + (char2b->byte2 - font->min_char_or_byte2);
-	}
-      else
-	{
-	  /* If either min_byte1 or max_byte1 are nonzero, both
-	     min_char_or_byte2 and max_char_or_byte2 are less than
-	     256, and the 2-byte character index values corresponding
-	     to the per_char array element N (counting from 0) are:
-
-	     byte1 = N/D + min_byte1
-	     byte2 = N\D + min_char_or_byte2
-
-	     where:
-
-	     D = max_char_or_byte2 - min_char_or_byte2 + 1
-	     / = integer division
-	     \ = integer modulus  */
-	  if (char2b->byte1 >= font->min_byte1
-	      && char2b->byte1 <= font->max_byte1
-	      && char2b->byte2 >= font->min_char_or_byte2
-	      && char2b->byte2 <= font->max_char_or_byte2)
-	    {
-	      pcm = (font->bounds.per_char
-		     + ((font->max_char_or_byte2 - font->min_char_or_byte2 + 1)
-			* (char2b->byte1 - font->min_byte1))
-		     + (char2b->byte2 - font->min_char_or_byte2));
-	    }
-	}
-    }
-  else
-    {
-      /* If the per_char pointer is null, all glyphs between the first
-	 and last character indexes inclusive have the same
-	 information, as given by both min_bounds and max_bounds.  */
-      if (char2b->byte2 >= font->min_char_or_byte2
-	  && char2b->byte2 <= font->max_char_or_byte2)
-	pcm = &font->max_bounds;
-    }
-#if USE_ATSUI
-    }
-#endif
-
-  return ((pcm == NULL
-	   || (pcm->width == 0
-#if 0 /* Show hollow boxes for zero-width glyphs such as combining diacritics.  */
-	       && (pcm->rbearing - pcm->lbearing) == 0
-#endif
-	       ))
-	  ? NULL : pcm);
-}
-
-/* RIF:
- */
-
-static XCharStruct *
-mac_per_char_metric (font, char2b, font_type)
-     XFontStruct *font;
-     XChar2b *char2b;
-     int font_type;
-{
-  return x_per_char_metric (font, char2b);
-}
-
-/* RIF:
-   Encode CHAR2B using encoding information from FONT_INFO.  CHAR2B is
-   the two-byte form of C.  Encoding is returned in *CHAR2B.  */
-
-static int
-mac_encode_char (c, char2b, font_info, two_byte_p)
-     int c;
-     XChar2b *char2b;
-     struct font_info *font_info;
-     int *two_byte_p;
-{
-  int charset = CHAR_CHARSET (c);
-  XFontStruct *font = font_info->font;
-
-  /* FONT_INFO may define a scheme by which to encode byte1 and byte2.
-     This may be either a program in a special encoder language or a
-     fixed encoding.  */
-  if (font_info->font_encoder)
-    {
-      /* It's a program.  */
-      struct ccl_program *ccl = font_info->font_encoder;
-
-      check_ccl_update (ccl);
-      if (CHARSET_DIMENSION (charset) == 1)
-	{
-	  ccl->reg[0] = charset;
-	  ccl->reg[1] = char2b->byte2;
-	  ccl->reg[2] = -1;
-	}
-      else
-	{
-	  ccl->reg[0] = charset;
-	  ccl->reg[1] = char2b->byte1;
-	  ccl->reg[2] = char2b->byte2;
-	}
-
-      ccl_driver (ccl, NULL, NULL, 0, 0, NULL);
-
-      /* We assume that MSBs are appropriately set/reset by CCL
-	 program.  */
-      if (font->max_byte1 == 0)	/* 1-byte font */
-	char2b->byte1 = 0, char2b->byte2 = ccl->reg[1];
-      else
-	char2b->byte1 = ccl->reg[1], char2b->byte2 = ccl->reg[2];
-    }
-  else if (font_info->encoding[charset])
-    {
-      /* Fixed encoding scheme.  See fontset.h for the meaning of the
-	 encoding numbers.  */
-      int enc = font_info->encoding[charset];
-
-      if ((enc == 1 || enc == 2)
-	  && CHARSET_DIMENSION (charset) == 2)
-	char2b->byte1 |= 0x80;
-
-      if (enc == 1 || enc == 3)
-	char2b->byte2 |= 0x80;
-
-      if (enc == 4)
-        {
-          int sjis1, sjis2;
-
-          ENCODE_SJIS (char2b->byte1, char2b->byte2, sjis1, sjis2);
-          char2b->byte1 = sjis1;
-          char2b->byte2 = sjis2;
-        }
-    }
-
-  if (two_byte_p)
-    *two_byte_p = ((XFontStruct *) (font_info->font))->max_byte1 > 0;
-
-  return FONT_TYPE_UNKNOWN;
-}
-
 
 
 /***********************************************************************
@@ -2649,7 +1369,7 @@ static void x_draw_glyph_string_foreground P_ ((struct glyph_string *));
 static void x_draw_composite_glyph_string_foreground P_ ((struct glyph_string *));
 static void x_draw_glyph_string_box P_ ((struct glyph_string *));
 static void x_draw_glyph_string  P_ ((struct glyph_string *));
-static void mac_compute_glyph_string_overhangs P_ ((struct glyph_string *));
+static void x_compute_glyph_string_overhangs P_ ((struct glyph_string *));
 static void x_set_cursor_gc P_ ((struct glyph_string *));
 static void x_set_mode_line_face_gc P_ ((struct glyph_string *));
 static void x_set_mouse_face_gc P_ ((struct glyph_string *));
@@ -2670,7 +1390,7 @@ static void x_draw_box_rect P_ ((struct glyph_string *, int, int, int, int,
 				 int, int, int, Rect *));
 
 #if GLYPH_DEBUG
-static void x_check_font P_ ((struct frame *, XFontStruct *));
+static void x_check_font P_ ((struct frame *, struct font *));
 #endif
 
 
@@ -2711,9 +1431,7 @@ x_set_cursor_gc (s)
 	  xgcv.foreground = s->face->background;
 	}
 
-      IF_DEBUG (x_check_font (s->f, s->font));
-      xgcv.font = s->font;
-      mask = GCForeground | GCBackground | GCFont;
+      mask = GCForeground | GCBackground;
 
       if (FRAME_MAC_DISPLAY_INFO (s->f)->scratch_cursor_gc)
 	XChangeGC (s->display, FRAME_MAC_DISPLAY_INFO (s->f)->scratch_cursor_gc,
@@ -2743,9 +1461,9 @@ x_set_mouse_face_gc (s)
     face = FACE_FROM_ID (s->f, MOUSE_FACE_ID);
 
   if (s->first_glyph->type == CHAR_GLYPH)
-    face_id = FACE_FOR_CHAR (s->f, face, s->first_glyph->u.ch);
+    face_id = FACE_FOR_CHAR (s->f, face, s->first_glyph->u.ch, -1, Qnil);
   else
-    face_id = FACE_FOR_CHAR (s->f, face, 0);
+    face_id = FACE_FOR_CHAR (s->f, face, 0, -1, Qnil);
   s->face = FACE_FROM_ID (s->f, face_id);
   PREPARE_FACE_FOR_DISPLAY (s->f, s->face);
 
@@ -2755,15 +1473,13 @@ x_set_mouse_face_gc (s)
   else
     {
       /* Otherwise construct scratch_cursor_gc with values from FACE
-	 but font FONT.  */
+	 except for FONT.  */
       XGCValues xgcv;
       unsigned long mask;
 
       xgcv.background = s->face->background;
       xgcv.foreground = s->face->foreground;
-      IF_DEBUG (x_check_font (s->f, s->font));
-      xgcv.font = s->font;
-      mask = GCForeground | GCBackground | GCFont;
+      mask = GCForeground | GCBackground;
 
       if (FRAME_MAC_DISPLAY_INFO (s->f)->scratch_cursor_gc)
 	XChangeGC (s->display, FRAME_MAC_DISPLAY_INFO (s->f)->scratch_cursor_gc,
@@ -2845,59 +1561,68 @@ static INLINE void
 x_set_glyph_string_clipping (s)
      struct glyph_string *s;
 {
-  Rect rects[MAX_CLIP_RECTS];
-  int n;
+  Rect *r = s->clip;
+  int n = get_glyph_string_clip_rects (s, r, MAX_CLIP_RECTS);
 
-  n = get_glyph_string_clip_rects (s, rects, MAX_CLIP_RECTS);
-  mac_set_clip_rectangles (s->f, s->gc, rects, n);
+  mac_set_clip_rectangles (s->f, s->gc, r, n);
+  s->num_clips = n;
+}
+
+
+/* Set SRC's clipping for output of glyph string DST.  This is called
+   when we are drawing DST's left_overhang or right_overhang only in
+   the area of SRC.  */
+
+static void
+x_set_glyph_string_clipping_exactly (src, dst)
+     struct glyph_string *src, *dst;
+{
+  Rect r;
+
+  STORE_NATIVE_RECT (r, src->x, src->y, src->width, src->height);
+  dst->clip[0] = r;
+  dst->num_clips = 1;
+  mac_set_clip_rectangles (dst->f, dst->gc, &r, 1);
 }
 
 
 /* RIF:
-   Compute left and right overhang of glyph string S.  If S is a glyph
-   string for a composition, assume overhangs don't exist.  */
+   Compute left and right overhang of glyph string S.  */
 
 static void
-mac_compute_glyph_string_overhangs (s)
+x_compute_glyph_string_overhangs (s)
      struct glyph_string *s;
 {
-  if (!(s->cmp == NULL
-	&& s->first_glyph->type == CHAR_GLYPH))
-    return;
-
-  if (!s->two_byte_p
-#if USE_ATSUI
-      || s->font->mac_style
-#endif
-      )
+  if (s->cmp == NULL
+      && (s->first_glyph->type == CHAR_GLYPH
+	  || s->first_glyph->type == COMPOSITE_GLYPH))
     {
-      XCharStruct cs;
+      struct font_metrics metrics;
 
-      mac_text_extents_16 (s->font, s->char2b, s->nchars, &cs);
-      s->right_overhang = cs.rbearing > cs.width ? cs.rbearing - cs.width : 0;
-      s->left_overhang = cs.lbearing < 0 ? -cs.lbearing : 0;
+      if (s->first_glyph->type == CHAR_GLYPH)
+	{
+	  unsigned *code = alloca (sizeof (unsigned) * s->nchars);
+	  struct font *font = s->font;
+	  int i;
+
+	  for (i = 0; i < s->nchars; i++)
+	    code[i] = (s->char2b[i].byte1 << 8) | s->char2b[i].byte2;
+	  font->driver->text_extents (font, code, s->nchars, &metrics);
+	}
+      else
+	{
+	  Lisp_Object gstring = composition_gstring_from_id (s->cmp_id);
+
+	  composition_gstring_width (gstring, s->cmp_from, s->cmp_to, &metrics);
+	}
+      s->right_overhang = (metrics.rbearing > metrics.width
+			   ? metrics.rbearing - metrics.width : 0);
+      s->left_overhang = metrics.lbearing < 0 ? - metrics.lbearing : 0;
     }
-  else
+  else if (s->cmp)
     {
-#if !USE_QUICKDRAW
-      abort ();
-#else  /* USE_QUICKDRAW */
-      Rect r;
-      MacFontStruct *font = s->font;
-
-      mac_begin_clip (s->f, NULL);
-
-      TextFont (font->mac_fontnum);
-      TextSize (font->mac_fontsize);
-      TextFace (font->mac_fontface);
-
-      QDTextBounds (s->nchars * 2, (char *)s->char2b, &r);
-
-      mac_end_clip (s->f, NULL);
-
-      s->right_overhang = r.right > s->width ? r.right - s->width : 0;
-      s->left_overhang = r.left < 0 ? -r.left : 0;
-#endif	/* USE_QUICKDRAW */
+      s->right_overhang = s->cmp->rbearing - s->cmp->pixel_width;
+      s->left_overhang = - s->cmp->lbearing;
     }
 }
 
@@ -2964,13 +1689,13 @@ static void
 x_draw_glyph_string_foreground (s)
      struct glyph_string *s;
 {
-  int i, x, bg_width;
+  int i, x;
 
   /* If first glyph of S has a left box line, start drawing the text
      of S to the right of that box line.  */
   if (s->face->box != FACE_NO_BOX
       && s->first_glyph->left_box_line_p)
-    x = s->x + abs (s->face->box_line_width);
+    x = s->x + eabs (s->face->box_line_width);
   else
     x = s->x;
 
@@ -2988,52 +1713,21 @@ x_draw_glyph_string_foreground (s)
     }
   else
     {
-      char *char1b = (char *) s->char2b;
-      int boff = s->font_info->baseline_offset;
+      struct font *font = s->font;
+      int boff = font->baseline_offset;
+      int y;
 
-      if (s->font_info->vertical_centering)
-	boff = VCENTER_BASELINE_OFFSET (s->font, s->f) - boff;
+      if (font->vertical_centering)
+	boff = VCENTER_BASELINE_OFFSET (font, s->f) - boff;
 
-      /* If we can use 8-bit functions, condense S->char2b.  */
-      if (!s->two_byte_p
-#if USE_ATSUI
-	  && GC_FONT (s->gc)->mac_style == NULL
-#endif
-	  )
-	for (i = 0; i < s->nchars; ++i)
-	  char1b[i] = s->char2b[i].byte2;
-
-      /* Draw text with XDrawString if background has already been
-	 filled.  Otherwise, use XDrawImageString.  (Note that
-	 XDrawImageString is usually faster than XDrawString.)  Always
-	 use XDrawImageString when drawing the cursor so that there is
-	 no chance that characters under a box cursor are invisible.  */
+      y = s->ybase - boff;
       if (s->for_overlaps
 	  || (s->background_filled_p && s->hl != DRAW_CURSOR))
-	bg_width = 0;		/* Corresponds to XDrawString.  */
+	font->driver->draw (s, 0, s->nchars, x, y, 0);
       else
-	bg_width = s->background_width; /* Corresponds to XDrawImageString.  */
-
-      if (s->two_byte_p
-#if USE_ATSUI
-	  || GC_FONT (s->gc)->mac_style
-#endif
-	  )
-#if USE_CG_TEXT_DRAWING
-	if (!s->two_byte_p
-	    && mac_draw_image_string_cg (s->f, s->gc, x, s->ybase - boff,
-					 s->char2b, s->nchars, bg_width,
-					 s->face->overstrike))
-	  ;
-	else
-#endif
-	  mac_draw_image_string_16 (s->f, s->gc, x, s->ybase - boff,
-				    s->char2b, s->nchars, bg_width,
-				    s->face->overstrike);
-      else
-	mac_draw_image_string (s->f, s->gc, x, s->ybase - boff,
-			       char1b, s->nchars, bg_width,
-			       s->face->overstrike);
+	font->driver->draw (s, 0, s->nchars, x, y, 1);
+      if (s->face->overstrike)
+	font->driver->draw (s, 0, s->nchars, x + 1, y, 0);
     }
 }
 
@@ -3043,214 +1737,113 @@ static void
 x_draw_composite_glyph_string_foreground (s)
      struct glyph_string *s;
 {
-  int i, x;
+  int i, j, x;
+  struct font *font = s->font;
 
   /* If first glyph of S has a left box line, start drawing the text
      of S to the right of that box line.  */
-  if (s->face->box != FACE_NO_BOX
+  if (s->face && s->face->box != FACE_NO_BOX
       && s->first_glyph->left_box_line_p)
-    x = s->x + abs (s->face->box_line_width);
+    x = s->x + eabs (s->face->box_line_width);
   else
     x = s->x;
 
-  /* S is a glyph string for a composition.  S->gidx is the index of
-     the first character drawn for glyphs of this composition.
-     S->gidx == 0 means we are drawing the very first character of
+  /* S is a glyph string for a composition.  S->cmp_from is the index
+     of the first character drawn for glyphs of this composition.
+     S->cmp_from == 0 means we are drawing the very first character of
      this composition.  */
 
   /* Draw a rectangle for the composition if the font for the very
      first character of the composition could not be loaded.  */
   if (s->font_not_found_p)
     {
-      if (s->gidx == 0)
+      if (s->cmp_from == 0)
 	mac_draw_rectangle (s->f, s->gc, x, s->y,
 			    s->width - 1, s->height - 1);
     }
+  else if (! s->first_glyph->u.cmp.automatic)
+    {
+      int y = s->ybase;
+
+      for (i = 0, j = s->cmp_from; i < s->nchars; i++, j++)
+	if (COMPOSITION_GLYPH (s->cmp, j) != '\t')
+	  {
+	    int xx = x + s->cmp->offsets[j * 2];
+	    int yy = y - s->cmp->offsets[j * 2 + 1];
+
+	    font->driver->draw (s, j, j + 1, xx, yy, 0);
+	    if (s->face->overstrike)
+	      font->driver->draw (s, j, j + 1, xx + 1, yy, 0);
+	  }
+    }
   else
     {
-      for (i = 0; i < s->nchars; i++, ++s->gidx)
-	if (mac_per_char_metric (GC_FONT (s->gc), s->char2b + i, 0) == NULL)
-	  /* This is a nonexistent or zero-width glyph such as a
-	     combining diacritic.  Draw a rectangle.  */
-	  mac_draw_rectangle (s->f, s->gc,
-			      x + s->cmp->offsets[s->gidx * 2], s->y,
-			      FONT_WIDTH (GC_FONT (s->gc)) - 1, s->height - 1);
-	else
-	  mac_draw_image_string_16 (s->f, s->gc,
-				    x + s->cmp->offsets[s->gidx * 2],
-				    s->ybase - s->cmp->offsets[s->gidx * 2 + 1],
-				    s->char2b + i, 1, 0, s->face->overstrike);
-    }
-}
+      Lisp_Object gstring = composition_gstring_from_id (s->cmp_id);
+      Lisp_Object glyph;
+      int y = s->ybase;
+      int width = 0;
 
-
-#ifdef USE_X_TOOLKIT
-
-static struct frame *x_frame_of_widget P_ ((Widget));
-
-
-/* Return the frame on which widget WIDGET is used.. Abort if frame
-   cannot be determined.  */
-
-static struct frame *
-x_frame_of_widget (widget)
-     Widget widget;
-{
-  struct x_display_info *dpyinfo;
-  Lisp_Object tail;
-  struct frame *f;
-
-  dpyinfo = x_display_info_for_display (XtDisplay (widget));
-
-  /* Find the top-level shell of the widget.  Note that this function
-     can be called when the widget is not yet realized, so XtWindow
-     (widget) == 0.  That's the reason we can't simply use
-     x_any_window_to_frame.  */
-  while (!XtIsTopLevelShell (widget))
-    widget = XtParent (widget);
-
-  /* Look for a frame with that top-level widget.  Allocate the color
-     on that frame to get the right gamma correction value.  */
-  for (tail = Vframe_list; GC_CONSP (tail); tail = XCDR (tail))
-    if (GC_FRAMEP (XCAR (tail))
-	&& (f = XFRAME (XCAR (tail)),
-	    (f->output_data.nothing != 1
-	     && FRAME_X_DISPLAY_INFO (f) == dpyinfo))
-	&& f->output_data.x->widget == widget)
-      return f;
-
-  abort ();
-}
-
-
-/* Allocate the color COLOR->pixel on the screen and display of
-   widget WIDGET in colormap CMAP.  If an exact match cannot be
-   allocated, try the nearest color available.  Value is non-zero
-   if successful.  This is called from lwlib.  */
-
-int
-x_alloc_nearest_color_for_widget (widget, cmap, color)
-     Widget widget;
-     Colormap cmap;
-     XColor *color;
-{
-  struct frame *f = x_frame_of_widget (widget);
-  return x_alloc_nearest_color (f, cmap, color);
-}
-
-
-#endif /* USE_X_TOOLKIT */
-
-#if 0 /* MAC_TODO */
-
-/* Allocate the color COLOR->pixel on SCREEN of DISPLAY, colormap
-   CMAP.  If an exact match can't be allocated, try the nearest color
-   available.  Value is non-zero if successful.  Set *COLOR to the
-   color allocated.  */
-
-int
-x_alloc_nearest_color (f, cmap, color)
-     struct frame *f;
-     Colormap cmap;
-     XColor *color;
-{
-  Display *display = FRAME_X_DISPLAY (f);
-  Screen *screen = FRAME_X_SCREEN (f);
-  int rc;
-
-  gamma_correct (f, color);
-  rc = XAllocColor (display, cmap, color);
-  if (rc == 0)
-    {
-      /* If we got to this point, the colormap is full, so we're going
-	 to try to get the next closest color.  The algorithm used is
-	 a least-squares matching, which is what X uses for closest
-	 color matching with StaticColor visuals.  */
-      int nearest, i;
-      unsigned long nearest_delta = ~0;
-      int ncells = XDisplayCells (display, XScreenNumberOfScreen (screen));
-      XColor *cells = (XColor *) alloca (ncells * sizeof *cells);
-
-      for (i = 0; i < ncells; ++i)
-	cells[i].pixel = i;
-      XQueryColors (display, cmap, cells, ncells);
-
-      for (nearest = i = 0; i < ncells; ++i)
+      for (i = j = s->cmp_from; i < s->cmp_to; i++)
 	{
-	  long dred   = (color->red   >> 8) - (cells[i].red   >> 8);
-	  long dgreen = (color->green >> 8) - (cells[i].green >> 8);
-	  long dblue  = (color->blue  >> 8) - (cells[i].blue  >> 8);
-	  unsigned long delta = dred * dred + dgreen * dgreen + dblue * dblue;
-
-	  if (delta < nearest_delta)
+	  glyph = LGSTRING_GLYPH (gstring, i);
+	  if (NILP (LGLYPH_ADJUSTMENT (glyph)))
+	    width += LGLYPH_WIDTH (glyph);
+	  else
 	    {
-	      nearest = i;
-	      nearest_delta = delta;
+	      int xoff, yoff, wadjust;
+
+	      if (j < i)
+		{
+		  font->driver->draw (s, j, i, x, y, 0);
+		  x += width;
+		}
+	      xoff = LGLYPH_XOFF (glyph);
+	      yoff = LGLYPH_YOFF (glyph);
+	      wadjust = LGLYPH_WADJUST (glyph);
+	      font->driver->draw (s, i, i + 1, x + xoff, y + yoff, 0);
+	      x += wadjust;
+	      j = i + 1;
+	      width = 0;
 	    }
 	}
-
-      color->red   = cells[nearest].red;
-      color->green = cells[nearest].green;
-      color->blue  = cells[nearest].blue;
-      rc = XAllocColor (display, cmap, color);
+      if (j < i)
+	font->driver->draw (s, j, i, x, y, 0);
     }
-
-#ifdef DEBUG_X_COLORS
-  if (rc)
-    register_color (color->pixel);
-#endif /* DEBUG_X_COLORS */
-
-  return rc;
 }
 
 
-/* Allocate color PIXEL on frame F.  PIXEL must already be allocated.
-   It's necessary to do this instead of just using PIXEL directly to
-   get color reference counts right.  */
+/* On frame F, translate pixel colors to RGB values for the NCOLORS
+   colors in COLORS.  */
 
-unsigned long
-x_copy_color (f, pixel)
+void
+x_query_colors (f, colors, ncolors)
      struct frame *f;
-     unsigned long pixel;
+     XColor *colors;
+     int ncolors;
 {
-  XColor color;
+  int i;
 
-  color.pixel = pixel;
-  BLOCK_INPUT;
-  XQueryColor (FRAME_X_DISPLAY (f), FRAME_X_COLORMAP (f), &color);
-  XAllocColor (FRAME_X_DISPLAY (f), FRAME_X_COLORMAP (f), &color);
-  UNBLOCK_INPUT;
-#ifdef DEBUG_X_COLORS
-  register_color (pixel);
-#endif
-  return color.pixel;
+  for (i = 0; i < ncolors; ++i)
+    {
+      unsigned long pixel = colors[i].pixel;
+
+      colors[i].red = RED16_FROM_ULONG (pixel);
+      colors[i].green = GREEN16_FROM_ULONG (pixel);
+      colors[i].blue = BLUE16_FROM_ULONG (pixel);
+    }
 }
 
 
-/* Allocate color PIXEL on display DPY.  PIXEL must already be allocated.
-   It's necessary to do this instead of just using PIXEL directly to
-   get color reference counts right.  */
+/* On frame F, translate pixel color to RGB values for the color in
+   COLOR.  */
 
-unsigned long
-x_copy_dpy_color (dpy, cmap, pixel)
-     Display *dpy;
-     Colormap cmap;
-     unsigned long pixel;
+void
+x_query_color (f, color)
+     struct frame *f;
+     XColor *color;
 {
-  XColor color;
-
-  color.pixel = pixel;
-  BLOCK_INPUT;
-  XQueryColor (dpy, cmap, &color);
-  XAllocColor (dpy, cmap, &color);
-  UNBLOCK_INPUT;
-#ifdef DEBUG_X_COLORS
-  register_color (pixel);
-#endif
-  return color.pixel;
+  x_query_colors (f, color, 1);
 }
-
-#endif /* MAC_TODO */
 
 
 /* Brightness beyond which a color won't have its highlight brightness
@@ -3434,7 +2027,6 @@ x_draw_relief_rect (f, left_x, top_y, right_x, bottom_y, width,
      int top_p, bot_p, left_p, right_p, raised_p;
      Rect *clip_rect;
 {
-#if USE_APPKIT
   GC top_left_gc, bottom_right_gc;
 
   if (raised_p)
@@ -3479,51 +2071,6 @@ x_draw_relief_rect (f, left_x, top_y, right_x, bottom_y, width,
 
   mac_set_clip_rectangles (f, top_left_gc, clip_rect, 1);
   mac_set_clip_rectangles (f, bottom_right_gc, clip_rect, 1);
-#else
-  int i;
-  GC gc;
-
-  if (raised_p)
-    gc = f->output_data.mac->white_relief.gc;
-  else
-    gc = f->output_data.mac->black_relief.gc;
-  mac_set_clip_rectangles (f, gc, clip_rect, 1);
-
-  /* Top.  */
-  if (top_p)
-    for (i = 0; i < width; ++i)
-      mac_draw_line (f, gc,
-		     left_x + i * left_p, top_y + i,
-		     right_x + 1 - i * right_p, top_y + i);
-
-  /* Left.  */
-  if (left_p)
-    for (i = 0; i < width; ++i)
-      mac_draw_line (f, gc,
-		     left_x + i, top_y + i, left_x + i, bottom_y - i + 1);
-
-  mac_reset_clip_rectangles (f, gc);
-  if (raised_p)
-    gc = f->output_data.mac->black_relief.gc;
-  else
-    gc = f->output_data.mac->white_relief.gc;
-  mac_set_clip_rectangles (f, gc, clip_rect, 1);
-
-  /* Bottom.  */
-  if (bot_p)
-    for (i = 0; i < width; ++i)
-      mac_draw_line (f, gc,
-		     left_x + i * left_p, bottom_y - i,
-		     right_x + 1 - i * right_p, bottom_y - i);
-
-  /* Right.  */
-  if (right_p)
-    for (i = 0; i < width; ++i)
-      mac_draw_line (f, gc,
-		     right_x - i, top_y + i + 1, right_x - i, bottom_y - i);
-
-  mac_reset_clip_rectangles (f, gc);
-#endif
 }
 
 
@@ -3590,7 +2137,7 @@ x_draw_glyph_string_box (s)
 		? s->first_glyph
 		: s->first_glyph + s->nchars - 1);
 
-  width = abs (s->face->box_line_width);
+  width = eabs (s->face->box_line_width);
   raised_p = s->face->box == FACE_RAISED_BOX;
   left_x = s->x;
   right_x = (s->row->full_width_p && s->extends_to_end_of_line_p
@@ -3636,7 +2183,7 @@ x_draw_image_foreground (s)
   if (s->face->box != FACE_NO_BOX
       && s->first_glyph->left_box_line_p
       && s->slice.x == 0)
-    x += abs (s->face->box_line_width);
+    x += eabs (s->face->box_line_width);
 
   /* If there is a margin around the image, adjust x- and y-position
      by that margin.  */
@@ -3649,27 +2196,11 @@ x_draw_image_foreground (s)
     {
       x_set_glyph_string_clipping (s);
 
-#if USE_CG_DRAWING
       mac_draw_cg_image (s->img->data.ptr_val,
 			 s->f, s->gc, s->slice.x, s->slice.y,
 			 s->slice.width, s->slice.height, x, y, 1);
-#endif
-      if (s->img->mask)
-#if !USE_CG_DRAWING
-	mac_copy_area_with_mask (s->img->pixmap, s->img->mask,
-				 s->f, s->gc, s->slice.x, s->slice.y,
-				 s->slice.width, s->slice.height, x, y);
-#else
-	;
-#endif
-      else
+      if (!s->img->mask)
 	{
-#if !USE_CG_DRAWING
-	  mac_copy_area (s->img->pixmap,
-			 s->f, s->gc, s->slice.x, s->slice.y,
-			 s->slice.width, s->slice.height, x, y);
-#endif
-
 	  /* When the image has a mask, we can expect that at
 	     least part of a mouse highlight or a block cursor will
 	     be visible.  If the image doesn't have a mask, make
@@ -3709,7 +2240,7 @@ x_draw_image_relief (s)
   if (s->face->box != FACE_NO_BOX
       && s->first_glyph->left_box_line_p
       && s->slice.x == 0)
-    x += abs (s->face->box_line_width);
+    x += eabs (s->face->box_line_width);
 
   /* If there is a margin around the image, adjust x- and y-position
      by that margin.  */
@@ -3726,7 +2257,7 @@ x_draw_image_relief (s)
     }
   else
     {
-      thick = abs (s->img->relief);
+      thick = eabs (s->img->relief);
       raised_p = s->img->relief > 0;
     }
 
@@ -3787,7 +2318,7 @@ x_draw_image_glyph_string (s)
      struct glyph_string *s;
 {
   int x, y;
-  int box_line_hwidth = abs (s->face->box_line_width);
+  int box_line_hwidth = eabs (s->face->box_line_width);
   int box_line_vwidth = max (s->face->box_line_width, 0);
   int height;
 
@@ -3918,20 +2449,27 @@ x_draw_glyph_string (s)
 {
   int relief_drawn_p = 0;
 
-  /* If S draws into the background of its successor that does not
-     draw a cursor, draw the background of the successor first so that
-     S can draw into it.  This makes S->next use XDrawString instead
-     of XDrawImageString.  */
-  if (s->next && s->right_overhang && !s->for_overlaps
-      && s->next->first_glyph->type != IMAGE_GLYPH
-      && s->next->hl != DRAW_CURSOR)
+  /* If S draws into the background of its successors, draw the
+     background of the successors first so that S can draw into it.
+     This makes S->next use XDrawString instead of XDrawImageString.  */
+  if (s->next && s->right_overhang && !s->for_overlaps)
     {
-      x_set_glyph_string_gc (s->next);
-      x_set_glyph_string_clipping (s->next);
-      if (s->next->first_glyph->type == STRETCH_GLYPH)
-	x_draw_stretch_glyph_string (s->next);
-      else
-	x_draw_glyph_string_background (s->next, 1);
+      int width;
+      struct glyph_string *next;
+
+      for (width = 0, next = s->next;
+	   next && width < s->right_overhang;
+	   width += next->width, next = next->next)
+	if (next->first_glyph->type != IMAGE_GLYPH)
+	  {
+	    x_set_glyph_string_gc (next);
+	    x_set_glyph_string_clipping (next);
+	    if (next->first_glyph->type == STRETCH_GLYPH)
+	      x_draw_stretch_glyph_string (next);
+	    else
+	      x_draw_glyph_string_background (next, 1);
+	    next->num_clips = 0;
+	  }
     }
 
   /* Set up S->gc, set clipping and draw S.  */
@@ -3951,6 +2489,14 @@ x_draw_glyph_string (s)
       x_set_glyph_string_clipping (s);
       relief_drawn_p = 1;
     }
+  else if (!s->clip_head /* draw_glyphs didn't specify a clip mask. */
+	   && !s->clip_tail
+	   && ((s->prev && s->prev->hl != s->hl && s->left_overhang)
+	       || (s->next && s->next->hl != s->hl && s->right_overhang)))
+    /* We must clip just this glyph.  left_overhang part has already
+       drawn when s->prev was drawn, and right_overhang part will be
+       drawn later when s->next is drawn. */
+    x_set_glyph_string_clipping_exactly (s, s);
   else
     x_set_glyph_string_clipping (s);
 
@@ -3973,7 +2519,8 @@ x_draw_glyph_string (s)
       break;
 
     case COMPOSITE_GLYPH:
-      if (s->for_overlaps || s->gidx > 0)
+      if (s->for_overlaps || (s->cmp_from > 0
+			      && ! s->first_glyph->u.cmp.automatic))
 	s->background_filled_p = 1;
       else
 	x_draw_glyph_string_background (s, 1);
@@ -3989,46 +2536,63 @@ x_draw_glyph_string (s)
       /* Draw underline.  */
       if (s->face->underline_p)
 	{
-	  unsigned long tem, h;
+	  unsigned long thickness, position;
 	  int y;
 
-#if 0
-	  /* Get the underline thickness.  Default is 1 pixel.  */
-	  if (!XGetFontProperty (s->font, XA_UNDERLINE_THICKNESS, &h))
-#endif
-	    h = 1;
+	  if (s->prev && s->prev->face->underline_p)
+	    {
+	      /* We use the same underline style as the previous one.  */
+	      thickness = s->prev->underline_thickness;
+	      position = s->prev->underline_position;
+	    }
+	  else
+	    {
+	      /* Get the underline thickness.  Default is 1 pixel.  */
+	      if (s->font && s->font->underline_thickness > 0)
+		thickness = s->font->underline_thickness;
+	      else
+		thickness = 1;
+	      if (x_underline_at_descent_line)
+		position = (s->height - thickness) - (s->ybase - s->y);
+	      else
+		{
+		  /* Get the underline position.  This is the recommended
+		     vertical offset in pixels from the baseline to the top of
+		     the underline.  This is a signed value according to the
+		     specs, and its default is
 
-	  y = s->y + s->height - h;
-	  if (!x_underline_at_descent_line)
-            {
-	      /* Get the underline position.  This is the recommended
-                 vertical offset in pixels from the baseline to the top of
-                 the underline.  This is a signed value according to the
-                 specs, and its default is
+		     ROUND ((maximum descent) / 2), with
+		     ROUND(x) = floor (x + 0.5)  */
 
-	         ROUND ((maximum descent) / 2), with
-	         ROUND(x) = floor (x + 0.5)  */
-
-#if 0
-              if (x_use_underline_position_properties
-                  && XGetFontProperty (s->font, XA_UNDERLINE_POSITION, &tem))
-                y = s->ybase + (long) tem;
-              else
-#endif
-	      if (s->face->font)
-                y = s->ybase + (s->face->font->max_bounds.descent + 1) / 2;
-            }
-
+		  if (x_use_underline_position_properties
+		      && s->font && s->font->underline_position >= 0)
+		    position = s->font->underline_position;
+		  else if (s->font)
+		    position = (s->font->descent + 1) / 2;
+		  else
+		    position = underline_minimum_offset;
+		}
+	      position = max (position, underline_minimum_offset);
+	    }
+	  /* Check the sanity of thickness and position.  We should
+	     avoid drawing underline out of the current line area.  */
+	  if (s->y + s->height <= s->ybase + position)
+	    position = (s->height - 1) - (s->ybase - s->y);
+	  if (s->y + s->height < s->ybase + position + thickness)
+	    thickness = (s->y + s->height) - (s->ybase + position);
+	  s->underline_thickness = thickness;
+	  s->underline_position = position;
+	  y = s->ybase + position;
 	  if (s->face->underline_defaulted_p)
 	    mac_fill_rectangle (s->f, s->gc, s->x, y,
-				s->background_width, h);
+				s->background_width, thickness);
 	  else
 	    {
 	      XGCValues xgcv;
 	      XGetGCValues (s->display, s->gc, GCForeground, &xgcv);
 	      XSetForeground (s->display, s->gc, s->face->underline_color);
 	      mac_fill_rectangle (s->f, s->gc, s->x, y,
-				  s->background_width, h);
+				  s->background_width, thickness);
 	      XSetForeground (s->display, s->gc, xgcv.foreground);
 	    }
 	}
@@ -4059,15 +2623,13 @@ x_draw_glyph_string (s)
 	  unsigned long dy = (s->height - h) / 2;
 
 	  if (s->face->strike_through_color_defaulted_p)
-	    mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy,
-				s->width, h);
+	    mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy, s->width, h);
 	  else
 	    {
 	      XGCValues xgcv;
 	      XGetGCValues (s->display, s->gc, GCForeground, &xgcv);
 	      XSetForeground (s->display, s->gc, s->face->strike_through_color);
-	      mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy,
-				  s->width, h);
+	      mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy, s->width, h);
 	      XSetForeground (s->display, s->gc, xgcv.foreground);
 	    }
 	}
@@ -4075,10 +2637,61 @@ x_draw_glyph_string (s)
       /* Draw relief if not yet drawn.  */
       if (!relief_drawn_p && s->face->box != FACE_NO_BOX)
 	x_draw_glyph_string_box (s);
+
+      if (s->prev)
+	{
+	  struct glyph_string *prev;
+
+	  for (prev = s->prev; prev; prev = prev->prev)
+	    if (prev->hl != s->hl
+		&& prev->x + prev->width + prev->right_overhang > s->x)
+	      {
+		/* As prev was drawn while clipped to its own area, we
+		   must draw the right_overhang part using s->hl now.  */
+		enum draw_glyphs_face save = prev->hl;
+
+		prev->hl = s->hl;
+		x_set_glyph_string_gc (prev);
+		x_set_glyph_string_clipping_exactly (s, prev);
+		if (prev->first_glyph->type == CHAR_GLYPH)
+		  x_draw_glyph_string_foreground (prev);
+		else
+		  x_draw_composite_glyph_string_foreground (prev);
+		mac_reset_clip_rectangles (prev->f, prev->gc);
+		prev->hl = save;
+		prev->num_clips = 0;
+	      }
+	}
+
+      if (s->next)
+	{
+	  struct glyph_string *next;
+
+	  for (next = s->next; next; next = next->next)
+	    if (next->hl != s->hl
+		&& next->x - next->left_overhang < s->x + s->width)
+	      {
+		/* As next will be drawn while clipped to its own area,
+		   we must draw the left_overhang part using s->hl now.  */
+		enum draw_glyphs_face save = next->hl;
+
+		next->hl = s->hl;
+		x_set_glyph_string_gc (next);
+		x_set_glyph_string_clipping_exactly (s, next);
+		if (next->first_glyph->type == CHAR_GLYPH)
+		  x_draw_glyph_string_foreground (next);
+		else
+		  x_draw_composite_glyph_string_foreground (next);
+		mac_reset_clip_rectangles (next->f, next->gc);
+		next->hl = save;
+		next->num_clips = 0;
+	      }
+	}
     }
 
   /* Reset clipping.  */
   mac_reset_clip_rectangles (s->f, s->gc);
+  s->num_clips = 0;
 }
 
 /* Shift display to make room for inserted glyphs.   */
@@ -4097,7 +2710,8 @@ mac_shift_glyphs_for_insert (f, x, y, width, height, shift_by)
    for X frames.  */
 
 static void
-x_delete_glyphs (n)
+x_delete_glyphs (f, n)
+     struct frame *f;
      register int n;
 {
   abort ();
@@ -4108,15 +2722,8 @@ x_delete_glyphs (n)
    frame.  Otherwise clear the selected frame.  */
 
 static void
-x_clear_frame ()
+x_clear_frame (struct frame *f)
 {
-  struct frame *f;
-
-  if (updating_frame)
-    f = updating_frame;
-  else
-    f = SELECTED_FRAME ();
-
   /* Clearing the frame will erase any cursor, so mark them all as no
      longer visible.  */
   mark_window_cursors_off (XWINDOW (FRAME_ROOT_WINDOW (f)));
@@ -4292,10 +2899,8 @@ XTflash (f)
 /* Make audible bell.  */
 
 void
-XTring_bell ()
+XTring_bell (struct frame *f)
 {
-  struct frame *f = SELECTED_FRAME ();
-
 #if defined (HAVE_TIMEVAL) && defined (HAVE_SELECT)
   if (visible_bell)
     XTflash (f);
@@ -4332,7 +2937,8 @@ XTset_terminal_window (n)
    lines or deleting -N lines at vertical position VPOS.  */
 
 static void
-x_ins_del_lines (vpos, n)
+x_ins_del_lines (f, vpos, n)
+     struct frame *f;
      int vpos, n;
 {
   abort ();
@@ -4403,6 +3009,9 @@ frame_highlight (f)
      struct frame *f;
 {
   x_update_cursor (f, 1);
+  BLOCK_INPUT;
+  x_set_frame_alpha (f);
+  UNBLOCK_INPUT;
 }
 
 static void
@@ -4410,6 +3019,9 @@ frame_unhighlight (f)
      struct frame *f;
 {
   x_update_cursor (f, 1);
+  BLOCK_INPUT;
+  x_set_frame_alpha (f);
+  UNBLOCK_INPUT;
 }
 
 /* The focus has changed.  Update the frames as necessary to reflect
@@ -4447,10 +3059,8 @@ x_new_focus_frame (dpyinfo, frame)
       else
 	pending_autoraise_frame = 0;
 
-#if USE_MAC_FONT_PANEL
       if (frame)
-	mac_set_font_info_for_selection (frame, DEFAULT_FACE_ID, 0);
-#endif
+	mac_set_font_info_for_selection (frame, DEFAULT_FACE_ID, 0, -1, Qnil);
     }
 
   x_frame_rehighlight (dpyinfo);
@@ -4476,9 +3086,9 @@ mac_focus_changed (type, dpyinfo, frame, bufp)
 
           /* Don't stop displaying the initial startup message
              for a switch-frame event we don't need.  */
-          if (GC_NILP (Vterminal_frame)
-              && GC_CONSP (Vframe_list)
-              && !GC_NILP (XCDR (Vframe_list)))
+          if (NILP (Vterminal_frame)
+              && CONSP (Vframe_list)
+              && !NILP (XCDR (Vframe_list)))
             {
               bufp->kind = FOCUS_IN_EVENT;
               XSETFRAME (bufp->frame_or_window, frame);
@@ -4528,7 +3138,7 @@ x_frame_rehighlight (dpyinfo)
   if (dpyinfo->x_focus_frame)
     {
       dpyinfo->x_highlight_frame
-	= ((GC_FRAMEP (FRAME_FOCUS_FRAME (dpyinfo->x_focus_frame)))
+	= ((FRAMEP (FRAME_FOCUS_FRAME (dpyinfo->x_focus_frame)))
 	   ? XFRAME (FRAME_FOCUS_FRAME (dpyinfo->x_focus_frame))
 	   : dpyinfo->x_focus_frame);
       if (! FRAME_LIVE_P (dpyinfo->x_highlight_frame))
@@ -4572,75 +3182,9 @@ x_get_keysym_name (keysym)
 
 
 
-/* Function to report a mouse movement to the mainstream Emacs code.
-   The input handler calls this.
-
-   We have received a mouse movement event, which is given in *event.
-   If the mouse is over a different glyph than it was last time, tell
-   the mainstream emacs code by setting mouse_moved.  If not, ask for
-   another motion event, so we can check again the next time it moves.  */
-
-static Point last_mouse_motion_position;
-static Lisp_Object last_mouse_motion_frame;
-
-int
-note_mouse_movement (frame, pos)
-     FRAME_PTR frame;
-     Point *pos;
-{
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (frame);
-  Rect r;
-
-  last_mouse_movement_time = TickCount () * (1000 / 60);  /* to milliseconds */
-  last_mouse_motion_position = *pos;
-  XSETFRAME (last_mouse_motion_frame, frame);
-
-  if (frame == dpyinfo->mouse_face_mouse_frame
-      && !PtInRect (*pos, mac_get_frame_bounds (frame, &r)))
-    {
-      /* This case corresponds to LeaveNotify in X11.  If we move
-	 outside the frame, then we're certainly no longer on any text
-	 in the frame.  */
-      clear_mouse_face (dpyinfo);
-      dpyinfo->mouse_face_mouse_frame = 0;
-      if (!dpyinfo->grabbed)
-	rif->define_frame_cursor (frame,
-				  frame->output_data.mac->nontext_cursor);
-    }
-
-  /* Has the mouse moved off the glyph it was on at the last sighting?  */
-  if (frame != last_mouse_glyph_frame
-      || !PtInRect (*pos, &last_mouse_glyph))
-    {
-      frame->mouse_moved = 1;
-      last_mouse_scroll_bar = Qnil;
-      note_mouse_highlight (frame, pos->h, pos->v);
-      /* Remember which glyph we're now on.  */
-      remember_mouse_glyph (frame, pos->h, pos->v, &last_mouse_glyph);
-      last_mouse_glyph_frame = frame;
-      return 1;
-    }
-
-  return 0;
-}
-
-
 /************************************************************************
 			      Mouse Face
  ************************************************************************/
-
-/* MAC TODO:  This should be called from somewhere (or removed)  ++KFS */
-
-static void
-redo_mouse_highlight ()
-{
-  if (!NILP (last_mouse_motion_frame)
-      && FRAME_LIVE_P (XFRAME (last_mouse_motion_frame)))
-    note_mouse_highlight (XFRAME (last_mouse_motion_frame),
-			  last_mouse_motion_position.h,
-			  last_mouse_motion_position.v);
-}
-
 
 struct frame *
 mac_focus_frame (dpyinfo)
@@ -4689,50 +3233,44 @@ XTmouse_position (fp, insist, bar_window, part, x, y, time)
 
   BLOCK_INPUT;
 
-#if !USE_APPKIT
-  if (! NILP (last_mouse_scroll_bar) && insist == 0)
-    x_scroll_bar_report_motion (fp, bar_window, part, x, y, time);
-  else
-#endif	/* !USE_APPKIT */
-    {
-      Lisp_Object frame, tail;
+  {
+    Lisp_Object frame, tail;
 
-      /* Clear the mouse-moved flag for every frame on this display.  */
-      FOR_EACH_FRAME (tail, frame)
+    /* Clear the mouse-moved flag for every frame on this display.  */
+    FOR_EACH_FRAME (tail, frame)
+      if (FRAME_MAC_P (XFRAME (frame)))
 	XFRAME (frame)->mouse_moved = 0;
 
-      last_mouse_scroll_bar = Qnil;
+    if (FRAME_MAC_DISPLAY_INFO (*fp)->grabbed && last_mouse_frame
+	&& FRAME_LIVE_P (last_mouse_frame))
+      f1 = last_mouse_frame;
+    else
+      f1 = mac_focus_frame (FRAME_MAC_DISPLAY_INFO (*fp));
 
-      if (FRAME_MAC_DISPLAY_INFO (*fp)->grabbed && last_mouse_frame
-	  && FRAME_LIVE_P (last_mouse_frame))
-	f1 = last_mouse_frame;
-      else
-	f1 = mac_focus_frame (FRAME_MAC_DISPLAY_INFO (*fp));
+    if (f1)
+      {
+	/* Ok, we found a frame.  Store all the values.
+	   last_mouse_glyph is a rectangle used to reduce the
+	   generation of mouse events.  To not miss any motion events,
+	   we must divide the frame into rectangles of the size of the
+	   smallest character that could be displayed on it, i.e. into
+	   the same rectangles that matrices on the frame are divided
+	   into.  */
+	Point mouse_pos;
 
-      if (f1)
-	{
-	  /* Ok, we found a frame.  Store all the values.
-	     last_mouse_glyph is a rectangle used to reduce the
-	     generation of mouse events.  To not miss any motion
-	     events, we must divide the frame into rectangles of the
-	     size of the smallest character that could be displayed
-	     on it, i.e. into the same rectangles that matrices on
-	     the frame are divided into.  */
-	  Point mouse_pos;
+	mac_get_frame_mouse (f1, &mouse_pos);
+	remember_mouse_glyph (f1, mouse_pos.h, mouse_pos.v,
+			      &last_mouse_glyph);
+	last_mouse_glyph_frame = f1;
 
-	  mac_get_frame_mouse (f1, &mouse_pos);
-	  remember_mouse_glyph (f1, mouse_pos.h, mouse_pos.v,
-				&last_mouse_glyph);
-	  last_mouse_glyph_frame = f1;
-
-	  *bar_window = Qnil;
-	  *part = 0;
-	  *fp = f1;
-	  XSETINT (*x, mouse_pos.h);
-	  XSETINT (*y, mouse_pos.v);
-	  *time = last_mouse_movement_time;
-	}
-    }
+	*bar_window = Qnil;
+	*part = 0;
+	*fp = f1;
+	XSETINT (*x, mouse_pos.h);
+	XSETINT (*y, mouse_pos.v);
+	*time = last_mouse_movement_time;
+      }
+  }
 
   UNBLOCK_INPUT;
 }
@@ -4748,35 +3286,27 @@ XTmouse_position (fp, insist, bar_window, part, x, y, time)
    scroll bar. */
 
 static struct scroll_bar *
-x_scroll_bar_create (w, top, left, width, height, disp_top, disp_height)
+x_scroll_bar_create (w, top, left, width, height)
      struct window *w;
-     int top, left, width, height, disp_top, disp_height;
+     int top, left, width, height;
 {
   struct frame *f = XFRAME (w->frame);
   struct scroll_bar *bar
-    = XSCROLL_BAR (Fmake_vector (make_number (SCROLL_BAR_VEC_SIZE), Qnil));
+    = ALLOCATE_PSEUDOVECTOR (struct scroll_bar, mac_control_ref, PVEC_OTHER);
   Rect r;
 
   BLOCK_INPUT;
 
   XSETWINDOW (bar->window, w);
-  XSETINT (bar->top, top);
-  XSETINT (bar->left, left);
-  XSETINT (bar->width, width);
-  XSETINT (bar->height, height);
-#ifdef MAC_OSX
-  bar->fringe_extended_p = Qnil;
-#endif
-  bar->redraw_needed_p = Qnil;
+  bar->top = top;
+  bar->left = left;
+  bar->width = width;
+  bar->height = height;
+  bar->fringe_extended_p = 0;
+  bar->redraw_needed_p = 0;
 
-  SetRect (&r, left, disp_top, left + width, disp_top + disp_height);
-  mac_create_scroll_bar (bar, &r,
-#ifdef USE_TOOLKIT_SCROLL_BARS
-			 false
-#else
-			 width < disp_height
-#endif
-			 );
+  SetRect (&r, left, top, left + width, top + height);
+  mac_create_scroll_bar (bar, &r, false);
 
   /* Add bar to its frame's list of scroll bars.  */
   bar->next = FRAME_SCROLL_BARS (f);
@@ -4821,11 +3351,9 @@ XTset_vertical_scroll_bar (w, portion, whole, position)
 {
   struct frame *f = XFRAME (w->frame);
   struct scroll_bar *bar;
-  int top, height, left, sb_left, width, sb_width, disp_top, disp_height;
+  int top, height, left, sb_left, width, sb_width;
   int window_y, window_height;
-#ifdef MAC_OSX
   int fringe_extended_p;
-#endif
 
   /* Get window dimensions.  */
   window_box (w, -1, 0, &window_y, 0, &window_height);
@@ -4849,51 +3377,27 @@ XTset_vertical_scroll_bar (w, portion, whole, position)
   else
     sb_left = left + (WINDOW_LEFTMOST_P (w) ? 0 : width - sb_width);
 
-  /* Adjustments according to Inside Macintosh to make it look nice */
-  disp_top = top;
-  disp_height = height;
-#ifdef MAC_OS8
-  if (disp_top == 0)
-    {
-      disp_top = -1;
-      disp_height++;
-    }
-  else if (disp_top == FRAME_PIXEL_HEIGHT (f) - 16)
-    {
-      disp_top++;
-      disp_height--;
-    }
-
-  if (sb_left + sb_width == FRAME_PIXEL_WIDTH (f))
-    sb_left++;
-#endif
-
-#ifdef MAC_OSX
   if (WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_LEFT (w))
     fringe_extended_p = (WINDOW_LEFTMOST_P (w)
-			 && WINDOW_LEFT_FRINGE_WIDTH (w)
+			 && WINDOW_LEFT_FRINGE_WIDTH (w) != 0
 			 && (WINDOW_HAS_FRINGES_OUTSIDE_MARGINS (w)
 			     || WINDOW_LEFT_MARGIN_COLS (w) == 0));
   else
     fringe_extended_p = (WINDOW_RIGHTMOST_P (w)
-			 && WINDOW_RIGHT_FRINGE_WIDTH (w)
+			 && WINDOW_RIGHT_FRINGE_WIDTH (w) != 0
 			 && (WINDOW_HAS_FRINGES_OUTSIDE_MARGINS (w)
 			     || WINDOW_RIGHT_MARGIN_COLS (w) == 0));
-#endif
 
   /* Does the scroll bar exist yet?  */
   if (NILP (w->vertical_scroll_bar))
     {
       BLOCK_INPUT;
-#ifdef MAC_OSX
       if (fringe_extended_p)
 	mac_clear_area (f, sb_left, top, sb_width, height);
       else
-#endif
 	mac_clear_area (f, left, top, width, height);
       UNBLOCK_INPUT;
-      bar = x_scroll_bar_create (w, top, sb_left, sb_width, height, disp_top,
-				 disp_height);
+      bar = x_scroll_bar_create (w, top, sb_left, sb_width, height);
       XSETVECTOR (w->vertical_scroll_bar, bar);
     }
   else
@@ -4904,16 +3408,11 @@ XTset_vertical_scroll_bar (w, portion, whole, position)
       BLOCK_INPUT;
 
       /* If already correctly positioned, do nothing.  */
-      if (XINT (bar->left) == sb_left
-	  && XINT (bar->top) == top
-	  && XINT (bar->width) == sb_width
-	  && XINT (bar->height) == height
-#ifdef MAC_OSX
-	  && !NILP (bar->fringe_extended_p) == fringe_extended_p
-#endif
-	  )
+      if (bar->left == sb_left && bar->top == top
+	  && bar->width == sb_width && bar->height == height
+	  && bar->fringe_extended_p == fringe_extended_p)
 	{
-	  if (!NILP (bar->redraw_needed_p))
+	  if (bar->redraw_needed_p)
 	    mac_redraw_scroll_bar (bar);
 	}
       else
@@ -4922,52 +3421,30 @@ XTset_vertical_scroll_bar (w, portion, whole, position)
 
 	  /* Since toolkit scroll bars are smaller than the space reserved
 	     for them on the frame, we have to clear "under" them.  */
-#ifdef MAC_OSX
 	  if (fringe_extended_p)
 	    mac_clear_area (f, sb_left, top, sb_width, height);
 	  else
-#endif
 	    mac_clear_area (f, left, top, width, height);
 
-	  SetRect (&r, sb_left + VERTICAL_SCROLL_BAR_WIDTH_TRIM, disp_top,
+	  SetRect (&r, sb_left + VERTICAL_SCROLL_BAR_WIDTH_TRIM, top,
 		   sb_left + sb_width - VERTICAL_SCROLL_BAR_WIDTH_TRIM,
-		   disp_top + disp_height);
+		   top + height);
 	  mac_set_scroll_bar_bounds (bar, &r);
 
           /* Remember new settings.  */
-          XSETINT (bar->left, sb_left);
-          XSETINT (bar->top, top);
-          XSETINT (bar->width, sb_width);
-          XSETINT (bar->height, height);
+          bar->left = sb_left;
+          bar->top = top;
+          bar->width = sb_width;
+          bar->height = height;
         }
 
       UNBLOCK_INPUT;
     }
 
-#ifdef MAC_OSX
-  bar->fringe_extended_p = fringe_extended_p ? Qt : Qnil;
-#endif
-  bar->redraw_needed_p = Qnil;
+  bar->fringe_extended_p = fringe_extended_p;
+  bar->redraw_needed_p = 0;
 
-#ifdef USE_TOOLKIT_SCROLL_BARS
   x_set_toolkit_scroll_bar_thumb (bar, portion, position, whole);
-#else /* not USE_TOOLKIT_SCROLL_BARS */
-  /* Set the scroll bar's current state, unless we're currently being
-     dragged.  */
-  if (NILP (bar->dragging))
-    {
-      int top_range = VERTICAL_SCROLL_BAR_TOP_RANGE (f, height);
-
-      if (whole == 0)
-	x_scroll_bar_set_handle (bar, 0, top_range, 0);
-      else
-	{
-	  int start = ((double) position * top_range) / whole;
-	  int end = ((double) (position + portion) * top_range) / whole;
-	  x_scroll_bar_set_handle (bar, start, end, 0);
-	}
-    }
-#endif /* not USE_TOOLKIT_SCROLL_BARS */
 }
 
 
@@ -5092,16 +3569,16 @@ x_scroll_bar_clear (f)
      if we just turned off scroll bar mode.
      But in that case we should not clear them.  */
   if (FRAME_HAS_VERTICAL_SCROLL_BARS (f))
-    for (bar = FRAME_SCROLL_BARS (f); VECTORP (bar);
+    for (bar = FRAME_SCROLL_BARS (f); !NILP (bar);
 	 bar = XSCROLL_BAR (bar)->next)
-      XSCROLL_BAR (bar)->redraw_needed_p = Qt;
+      XSCROLL_BAR (bar)->redraw_needed_p = 1;
 }
 
 
 /***********************************************************************
 			       Tool-bars
  ***********************************************************************/
-#if USE_MAC_TOOLBAR
+
 void
 mac_move_window_with_gravity (f, win_gravity, left, top)
      struct frame *f;
@@ -5229,7 +3706,6 @@ mac_image_spec_to_cg_image (f, image)
       return img->data.ptr_val;
     }
 }
-#endif	/* USE_MAC_TOOLBAR */
 
 
 /***********************************************************************
@@ -5351,7 +3827,7 @@ x_draw_bar_cursor (w, row, width, kind)
       XGCValues xgcv;
 
       /* If the glyph's background equals the color we normally draw
-	 the bar cursor in, the bar cursor in its normal color is
+	 the bars cursor in, the bar cursor in its normal color is
 	 invisible.  Use the glyph's foreground color instead in this
 	 case, on the assumption that the glyph's colors are chosen so
 	 that the glyph is legible.  */
@@ -5368,25 +3844,39 @@ x_draw_bar_cursor (w, row, width, kind)
 	  FRAME_MAC_DISPLAY_INFO (f)->scratch_cursor_gc = gc;
 	}
 
-      if (width < 0)
-	width = FRAME_CURSOR_WIDTH (f);
-      width = min (cursor_glyph->pixel_width, width);
-
-      w->phys_cursor_width = width;
       x_clip_to_row (w, row, TEXT_AREA, gc);
 
       if (kind == BAR_CURSOR)
-	mac_fill_rectangle (f, gc,
-			    WINDOW_TEXT_TO_FRAME_PIXEL_X (w, w->phys_cursor.x),
-			    WINDOW_TO_FRAME_PIXEL_Y (w, w->phys_cursor.y),
-			    width, row->height);
+	{
+	  if (width < 0)
+	    width = FRAME_CURSOR_WIDTH (f);
+	  width = min (cursor_glyph->pixel_width, width);
+
+	  w->phys_cursor_width = width;
+
+	  mac_fill_rectangle (f, gc,
+			      WINDOW_TEXT_TO_FRAME_PIXEL_X (w, w->phys_cursor.x),
+			      WINDOW_TO_FRAME_PIXEL_Y (w, w->phys_cursor.y),
+			      width, row->height);
+	}
       else
-	mac_fill_rectangle (f, gc,
-			    WINDOW_TEXT_TO_FRAME_PIXEL_X (w, w->phys_cursor.x),
-			    WINDOW_TO_FRAME_PIXEL_Y (w, w->phys_cursor.y +
-						     row->height - width),
-			    cursor_glyph->pixel_width,
-			    width);
+	{
+	  int dummy_x, dummy_y, dummy_h;
+
+	  if (width < 0)
+	    width = row->height;
+
+	  width = min (row->height, width);
+
+	  get_phys_cursor_geometry (w, row, cursor_glyph, &dummy_x,
+				    &dummy_y, &dummy_h);
+
+	  mac_fill_rectangle (f, gc,
+			      WINDOW_TEXT_TO_FRAME_PIXEL_X (w, w->phys_cursor.x),
+			      WINDOW_TO_FRAME_PIXEL_Y (w, w->phys_cursor.y +
+						       row->height - width),
+			      w->phys_cursor_width, width);
+	}
 
       mac_reset_clip_rectangles (f, gc);
     }
@@ -5469,107 +3959,34 @@ mac_draw_window_cursor (w, glyph_row, x, y, cursor_type, cursor_width, on_p, act
 }
 
 
-/* Icons.  */
-
-#if 0 /* MAC_TODO: no icon support yet.  */
-int
-x_bitmap_icon (f, icon)
-     struct frame *f;
-     Lisp_Object icon;
-{
-  HANDLE hicon;
-
-  if (FRAME_W32_WINDOW (f) == 0)
-    return 1;
-
-  if (NILP (icon))
-    hicon = LoadIcon (hinst, EMACS_CLASS);
-  else if (STRINGP (icon))
-    hicon = LoadImage (NULL, (LPCTSTR) SDATA (icon), IMAGE_ICON, 0, 0,
-		       LR_DEFAULTSIZE | LR_LOADFROMFILE);
-  else if (SYMBOLP (icon))
-    {
-      LPCTSTR name;
-
-      if (EQ (icon, intern ("application")))
-	name = (LPCTSTR) IDI_APPLICATION;
-      else if (EQ (icon, intern ("hand")))
-	name = (LPCTSTR) IDI_HAND;
-      else if (EQ (icon, intern ("question")))
-	name = (LPCTSTR) IDI_QUESTION;
-      else if (EQ (icon, intern ("exclamation")))
-	name = (LPCTSTR) IDI_EXCLAMATION;
-      else if (EQ (icon, intern ("asterisk")))
-	name = (LPCTSTR) IDI_ASTERISK;
-      else if (EQ (icon, intern ("winlogo")))
-	name = (LPCTSTR) IDI_WINLOGO;
-      else
-	return 1;
-
-      hicon = LoadIcon (NULL, name);
-    }
-  else
-    return 1;
-
-  if (hicon == NULL)
-    return 1;
-
-  PostMessage (FRAME_W32_WINDOW (f), WM_SETICON, (WPARAM) ICON_BIG,
-               (LPARAM) hicon);
-
-  return 0;
-}
-#endif /* MAC_TODO */
-
-/************************************************************************
-			  Handling X errors
- ************************************************************************/
-
-/* Display Error Handling functions not used on W32. Listing them here
-   helps diff stay in step when comparing w32term.c with xterm.c.
-
-x_error_catcher (display, error)
-x_catch_errors (dpy)
-x_catch_errors_unwind (old_val)
-x_check_errors (dpy, format)
-x_had_errors_p (dpy)
-x_clear_errors (dpy)
-x_uncatch_errors (dpy, count)
-x_trace_wire ()
-x_connection_signal (signalnum)
-x_connection_closed (dpy, error_message)
-x_error_quitter (display, error)
-x_error_handler (display, error)
-x_io_error_quitter (display)
-
- */
-
-
 /* Changing the font of the frame.  */
 
-/* Give frame F the font named FONTNAME as its default font, and
-   return the full name of that font.  FONTNAME may be a wildcard
-   pattern; in that case, we choose some font that fits the pattern.
-   The return value shows which font we chose.  */
+/* Give frame F the font FONT-OBJECT as its default font.  The return
+   value is FONT-OBJECT.  FONTSET is an ID of the fontset for the
+   frame.  If it is negative, generate a new fontset from
+   FONT-OBJECT.  */
 
 Lisp_Object
-x_new_font (f, fontname)
+x_new_font (f, font_object, fontset)
      struct frame *f;
-     register char *fontname;
+     Lisp_Object font_object;
+     int fontset;
 {
-  struct font_info *fontp
-    = FS_LOAD_FONT (f, 0, fontname, -1);
+  struct font *font = XFONT_OBJECT (font_object);
 
-  if (!fontp)
-    return Qnil;
+  if (fontset < 0)
+    fontset = fontset_from_font (font_object);
+  FRAME_FONTSET (f) = fontset;
+  if (FRAME_FONT (f) == font)
+    /* This font is already set in frame F.  There's nothing more to
+       do.  */
+    return font_object;
 
-  FRAME_FONT (f) = (XFontStruct *) (fontp->font);
-  FRAME_BASELINE_OFFSET (f) = fontp->baseline_offset;
-  FRAME_FONTSET (f) = -1;
-
-  FRAME_COLUMN_WIDTH (f) = fontp->average_width;
-  FRAME_SPACE_WIDTH (f) = fontp->space_width;
-  FRAME_LINE_HEIGHT (f) = FONT_HEIGHT (FRAME_FONT (f));
+  FRAME_FONT (f) = font;
+  FRAME_BASELINE_OFFSET (f) = font->baseline_offset;
+  FRAME_COLUMN_WIDTH (f) = font->average_width;
+  FRAME_SPACE_WIDTH (f) = font->space_width;
+  FRAME_LINE_HEIGHT (f) = FONT_HEIGHT (font);
 
   compute_fringe_widths (f, 1);
 
@@ -5586,73 +4003,17 @@ x_new_font (f, fontname)
       FRAME_CONFIG_SCROLL_BAR_COLS (f) = (14 + wid - 1) / wid;
     }
 
-  /* Now make the frame display the given font.  */
   if (FRAME_MAC_WINDOW (f) != 0)
     {
-      XSetFont (FRAME_MAC_DISPLAY (f), f->output_data.mac->normal_gc,
-		FRAME_FONT (f));
-      XSetFont (FRAME_MAC_DISPLAY (f), f->output_data.mac->reverse_gc,
-		FRAME_FONT (f));
-      XSetFont (FRAME_MAC_DISPLAY (f), f->output_data.mac->cursor_gc,
-		FRAME_FONT (f));
-
       /* Don't change the size of a tip frame; there's no point in
 	 doing it because it's done in Fx_show_tip, and it leads to
 	 problems because the tip frame has no widget.  */
       if (NILP (tip_frame) || XFRAME (tip_frame) != f)
-        x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
+	x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
     }
 
-  return build_string (fontp->full_name);
+  return font_object;
 }
-
-/* Give frame F the fontset named FONTSETNAME as its default font, and
-   return the full name of that fontset.  FONTSETNAME may be a wildcard
-   pattern; in that case, we choose some fontset that fits the pattern.
-   The return value shows which fontset we chose.  */
-
-Lisp_Object
-x_new_fontset (f, fontsetname)
-     struct frame *f;
-     char *fontsetname;
-{
-  int fontset = fs_query_fontset (build_string (fontsetname), 0);
-  Lisp_Object result;
-
-  if (fontset < 0)
-    return Qnil;
-
-  if (FRAME_FONTSET (f) == fontset)
-    /* This fontset is already set in frame F.  There's nothing more
-       to do.  */
-    return fontset_name (fontset);
-
-  result = x_new_font (f, (SDATA (fontset_ascii (fontset))));
-
-  if (!STRINGP (result))
-    /* Can't load ASCII font.  */
-    return Qnil;
-
-  /* Since x_new_font doesn't update any fontset information, do it now.  */
-  FRAME_FONTSET (f) = fontset;
-
-  return build_string (fontsetname);
-}
-
-
-/***********************************************************************
-	TODO: W32 Input Methods
- ***********************************************************************/
-/* Listing missing functions from xterm.c helps diff stay in step.
-
-xim_destroy_callback (xim, client_data, call_data)
-xim_open_dpy (dpyinfo, resource_name)
-struct xim_inst_t
-xim_instantiate_callback (display, client_data, call_data)
-xim_initialize (dpyinfo, resource_name)
-xim_close_dpy (dpyinfo)
-
- */
 
 
 void
@@ -5693,9 +4054,7 @@ mac_handle_size_change (f, pixelwidth, pixelheight)
 	 done afresh with new size.  */
       cancel_mouse_face (f);
 
-#if TARGET_API_MAC_CARBON
       mac_reposition_hourglass (f);
-#endif
     }
 }
 
@@ -5724,11 +4083,11 @@ x_calc_absolute_position (f)
   /* Treat negative positions as relative to the leftmost bottommost
      position that fits on the screen.  */
   if (flags & XNegative)
-    f->left_pos += (FRAME_MAC_DISPLAY_INFO (f)->width
+    f->left_pos += (x_display_pixel_width (FRAME_MAC_DISPLAY_INFO (f))
 		    - (outer.right - outer.left));
 
   if (flags & YNegative)
-    f->top_pos += (FRAME_MAC_DISPLAY_INFO (f)->height
+    f->top_pos += (x_display_pixel_height (FRAME_MAC_DISPLAY_INFO (f))
 		   - (outer.bottom - outer.top));
 
   /* The left_pos and top_pos
@@ -5765,59 +4124,9 @@ x_set_offset (f, xoff, yoff, change_gravity)
   BLOCK_INPUT;
   x_wm_set_size_hint (f, (long) 0, 0);
 
-#if TARGET_API_MAC_CARBON
   mac_move_window_structure (FRAME_MAC_WINDOW (f), f->left_pos, f->top_pos);
   /* If the title bar is completely outside the screen, adjust the
      position. */
-#if !USE_APPKIT
-  ConstrainWindowToScreen (FRAME_MAC_WINDOW (f), kWindowTitleBarRgn,
-			   kWindowConstrainMoveRegardlessOfFit
-			   | kWindowConstrainAllowPartial, NULL, NULL);
-  if (!NILP (tip_frame) && XFRAME (tip_frame) == f)
-    mac_handle_origin_change (f);
-#endif	/* !USE_APPKIT */
-#else
-  {
-    Rect inner, outer, screen_rect, dummy;
-    RgnHandle region = NewRgn ();
-
-    mac_get_window_bounds (f, &inner, &outer);
-    f->x_pixels_diff = inner.left - outer.left;
-    f->y_pixels_diff = inner.top - outer.top;
-    MoveWindow (FRAME_MAC_WINDOW (f), f->left_pos + f->x_pixels_diff,
-		f->top_pos + f->y_pixels_diff, false);
-
-    /* If the title bar is completely outside the screen, adjust the
-       position.  The variable `outer' holds the title bar rectangle.
-       The variable `inner' holds slightly smaller one than `outer',
-       so that the calculation of overlapping may not become too
-       strict.  */
-    GetWindowRegion (FRAME_MAC_WINDOW (f), kWindowTitleBarRgn, region);
-    outer = (*region)->rgnBBox;
-    DisposeRgn (region);
-    inner = outer;
-    InsetRect (&inner, 8, 8);
-    screen_rect = qd.screenBits.bounds;
-    screen_rect.top += GetMBarHeight ();
-
-    if (!SectRect (&inner, &screen_rect, &dummy))
-      {
-	if (inner.right <= screen_rect.left)
-	  f->left_pos = screen_rect.left;
-	else if (inner.left >= screen_rect.right)
-	  f->left_pos = screen_rect.right - (outer.right - outer.left);
-
-	if (inner.bottom <= screen_rect.top)
-	  f->top_pos = screen_rect.top;
-	else if (inner.top >= screen_rect.bottom)
-	  f->top_pos = screen_rect.bottom - (outer.bottom - outer.top);
-
-	MoveWindow (FRAME_MAC_WINDOW (f), f->left_pos + f->x_pixels_diff,
-		    f->top_pos + f->y_pixels_diff, false);
-      }
-  }
-#endif
-
   UNBLOCK_INPUT;
 }
 
@@ -5850,9 +4159,7 @@ x_set_window_size (f, change_gravity, cols, rows)
 
   mac_size_window (FRAME_MAC_WINDOW (f), pixelwidth, pixelheight, 0);
 
-#if TARGET_API_MAC_CARBON
   if (!NILP (tip_frame) && f == XFRAME (tip_frame))
-#endif
     mac_handle_size_change (f, pixelwidth, pixelheight);
 
   if (f->output_data.mac->internal_border_width
@@ -5897,20 +4204,10 @@ x_set_mouse_pixel_position (f, pix_x, pix_y)
      struct frame *f;
      int pix_x, pix_y;
 {
-#ifdef MAC_OSX
   BLOCK_INPUT;
   mac_convert_frame_point_to_global (f, &pix_x, &pix_y);
   CGWarpMouseCursorPosition (CGPointMake (pix_x, pix_y));
   UNBLOCK_INPUT;
-#else
-#if 0 /* MAC_TODO: LMSetMouseLocation and CursorDeviceMoveTo are non-Carbon */
-  BLOCK_INPUT;
-
-  XWarpPointer (FRAME_X_DISPLAY (f), None, FRAME_X_WINDOW (f),
-		0, 0, 0, 0, pix_x, pix_y);
-  UNBLOCK_INPUT;
-#endif
-#endif
 }
 
 /* focus shifting, raising and lowering.  */
@@ -6124,22 +4421,18 @@ x_make_frame_invisible (f)
 
   BLOCK_INPUT;
 
-#if !TARGET_API_MAC_CARBON || USE_APPKIT
   /* Before unmapping the window, update the WM_SIZE_HINTS property to claim
      that the current position of the window is user-specified, rather than
      program-specified, so that when the window is mapped again, it will be
      placed at the same location, without forcing the user to position it
      by hand again (they have already done that once for this window.)  */
   x_wm_set_size_hint (f, (long) 0, 1);
-#endif
 
   mac_hide_window (FRAME_MAC_WINDOW (f));
 
   UNBLOCK_INPUT;
 
-#if !TARGET_API_MAC_CARBON || USE_APPKIT
   mac_handle_visibility_change (f);
-#endif
 }
 
 /* Change window state from mapped to iconified.  */
@@ -6176,9 +4469,7 @@ x_iconify_frame (f)
   if (err != noErr)
     error ("Can't notify window manager of iconification");
 
-#if !TARGET_API_MAC_CARBON || USE_APPKIT
   mac_handle_visibility_change (f);
-#endif
 }
 
 
@@ -6200,9 +4491,7 @@ x_free_frame_resources (f)
   if (f == dpyinfo->x_focus_frame)
     {
       dpyinfo->x_focus_frame = 0;
-#if USE_MAC_FONT_PANEL
-      mac_set_font_info_for_selection (NULL, DEFAULT_FACE_ID, 0);
-#endif
+      mac_set_font_info_for_selection (NULL, DEFAULT_FACE_ID, 0, -1, Qnil);
     }
   if (f == dpyinfo->x_focus_event_frame)
     dpyinfo->x_focus_event_frame = 0;
@@ -6233,8 +4522,7 @@ x_free_frame_resources (f)
 
   x_free_gcs (f);
 
-  if (FRAME_SIZE_HINTS (f))
-    xfree (FRAME_SIZE_HINTS (f));
+  xfree (FRAME_SIZE_HINTS (f));
 
   xfree (f->output_data.mac);
   f->output_data.mac = NULL;
@@ -6305,79 +4593,6 @@ x_wm_set_size_hint (f, flags, user_position)
     }
 }
 
-#if 0 /* MAC_TODO: hide application instead of iconify? */
-/* Used for IconicState or NormalState */
-
-void
-x_wm_set_window_state (f, state)
-     struct frame *f;
-     int state;
-{
-#ifdef USE_X_TOOLKIT
-  Arg al[1];
-
-  XtSetArg (al[0], XtNinitialState, state);
-  XtSetValues (f->output_data.x->widget, al, 1);
-#else /* not USE_X_TOOLKIT */
-  Window window = FRAME_X_WINDOW (f);
-
-  f->output_data.x->wm_hints.flags |= StateHint;
-  f->output_data.x->wm_hints.initial_state = state;
-
-  XSetWMHints (FRAME_X_DISPLAY (f), window, &f->output_data.x->wm_hints);
-#endif /* not USE_X_TOOLKIT */
-}
-
-void
-x_wm_set_icon_pixmap (f, pixmap_id)
-     struct frame *f;
-     int pixmap_id;
-{
-  Pixmap icon_pixmap;
-
-#ifndef USE_X_TOOLKIT
-  Window window = FRAME_X_WINDOW (f);
-#endif
-
-  if (pixmap_id > 0)
-    {
-      icon_pixmap = x_bitmap_pixmap (f, pixmap_id);
-      f->output_data.x->wm_hints.icon_pixmap = icon_pixmap;
-    }
-  else
-    {
-      /* It seems there is no way to turn off use of an icon pixmap.
-	 The following line does it, only if no icon has yet been created,
-	 for some window managers.  But with mwm it crashes.
-	 Some people say it should clear the IconPixmapHint bit in this case,
-	 but that doesn't work, and the X consortium said it isn't the
-	 right thing at all.  Since there is no way to win,
-	 best to explicitly give up.  */
-#if 0
-      f->output_data.x->wm_hints.icon_pixmap = None;
-#else
-      return;
-#endif
-    }
-
-#ifdef USE_X_TOOLKIT /* same as in x_wm_set_window_state.  */
-
-  {
-    Arg al[1];
-    XtSetArg (al[0], XtNiconPixmap, icon_pixmap);
-    XtSetValues (f->output_data.x->widget, al, 1);
-  }
-
-#else /* not USE_X_TOOLKIT */
-
-  f->output_data.x->wm_hints.flags |= IconPixmapHint;
-  XSetWMHints (FRAME_X_DISPLAY (f), window, &f->output_data.x->wm_hints);
-
-#endif /* not USE_X_TOOLKIT */
-}
-
-#endif /* MAC_TODO */
-
 void
 x_wm_set_icon_position (f, icon_x, icon_y)
      struct frame *f;
@@ -6400,1165 +4615,10 @@ x_wm_set_icon_position (f, icon_x, icon_y)
 
 
 /***********************************************************************
-			  XLFD Pattern Match
- ***********************************************************************/
-
-/* An XLFD pattern is divided into blocks delimited by '*'.  This
-   structure holds information for each block.  */
-struct xlfdpat_block
-{
-  /* Length of the pattern string in this block.  Non-zero except for
-     the first and the last blocks.  */
-  int len;
-
-  /* Pattern string except the last character in this block.  The last
-     character is replaced with NUL in order to use it as a
-     sentinel.  */
-  unsigned char *pattern;
-
-  /* Last character of the pattern string.  Must not be '?'.  */
-  unsigned char last_char;
-
-  /* One of the tables for the Boyer-Moore string search.  It
-     specifies the number of positions to proceed for each character
-     with which the match fails.  */
-  int skip[256];
-
-  /* The skip value for the last character in the above `skip' is
-     assigned to `infinity' in order to simplify a loop condition.
-     The original value is saved here.  */
-  int last_char_skip;
-};
-
-struct xlfdpat
-{
-  /* Normalized pattern string.  "Normalized" means that capital
-     letters are lowered, blocks are not empty except the first and
-     the last ones, and trailing '?'s in a block that is not the last
-     one are moved to the next one.  The last character in each block
-     is replaced with NUL.  */
-  unsigned char *buf;
-
-  /* Number of characters except '*'s and trailing '?'s in the
-     normalized pattern string.  */
-  int nchars;
-
-  /* Number of trailing '?'s in the normalized pattern string.  */
-  int trailing_anychars;
-
-  /* Number of blocks and information for each block.  The latter is
-     NULL if the pattern is exact (no '*' or '?' in it).  */
-  int nblocks;
-  struct xlfdpat_block *blocks;
-};
-
-static void
-xlfdpat_destroy (pat)
-     struct xlfdpat *pat;
-{
-  if (pat)
-    {
-      if (pat->buf)
-	{
-	  if (pat->blocks)
-	    xfree (pat->blocks);
-	  xfree (pat->buf);
-	}
-      xfree (pat);
-    }
-}
-
-static struct xlfdpat *
-xlfdpat_create (pattern)
-     const char *pattern;
-{
-  struct xlfdpat *pat;
-  int nblocks, i, skip;
-  unsigned char last_char, *p, *q, *anychar_head;
-  const unsigned char *ptr;
-  struct xlfdpat_block *blk;
-
-  pat = xmalloc (sizeof (struct xlfdpat));
-  pat->buf = xmalloc (strlen (pattern) + 1);
-
-  /* Normalize the pattern string and store it to `pat->buf'.  */
-  nblocks = 0;
-  anychar_head = NULL;
-  q = pat->buf;
-  last_char = '\0';
-  for (ptr = pattern; *ptr; ptr++)
-    {
-      unsigned char c = *ptr;
-
-      if (c == '*')
-	if (last_char == '*')
-	  /*  ...a** -> ...a*  */
-	  continue;
-	else
-	  {
-	    if (last_char == '?')
-	      {
-		if (anychar_head > pat->buf && *(anychar_head - 1) == '*')
-		  /*  ...*??* -> ...*??  */
-		  continue;
-		else
-		  /*  ...a??* -> ...a*??  */
-		  {
-		    *anychar_head++ = '*';
-		    c = '?';
-		  }
-	      }
-	    nblocks++;
-	  }
-      else if (c == '?')
-	{
-	  if (last_char != '?')
-	    anychar_head = q;
-	}
-      else
-	/* On Mac OS X 10.3, tolower also converts non-ASCII
-	   characters for some locales.  */
-	if (isascii (c))
-	  c = tolower (c);
-
-      *q++ = last_char = c;
-    }
-  *q = '\0';
-  nblocks++;
-  pat->nblocks = nblocks;
-  if (last_char != '?')
-    pat->trailing_anychars = 0;
-  else
-    {
-      pat->trailing_anychars = q - anychar_head;
-      q = anychar_head;
-    }
-  pat->nchars = q - pat->buf - (nblocks - 1);
-
-  if (anychar_head == NULL && nblocks == 1)
-    {
-      /* The pattern is exact.  */
-      pat->blocks = NULL;
-      return pat;
-    }
-
-  pat->blocks = xmalloc (sizeof (struct xlfdpat_block) * nblocks);
-
-  /* Divide the normalized pattern into blocks.  */
-  p = pat->buf;
-  for (blk = pat->blocks; blk < pat->blocks + nblocks - 1; blk++)
-    {
-      blk->pattern = p;
-      while (*p != '*')
-	p++;
-      blk->len = p - blk->pattern;
-      p++;
-    }
-  blk->pattern = p;
-  blk->len = q - blk->pattern;
-
-  /* Setup a table for the Boyer-Moore string search.  */
-  for (blk = pat->blocks; blk < pat->blocks + nblocks; blk++)
-    if (blk->len != 0)
-      {
-	blk->last_char = blk->pattern[blk->len - 1];
-	blk->pattern[blk->len - 1] = '\0';
-
-	for (skip = 1; skip < blk->len; skip++)
-	  if (blk->pattern[blk->len - skip - 1] == '?')
-	    break;
-
-	for (i = 0; i < 256; i++)
-	  blk->skip[i] = skip;
-
-	p = blk->pattern + (blk->len - skip);
-	while (--skip > 0)
-	  blk->skip[*p++] = skip;
-
-	blk->last_char_skip = blk->skip[blk->last_char];
-      }
-
-  return pat;
-}
-
-static INLINE int
-xlfdpat_exact_p (pat)
-     struct xlfdpat *pat;
-{
-  return pat->blocks == NULL;
-}
-
-/* Return the first string in STRING + 0, ..., STRING + START_MAX such
-   that the pattern in *BLK matches with its prefix.  Return NULL
-   there is no such strings.  STRING must be lowered in advance.  */
-
-static const char *
-xlfdpat_block_match_1 (blk, string, start_max)
-     struct xlfdpat_block *blk;
-     const unsigned char *string;
-     int start_max;
-{
-  int start, infinity;
-  unsigned char *p;
-  const unsigned char *s;
-
-  xassert (blk->len > 0);
-  xassert (start_max + blk->len <= strlen (string));
-  xassert (blk->last_char != '?');
-
-  /* See the comments in the function `boyer_moore' (search.c) for the
-     use of `infinity'.  */
-  infinity = start_max + blk->len + 1;
-  blk->skip[blk->last_char] = infinity;
-
-  start = 0;
-  do
-    {
-      /* Check the last character of the pattern. */
-      s = string + blk->len - 1;
-      do
-	{
-	  start += blk->skip[*(s + start)];
-	}
-      while (start <= start_max);
-
-      if (start < infinity)
-	/* Couldn't find the last character.  */
-	return NULL;
-
-      /* No less than `infinity' means we could find the last
-	 character at `s[start - infinity]'.  */
-      start -= infinity;
-
-      /* Check the remaining characters.  We prefer making no-'?'
-	 cases faster because the use of '?' is really rare.  */
-      p = blk->pattern;
-      s = string + start;
-      do
-	{
-	  while (*p++ == *s++)
-	    ;
-	}
-      while (*(p - 1) == '?');
-
-      if (*(p - 1) == '\0')
-	/* Matched.  */
-	return string + start;
-
-      /* Didn't match.  */
-      start += blk->last_char_skip;
-    }
-  while (start <= start_max);
-
-  return NULL;
-}
-
-#define xlfdpat_block_match(b, s, m) \
-  ((b)->len == 1 ? memchr ((s), (b)->last_char, (m) + 1) \
-   : xlfdpat_block_match_1 (b, s, m))
-
-/* Check if XLFD pattern PAT, which is generated by `xlfdpat_create',
-   matches with STRING.  STRING must be lowered in advance.  */
-
-static int
-xlfdpat_match (pat, string)
-     struct xlfdpat *pat;
-     const unsigned char *string;
-{
-  int str_len, nblocks, i, start_max;
-  struct xlfdpat_block *blk;
-  const unsigned char *s;
-
-  xassert (pat->nblocks > 0);
-
-  if (xlfdpat_exact_p (pat))
-    return strcmp (pat->buf, string) == 0;
-
-  /* The number of the characters in the string must not be smaller
-     than that in the pattern.  */
-  str_len = strlen (string);
-  if (str_len < pat->nchars + pat->trailing_anychars)
-    return 0;
-
-  /* Chop off the trailing '?'s.  */
-  str_len -= pat->trailing_anychars;
-
-  /* The last block.  When it is non-empty, it must match at the end
-     of the string.  */
-  nblocks = pat->nblocks;
-  blk = pat->blocks + (nblocks - 1);
-  if (nblocks == 1)
-    /* The last block is also the first one.  */
-    return (str_len == blk->len
-	    && (blk->len == 0 || xlfdpat_block_match (blk, string, 0)));
-  else if (blk->len != 0)
-    if (!xlfdpat_block_match (blk, string + (str_len - blk->len), 0))
-      return 0;
-
-  /* The first block.  When it is non-empty, it must match at the
-     beginning of the string.  */
-  blk = pat->blocks;
-  if (blk->len != 0)
-    {
-      s = xlfdpat_block_match (blk, string, 0);
-      if (s == NULL)
-	return 0;
-      string = s + blk->len;
-    }
-
-  /* The rest of the blocks.  */
-  start_max = str_len - pat->nchars;
-  for (i = 1, blk++; i < nblocks - 1; i++, blk++)
-    {
-      s = xlfdpat_block_match (blk, string, start_max);
-      if (s == NULL)
-	return 0;
-      start_max -= s - string;
-      string = s + blk->len;
-    }
-
-  return 1;
-}
-
-
-/***********************************************************************
 				Fonts
  ***********************************************************************/
 
-/* Return a pointer to struct font_info of font FONT_IDX of frame F.  */
-
-struct font_info *
-x_get_font_info (f, font_idx)
-     FRAME_PTR f;
-     int font_idx;
-{
-  return (FRAME_MAC_FONT_TABLE (f) + font_idx);
-}
-
-/* the global font name table */
-static char **font_name_table = NULL;
-static int font_name_table_size = 0;
-static int font_name_count = 0;
-
-/* Alist linking font family names to Font Manager font family
-   references (which can also be used as QuickDraw font IDs).  We use
-   an alist because hash tables are not ready when the terminal frame
-   for Mac OS Classic is created.  */
-static Lisp_Object fm_font_family_alist;
-#if USE_ATSUI
-/* Hash table linking font family names to ATSU font IDs.  */
-static Lisp_Object atsu_font_id_hash;
-/* Alist linking Font Manager style to face attributes.  */
-static Lisp_Object fm_style_face_attributes_alist;
-extern Lisp_Object QCfamily, QCweight, QCslant, Qnormal, Qbold, Qitalic;
-#endif
-#if USE_MAC_FONT_PANEL
 Lisp_Object Qpanel_closed, Qselection;
-#endif
-
-/* Alist linking character set strings to Mac text encoding and Emacs
-   coding system. */
-static Lisp_Object Vmac_charset_info_alist;
-
-static Lisp_Object
-create_text_encoding_info_alist ()
-{
-  Lisp_Object result = Qnil, rest;
-
-  for (rest = Vmac_charset_info_alist; CONSP (rest); rest = XCDR (rest))
-    {
-      Lisp_Object charset_info = XCAR (rest);
-      Lisp_Object charset, coding_system, text_encoding;
-      Lisp_Object existing_info;
-
-      if (!(CONSP (charset_info)
-	    && (charset = XCAR (charset_info),
-		STRINGP (charset))
-	    && CONSP (XCDR (charset_info))
-	    && (text_encoding = XCAR (XCDR (charset_info)),
-		INTEGERP (text_encoding))
-	    && CONSP (XCDR (XCDR (charset_info)))
-	    && (coding_system = XCAR (XCDR (XCDR (charset_info))),
-		SYMBOLP (coding_system))))
-	continue;
-
-      existing_info = assq_no_quit (text_encoding, result);
-      if (NILP (existing_info))
-	result = Fcons (list3 (text_encoding, coding_system, charset),
-			result);
-      else
-	if (NILP (Fmember (charset, XCDR (XCDR (existing_info)))))
-	  XSETCDR (XCDR (existing_info),
-		   Fcons (charset, XCDR (XCDR (existing_info))));
-    }
-
-  return result;
-}
-
-
-static void
-decode_mac_font_name (name, size, coding_system)
-     char *name;
-     int size;
-     Lisp_Object coding_system;
-{
-  struct coding_system coding;
-  char *buf, *p;
-
-  if (!NILP (coding_system) && !NILP (Fcoding_system_p (coding_system)))
-    {
-      for (p = name; *p; p++)
-	if (!isascii (*p) || iscntrl (*p))
-	  break;
-
-      if (*p)
-	{
-	  setup_coding_system (coding_system, &coding);
-	  coding.src_multibyte = 0;
-	  coding.dst_multibyte = 1;
-	  coding.mode |= CODING_MODE_LAST_BLOCK;
-	  coding.composing = COMPOSITION_DISABLED;
-	  buf = (char *) alloca (size);
-
-	  decode_coding (&coding, name, buf, strlen (name), size - 1);
-	  bcopy (buf, name, coding.produced);
-	  name[coding.produced] = '\0';
-	}
-    }
-
-  /* If there's just one occurrence of '-' in the family name, it is
-     replaced with '_'.  (More than one occurrence of '-' means a
-     "FOUNDRY-FAMILY-CHARSET"-style name.)  */
-  p = strchr (name, '-');
-  if (p && strchr (p + 1, '-') == NULL)
-    *p = '_';
-
-  for (p = name; *p; p++)
-    /* On Mac OS X 10.3, tolower also converts non-ASCII characters
-       for some locales.  */
-    if (isascii (*p))
-      *p = tolower (*p);
-}
-
-
-static char *
-mac_to_x_fontname (name, size, style, charset)
-     const char *name;
-     int size;
-     Style style;
-     char *charset;
-{
-  Str31 foundry, cs;
-  Str255 family;
-  char xf[256], *result;
-  unsigned char *p;
-
-  if (sscanf (name, "%31[^-]-%255[^-]-%31s", foundry, family, cs) == 3)
-    charset = cs;
-  else
-    {
-      strcpy(foundry, "Apple");
-      strcpy(family, name);
-    }
-
-  sprintf (xf, "%s-%c-normal--%d-%d-%d-%d-m-%d-%s",
-	   style & bold ? "bold" : "medium", style & italic ? 'i' : 'r',
-	   size, size * 10, size ? 72 : 0, size ? 72 : 0, size * 10, charset);
-
-  result = xmalloc (strlen (foundry) + strlen (family) + strlen (xf) + 3 + 1);
-  sprintf (result, "-%s-%s-%s", foundry, family, xf);
-  for (p = result; *p; p++)
-    /* On Mac OS X 10.3, tolower also converts non-ASCII characters
-       for some locales.  */
-    if (isascii (*p))
-      *p = tolower (*p);
-  return result;
-}
-
-
-/* Parse fully-specified and instantiated X11 font spec XF, and store
-   the results to FAMILY, *SIZE, *STYLE, and CHARSET.  Return 1 if the
-   parsing succeeded, and 0 otherwise.  For FAMILY and CHARSET, the
-   caller must allocate at least 256 and 32 bytes respectively.  For
-   ordinary Mac fonts, the value stored to FAMILY should just be their
-   names, like "monaco", "Taipei", etc.  Fonts converted from the GNU
-   intlfonts collection contain their charset designation in their
-   names, like "ETL-Fixed-iso8859-1", "ETL-Fixed-koi8-r", etc.  Both
-   types of font names are handled accordingly.  */
-
-const int kDefaultFontSize = 12;
-
-static int
-parse_x_font_name (xf, family, size, style, charset)
-     const char *xf;
-     char *family;
-     int *size;
-     Style *style;
-     char *charset;
-{
-  Str31 foundry, weight;
-  int point_size, avgwidth;
-  char slant[2], *p;
-
-  if (sscanf (xf, "-%31[^-]-%255[^-]-%31[^-]-%1[^-]-%*[^-]-%*[^-]-%d-%d-%*[^-]-%*[^-]-%*c-%d-%31s",
-              foundry, family, weight, slant, size,
-	      &point_size, &avgwidth, charset) != 8
-      && sscanf (xf, "-%31[^-]-%255[^-]-%31[^-]-%1[^-]-%*[^-]--%d-%d-%*[^-]-%*[^-]-%*c-%d-%31s",
-		 foundry, family, weight, slant, size,
-		 &point_size, &avgwidth, charset) != 8)
-    return 0;
-
-  if (*size == 0)
-    {
-      if (point_size > 0)
-	*size = point_size / 10;
-      else if (avgwidth > 0)
-	*size = avgwidth / 10;
-    }
-  if (*size == 0)
-    *size = kDefaultFontSize;
-
-  *style = normal;
-  if (strcmp (weight, "bold") == 0)
-    *style |= bold;
-  if (*slant == 'i')
-    *style |= italic;
-
-  if (NILP (Fassoc (build_string (charset), Vmac_charset_info_alist)))
-    {
-      int foundry_len = strlen (foundry), family_len = strlen (family);
-
-      if (foundry_len + family_len + strlen (charset) + 2 < sizeof (Str255))
-	{
-	  /* Like sprintf (family, "%s-%s-%s", foundry, family, charset),
-	     but take overlap into account.  */
-	  memmove (family + foundry_len + 1, family, family_len);
-	  memcpy (family, foundry, foundry_len);
-	  family[foundry_len] = '-';
-	  family[foundry_len + 1 + family_len] = '-';
-	  strcpy (family + foundry_len + 1 + family_len + 1, charset);
-	}
-      else
-	return 0;
-    }
-
-  for (p = family; *p; p++)
-    /* On Mac OS X 10.3, tolower also converts non-ASCII characters
-       for some locales.  */
-    if (isascii (*p))
-      *p = tolower (*p);
-
-  return 1;
-}
-
-
-static void
-add_font_name_table_entry (char *font_name)
-{
-  if (font_name_table_size == 0)
-    {
-      font_name_table_size = 256;
-      font_name_table = (char **)
-	xmalloc (font_name_table_size * sizeof (char *));
-    }
-  else if (font_name_count + 1 >= font_name_table_size)
-    {
-      font_name_table_size *= 2;
-      font_name_table = (char **)
-	xrealloc (font_name_table,
-		  font_name_table_size * sizeof (char *));
-    }
-
-  font_name_table[font_name_count++] = font_name;
-}
-
-static void
-add_mac_font_name (name, size, style, charset)
-     const char *name;
-     int size;
-     Style style;
-     const char *charset;
-{
-  if (size > 0)
-    add_font_name_table_entry (mac_to_x_fontname (name, size, style, charset));
-  else
-    {
-      add_font_name_table_entry (mac_to_x_fontname (name, 0, style, charset));
-      add_font_name_table_entry (mac_to_x_fontname (name, 0, italic, charset));
-      add_font_name_table_entry (mac_to_x_fontname (name, 0, bold, charset));
-      add_font_name_table_entry (mac_to_x_fontname (name, 0, italic | bold,
-						    charset));
-    }
-}
-
-#if USE_ATSUI
-static FMFontStyle
-fm_get_style_from_font (font)
-     FMFont font;
-{
-  OSStatus err;
-  FMFontStyle style = normal;
-  ByteCount len;
-  UInt16 mac_style;
-  FMFontFamily font_family;
-#define FONT_HEADER_MAC_STYLE_OFFSET (4*4 + 2*2 + 8*2 + 2*4)
-
-#if __LP64__
-  err = ATSFontGetTable (FMGetATSFontRefFromFont (font),
-			 'head', FONT_HEADER_MAC_STYLE_OFFSET,
-			 sizeof (mac_style), &mac_style, &len);
-  if (err == noErr
-      && len >= FONT_HEADER_MAC_STYLE_OFFSET + sizeof (mac_style))
-    style = EndianU16_BtoN (mac_style);
-#else
-  /* FMGetFontFamilyInstanceFromFont returns `normal' as the style of
-     some font (e.g., Optima) even if it is `bold'.  */
-  err = FMGetFontTable (font, 'head', FONT_HEADER_MAC_STYLE_OFFSET,
-			sizeof (mac_style), &mac_style, &len);
-  if (err == noErr
-      && len >= FONT_HEADER_MAC_STYLE_OFFSET + sizeof (mac_style))
-    style = EndianU16_BtoN (mac_style);
-  else
-    FMGetFontFamilyInstanceFromFont (font, &font_family, &style);
-#endif
-
-  return style;
-}
-
-static ATSUFontID
-atsu_find_font_from_family_name (family)
-     const char *family;
-{
-  struct Lisp_Hash_Table *h = XHASH_TABLE (atsu_font_id_hash);
-  unsigned hash_code;
-  int i;
-  Lisp_Object rest, best;
-  FMFontStyle min_style, style;
-
-  i = hash_lookup (h, make_unibyte_string (family, strlen (family)),
-		   &hash_code);
-  if (i < 0)
-    return kATSUInvalidFontID;
-
-  rest = HASH_VALUE (h, i);
-  if (INTEGERP (rest) || (CONSP (rest) && INTEGERP (XCDR (rest))))
-    return cons_to_long (rest);
-
-  rest = Fnreverse (rest);
-  best = XCAR (rest);
-  rest = XCDR (rest);
-  if (!NILP (rest)
-      && (min_style = fm_get_style_from_font (cons_to_long (best))) != normal)
-    do
-      {
-	style = fm_get_style_from_font (cons_to_long (XCAR (rest)));
-	if (style < min_style)
-	  {
-	    best = XCAR (rest);
-	    if (style == normal)
-	      break;
-	    else
-	      min_style = style;
-	  }
-	rest = XCDR (rest);
-      }
-    while (!NILP (rest));
-
-  HASH_VALUE (h, i) = best;
-  return cons_to_long (best);
-}
-
-static Lisp_Object
-fm_style_to_face_attributes (fm_style)
-     FMFontStyle fm_style;
-{
-  Lisp_Object tem;
-
-  fm_style &= (bold | italic);
-  tem = assq_no_quit (make_number (fm_style),
-		      fm_style_face_attributes_alist);
-  if (!NILP (tem))
-    return XCDR (tem);
-
-  tem = list4 (QCweight, fm_style & bold ? Qbold : Qnormal,
-	       QCslant, fm_style & italic ? Qitalic : Qnormal);
-  fm_style_face_attributes_alist =
-    Fcons (Fcons (make_number (fm_style), tem),
-	   fm_style_face_attributes_alist);
-
-  return tem;
-}
-
-static Lisp_Object
-atsu_find_font_family_name (font_id)
-     ATSUFontID font_id;
-{
-  OSStatus err;
-  ByteCount len;
-  Lisp_Object family = Qnil;
-
-  err = ATSUFindFontName (font_id, kFontFamilyName,
-			  kFontMacintoshPlatform, kFontNoScript,
-			  kFontNoLanguage, 0, NULL, &len, NULL);
-  if (err == noErr)
-    {
-      family = make_uninit_string (len);
-      err = ATSUFindFontName (font_id, kFontFamilyName,
-			      kFontMacintoshPlatform, kFontNoScript,
-			      kFontNoLanguage, len, SDATA (family),
-			      NULL, NULL);
-    }
-  if (err == noErr)
-    decode_mac_font_name (SDATA (family), len + 1, Qnil);
-
-  return family;
-}
-
-Lisp_Object
-mac_atsu_font_face_attributes (font_id)
-     ATSUFontID font_id;
-{
-  Lisp_Object family, style_attrs;
-
-  family = atsu_find_font_family_name (font_id);
-  if (NILP (family))
-    return Qnil;
-  style_attrs = fm_style_to_face_attributes (fm_get_style_from_font (font_id));
-  return Fcons (QCfamily, Fcons (family, style_attrs));
-}
-#endif
-
-/* Sets up the table font_name_table to contain the list of all fonts
-   in the system the first time the table is used so that the Resource
-   Manager need not be accessed every time this information is
-   needed.  */
-
-static void
-init_font_name_table ()
-{
-#if TARGET_API_MAC_CARBON
-  FMFontFamilyIterator ffi;
-  FMFontFamilyInstanceIterator ffii;
-  FMFontFamily ff;
-  Lisp_Object text_encoding_info_alist;
-  struct gcpro gcpro1;
-
-  text_encoding_info_alist = create_text_encoding_info_alist ();
-
-#if USE_ATSUI
-#if USE_CG_TEXT_DRAWING
-  init_cg_text_anti_aliasing_threshold ();
-#endif
-  if (!NILP (assq_no_quit (make_number (kTextEncodingMacUnicode),
-			   text_encoding_info_alist)))
-    {
-      OSStatus err;
-      struct Lisp_Hash_Table *h;
-      unsigned hash_code;
-      ItemCount nfonts, i;
-      ATSUFontID *font_ids = NULL;
-      Lisp_Object prev_family = Qnil;
-      int j;
-
-      atsu_font_id_hash =
-	make_hash_table (Qequal, make_number (DEFAULT_HASH_SIZE),
-			 make_float (DEFAULT_REHASH_SIZE),
-			 make_float (DEFAULT_REHASH_THRESHOLD),
-			 Qnil, Qnil, Qnil);
-      h = XHASH_TABLE (atsu_font_id_hash);
-
-      err = ATSUFontCount (&nfonts);
-      if (err == noErr)
-	{
-	  font_ids = xmalloc (sizeof (ATSUFontID) * nfonts);
-	  err = ATSUGetFontIDs (font_ids, nfonts, NULL);
-	}
-      if (err == noErr)
-	for (i = 0; i < nfonts; i++)
-	  {
-	    Lisp_Object family;
-
-	    family = atsu_find_font_family_name (font_ids[i]);
-	    if (NILP (family) || SREF (family, 0) == '.')
-	      continue;
-	    if (!NILP (Fequal (prev_family, family)))
-	      family = prev_family;
-	    else
-	      j = hash_lookup (h, family, &hash_code);
-	    if (j < 0)
-	      {
-		add_mac_font_name (SDATA (family), 0, normal, "iso10646-1");
-		j = hash_put (h, family, Fcons (long_to_cons (font_ids[i]),
-						Qnil), hash_code);
-	      }
-	    else if (EQ (prev_family, family))
-	      HASH_VALUE (h, j) = Fcons (long_to_cons (font_ids[i]),
-					 HASH_VALUE (h, j));
-	    prev_family = family;
-	  }
-      if (font_ids)
-	xfree (font_ids);
-    }
-#endif
-
-#if USE_QUICKDRAW
-  /* Create a dummy instance iterator here to avoid creating and
-     destroying it in the loop.  */
-  if (FMCreateFontFamilyInstanceIterator (0, &ffii) != noErr)
-    return;
-  /* Create an iterator to enumerate the font families.  */
-  if (FMCreateFontFamilyIterator (NULL, NULL, kFMDefaultOptions, &ffi)
-      != noErr)
-    {
-      FMDisposeFontFamilyInstanceIterator (&ffii);
-      return;
-    }
-
-  GCPRO1 (text_encoding_info_alist);
-
-  while (FMGetNextFontFamily (&ffi, &ff) == noErr)
-    {
-      Str255 name;
-      FMFont font;
-      FMFontStyle style;
-      FMFontSize size;
-      TextEncoding encoding;
-      TextEncodingBase sc;
-      Lisp_Object text_encoding_info, family;
-
-      if (FMGetFontFamilyName (ff, name) != noErr)
-	continue;
-      p2cstr (name);
-      if (*name == '.')
-	continue;
-
-      if (FMGetFontFamilyTextEncoding (ff, &encoding) != noErr)
-	continue;
-      sc = GetTextEncodingBase (encoding);
-      text_encoding_info = assq_no_quit (make_number (sc),
-					 text_encoding_info_alist);
-      if (NILP (text_encoding_info))
-	text_encoding_info = assq_no_quit (make_number (kTextEncodingMacRoman),
-					   text_encoding_info_alist);
-      decode_mac_font_name (name, sizeof (name),
-			    XCAR (XCDR (text_encoding_info)));
-      family = build_string (name);
-      if (!NILP (Fassoc (family, fm_font_family_alist)))
-	continue;
-      fm_font_family_alist = Fcons (Fcons (family, make_number (ff)),
-				    fm_font_family_alist);
-
-      /* Point the instance iterator at the current font family.  */
-      if (FMResetFontFamilyInstanceIterator (ff, &ffii) != noErr)
-	continue;
-
-      while (FMGetNextFontFamilyInstance (&ffii, &font, &style, &size)
-	     == noErr)
-	{
-	  Lisp_Object rest = XCDR (XCDR (text_encoding_info));
-
-	  if (size > 0 || style == normal)
-	    for (; !NILP (rest); rest = XCDR (rest))
-	      add_mac_font_name (name, size, style, SDATA (XCAR (rest)));
-	}
-    }
-
-  UNGCPRO;
-
-  /* Dispose of the iterators.  */
-  FMDisposeFontFamilyIterator (&ffi);
-  FMDisposeFontFamilyInstanceIterator (&ffii);
-#endif	/* USE_QUICKDRAW */
-#else  /* !TARGET_API_MAC_CARBON */
-  GrafPtr port;
-  SInt16 fontnum, old_fontnum;
-  int num_mac_fonts = CountResources('FOND');
-  int i, j;
-  Handle font_handle, font_handle_2;
-  short id, scriptcode;
-  ResType type;
-  Str255 name;
-  struct FontAssoc *fat;
-  struct AsscEntry *assc_entry;
-  Lisp_Object text_encoding_info_alist, text_encoding_info, family;
-  struct gcpro gcpro1;
-
-  GetPort (&port);  /* save the current font number used */
-  old_fontnum = port->txFont;
-
-  text_encoding_info_alist = create_text_encoding_info_alist ();
-
-  GCPRO1 (text_encoding_info_alist);
-
-  for (i = 1; i <= num_mac_fonts; i++)  /* get all available fonts */
-    {
-      font_handle = GetIndResource ('FOND', i);
-      if (!font_handle)
-	continue;
-
-      GetResInfo (font_handle, &id, &type, name);
-      GetFNum (name, &fontnum);
-      p2cstr (name);
-      if (fontnum == 0 || *name == '.')
-	continue;
-
-      TextFont (fontnum);
-      scriptcode = FontToScript (fontnum);
-      text_encoding_info = assq_no_quit (make_number (scriptcode),
-					 text_encoding_info_alist);
-      if (NILP (text_encoding_info))
-	text_encoding_info = assq_no_quit (make_number (smRoman),
-					   text_encoding_info_alist);
-      decode_mac_font_name (name, sizeof (name),
-			    XCAR (XCDR (text_encoding_info)));
-      family = build_string (name);
-      if (!NILP (Fassoc (family, fm_font_family_alist)))
-	continue;
-      fm_font_family_alist = Fcons (Fcons (family, make_number (fontnum)),
-				    fm_font_family_alist);
-      do
-	{
-	  HLock (font_handle);
-
-	  if (GetResourceSizeOnDisk (font_handle)
-	      >= sizeof (struct FamRec))
-	    {
-	      fat = (struct FontAssoc *) (*font_handle
-					  + sizeof (struct FamRec));
-	      assc_entry
-		= (struct AsscEntry *) (*font_handle
-					+ sizeof (struct FamRec)
-					+ sizeof (struct FontAssoc));
-
-	      for (j = 0; j <= fat->numAssoc; j++, assc_entry++)
-		{
-		  Lisp_Object rest = XCDR (XCDR (text_encoding_info));
-
-		  for (; !NILP (rest); rest = XCDR (rest))
-		    add_mac_font_name (name, assc_entry->fontSize,
-				       assc_entry->fontStyle,
-				       SDATA (XCAR (rest)));
-		}
-	    }
-
-	  HUnlock (font_handle);
-	  font_handle_2 = GetNextFOND (font_handle);
-	  ReleaseResource (font_handle);
-	  font_handle = font_handle_2;
-	}
-      while (ResError () == noErr && font_handle);
-    }
-
-  UNGCPRO;
-
-  TextFont (old_fontnum);
-#endif  /* !TARGET_API_MAC_CARBON */
-}
-
-
-void
-mac_clear_font_name_table ()
-{
-  int i;
-
-  for (i = 0; i < font_name_count; i++)
-    xfree (font_name_table[i]);
-  xfree (font_name_table);
-  font_name_table = NULL;
-  font_name_table_size = font_name_count = 0;
-  fm_font_family_alist = Qnil;
-}
-
-
-enum xlfd_scalable_field_index
-  {
-    XLFD_SCL_PIXEL_SIZE,
-    XLFD_SCL_POINT_SIZE,
-    XLFD_SCL_AVGWIDTH,
-    XLFD_SCL_LAST
-  };
-
-static const int xlfd_scalable_fields[] =
-  {
-    6,				/* PIXEL_SIZE */
-    7,				/* POINT_SIZE */
-    11,				/* AVGWIDTH */
-    -1
-  };
-
-static Lisp_Object
-mac_do_list_fonts (pattern, maxnames)
-     const char *pattern;
-     int maxnames;
-{
-  int i, n_fonts = 0;
-  Lisp_Object font_list = Qnil;
-  struct xlfdpat *pat;
-  char *scaled;
-  const char *ptr;
-  int scl_val[XLFD_SCL_LAST], *val;
-  const int *field;
-  int exact;
-
-  if (font_name_table == NULL)  /* Initialize when first used.  */
-    init_font_name_table ();
-
-  for (i = 0; i < XLFD_SCL_LAST; i++)
-    scl_val[i] = -1;
-
-  /* If the pattern contains 14 dashes and one of PIXEL_SIZE,
-     POINT_SIZE, and AVGWIDTH fields is explicitly specified, scalable
-     fonts are scaled according to the specified size.  */
-  ptr = pattern;
-  i = 0;
-  field = xlfd_scalable_fields;
-  val = scl_val;
-  if (*ptr == '-')
-    do
-      {
-	ptr++;
-	if (i == *field)
-	  {
-	    if ('0' <= *ptr && *ptr <= '9')
-	      {
-		*val = *ptr++ - '0';
-		while ('0' <= *ptr && *ptr <= '9' && *val < 10000)
-		  *val = *val * 10 + *ptr++ - '0';
-		if (*ptr != '-')
-		  *val = -1;
-	      }
-	    field++;
-	    val++;
-	  }
-	ptr = strchr (ptr, '-');
-	i++;
-      }
-    while (ptr && i < 14);
-
-  if (i == 14 && ptr == NULL)
-    {
-      if (scl_val[XLFD_SCL_PIXEL_SIZE] < 0)
-	scl_val[XLFD_SCL_PIXEL_SIZE] =
-	  (scl_val[XLFD_SCL_POINT_SIZE] > 0 ? scl_val[XLFD_SCL_POINT_SIZE] / 10
-	   : (scl_val[XLFD_SCL_AVGWIDTH] > 0 ? scl_val[XLFD_SCL_AVGWIDTH] / 10
-	      : -1));
-      if (scl_val[XLFD_SCL_POINT_SIZE] < 0)
-	scl_val[XLFD_SCL_POINT_SIZE] =
-	  (scl_val[XLFD_SCL_PIXEL_SIZE] > 0 ? scl_val[XLFD_SCL_PIXEL_SIZE] * 10
-	   : (scl_val[XLFD_SCL_AVGWIDTH] > 0 ? scl_val[XLFD_SCL_AVGWIDTH]
-	      : -1));
-      if (scl_val[XLFD_SCL_AVGWIDTH] < 0)
-	scl_val[XLFD_SCL_AVGWIDTH] =
-	  (scl_val[XLFD_SCL_PIXEL_SIZE] > 0 ? scl_val[XLFD_SCL_PIXEL_SIZE] * 10
-	   : (scl_val[XLFD_SCL_POINT_SIZE] > 0 ? scl_val[XLFD_SCL_POINT_SIZE]
-	      : -1));
-    }
-  else
-    scl_val[XLFD_SCL_PIXEL_SIZE] = -1;
-
-  pat = xlfdpat_create (pattern);
-  if (pat == NULL)
-    return Qnil;
-
-  exact = xlfdpat_exact_p (pat);
-
-  for (i = 0; i < font_name_count; i++)
-    {
-      if (xlfdpat_match (pat, font_name_table[i]))
-	{
-	  font_list = Fcons (build_string (font_name_table[i]), font_list);
-	  if (exact || (maxnames > 0 && ++n_fonts >= maxnames))
-	    break;
-	}
-      else if (scl_val[XLFD_SCL_PIXEL_SIZE] > 0
-	       && (ptr = strstr (font_name_table[i], "-0-0-0-0-m-0-")))
-	{
-	  int former_len = ptr - font_name_table[i];
-
-	  scaled = xmalloc (strlen (font_name_table[i]) + 20 + 1);
-	  memcpy (scaled, font_name_table[i], former_len);
-	  sprintf (scaled + former_len,
-		   "-%d-%d-72-72-m-%d-%s",
-		   scl_val[XLFD_SCL_PIXEL_SIZE],
-		   scl_val[XLFD_SCL_POINT_SIZE],
-		   scl_val[XLFD_SCL_AVGWIDTH],
-		   ptr + sizeof ("-0-0-0-0-m-0-") - 1);
-
-	  if (xlfdpat_match (pat, scaled))
-	    {
-	      font_list = Fcons (build_string (scaled), font_list);
-	      xfree (scaled);
-	      if (exact || (maxnames > 0 && ++n_fonts >= maxnames))
-		  break;
-	    }
-	  else
-	    xfree (scaled);
-	}
-    }
-
-  xlfdpat_destroy (pat);
-
-  return font_list;
-}
-
-/* Return a list of names of available fonts matching PATTERN on frame F.
-
-   Frame F null means we have not yet created any frame on Mac, and
-   consult the first display in x_display_list.  MAXNAMES sets a limit
-   on how many fonts to match.  */
-
-Lisp_Object
-x_list_fonts (f, pattern, size, maxnames)
-     struct frame *f;
-     Lisp_Object pattern;
-     int size, maxnames;
-{
-  Lisp_Object list = Qnil, patterns, tem, key;
-  struct mac_display_info *dpyinfo
-    = f ? FRAME_MAC_DISPLAY_INFO (f) : x_display_list;
-
-  xassert (size <= 0);
-
-  patterns = Fassoc (pattern, Valternate_fontname_alist);
-  if (NILP (patterns))
-    patterns = Fcons (pattern, Qnil);
-
-  for (; CONSP (patterns); patterns = XCDR (patterns))
-    {
-      pattern = XCAR (patterns);
-
-      if (!STRINGP (pattern))
-        continue;
-
-      tem = XCAR (XCDR (dpyinfo->name_list_element));
-      key = Fcons (pattern, make_number (maxnames));
-
-      list = Fassoc (key, tem);
-      if (!NILP (list))
-	{
-	  list = Fcdr_safe (list);
-	  /* We have a cashed list.  Don't have to get the list again.  */
-	  goto label_cached;
-	}
-
-      BLOCK_INPUT;
-      list = mac_do_list_fonts (SDATA (pattern), maxnames);
-      UNBLOCK_INPUT;
-
-      /* MAC_TODO: add code for matching outline fonts here */
-
-      /* Now store the result in the cache.  */
-      XSETCAR (XCDR (dpyinfo->name_list_element),
-	       Fcons (Fcons (key, list),
-		      XCAR (XCDR (dpyinfo->name_list_element))));
-
-    label_cached:
-      if (NILP (list)) continue; /* Try the remaining alternatives.  */
-    }
-
-  return list;
-}
-
 
 #if GLYPH_DEBUG
 
@@ -7568,800 +4628,19 @@ x_list_fonts (f, pattern, size, maxnames)
 static void
 x_check_font (f, font)
      struct frame *f;
-     XFontStruct *font;
+     struct font *font;
 {
-  int i;
-  struct x_display_info *dpyinfo = FRAME_X_DISPLAY_INFO (f);
+  Lisp_Object frame;
 
-  xassert (font != NULL);
-
-  for (i = 0; i < dpyinfo->n_fonts; i++)
-    if (dpyinfo->font_table[i].name
-	&& font == dpyinfo->font_table[i].font)
-      break;
-
-  xassert (i < dpyinfo->n_fonts);
+  xassert (font != NULL && ! NILP (font->props[FONT_TYPE_INDEX]));
+  if (font->driver->check)
+    xassert (font->driver->check (f, font) == 0);
 }
 
 #endif /* GLYPH_DEBUG != 0 */
 
-/* Set *W to the minimum width, *H to the minimum font height of FONT.
-   Note: There are (broken) X fonts out there with invalid XFontStruct
-   min_bounds contents.  For example, handa@etl.go.jp reports that
-   "-adobe-courier-medium-r-normal--*-180-*-*-m-*-iso8859-1" fonts
-   have font->min_bounds.width == 0.  */
-
-static INLINE void
-x_font_min_bounds (font, w, h)
-     MacFontStruct *font;
-     int *w, *h;
-{
-  *h = FONT_HEIGHT (font);
-  *w = font->min_bounds.width;
-}
-
-
-/* Compute the smallest character width and smallest font height over
-   all fonts available on frame F.  Set the members smallest_char_width
-   and smallest_font_height in F's x_display_info structure to
-   the values computed.  Value is non-zero if smallest_font_height or
-   smallest_char_width become smaller than they were before.  */
-
-static int
-x_compute_min_glyph_bounds (f)
-     struct frame *f;
-{
-  int i;
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  MacFontStruct *font;
-  int old_width = dpyinfo->smallest_char_width;
-  int old_height = dpyinfo->smallest_font_height;
-
-  dpyinfo->smallest_font_height = 100000;
-  dpyinfo->smallest_char_width = 100000;
-
-  for (i = 0; i < dpyinfo->n_fonts; ++i)
-    if (dpyinfo->font_table[i].name)
-      {
-	struct font_info *fontp = dpyinfo->font_table + i;
-	int w, h;
-
-	font = (MacFontStruct *) fontp->font;
-	xassert (font != (MacFontStruct *) ~0);
-	x_font_min_bounds (font, &w, &h);
-
-	dpyinfo->smallest_font_height = min (dpyinfo->smallest_font_height, h);
-	dpyinfo->smallest_char_width = min (dpyinfo->smallest_char_width, w);
-      }
-
-  xassert (dpyinfo->smallest_char_width > 0
-	   && dpyinfo->smallest_font_height > 0);
-
-  return (dpyinfo->n_fonts == 1
-	  || dpyinfo->smallest_char_width < old_width
-	  || dpyinfo->smallest_font_height < old_height);
-}
-
-
-/* Determine whether given string is a fully-specified XLFD: all 14
-   fields are present, none is '*'.  */
-
-static int
-is_fully_specified_xlfd (p)
-     const char *p;
-{
-  int i;
-  char *q;
-
-  if (*p != '-')
-    return 0;
-
-  for (i = 0; i < 13; i++)
-    {
-      q = strchr (p + 1, '-');
-      if (q == NULL)
-        return 0;
-      if (q - p == 2 && *(p + 1) == '*')
-        return 0;
-      p = q;
-    }
-
-  if (strchr (p + 1, '-') != NULL)
-    return 0;
-
-  if (*(p + 1) == '*' && *(p + 2) == '\0')
-    return 0;
-
-  return 1;
-}
-
-
-/* mac_load_query_font creates and returns an internal representation
-   for a font in a MacFontStruct struct.  There is really no concept
-   corresponding to "loading" a font on the Mac.  But we check its
-   existence and find the font number and all other information for it
-   and store them in the returned MacFontStruct.  */
-
-static MacFontStruct *
-mac_load_query_font (f, fontname)
-     struct frame *f;
-     char *fontname;
-{
-  int size;
-  char *name;
-  Str255 family;
-  Str31 charset;
-  SInt16 fontnum;
-#if USE_ATSUI
-  static ATSUFontID font_id;
-  ATSUStyle mac_style = NULL;
-#endif
-  Style fontface;
-#if TARGET_API_MAC_CARBON
-  TextEncoding encoding;
-  int scriptcode;
-#else
-  short scriptcode;
-#endif
-  MacFontStruct *font;
-  XCharStruct *space_bounds = NULL, *pcm;
-
-  if (is_fully_specified_xlfd (fontname))
-    name = fontname;
-  else
-    {
-      Lisp_Object matched_fonts;
-
-      matched_fonts = mac_do_list_fonts (fontname, 1);
-      if (NILP (matched_fonts))
-	return NULL;
-      name = SDATA (XCAR (matched_fonts));
-    }
-
-  if (parse_x_font_name (name, family, &size, &fontface, charset) == 0)
-    return NULL;
-
-#if USE_ATSUI
-  if (strcmp (charset, "iso10646-1") == 0) /* XXX */
-    {
-      OSStatus err;
-      static const ATSUAttributeTag tags[] =
-	{kATSUFontTag, kATSUSizeTag,
-	 kATSUQDBoldfaceTag, kATSUQDItalicTag};
-      static const ByteCount sizes[] =
-	{sizeof (ATSUFontID), sizeof (Fixed),
-	 sizeof (Boolean), sizeof (Boolean)};
-      static Fixed size_fixed;
-      static Boolean bold_p, italic_p;
-      static const ATSUAttributeValuePtr values[] =
-	{&font_id, &size_fixed,
-	 &bold_p, &italic_p};
-      static const ATSUFontFeatureType types[] =
-	{kAllTypographicFeaturesType, kDiacriticsType};
-      static const ATSUFontFeatureSelector selectors[] =
-	{kAllTypeFeaturesOffSelector, kDecomposeDiacriticsSelector};
-      FMFontStyle style;
-
-      font_id = atsu_find_font_from_family_name (family);
-      if (font_id == kATSUInvalidFontID)
-	return NULL;
-      size_fixed = Long2Fix (size);
-      bold_p = (fontface & bold) != 0;
-      italic_p = (fontface & italic) != 0;
-      err = ATSUCreateStyle (&mac_style);
-      if (err != noErr)
-	return NULL;
-      err = ATSUSetFontFeatures (mac_style, sizeof (types) / sizeof (types[0]),
-      				 types, selectors);
-      if (err != noErr)
-	return NULL;
-      err = ATSUSetAttributes (mac_style, sizeof (tags) / sizeof (tags[0]),
-			       tags, sizes, values);
-      if (err != noErr)
-	return NULL;
-#if !__LP64__
-      err = FMGetFontFamilyInstanceFromFont (font_id, &fontnum, &style);
-      if (err != noErr)
-#endif
-	fontnum = -1;
-      scriptcode = kTextEncodingMacUnicode;
-    }
-  else
-#endif
-    {
-#if USE_QUICKDRAW
-      Lisp_Object tmp = Fassoc (build_string (family), fm_font_family_alist);
-
-      if (NILP (tmp))
-	return NULL;
-      fontnum = XINT (XCDR (tmp));
-#if TARGET_API_MAC_CARBON
-      if (FMGetFontFamilyTextEncoding (fontnum, &encoding) != noErr)
-	return NULL;
-      scriptcode = GetTextEncodingBase (encoding);
-#else
-      scriptcode = FontToScript (fontnum);
-#endif
-#else	/* !USE_QUICKDRAW */
-      return NULL;
-#endif	/* !USE_QUICKDRAW */
-    }
-
-  font = (MacFontStruct *) xmalloc (sizeof (struct MacFontStruct));
-
-  font->mac_fontnum = fontnum;
-  font->mac_fontsize = size;
-  font->mac_fontface = fontface;
-  font->mac_scriptcode = scriptcode;
-#if USE_ATSUI
-  font->mac_style = mac_style;
-#if USE_CG_TEXT_DRAWING
-  font->cg_font = NULL;
-  font->cg_glyphs = NULL;
-#endif
-#endif
-
-  /* Apple Japanese (SJIS) font is listed as both
-     "*-jisx0208.1983-sjis" (Japanese script) and "*-jisx0201.1976-0"
-     (Roman script) in init_font_name_table ().  The latter should be
-     treated as a one-byte font.  */
-  if (scriptcode == smJapanese && strcmp (charset, "jisx0201.1976-0") == 0)
-    font->mac_scriptcode = smRoman;
-
-  font->full_name = mac_to_x_fontname (family, size, fontface, charset);
-
-#if USE_ATSUI
-  if (font->mac_style)
-    {
-      OSStatus err;
-      UniChar c;
-
-      font->min_byte1 = 0;
-      font->max_byte1 = 0xff;
-      font->min_char_or_byte2 = 0;
-      font->max_char_or_byte2 = 0xff;
-
-      font->bounds.rows = xmalloc (sizeof (XCharStruct *) * 0x100);
-      bzero (font->bounds.rows, sizeof (XCharStruct *) * 0x100);
-      font->bounds.rows[0] = xmalloc (sizeof (XCharStruct) * 0x100);
-      pcm_init (font->bounds.rows[0], 0x100);
-
-#if USE_CG_TEXT_DRAWING
-      if (fontnum != -1)
-	{
-	  FMFontStyle style;
-	  ATSFontRef ats_font;
-
-	  err = FMGetFontFromFontFamilyInstance (fontnum, fontface,
-						 &font_id, &style);
-	  /* Use CG text drawing if italic/bold is not synthesized.  */
-	  if (err == noErr && style == fontface)
-	    {
-	      ats_font = FMGetATSFontRefFromFont (font_id);
-	      font->cg_font = CGFontCreateWithPlatformFont (&ats_font);
-	    }
-	}
-
-      if (font->cg_font)
-	{
-	  font->cg_glyphs = xmalloc (sizeof (CGGlyph) * 0x100);
-	  bzero (font->cg_glyphs, sizeof (CGGlyph) * 0x100);
-	}
-#endif
-      space_bounds = font->bounds.rows[0] + 0x20;
-      err = mac_query_char_extents (font->mac_style, 0x20,
-				    &font->ascent, &font->descent,
-				    space_bounds,
-#if USE_CG_TEXT_DRAWING
-				    (font->cg_glyphs ? font->cg_glyphs + 0x20
-				     : NULL)
-#else
-				    NULL
-#endif
-				    );
-      if (err != noErr
-	  || space_bounds->width <= 0 || FONT_HEIGHT (font) <= 0)
-	{
-	  mac_unload_font (&one_mac_display_info, font);
-	  return NULL;
-	}
-
-      pcm = font->bounds.rows[0];
-      for (c = 0x21; c <= 0xff; c++)
-	{
-	  if (c == 0xad)
-	    /* Soft hyphen is not supported in ATSUI.  */
-	    continue;
-	  else if (c == 0x7f)
-	    {
-#if USE_CG_TEXT_DRAWING
-	      if (font->cg_glyphs)
-		{
-		  c = 0x9f;
-		  pcm = NULL;
-		  continue;
-		}
-#endif
-	      break;
-	    }
-
-	  mac_query_char_extents (font->mac_style, c, NULL, NULL,
-				  pcm ? pcm + c : NULL,
-#if USE_CG_TEXT_DRAWING
-				  (font->cg_glyphs ? font->cg_glyphs + c
-				   : NULL)
-#else
-				    NULL
-#endif
-				  );
-
-#if USE_CG_TEXT_DRAWING
-	  if (font->cg_glyphs && font->cg_glyphs[c] == 0)
-	    {
-	      /* Don't use CG text drawing if font substitution occurs in
-		 ASCII or Latin-1 characters.  */
-	      CGFontRelease (font->cg_font);
-	      font->cg_font = NULL;
-	      xfree (font->cg_glyphs);
-	      font->cg_glyphs = NULL;
-	      if (pcm == NULL)
-		break;
-	    }
-#endif
-	}
-    }
-  else
-#endif
-    {
-#if !USE_QUICKDRAW
-      abort ();
-#else  /* USE_QUICKDRAW */
-      OSStatus err;
-      FontInfo the_fontinfo;
-      int is_two_byte_font;
-
-      mac_begin_clip (f, NULL);
-
-      TextFont (fontnum);
-      TextSize (size);
-      TextFace (fontface);
-
-      GetFontInfo (&the_fontinfo);
-
-      font->ascent = the_fontinfo.ascent;
-      font->descent = the_fontinfo.descent;
-
-      is_two_byte_font = (font->mac_scriptcode == smJapanese
-			  || font->mac_scriptcode == smTradChinese
-			  || font->mac_scriptcode == smSimpChinese
-			  || font->mac_scriptcode == smKorean);
-
-      if (is_two_byte_font)
-	{
-	  int char_width;
-
-	  font->min_byte1 = 0xa1;
-	  font->max_byte1 = 0xfe;
-	  font->min_char_or_byte2 = 0xa1;
-	  font->max_char_or_byte2 = 0xfe;
-
-	  /* Use the width of an "ideographic space" of that font
-	     because the_fontinfo.widMax returns the wrong width for
-	     some fonts.  */
-	  switch (font->mac_scriptcode)
-	    {
-	    case smJapanese:
-	      font->min_byte1 = 0x81;
-	      font->max_byte1 = 0xfc;
-	      font->min_char_or_byte2 = 0x40;
-	      font->max_char_or_byte2 = 0xfc;
-	      char_width = StringWidth("\p\x81\x40");
-	      break;
-	    case smTradChinese:
-	      font->min_char_or_byte2 = 0x40;
-	      char_width = StringWidth("\p\xa1\x40");
-	      break;
-	    case smSimpChinese:
-	      char_width = StringWidth("\p\xa1\xa1");
-	      break;
-	    case smKorean:
-	      char_width = StringWidth("\p\xa1\xa1");
-	      break;
-	    }
-
-	  font->bounds.per_char = NULL;
-
-	  if (fontface & italic)
-	    font->max_bounds.rbearing = char_width + 1;
-	  else
-	    font->max_bounds.rbearing = char_width;
-	  font->max_bounds.lbearing = 0;
-	  font->max_bounds.width = char_width;
-	  font->max_bounds.ascent = the_fontinfo.ascent;
-	  font->max_bounds.descent = the_fontinfo.descent;
-
-	  font->min_bounds = font->max_bounds;
-	}
-      else
-	{
-	  int c;
-
-	  font->min_byte1 = font->max_byte1 = 0;
-	  font->min_char_or_byte2 = 0x20;
-	  font->max_char_or_byte2 = 0xff;
-
-	  font->bounds.per_char =
-	    xmalloc (sizeof (XCharStruct) * (0xff - 0x20 + 1));
-	  bzero (font->bounds.per_char,
-		 sizeof (XCharStruct) * (0xff - 0x20 + 1));
-
-	  space_bounds = font->bounds.per_char;
-	  err = mac_query_char_extents (NULL, 0x20, &font->ascent,
-					&font->descent, space_bounds, NULL);
-	  if (err != noErr || space_bounds->width <= 0)
-	    {
-	      mac_unload_font (&one_mac_display_info, font);
-	      return NULL;
-	    }
-
-	  for (c = 0x21, pcm = space_bounds + 1; c <= 0xff; c++, pcm++)
-	    mac_query_char_extents (NULL, c, NULL, NULL, pcm, NULL);
-	}
-
-      mac_end_clip (f, NULL);
-#endif	/* USE_QUICKDRAW */
-    }
-
-  if (space_bounds)
-    {
-      int c;
-
-      font->min_bounds = font->max_bounds = *space_bounds;
-      for (c = 0x21, pcm = space_bounds + 1; c <= 0x7f; c++, pcm++)
-	if (pcm->width > 0)
-	  {
-	    font->min_bounds.lbearing = min (font->min_bounds.lbearing,
-					     pcm->lbearing);
-	    font->min_bounds.rbearing = min (font->min_bounds.rbearing,
-					     pcm->rbearing);
-	    font->min_bounds.width    = min (font->min_bounds.width,
-					     pcm->width);
-	    font->min_bounds.ascent   = min (font->min_bounds.ascent,
-					     pcm->ascent);
-	    font->min_bounds.descent  = min (font->min_bounds.descent,
-					     pcm->descent);
-
-	    font->max_bounds.lbearing = max (font->max_bounds.lbearing,
-					     pcm->lbearing);
-	    font->max_bounds.rbearing = max (font->max_bounds.rbearing,
-					     pcm->rbearing);
-	    font->max_bounds.width    = max (font->max_bounds.width,
-					     pcm->width);
-	    font->max_bounds.ascent   = max (font->max_bounds.ascent,
-					     pcm->ascent);
-	    font->max_bounds.descent  = max (font->max_bounds.descent,
-					     pcm->descent);
-	  }
-      if (
-#if USE_ATSUI
-	  font->mac_style == NULL &&
-#endif
-	  font->max_bounds.width == font->min_bounds.width
-	  && font->min_bounds.lbearing >= 0
-	  && font->max_bounds.rbearing <= font->max_bounds.width)
-	{
-	  /* Fixed width and no overhangs.  */
-	  xfree (font->bounds.per_char);
-	  font->bounds.per_char = NULL;
-	}
-    }
-
-#if !defined (MAC_OS8) || USE_ATSUI
-  /* AppKit and WebKit do some adjustment to the heights of Courier,
-     Helvetica, and Times.  This only works on the environments where
-     srcCopy text transfer mode is never used.  */
-  if (
-#ifdef MAC_OS8			/* implies USE_ATSUI */
-      font->mac_style &&
-#endif
-      (strcmp (family, "courier") == 0 || strcmp (family, "helvetica") == 0
-       || strcmp (family, "times") == 0))
-    font->ascent += (font->ascent + font->descent) * .15 + 0.5;
-#endif
-
-  return font;
-}
-
-
-void
-mac_unload_font (dpyinfo, font)
-     struct mac_display_info *dpyinfo;
-     XFontStruct *font;
-{
-  xfree (font->full_name);
-#if USE_ATSUI
-  if (font->mac_style)
-    {
-      int i;
-
-      for (i = font->min_byte1; i <= font->max_byte1; i++)
-	if (font->bounds.rows[i])
-	  xfree (font->bounds.rows[i]);
-      xfree (font->bounds.rows);
-      ATSUDisposeStyle (font->mac_style);
-    }
-  else
-#endif
-    if (font->bounds.per_char)
-      xfree (font->bounds.per_char);
-#if USE_CG_TEXT_DRAWING
-  if (font->cg_font)
-    CGFontRelease (font->cg_font);
-  if (font->cg_glyphs)
-    xfree (font->cg_glyphs);
-#endif
-  xfree (font);
-}
-
-
-/* Load font named FONTNAME of the size SIZE for frame F, and return a
-   pointer to the structure font_info while allocating it dynamically.
-   If SIZE is 0, load any size of font.
-   If loading is failed, return NULL.  */
-
-struct font_info *
-x_load_font (f, fontname, size)
-     struct frame *f;
-     register char *fontname;
-     int size;
-{
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  Lisp_Object font_names;
-
-  /* Get a list of all the fonts that match this name.  Once we
-     have a list of matching fonts, we compare them against the fonts
-     we already have by comparing names.  */
-  font_names = x_list_fonts (f, build_string (fontname), size, 1);
-
-  if (!NILP (font_names))
-    {
-      Lisp_Object tail;
-      int i;
-
-      for (i = 0; i < dpyinfo->n_fonts; i++)
-	for (tail = font_names; CONSP (tail); tail = XCDR (tail))
-	  if (dpyinfo->font_table[i].name
-	      && (!strcmp (dpyinfo->font_table[i].name,
-			   SDATA (XCAR (tail)))
-		  || !strcmp (dpyinfo->font_table[i].full_name,
-			      SDATA (XCAR (tail)))))
-	    return (dpyinfo->font_table + i);
-    }
-  else
-    return NULL;
-
-  /* Load the font and add it to the table.  */
-  {
-    struct MacFontStruct *font;
-    struct font_info *fontp;
-    int i;
-
-    fontname = (char *) SDATA (XCAR (font_names));
-
-    BLOCK_INPUT;
-    font = mac_load_query_font (f, fontname);
-    UNBLOCK_INPUT;
-    if (!font)
-      return NULL;
-
-    /* Find a free slot in the font table.  */
-    for (i = 0; i < dpyinfo->n_fonts; ++i)
-      if (dpyinfo->font_table[i].name == NULL)
-	break;
-
-    /* If no free slot found, maybe enlarge the font table.  */
-    if (i == dpyinfo->n_fonts
-	&& dpyinfo->n_fonts == dpyinfo->font_table_size)
-      {
-	int sz;
-	dpyinfo->font_table_size = max (16, 2 * dpyinfo->font_table_size);
-	sz = dpyinfo->font_table_size * sizeof *dpyinfo->font_table;
-	dpyinfo->font_table
-	  = (struct font_info *) xrealloc (dpyinfo->font_table, sz);
-      }
-
-    fontp = dpyinfo->font_table + i;
-    if (i == dpyinfo->n_fonts)
-      ++dpyinfo->n_fonts;
-
-    /* Now fill in the slots of *FONTP.  */
-    BLOCK_INPUT;
-    bzero (fontp, sizeof (*fontp));
-    fontp->font = font;
-    fontp->font_idx = i;
-    fontp->name = (char *) xmalloc (strlen (fontname) + 1);
-    bcopy (fontname, fontp->name, strlen (fontname) + 1);
-
-    if (font->min_bounds.width == font->max_bounds.width)
-      {
-	/* Fixed width font.  */
-	fontp->average_width = fontp->space_width = font->min_bounds.width;
-      }
-    else
-      {
-	XChar2b char2b;
-	XCharStruct *pcm;
-
-	char2b.byte1 = 0x00, char2b.byte2 = 0x20;
-	pcm = mac_per_char_metric (font, &char2b, 0);
-	if (pcm)
-	  fontp->space_width = pcm->width;
-	else
-	  fontp->space_width = FONT_WIDTH (font);
-
-	if (pcm)
-	  {
-	    int width = pcm->width;
-	    for (char2b.byte2 = 33; char2b.byte2 <= 126; char2b.byte2++)
-	      if ((pcm = mac_per_char_metric (font, &char2b, 0)) != NULL)
-		width += pcm->width;
-	    fontp->average_width = width / 95.0 + 0.5;
-	  }
-	else
-	  fontp->average_width = FONT_WIDTH (font);
-      }
-
-    fontp->full_name = (char *) xmalloc (strlen (font->full_name) + 1);
-    bcopy (font->full_name, fontp->full_name, strlen (font->full_name) + 1);
-
-    fontp->size = font->max_bounds.width;
-    fontp->height = FONT_HEIGHT (font);
-    {
-      /* For some font, ascent and descent in max_bounds field is
-	 larger than the above value.  */
-      int max_height = font->max_bounds.ascent + font->max_bounds.descent;
-      if (max_height > fontp->height)
-	fontp->height = max_height;
-    }
-
-    /* The slot `encoding' specifies how to map a character
-       code-points (0x20..0x7F or 0x2020..0x7F7F) of each charset to
-       the font code-points (0:0x20..0x7F, 1:0xA0..0xFF), or
-       (0:0x2020..0x7F7F, 1:0xA0A0..0xFFFF, 3:0x20A0..0x7FFF,
-       2:0xA020..0xFF7F).  For the moment, we don't know which charset
-       uses this font.  So, we set information in fontp->encoding[1]
-       which is never used by any charset.  If mapping can't be
-       decided, set FONT_ENCODING_NOT_DECIDED.  */
-    if (font->mac_scriptcode == smJapanese)
-      fontp->encoding[1] = 4;
-    else
-      {
-        fontp->encoding[1]
-           = (font->max_byte1 == 0
-	      /* 1-byte font */
-	      ? (font->min_char_or_byte2 < 0x80
-	         ? (font->max_char_or_byte2 < 0x80
-	            ? 0		/* 0x20..0x7F */
-	            : FONT_ENCODING_NOT_DECIDED) /* 0x20..0xFF */
-	         : 1)		/* 0xA0..0xFF */
-	      /* 2-byte font */
-	      : (font->min_byte1 < 0x80
-	         ? (font->max_byte1 < 0x80
-	            ? (font->min_char_or_byte2 < 0x80
-		       ? (font->max_char_or_byte2 < 0x80
-		          ? 0		/* 0x2020..0x7F7F */
-		          : FONT_ENCODING_NOT_DECIDED) /* 0x2020..0x7FFF */
-		       : 3)		/* 0x20A0..0x7FFF */
-	            : FONT_ENCODING_NOT_DECIDED) /* 0x20??..0xA0?? */
-	         : (font->min_char_or_byte2 < 0x80
-	            ? (font->max_char_or_byte2 < 0x80
-		       ? 2		/* 0xA020..0xFF7F */
-		       : FONT_ENCODING_NOT_DECIDED) /* 0xA020..0xFFFF */
-	            : 1)));		/* 0xA0A0..0xFFFF */
-      }
-
-#if 0 /* MAC_TODO: fill these out with more reasonably values */
-    fontp->baseline_offset
-      = (XGetFontProperty (font, dpyinfo->Xatom_MULE_BASELINE_OFFSET, &value)
-	 ? (long) value : 0);
-    fontp->relative_compose
-      = (XGetFontProperty (font, dpyinfo->Xatom_MULE_RELATIVE_COMPOSE, &value)
-	 ? (long) value : 0);
-    fontp->default_ascent
-      = (XGetFontProperty (font, dpyinfo->Xatom_MULE_DEFAULT_ASCENT, &value)
-	 ? (long) value : 0);
-#else
-    fontp->baseline_offset = 0;
-    fontp->relative_compose = 0;
-    fontp->default_ascent = 0;
-#endif
-
-    /* Set global flag fonts_changed_p to non-zero if the font loaded
-       has a character with a smaller width than any other character
-       before, or if the font loaded has a smaller height than any
-       other font loaded before.  If this happens, it will make a
-       glyph matrix reallocation necessary.  */
-    fonts_changed_p |= x_compute_min_glyph_bounds (f);
-    UNBLOCK_INPUT;
-    return fontp;
-  }
-}
-
-
-/* Return a pointer to struct font_info of a font named FONTNAME for
-   frame F.  If no such font is loaded, return NULL.  */
-
-struct font_info *
-x_query_font (f, fontname)
-     struct frame *f;
-     register char *fontname;
-{
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  int i;
-
-  for (i = 0; i < dpyinfo->n_fonts; i++)
-    if (dpyinfo->font_table[i].name
-	&& (!xstricmp (dpyinfo->font_table[i].name, fontname)
-	    || !xstricmp (dpyinfo->font_table[i].full_name, fontname)))
-      return (dpyinfo->font_table + i);
-  return NULL;
-}
-
-
-/* Find a CCL program for a font specified by FONTP, and set the member
- `encoder' of the structure.  */
-
-void
-x_find_ccl_program (fontp)
-     struct font_info *fontp;
-{
-  Lisp_Object list, elt;
-
-  for (list = Vfont_ccl_encoder_alist; CONSP (list); list = XCDR (list))
-    {
-      elt = XCAR (list);
-      if (CONSP (elt)
-	  && STRINGP (XCAR (elt))
-	  && (fast_c_string_match_ignore_case (XCAR (elt), fontp->name)
-	      >= 0))
-	break;
-    }
-  if (! NILP (list))
-    {
-      struct ccl_program *ccl
-	= (struct ccl_program *) xmalloc (sizeof (struct ccl_program));
-
-      if (setup_ccl_program (ccl, XCDR (elt)) < 0)
-	xfree (ccl);
-      else
-	fontp->font_encoder = ccl;
-    }
-}
-
 
 /* The Mac Event loop code */
-
-#if !TARGET_API_MAC_CARBON
-#include <Events.h>
-#include <Quickdraw.h>
-#include <Balloons.h>
-#include <Devices.h>
-#include <Fonts.h>
-#include <Gestalt.h>
-#include <Menus.h>
-#include <Processes.h>
-#include <Sound.h>
-#include <ToolUtils.h>
-#include <TextUtils.h>
-#include <Dialogs.h>
-#include <Script.h>
-#include <Types.h>
-#include <Resources.h>
-
-#if __MWERKS__
-#include <unix.h>
-#endif
-#endif /* ! TARGET_API_MAC_CARBON */
 
 /* Contains the string "reverse", which is a constant for mouse button emu.*/
 Lisp_Object Qreverse;
@@ -8383,7 +4662,6 @@ Lisp_Object Vmac_function_modifier;
    a three button mouse */
 Lisp_Object Vmac_emulate_three_button_mouse;
 
-#if TARGET_API_MAC_CARBON
 /* Non-zero if the mouse wheel button (i.e. button 4) should map to
    mouse-2, instead of mouse-3.  */
 int mac_wheel_button_is_mouse_2;
@@ -8395,44 +4673,24 @@ int mac_pass_command_to_system;
 /* If non-zero, the Mac "Control" key is passed on to the Mac Toolbox
    for processing before Emacs sees it.  */
 int mac_pass_control_to_system;
-#endif
 
 /* Whether or not the screen configuration has changed.  */
 int mac_screen_config_changed = 0;
 
 /* Apple Events */
-#if TARGET_API_MAC_CARBON
-#if !USE_APPKIT
-Lisp_Object Qhi_command;
-#ifdef MAC_OSX
-Lisp_Object Qtoolbar_switch_mode;
-#endif
-#endif
-#if USE_MAC_TSM || USE_APPKIT
 Lisp_Object Qtext_input;
 Lisp_Object Vmac_ts_active_input_overlay, Vmac_ts_active_input_buf;
 static Lisp_Object Vmac_ts_script_language_on_focus;
 static Lisp_Object saved_ts_script_language_on_focus;
 static ScriptLanguageRecord saved_ts_language;
 static Component saved_ts_component;
-#endif
-#if USE_MAC_TSM
-Lisp_Object Qupdate_active_input_area, Qunicode_for_key_event;
-#endif
-#if USE_APPKIT
 Lisp_Object Qinsert_text, Qset_marked_text;
 Lisp_Object Qaction, Qmac_action_key_paths;
-#endif
-#ifdef MAC_OSX
 Lisp_Object Qservice, Qpaste, Qperform;
 Lisp_Object Qmouse_drag_overlay;
-#endif
-#endif	/* TARGET_API_MAC_CARBON */
+
 extern Lisp_Object Qundefined;
-extern int XTread_socket P_ ((int, int, struct input_event *));
-#if !USE_APPKIT
-extern void init_apple_event_handler P_ ((void));
-#endif
+extern int XTread_socket P_ ((struct terminal *, int, struct input_event *));
 extern void mac_find_apple_event_spec P_ ((AEEventClass, AEEventID,
 					   Lisp_Object *, Lisp_Object *,
 					   Lisp_Object *));
@@ -8475,7 +4733,6 @@ const unsigned char keycode_to_xkeysym_table[] = {
   /*0x7C*/ 0x53 /*right*/, 0x54 /*down*/, 0x52 /*up*/, 0
 };
 
-#ifdef MAC_OSX
 /* Table for translating Mac keycode with the laptop `fn' key to that
    without it.  Destination symbols in comments are keys on US
    keyboard, and they may not be the same on other types of keyboards.
@@ -8511,14 +4768,9 @@ static const unsigned char fn_keycode_to_keycode_table[] = {
   /*0x78*/ 0x78 /*f2 = f2*/, 0x7d /*pgdown -> down*/, 0x7a /*f1 = f1*/, 0x7b /*left = left*/,
   /*0x7C*/ 0x7c /*right = right*/, 0x7d /*down = down*/, 0x7e /*up = up*/, 0
 };
-#endif	/* MAC_OSX */
 
 int
-#if TARGET_API_MAC_CARBON
 mac_to_emacs_modifiers (UInt32 mods, UInt32 unmapped_mods)
-#else
-mac_to_emacs_modifiers (EventModifiers mods, EventModifiers unmapped_mods)
-#endif
 {
   unsigned int result = 0;
   if ((mods | unmapped_mods) & shiftKey)
@@ -8548,14 +4800,11 @@ mac_to_emacs_modifiers (EventModifiers mods, EventModifiers unmapped_mods)
     if (INTEGERP(val))
       result |= XUINT(val);
   }
-
-#ifdef MAC_OSX
   if (!NILP (Vmac_function_modifier) && (mods & kEventKeyModifierFnMask)) {
     Lisp_Object val = Fget(Vmac_function_modifier, Qmodifier_value);
     if (INTEGERP(val))
       result |= XUINT(val);
   }
-#endif
 
   return result;
 }
@@ -8567,11 +4816,8 @@ mac_mapped_modifiers (modifiers, key_code)
   UInt32 mapped_modifiers_all =
     (NILP (Vmac_control_modifier) ? 0 : controlKey)
     | (NILP (Vmac_option_modifier) ? 0 : optionKey)
-    | (NILP (Vmac_command_modifier) ? 0 : cmdKey);
-
-#ifdef MAC_OSX
-  mapped_modifiers_all |=
-    (NILP (Vmac_function_modifier) ? 0 : kEventKeyModifierFnMask);
+    | (NILP (Vmac_command_modifier) ? 0 : cmdKey)
+    | (NILP (Vmac_function_modifier) ? 0 : kEventKeyModifierFnMask);
 
   /* The meaning of kEventKeyModifierFnMask has changed in Mac OS X
      10.5, and it now behaves much like Cocoa's NSFunctionKeyMask.  It
@@ -8583,7 +4829,6 @@ mac_mapped_modifiers (modifiers, key_code)
       && key_code <= 0x7f
       && fn_keycode_to_keycode_table[key_code] == key_code)
     modifiers &= ~kEventKeyModifierFnMask;
-#endif
 
   return mapped_modifiers_all & modifiers;
 }
@@ -8602,7 +4847,6 @@ mac_get_emulated_btn ( UInt32 modifiers )
   return result;
 }
 
-#ifdef MAC_OSX
 void
 mac_get_selected_range (w, range)
      struct window *w;
@@ -8665,9 +4909,42 @@ mac_get_selected_range (w, range)
 int
 mac_store_buffer_text_to_unicode_chars (buf, start, end, characters)
      struct buffer *buf;
-     int start, end;
+     EMACS_INT start, end;
      UniChar *characters;
 {
+#if 1
+  EMACS_INT start_byte = buf_charpos_to_bytepos (buf, start);
+
+#define BUF_FETCH_CHAR_ADVANCE(OUTPUT, BUF, CHARIDX, BYTEIDX)	\
+  do    							\
+    {								\
+      CHARIDX++;						\
+      if (!NILP (BUF->enable_multibyte_characters))		\
+	{							\
+	  unsigned char *ptr = BUF_BYTE_ADDRESS (BUF, BYTEIDX);	\
+	  int len;						\
+								\
+	  OUTPUT= STRING_CHAR_AND_LENGTH (ptr, 0, len);		\
+	  BYTEIDX += len;					\
+	}							\
+      else							\
+	{							\
+	  OUTPUT = BUF_FETCH_BYTE (BUF, BYTEIDX);		\
+	  BYTEIDX++;						\
+	}							\
+    }								\
+  while (0)
+
+  while (start < end)
+    {
+      int c;
+
+      BUF_FETCH_CHAR_ADVANCE (c, buf, start, start_byte);
+      *characters++ = c < 0x10000 ? c : 0xfffd;
+    }
+
+  return 1;
+#else
   int start_byte, end_byte, char_count, byte_count;
   struct coding_system coding;
   unsigned char *dst = (unsigned char *) characters;
@@ -8712,6 +4989,7 @@ mac_store_buffer_text_to_unicode_chars (buf, start, end, characters)
     return 0;
 
   return 1;
+#endif
 }
 
 void
@@ -8732,14 +5010,12 @@ mac_ax_number_of_characters (f)
   return BUF_ZV (b) - BUF_BEGV (b);
 }
 #endif
-#endif
 
-#if USE_MAC_TSM || USE_APPKIT
 OSStatus
 mac_restore_keyboard_input_source ()
 {
   OSStatus err = noErr;
-#if !__LP64__
+#if !__LP64__ // XXX
   ScriptLanguageRecord slrec, *slptr = NULL;
 
   if (EQ (Vmac_ts_script_language_on_focus, Qt)
@@ -8761,12 +5037,8 @@ mac_restore_keyboard_input_source ()
 
   if (slptr)
     {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
       err = SetDefaultInputMethodOfClass (saved_ts_component, slptr,
 					  kKeyboardInputMethodClass);
-#else
-      err = SetDefaultInputMethod (saved_ts_component, slptr);
-#endif
       if (err == noErr)
 	err = SetTextServiceLanguage (slptr);
 
@@ -8782,7 +5054,7 @@ mac_restore_keyboard_input_source ()
 void
 mac_save_keyboard_input_source ()
 {
-#if !__LP64__
+#if !__LP64__ // XXX
   OSStatus err;
   ScriptLanguageRecord slrec, *slptr = NULL;
 
@@ -8805,18 +5077,12 @@ mac_save_keyboard_input_source ()
 
   if (slptr)
     {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
       GetDefaultInputMethodOfClass (&saved_ts_component, slptr,
 				    kKeyboardInputMethodClass);
-#else
-      GetDefaultInputMethod (&saved_ts_component, slptr);
-#endif
     }
 #endif	/* !__LP64__ */
 }
-#endif
 
-#if TARGET_API_MAC_CARBON
 /***** Code to handle C-g testing  *****/
 extern int quit_char;
 extern int make_ctrl_char P_ ((int));
@@ -8847,44 +5113,17 @@ mac_quit_char_key_p (modifiers, key_code)
 
   return c == quit_char;
 }
-#endif
 
 static void
 mac_set_unicode_keystroke_event (code, buf)
      UniChar code;
      struct input_event *buf;
 {
-  int charset_id, c1, c2;
-
   if (code < 0x80)
-    {
-      buf->kind = ASCII_KEYSTROKE_EVENT;
-      buf->code = code;
-    }
-  else if (code < 0x100)
-    {
-      if (code < 0xA0)
-	charset_id = CHARSET_8_BIT_CONTROL;
-      else
-	charset_id = charset_latin_iso8859_1;
-      buf->kind = MULTIBYTE_CHAR_KEYSTROKE_EVENT;
-      buf->code = MAKE_CHAR (charset_id, code, 0);
-    }
+    buf->kind = ASCII_KEYSTROKE_EVENT;
   else
-    {
-      if (code < 0x2500)
-	charset_id = charset_mule_unicode_0100_24ff,
-	  code -= 0x100;
-      else if (code < 0x33FF)
-	charset_id = charset_mule_unicode_2500_33ff,
-	  code -= 0x2500;
-      else if (code >= 0xE000)
-	charset_id = charset_mule_unicode_e000_ffff,
-	  code -= 0xE000;
-      c1 = (code / 96) + 32, c2 = (code % 96) + 32;
-      buf->kind = MULTIBYTE_CHAR_KEYSTROKE_EVENT;
-      buf->code = MAKE_CHAR (charset_id, c1, c2);
-    }
+    buf->kind = MULTIBYTE_CHAR_KEYSTROKE_EVENT;
+  buf->code = code;
 }
 
 void
@@ -8899,12 +5138,10 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
   SInt16 current_key_script = GetScriptManagerVariable (smKeyScript);
   UInt32 mapped_modifiers = mac_mapped_modifiers (modifiers, key_code);
 
-#ifdef MAC_OSX
   if (mapped_modifiers & kEventKeyModifierFnMask
       && key_code <= 0x7f
       && fn_keycode_to_keycode_table[key_code])
     key_code = fn_keycode_to_keycode_table[key_code];
-#endif
 
   if (key_code <= 0x7f && keycode_to_xkeysym_table[key_code])
     {
@@ -8914,7 +5151,6 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
   else if (mapped_modifiers)
     {
       /* translate the keycode back to determine the original key */
-#ifdef MAC_OSX
       UCKeyboardLayout *uchr_ptr = NULL;
 #if __LP64__
       TISInputSourceRef source = TISCopyCurrentKeyboardLayoutInputSource ();
@@ -8925,7 +5161,7 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
 	  TISGetInputSourceProperty (source, kTISPropertyUnicodeKeyLayoutData);
       if (uchr_data)
 	uchr_ptr = (UCKeyboardLayout *) CFDataGetBytePtr (uchr_data);
-#elif MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
+#else
       OSStatus err;
       KeyboardLayoutRef layout;
 
@@ -8933,20 +5169,6 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
       if (err == noErr)
 	err = KLGetKeyboardLayoutProperty (layout, kKLuchrData,
 					   (const void **) &uchr_ptr);
-#else
-      static SInt16 last_key_layout_id = 0;
-      static Handle uchr_handle = (Handle)-1;
-      SInt16 current_key_layout_id =
-	GetScriptVariable (current_key_script, smScriptKeys);
-
-      if (uchr_handle == (Handle)-1
-	  || last_key_layout_id != current_key_layout_id)
-	{
-	  uchr_handle = GetResource ('uchr', current_key_layout_id);
-	  last_key_layout_id = current_key_layout_id;
-	}
-      if (uchr_handle)
-	uchr_ptr = (UCKeyboardLayout *)*uchr_handle;
 #endif
 
       if (uchr_ptr)
@@ -8971,7 +5193,6 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
       if (source)
 	CFRelease (source);
 #endif
-#endif	/* MAC_OSX */
 
       if (buf->kind == NO_EVENT)
 	{
@@ -9013,7 +5234,6 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
 		     & (meta_modifier | alt_modifier
 			| hyper_modifier | super_modifier));
 
-#if TARGET_API_MAC_CARBON
   if (buf->kind == ASCII_KEYSTROKE_EVENT
       && buf->code >= 0x80 && buf->modifiers)
     {
@@ -9042,7 +5262,6 @@ do_keystroke (action, char_code, key_code, modifiers, timestamp, buf)
 	  DisposeTextToUnicodeInfo (&ttu_info);
 	}
     }
-#endif
 
   if (buf->kind == ASCII_KEYSTROKE_EVENT
       && buf->code >= 0x80
@@ -9080,7 +5299,6 @@ mac_store_apple_event (class, id, desc)
   kbd_buffer_store_event (&buf);
 }
 
-#if TARGET_API_MAC_CARBON
 OSStatus
 mac_store_event_ref_as_apple_event (class, id, class_key, id_key,
 				    event, num_params, names, types)
@@ -9118,14 +5336,12 @@ mac_store_event_ref_as_apple_event (class, id, class_key, id_key,
 			   mac_event_parameters_to_lisp (event, num_params,
 							 names, types));
 	  kbd_buffer_store_event (&buf);
-	  mac_wakeup_from_rne ();
 	  err = noErr;
 	}
     }
 
   return err;
 }
-#endif	/* TARGET_API_MAC_CARBON */
 
 static pascal void
 mac_handle_dm_notification (event)
@@ -9184,7 +5400,6 @@ void
 mac_get_screen_info (dpyinfo)
      struct mac_display_info *dpyinfo;
 {
-#ifdef MAC_OSX
   /* HasDepth returns true if it is possible to have a 32 bit display,
      but this may not be what is actually used.  Mac OSX can do better.  */
   dpyinfo->color_p = CGDisplaySamplesPerPixel (kCGDirectMainDisplay) > 1;
@@ -9215,279 +5430,7 @@ mac_get_screen_info (dpyinfo)
 	dpyinfo->width = CGDisplayPixelsWide (kCGDirectMainDisplay);
       }
   }
-#else  /* !MAC_OSX */
-  {
-    GDHandle gdh = GetMainDevice ();
-    Rect rect = (**gdh).gdRect;
-
-    dpyinfo->color_p = TestDeviceAttribute (gdh, gdDevType);
-    for (dpyinfo->n_planes = 32; dpyinfo->n_planes > 0; dpyinfo->n_planes >>= 1)
-      if (HasDepth (gdh, dpyinfo->n_planes, gdDevType, dpyinfo->color_p))
-	break;
-
-    for (gdh = DMGetFirstScreenDevice (dmOnlyActiveDisplays); gdh;
-	 gdh = DMGetNextScreenDevice (gdh, dmOnlyActiveDisplays))
-      UnionRect (&rect, &(**gdh).gdRect, &rect);
-
-    dpyinfo->height = rect.bottom - rect.top;
-    dpyinfo->width = rect.right - rect.left;
-  }
-#endif  /* !MAC_OSX */
 }
-
-
-/***********************************************************************
-		   Initialization (Mac OS Classic)
- ***********************************************************************/
-
-#ifdef MAC_OS8
-extern void init_emacs_passwd_dir ();
-extern int emacs_main (int, char **, char **);
-
-extern void initialize_applescript();
-extern void terminate_applescript();
-
-static void
-do_get_menus (void)
-{
-  Handle menubar_handle;
-  MenuRef menu;
-
-  menubar_handle = GetNewMBar (128);
-  if(menubar_handle == NULL)
-    abort ();
-  SetMenuBar (menubar_handle);
-  DrawMenuBar ();
-
-#if !TARGET_API_MAC_CARBON
-  menu = GetMenuRef (M_APPLE);
-  if (menu != NULL)
-    AppendResMenu (menu, 'DRVR');
-  else
-    abort ();
-#endif
-}
-
-static void
-do_init_managers (void)
-{
-#if !TARGET_API_MAC_CARBON
-  InitGraf (&qd.thePort);
-  InitFonts ();
-  FlushEvents (everyEvent, 0);
-  InitWindows ();
-  InitMenus ();
-  TEInit ();
-  InitDialogs (NULL);
-#endif /* !TARGET_API_MAC_CARBON */
-  InitCursor ();
-
-#if !TARGET_API_MAC_CARBON
-  /* set up some extra stack space for use by emacs */
-  SetApplLimit ((Ptr) ((long) GetApplLimit () - EXTRA_STACK_ALLOC));
-
-  /* MaxApplZone must be called for AppleScript to execute more
-     complicated scripts */
-  MaxApplZone ();
-  MoreMasters ();
-#endif /* !TARGET_API_MAC_CARBON */
-}
-
-static void
-do_check_ram_size (void)
-{
-  SInt32 physical_ram_size, logical_ram_size;
-
-  if (Gestalt (gestaltPhysicalRAMSize, &physical_ram_size) != noErr
-      || Gestalt (gestaltLogicalRAMSize, &logical_ram_size) != noErr
-      || physical_ram_size > (1 << VALBITS)
-      || logical_ram_size > (1 << VALBITS))
-    {
-      StopAlert (RAM_TOO_LARGE_ALERT_ID, NULL);
-      exit (1);
-    }
-}
-
-#if __profile__
-void
-profiler_exit_proc ()
-{
-  ProfilerDump ("\pEmacs.prof");
-  ProfilerTerm ();
-}
-#endif
-
-/* These few functions implement Emacs as a normal Mac application
-   (almost): set up the heap and the Toolbox, handle necessary system
-   events plus a few simple menu events.  They also set up Emacs's
-   access to functions defined in the rest of this file.  Emacs uses
-   function hooks to perform all its terminal I/O.  A complete list of
-   these functions appear in termhooks.h.  For what they do, read the
-   comments there and see also w32term.c and xterm.c.  What's
-   noticeably missing here is the event loop, which is normally
-   present in most Mac application.  After performing the necessary
-   Mac initializations, main passes off control to emacs_main
-   (corresponding to main in emacs.c).  Emacs_main calls XTread_socket
-   (defined further below) to read input.  This is where
-   WaitNextEvent/ReceiveNextEvent is called to process Mac events.  */
-
-#undef main
-int
-main (void)
-{
-#if __profile__  /* is the profiler on? */
-  if (ProfilerInit(collectDetailed, bestTimeBase, 5000, 200))
-    exit(1);
-#endif
-
-#if __MWERKS__
-  /* set creator and type for files created by MSL */
-  _fcreator = MAC_EMACS_CREATOR_CODE;
-  _ftype = 'TEXT';
-#endif
-
-  do_init_managers ();
-
-  do_get_menus ();
-
-#ifndef USE_LSB_TAG
-  do_check_ram_size ();
-#endif
-
-  init_emacs_passwd_dir ();
-
-  init_environ ();
-
-  init_coercion_handler ();
-
-  initialize_applescript ();
-
-  init_apple_event_handler ();
-
-  init_dm_notification_handler ();
-
-  {
-    char **argv;
-    int argc = 0;
-
-    /* set up argv array from STR# resource */
-    get_string_list (&argv, ARGV_STRING_LIST_ID);
-    while (argv[argc])
-      argc++;
-
-    /* free up AppleScript resources on exit */
-    atexit (terminate_applescript);
-
-#if __profile__  /* is the profiler on? */
-    atexit (profiler_exit_proc);
-#endif
-
-    /* 3rd param "envp" never used in emacs_main */
-    (void) emacs_main (argc, argv, 0);
-  }
-
-  /* Never reached - real exit in Fkill_emacs */
-  return 0;
-}
-
-/* Need to override CodeWarrior's input function so no conversion is
-   done on newlines Otherwise compiled functions in .elc files will be
-   read incorrectly.  Defined in ...:MSL C:MSL
-   Common:Source:buffer_io.c.  */
-#ifdef __MWERKS__
-void
-__convert_to_newlines (unsigned char * p, size_t * n)
-{
-#pragma unused(p,n)
-}
-
-void
-__convert_from_newlines (unsigned char * p, size_t * n)
-{
-#pragma unused(p,n)
-}
-#endif
-
-void
-make_mac_terminal_frame (struct frame *f)
-{
-  Lisp_Object frame;
-  Rect r;
-
-  XSETFRAME (frame, f);
-
-  f->output_method = output_mac;
-  f->output_data.mac = (struct mac_output *)
-    xmalloc (sizeof (struct mac_output));
-  bzero (f->output_data.mac, sizeof (struct mac_output));
-
-  XSETFRAME (FRAME_KBOARD (f)->Vdefault_minibuffer_frame, f);
-
-  FRAME_COLS (f) = 96;
-  FRAME_LINES (f) = 4;
-
-  FRAME_CAN_HAVE_SCROLL_BARS (f) = 1;
-  FRAME_VERTICAL_SCROLL_BAR_TYPE (f) = vertical_scroll_bar_right;
-
-  FRAME_DESIRED_CURSOR (f) = FILLED_BOX_CURSOR;
-
-  f->output_data.mac->cursor_pixel = 0;
-  f->output_data.mac->border_pixel = 0x00ff00;
-  f->output_data.mac->mouse_pixel = 0xff00ff;
-  f->output_data.mac->cursor_foreground_pixel = 0x0000ff;
-
-  f->output_data.mac->text_cursor = kThemeIBeamCursor;
-  f->output_data.mac->nontext_cursor = kThemeArrowCursor;
-  f->output_data.mac->modeline_cursor = kThemeArrowCursor;
-  f->output_data.mac->hand_cursor = kThemePointingHandCursor;
-  f->output_data.mac->hourglass_cursor = kThemeWatchCursor;
-  f->output_data.mac->horizontal_drag_cursor = kThemeResizeLeftRightCursor;
-
-  FRAME_FONTSET (f) = -1;
-  f->output_data.mac->explicit_parent = 0;
-  f->left_pos = 8;
-  f->top_pos = 32;
-  f->border_width = 0;
-
-  f->internal_border_width = 0;
-
-  f->auto_raise = 1;
-  f->auto_lower = 1;
-
-  f->new_text_cols = 0;
-  f->new_text_lines = 0;
-
-  SetRect (&r, f->left_pos, f->top_pos,
-           f->left_pos + FRAME_PIXEL_WIDTH (f),
-           f->top_pos + FRAME_PIXEL_HEIGHT (f));
-
-  BLOCK_INPUT;
-
-  if (!(FRAME_MAC_WINDOW (f) =
-	NewCWindow (NULL, &r, "\p", true, dBoxProc,
-		    (WindowRef) -1, 1, (long) f->output_data.mac)))
-    abort ();
-  /* so that update events can find this mac_output struct */
-  f->output_data.mac->mFP = f;  /* point back to emacs frame */
-
-  UNBLOCK_INPUT;
-
-  x_make_gc (f);
-
-  /* Need to be initialized for unshow_buffer in window.c.  */
-  selected_window = f->selected_window;
-
-  Fmodify_frame_parameters (frame,
-                            Fcons (Fcons (Qfont,
-                                          build_string ("-*-monaco-medium-r-*--*-90-*-*-*-*-mac-roman")), Qnil));
-  Fmodify_frame_parameters (frame,
-                            Fcons (Fcons (Qforeground_color,
-                                          build_string ("black")), Qnil));
-  Fmodify_frame_parameters (frame,
-                            Fcons (Fcons (Qbackground_color,
-                                          build_string ("white")), Qnil));
-}
-#endif	/* MAC_OS8 */
 
 
 /***********************************************************************
@@ -9516,6 +5459,7 @@ mac_term_init (display_name, xrm_option, resource_name)
      char *resource_name;
 {
   struct mac_display_info *dpyinfo;
+  struct terminal *terminal;
 
   BLOCK_INPUT;
 
@@ -9531,17 +5475,19 @@ mac_term_init (display_name, xrm_option, resource_name)
   dpyinfo = &one_mac_display_info;
   bzero (dpyinfo, sizeof (*dpyinfo));
 
-#ifdef MAC_OSX
+  terminal = mac_create_terminal (dpyinfo);
+
+  /* Set the name of the terminal. */
+  terminal->name = (char *) xmalloc (SBYTES (display_name) + 1);
+  strncpy (terminal->name, SDATA (display_name), SBYTES (display_name));
+  terminal->name[SBYTES (display_name)] = 0;
+
   dpyinfo->mac_id_name
     = (char *) xmalloc (SCHARS (Vinvocation_name)
 			+ SCHARS (Vsystem_name)
 			+ 2);
   sprintf (dpyinfo->mac_id_name, "%s@%s",
 	   SDATA (Vinvocation_name), SDATA (Vsystem_name));
-#else
-  dpyinfo->mac_id_name = (char *) xmalloc (strlen ("Mac Display") + 1);
-  strcpy (dpyinfo->mac_id_name, "Mac Display");
-#endif
 
   dpyinfo->reference_count = 0;
   dpyinfo->resx = 72.0;
@@ -9551,7 +5497,6 @@ mac_term_init (display_name, xrm_option, resource_name)
 
   dpyinfo->grabbed = 0;
   dpyinfo->root_window = NULL;
-  dpyinfo->image_cache = make_image_cache ();
 
   dpyinfo->mouse_face_beg_row = dpyinfo->mouse_face_beg_col = -1;
   dpyinfo->mouse_face_end_row = dpyinfo->mouse_face_end_col = -1;
@@ -9566,11 +5511,18 @@ mac_term_init (display_name, xrm_option, resource_name)
   dpyinfo->next = x_display_list;
   x_display_list = dpyinfo;
 
-  /* Put it on x_display_name_list.  */
-  x_display_name_list = Fcons (Fcons (display_name,
-				      Fcons (Qnil, dpyinfo->xrdb)),
+  /* Put it on x_display_name_list as well, to keep them parallel.  */
+  x_display_name_list = Fcons (Fcons (display_name, Qnil),
                                x_display_name_list);
   dpyinfo->name_list_element = XCAR (x_display_name_list);
+
+  x_display_rdb_list = Fcons (dpyinfo->xrdb, x_display_rdb_list);
+
+  add_keyboard_wait_descriptor (0);
+
+  Fset_input_interrupt_mode (Qt);
+
+  mac_init_fringe (terminal->rif);
 
   UNBLOCK_INPUT;
 
@@ -9583,26 +5535,43 @@ void
 x_delete_display (dpyinfo)
      struct mac_display_info *dpyinfo;
 {
-  int i;
+  struct terminal *t;
+
+  /* Close all frames and delete the generic struct terminal for this
+     display.  */
+  for (t = terminal_list; t; t = t->next_terminal)
+    if (t->type == output_mac && t->display_info.mac == dpyinfo)
+      {
+        delete_terminal (t);
+        break;
+      }
+
+  delete_keyboard_wait_descriptor (0);
 
   /* Discard this display from x_display_name_list and x_display_list.
      We can't use Fdelq because that can quit.  */
   if (! NILP (x_display_name_list)
       && EQ (XCAR (x_display_name_list), dpyinfo->name_list_element))
-    x_display_name_list = XCDR (x_display_name_list);
+    {
+      x_display_name_list = XCDR (x_display_name_list);
+      x_display_rdb_list = XCDR (x_display_rdb_list);
+    }
   else
     {
-      Lisp_Object tail;
+      Lisp_Object tail, tail_rdb;
 
       tail = x_display_name_list;
+      tail_rdb = x_display_rdb_list;
       while (CONSP (tail) && CONSP (XCDR (tail)))
 	{
 	  if (EQ (XCAR (XCDR (tail)), dpyinfo->name_list_element))
 	    {
 	      XSETCDR (tail, XCDR (XCDR (tail)));
+	      XSETCDR (tail_rdb, XCDR (XCDR (tail_rdb)));
 	      break;
 	    }
 	  tail = XCDR (tail);
+	  tail_rdb = XCDR (tail_rdb);
 	}
     }
 
@@ -9617,33 +5586,10 @@ x_delete_display (dpyinfo)
 	  tail->next = tail->next->next;
     }
 
-  /* Free the font names in the font table.  */
-  for (i = 0; i < dpyinfo->n_fonts; i++)
-    if (dpyinfo->font_table[i].name)
-      {
-	if (dpyinfo->font_table[i].name != dpyinfo->font_table[i].full_name)
-	  xfree (dpyinfo->font_table[i].full_name);
-	xfree (dpyinfo->font_table[i].name);
-      }
-
-  if (dpyinfo->font_table)
-    {
-      if (dpyinfo->font_table->font_encoder)
-	xfree (dpyinfo->font_table->font_encoder);
-      xfree (dpyinfo->font_table);
-    }
-  if (dpyinfo->mac_id_name)
-    xfree (dpyinfo->mac_id_name);
-
-  if (x_display_list == 0)
-    {
-      mac_clear_font_name_table ();
-      bzero (dpyinfo, sizeof (*dpyinfo));
-    }
+  xfree (dpyinfo->mac_id_name);
 }
 
 
-#ifdef MAC_OSX
 void
 mac_handle_user_signal (sig)
      int sig;
@@ -9652,7 +5598,6 @@ mac_handle_user_signal (sig)
 
   mac_wakeup_from_run_loop_run_once ();
 }
-#endif	/* MAC_OSX */
 
 /* Set up use of X before we make the first connection.  */
 
@@ -9671,25 +5616,14 @@ static struct redisplay_interface x_redisplay_interface =
   x_update_window_end,
   x_cursor_to,
   x_flush,
-#if USE_CG_DRAWING && !USE_APPKIT
-  mac_flush_display_optional,
-#else
   0, /* flush_display_optional */
-#endif
   x_clear_window_mouse_face,
   x_get_glyph_overhangs,
   x_fix_overlapping_area,
   x_draw_fringe_bitmap,
-#if USE_CG_DRAWING
   mac_define_fringe_bitmap,
   mac_destroy_fringe_bitmap,
-#else
-  0, /* define_fringe_bitmap */
-  0, /* destroy_fringe_bitmap */
-#endif
-  mac_per_char_metric,
-  mac_encode_char,
-  mac_compute_glyph_string_overhangs,
+  x_compute_glyph_string_overhangs,
   x_draw_glyph_string,
   mac_define_frame_cursor,
   mac_clear_frame_area,
@@ -9698,48 +5632,96 @@ static struct redisplay_interface x_redisplay_interface =
   mac_shift_glyphs_for_insert
 };
 
+/* This function is called when the last frame on a display is deleted. */
+void
+x_delete_terminal (struct terminal *terminal)
+{
+  struct mac_display_info *dpyinfo = terminal->display_info.mac;
+
+  /* Protect against recursive calls.  delete_frame in
+     delete_terminal calls us back when it deletes our last frame.  */
+  if (!terminal->name)
+    return;
+
+  BLOCK_INPUT;
+  x_destroy_all_bitmaps (dpyinfo);
+
+  x_delete_display (dpyinfo);
+  UNBLOCK_INPUT;
+}
+
+static struct terminal *
+mac_create_terminal (struct mac_display_info *dpyinfo)
+{
+  struct terminal *terminal;
+
+  terminal = create_terminal ();
+
+  terminal->type = output_mac;
+  terminal->display_info.mac = dpyinfo;
+  dpyinfo->terminal = terminal;
+
+  terminal->clear_frame_hook = x_clear_frame;
+  terminal->ins_del_lines_hook = x_ins_del_lines;
+  terminal->delete_glyphs_hook = x_delete_glyphs;
+  terminal->ring_bell_hook = XTring_bell;
+  terminal->reset_terminal_modes_hook = XTreset_terminal_modes;
+  terminal->set_terminal_modes_hook = XTset_terminal_modes;
+  terminal->update_begin_hook = x_update_begin;
+  terminal->update_end_hook = x_update_end;
+  terminal->set_terminal_window_hook = XTset_terminal_window;
+  terminal->read_socket_hook = XTread_socket;
+  terminal->frame_up_to_date_hook = XTframe_up_to_date;
+  terminal->mouse_position_hook = XTmouse_position;
+  terminal->frame_rehighlight_hook = XTframe_rehighlight;
+  terminal->frame_raise_lower_hook = XTframe_raise_lower;
+  /* terminal->fullscreen_hook = XTfullscreen_hook; */
+  terminal->set_vertical_scroll_bar_hook = XTset_vertical_scroll_bar;
+  terminal->condemn_scroll_bars_hook = XTcondemn_scroll_bars;
+  terminal->redeem_scroll_bar_hook = XTredeem_scroll_bar;
+  terminal->judge_scroll_bars_hook = XTjudge_scroll_bars;
+
+  terminal->delete_frame_hook = x_destroy_window;
+  terminal->delete_terminal_hook = x_delete_terminal;
+
+  terminal->rif = &x_redisplay_interface;
+  terminal->scroll_region_ok = 1;    /* We'll scroll partial frames. */
+  terminal->char_ins_del_ok = 1;
+  terminal->line_ins_del_ok = 1;         /* We'll just blt 'em. */
+  terminal->fast_clear_end_of_line = 1;  /* X does this well. */
+  terminal->memory_below_frame = 0;   /* We don't remember what scrolls
+                                        off the bottom. */
+
+  /* FIXME: This keyboard setup is 100% untested, just copied from
+     w32_create_terminal in order to set window-system now that it's
+     a keyboard object.  */
+  /* We don't yet support separate terminals on Mac, so don't try to share
+     keyboards between virtual terminals that are on the same physical
+     terminal like X does.  */
+  terminal->kboard = (KBOARD *) xmalloc (sizeof (KBOARD));
+  init_kboard (terminal->kboard);
+  terminal->kboard->Vwindow_system = intern ("mac");
+  terminal->kboard->next_kboard = all_kboards;
+  all_kboards = terminal->kboard;
+  /* Don't let the initial kboard remain current longer than necessary.
+     That would cause problems if a file loaded on startup tries to
+     prompt in the mini-buffer.  */
+  if (current_kboard == initial_kboard)
+    current_kboard = terminal->kboard;
+  terminal->kboard->reference_count++;
+
+  return terminal;
+}
+
 void
 mac_initialize ()
 {
-  rif = &x_redisplay_interface;
-
-  clear_frame_hook = x_clear_frame;
-  ins_del_lines_hook = x_ins_del_lines;
-  delete_glyphs_hook = x_delete_glyphs;
-  ring_bell_hook = XTring_bell;
-  reset_terminal_modes_hook = XTreset_terminal_modes;
-  set_terminal_modes_hook = XTset_terminal_modes;
-  update_begin_hook = x_update_begin;
-  update_end_hook = x_update_end;
-  set_terminal_window_hook = XTset_terminal_window;
-  read_socket_hook = XTread_socket;
-  frame_up_to_date_hook = XTframe_up_to_date;
-  mouse_position_hook = XTmouse_position;
-  frame_rehighlight_hook = XTframe_rehighlight;
-  frame_raise_lower_hook = XTframe_raise_lower;
-
-  set_vertical_scroll_bar_hook = XTset_vertical_scroll_bar;
-  condemn_scroll_bars_hook = XTcondemn_scroll_bars;
-  redeem_scroll_bar_hook = XTredeem_scroll_bar;
-  judge_scroll_bars_hook = XTjudge_scroll_bars;
-
-  scroll_region_ok = 1;         /* we'll scroll partial frames */
-  char_ins_del_ok = 1;
-  line_ins_del_ok = 1;          /* we'll just blt 'em */
-  fast_clear_end_of_line = 1;   /* X does this well */
-  memory_below_frame = 0;       /* we don't remember what scrolls
-				   off the bottom */
   baud_rate = 19200;
 
   last_tool_bar_item = -1;
 
-  /* Try to use interrupt input; if we can't, then start polling.  */
-  Fset_input_mode (Qt, Qnil, Qt, Qnil);
-
   BLOCK_INPUT;
 
-#if TARGET_API_MAC_CARBON
-#ifdef MAC_OSX
   if (init_wakeup_fds () < 0)
     abort ();
 
@@ -9748,20 +5730,10 @@ mac_initialize ()
   init_coercion_handler ();
 
   init_dm_notification_handler ();
-#endif
 
   install_application_handler ();
 
-#if !USE_APPKIT
-  mac_toolbox_initialize ();
-#endif
-#endif
-
-#if USE_CG_DRAWING
   init_cg_color ();
-
-  mac_init_fringe ();
-#endif
 
   UNBLOCK_INPUT;
 }
@@ -9770,11 +5742,6 @@ mac_initialize ()
 void
 syms_of_macterm ()
 {
-#if 0
-  staticpro (&x_error_message_string);
-  x_error_message_string = Qnil;
-#endif
-
   Qcontrol = intern ("control");	staticpro (&Qcontrol);
   Qmeta    = intern ("meta");		staticpro (&Qmeta);
   Qalt     = intern ("alt");		staticpro (&Qalt);
@@ -9789,49 +5756,24 @@ syms_of_macterm ()
   Fput (Qhyper,   Qmodifier_value, make_number (hyper_modifier));
   Fput (Qsuper,   Qmodifier_value, make_number (super_modifier));
 
-#if TARGET_API_MAC_CARBON
-#if !USE_APPKIT
-  Qhi_command   = intern ("hi-command");    staticpro (&Qhi_command);
-#ifdef MAC_OSX
-  Qtoolbar_switch_mode = intern ("toolbar-switch-mode");
-  staticpro (&Qtoolbar_switch_mode);
-#endif
-#endif
-#if USE_MAC_FONT_PANEL
   Qpanel_closed = intern ("panel-closed");  staticpro (&Qpanel_closed);
   Qselection    = intern ("selection");     staticpro (&Qselection);
-#endif
 
-#ifdef MAC_OSX
   Qservice     = intern ("service");	  staticpro (&Qservice);
   Qpaste       = intern ("paste");	  staticpro (&Qpaste);
   Qperform     = intern ("perform");	  staticpro (&Qperform);
 
   Qmouse_drag_overlay = intern ("mouse-drag-overlay");
   staticpro (&Qmouse_drag_overlay);
-#endif
-#if USE_MAC_TSM || USE_APPKIT
   Qtext_input = intern ("text-input");	staticpro (&Qtext_input);
-#endif
-#if USE_MAC_TSM
-  Qupdate_active_input_area = intern ("update-active-input-area");
-  staticpro (&Qupdate_active_input_area);
-  Qunicode_for_key_event = intern ("unicode-for-key-event");
-  staticpro (&Qunicode_for_key_event);
-#endif
-#if USE_APPKIT
   Qinsert_text = intern ("insert-text");	staticpro (&Qinsert_text);
   Qset_marked_text = intern ("set-marked-text"); staticpro (&Qset_marked_text);
 
   Qaction = intern ("action");		staticpro (&Qaction);
   Qmac_action_key_paths = intern ("mac-action-key-paths");
   staticpro (&Qmac_action_key_paths);
-#endif
-#endif
 
-#ifdef MAC_OSX
   Fprovide (intern ("mac-carbon"), Qnil);
-#endif
 
   staticpro (&Qreverse);
   Qreverse = intern ("reverse");
@@ -9839,24 +5781,11 @@ syms_of_macterm ()
   staticpro (&x_display_name_list);
   x_display_name_list = Qnil;
 
-  staticpro (&last_mouse_scroll_bar);
-  last_mouse_scroll_bar = Qnil;
+  staticpro (&x_display_rdb_list);
+  x_display_rdb_list = Qnil;
 
-  staticpro (&fm_font_family_alist);
-  fm_font_family_alist = Qnil;
-
-#if USE_ATSUI
-  staticpro (&atsu_font_id_hash);
-  atsu_font_id_hash = Qnil;
-
-  staticpro (&fm_style_face_attributes_alist);
-  fm_style_face_attributes_alist = Qnil;
-#endif
-
-#if USE_MAC_TSM || USE_APPKIT
   staticpro (&saved_ts_script_language_on_focus);
   saved_ts_script_language_on_focus = Qnil;
-#endif
 
   /* We don't yet support this, but defining this here avoids whining
      from cus-start.el and other places, like "M-x set-variable".  */
@@ -9865,10 +5794,8 @@ syms_of_macterm ()
      doc: /* *Non-nil means make use of UNDERLINE_POSITION font properties.
 A value of nil means ignore them.  If you encounter fonts with bogus
 UNDERLINE_POSITION font properties, for example 7x13 on XFree prior
-to 4.1, set this to nil.
-
-NOTE: Not supported on Mac yet.  */);
-  x_use_underline_position_properties = 0;
+to 4.1, set this to nil.  */);
+  x_use_underline_position_properties = 1;
 
   DEFVAR_BOOL ("x-underline-at-descent-line",
 	       &x_underline_at_descent_line,
@@ -9880,14 +5807,7 @@ baseline level.  The default value is nil.  */);
 
   DEFVAR_LISP ("x-toolkit-scroll-bars", &Vx_toolkit_scroll_bars,
     doc: /* If not nil, Emacs uses toolkit scroll bars.  */);
-#ifdef USE_TOOLKIT_SCROLL_BARS
   Vx_toolkit_scroll_bars = Qt;
-#else
-  Vx_toolkit_scroll_bars = Qnil;
-#endif
-
-  staticpro (&last_mouse_motion_frame);
-  last_mouse_motion_frame = Qnil;
 
 /* Variables to configure modifier key assignment.  */
 
@@ -9931,7 +5851,6 @@ The symbol `reverse' means that the option-key will register for
 mouse-3 and the command-key will register for mouse-2.  */);
   Vmac_emulate_three_button_mouse = Qnil;
 
-#if TARGET_API_MAC_CARBON
   DEFVAR_BOOL ("mac-wheel-button-is-mouse-2", &mac_wheel_button_is_mouse_2,
     doc: /* *Non-nil if the wheel button is mouse-2 and the right click mouse-3.
 Otherwise, the right click will be treated as mouse-2 and the wheel
@@ -9946,35 +5865,6 @@ button will be mouse-3.  */);
     doc: /* *Non-nil if control key presses are passed on to the Mac Toolbox.  */);
   mac_pass_control_to_system = 1;
 
-#endif
-
-  DEFVAR_BOOL ("mac-allow-anti-aliasing", &mac_use_core_graphics,
-    doc: /* *If non-nil, allow anti-aliasing.
-The text will be rendered using Core Graphics text rendering which
-may anti-alias the text.  */);
-#if USE_CG_DRAWING
-  mac_use_core_graphics = 1;
-#else
-  mac_use_core_graphics = 0;
-#endif
-
-  /* Register an entry for `mac-roman' so that it can be used when
-     creating the terminal frame on Mac OS 9 before loading
-     term/mac-win.elc.  */
-  DEFVAR_LISP ("mac-charset-info-alist", &Vmac_charset_info_alist,
-    doc: /* Alist of Emacs character sets vs text encodings and coding systems.
-Each entry should be of the form:
-
-   (CHARSET-NAME TEXT-ENCODING CODING-SYSTEM)
-
-where CHARSET-NAME is a string used in font names to identify the
-charset, TEXT-ENCODING is a TextEncodingBase value in Mac, and
-CODING_SYSTEM is a coding system corresponding to TEXT-ENCODING.  */);
-  Vmac_charset_info_alist =
-    Fcons (list3 (build_string ("mac-roman"),
-		  make_number (smRoman), Qnil), Qnil);
-
-#if USE_MAC_TSM || USE_APPKIT
   DEFVAR_LISP ("mac-ts-active-input-overlay", &Vmac_ts_active_input_overlay,
     doc: /* Overlay used to display Mac TSM active input area.  */);
   Vmac_ts_active_input_overlay = Qnil;
@@ -9992,7 +5882,6 @@ input script and language codes, which are defined in the Script
 Manager, are set to its car and cdr parts, respectively.  Otherwise,
 Emacs doesn't set them and thus follows the system default behavior.  */);
   Vmac_ts_script_language_on_focus = Qnil;
-#endif
 }
 
 /* arch-tag: f2259165-4454-4c04-a029-a133c8af7b5b

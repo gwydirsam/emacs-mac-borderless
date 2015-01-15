@@ -1,22 +1,20 @@
 /* Definitions and headers for AppKit framework on the Mac OS.
    Copyright (C) 2008, 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs Carbon+AppKit port.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs Carbon+AppKit port is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3, or (at
-your option) any later version.
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs Carbon+AppKit port is distributed in the hope that it will
-be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
-of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-General Public License for more details.
+GNU Emacs Mac port is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs Carbon+AppKit port; see the file COPYING.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street,
-Fifth Floor, Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #undef Z
 #import <Cocoa/Cocoa.h>
@@ -159,11 +157,7 @@ typedef unsigned int NSUInteger;
    directly by tooltip frames, and indirectly by ordinary frames via
    inheritance.  */
 
-#if USE_QUICKDRAW
-@interface EmacsTipView : NSQuickDrawView
-#else
 @interface EmacsTipView : NSView
-#endif
 - (struct frame *)emacsFrame;
 @end
 
@@ -276,7 +270,6 @@ typedef unsigned int NSUInteger;
 - (int)inputEventModifiers;
 @end
 
-#if USE_MAC_TOOLBAR
 @interface EmacsToolbarItem : NSToolbarItem
 {
   /* CoreGraphics image of the item.  */
@@ -294,9 +287,6 @@ typedef unsigned int NSUInteger;
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
 - (void)storeToolBarEvent:(id)sender;
 @end
-#endif	/* USE_MAC_TOOLBAR */
-
-#if USE_MAC_FONT_PANEL
 
 /* Like NSFontPanel, but allows suspend/resume slider tracking.  */
 
@@ -317,15 +307,22 @@ typedef unsigned int NSUInteger;
 @end
 
 @interface EmacsFrameController (FontPanel)
-- (NSFont *)fontForFace:(int)faceId character:(int)c;
+- (NSFont *)fontForFace:(int)faceId character:(int)c
+	       position:(int)pos object:(Lisp_Object)object;
 - (void)changeFont:(id)sender;
 @end
-#endif	/* USE_MAC_FONT_PANEL */
 
 @interface EmacsSavePanel : NSSavePanel
 @end
 
 @interface EmacsOpenPanel : NSOpenPanel
+@end
+
+@interface EmacsFontDialogController : NSObject
+@end
+
+@interface NSFontPanel (Emacs)
+- (NSInteger)runModal;
 @end
 
 @interface NSMenu (Emacs)
@@ -357,24 +354,73 @@ typedef unsigned int NSUInteger;
 - (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
 @end
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+
+/* Class for locale objects used in kCTFontLanguagesAttribute
+   emulation.  */
+
+@interface EmacsLocale : NSObject
+{
+  /* Mac OS language and region codes for the locale.  */
+  LangCode langCode;
+  RegionCode regionCode;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+  /* Exemplar character set for the locale.  */
+  NSCharacterSet *exemplarCharacterSet;
+#endif
+}
+- (id)initWithLocaleIdentifier:(NSString *)string;
+- (BOOL)isCompatibleWithFont:(NSFont *)font;
+@end
+
+/* Class for CTFontDescriptor replacement for < 10.5 systems.  Some
+   selectors are compatible with those for NSFontDescriptor, so
+   toll-free bridged CTFontDescriptor can also respond to them.
+   Implementations of some methods are dummy and each subclass
+   (EmacsFDFontDescriptor or EmacsFMFontDescriptor below) should
+   override them.  */
+
+@interface EmacsFontDescriptor : NSObject
+- (id)initWithFontAttributes:(NSDictionary *)attributes;
++ (id)fontDescriptorWithFontAttributes:(NSDictionary *)attributes;
++ (id)fontDescriptorWithFont:(NSFont *)font;
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys;
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys
+					      locales:(NSArray *)locales;
+- (EmacsFontDescriptor *)matchingFontDescriptorWithMandatoryKeys:(NSSet *)mandatoryKeys;
+- (id)objectForKey:(NSString *)anAttribute;
+@end
+
+#if USE_NS_FONT_DESCRIPTOR
+@interface EmacsFDFontDescriptor : EmacsFontDescriptor
+{
+  NSFontDescriptor *fontDescriptor;
+}
+- (id)initWithFontDescriptor:(NSFontDescriptor *)aFontDescriptor;
+- (NSFontDescriptor *)fontDescriptor;
++ (id)fontDescriptorWithFontDescriptor:(NSFontDescriptor *)aFontDescriptor;
+@end
+
+#endif
+
+#if USE_NS_FONT_MANAGER
+@interface EmacsFMFontDescriptor : EmacsFontDescriptor
+{
+  NSMutableDictionary *fontAttributes;
+}
+@end
+
+#endif
+
+#endif	/* MAC_OS_X_VERSION_MIN_REQUIRED < 1050 */
+
 /* Some methods that are not declared in older versions.  Should be
    used with some runtime check such as `respondsToSelector:'. */
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1040
 @interface NSWindow (AvailableOn1040AndLater)
 - (CGFloat)userSpaceScaleFactor;
-@end
-#endif
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1020
-@interface NSWindow (AvailableOn1020AndLater)
-- (void)setIgnoresMouseEvents:(BOOL)flag;
-@end
-#endif
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
-@interface NSView (AvailableOn1030AndLater)
-- (void)getRectsBeingDrawn:(const NSRect **)rects count:(NSInteger *)count;
 @end
 #endif
 

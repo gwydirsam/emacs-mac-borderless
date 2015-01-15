@@ -1,61 +1,72 @@
-Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008
+Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
   Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
 	      Building and Installing Emacs from CVS
 
+If this is the first time you go through it, you'll need to configure
+before bootstrapping:
+
+  $ ./configure
+
 Some of the files that are included in the Emacs tarball, such as
 byte-compiled Lisp files, are not stored in the CVS repository.
 Therefore, to build from CVS you must run "make bootstrap"
 instead of just "make":
 
-  $ ./configure
+  $ cvs update -dP
   $ make bootstrap
 
-The bootstrap process makes sure all necessary files are rebuilt
-before it builds the final Emacs binary.
-
 Normally, it is not necessary to use "make bootstrap" after every CVS
-update.  Unless there are problems, we suggest using the following
-alternative procedure after you have done "make bootstrap" at least
-once:
+update.  "make" should work in 90% of the cases and be much quicker.
 
-  $ ./configure
-  $ make
-  $ cd lisp
-  $ make recompile EMACS=../src/emacs
-  $ cd ..
   $ make
 
 (If you want to install the Emacs binary, type "make install" instead
 of "make" in the last command.)
 
-Occasionally the file "lisp/loaddefs.el" will need be updated to
-reflect new autoloaded functions.  If you see errors about undefined
-lisp functions during compilation, that may be the reason.  Another
-symptom may be an error saying that "loaddefs.el" could not be found;
-this is due to a change in the way loaddefs.el was handled in CVS, and
-should only happen once, for users that are updating old CVS trees.
+Occasionally the file "lisp/loaddefs.el" (and similar automatically
+generated files, such as esh-groups.el, and *-loaddefs.el in some
+subdirectories of lisp/, e.g. mh-e/ and calendar/) will need to be
+updated to reflect new autoloaded functions.  If you see errors (rather
+than warnings) about undefined lisp functions during compilation, that
+may be the reason.  Another symptom may be an error saying that
+"loaddefs.el" could not be found; this is due to a change in the way
+loaddefs.el was handled in CVS, and should only happen once, for users
+that are updating old CVS trees.  Finally, sometimes there can be build
+failures related to *loaddefs.el (e.g. "required feature `esh-groups'
+was not provided").  In that case, follow the instructions below.
 
-To update loaddefs.el, do:
+To update loaddefs.el (and similar files), do:
 
   $ cd lisp
-  $ make autoloads EMACS=../src/emacs
+  $ make autoloads
 
 If either of the above partial procedures fails, try "make bootstrap".
+
+Very occasionally changes in the source can introduce
+incompatibilities with previous builds.  If a bootstrap fails, as a
+last resort try "make maintainer-clean" before configuring and
+bootstrapping again.  If CPU time is not an issue, the most thorough
+way to rebuild, and avoid any spurious problems, is always to use this
+method.
 
 Users of non-Posix systems (MS-Windows etc.) should run the
 platform-specific configuration scripts (nt/configure.bat, config.bat,
 etc.) before "make bootstrap" or "make"; the rest of the procedure is
-applicable to those systems as well, except that the value of the
-EMACS variable on the Make command line might be different, e.g.,
-../bin/emacs.exe or some such.
+applicable to those systems as well.
 
 Questions, requests, and bug reports about the CVS versions of Emacs
 should be sent to emacs-pretest-bug@gnu.org rather than gnu.emacs.help
 or gnu.emacs.bug.  Ideally, use M-x report-emacs-bug RET which will
 send it to the proper place.
+
+Because the CVS version of Emacs is a work in progress, it will
+sometimes fail to build.  Please wait a day or so (and check the bug
+and development mailing list archives) before reporting such problems.
+In most cases, the problem is known about and is just waiting for
+someone to fix it.
 
 
 Note on using SSH to access the CVS repository from inside Emacs
@@ -86,10 +97,10 @@ Host subversions.gnu.org
 
 This file is part of GNU Emacs.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -97,6 +108,4 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.
+along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.

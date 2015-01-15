@@ -1,22 +1,20 @@
 /* Functions for GUI implemented with Cocoa AppKit on the Mac OS.
    Copyright (C) 2008, 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs Carbon+AppKit port.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs Carbon+AppKit port is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3, or (at
-your option) any later version.
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs Carbon+AppKit port is distributed in the hope that it will
-be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
-of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-General Public License for more details.
+GNU Emacs Mac port is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs Carbon+AppKit port; see the file COPYING.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street,
-Fifth Floor, Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 #include "lisp.h"
@@ -25,6 +23,7 @@ Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include "macterm.h"
 
 #include "charset.h"
+#include "character.h"
 #include "frame.h"
 #include "dispextern.h"
 #include "fontset.h"
@@ -34,6 +33,10 @@ Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include "keyboard.h"
 #include "intervals.h"
 #include "keymap.h"
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+#include "macfont.h"
+#endif
 
 #import "macappkit.h"
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
@@ -160,77 +163,10 @@ NSRectToCGRect (nsrect)
 
 + (NSFont *)fontWithFace:(struct face *)face
 {
-  XFontStruct *font;
-  NSFont *nsFont = nil;
-
   if (face == NULL || face->font == NULL)
     return nil;
 
-  font = face->font;
-  if (font->mac_style)
-    {
-      OSStatus err;
-      Boolean bold_p = false, italic_p = false;
-      CFStringRef name;
-      ATSUFontID font_id;
-
-      ATSUGetAttribute (font->mac_style, kATSUQDBoldfaceTag,
-			sizeof (Boolean), &bold_p, NULL);
-      ATSUGetAttribute (font->mac_style, kATSUQDItalicTag,
-			sizeof (Boolean), &italic_p, NULL);
-      err = ATSUGetAttribute (font->mac_style, kATSUFontTag,
-			      sizeof (ATSUFontID), &font_id, NULL);
-      if (err == noErr)
-	{
-	  ATSFontRef ats_font = FMGetATSFontRefFromFont (font_id);
-
-	  err = ATSFontGetPostScriptName (ats_font, kATSOptionFlagsDefault,
-					  &name);
-	}
-      if (err == noErr)
-	{
-	  NSFontTraitMask fontTrait = ((bold_p ? NSBoldFontMask : 0)
-				       | (italic_p ? NSItalicFontMask : 0));
-
-	  nsFont = [NSFont fontWithName:((NSString *) name)
-			   size:font->mac_fontsize];
-	  CFRelease (name);
-	  if (fontTrait)
-	    {
-	      NSFontManager *fontManager = [NSFontManager sharedFontManager];
-
-	      nsFont = [fontManager convertFont:nsFont toHaveTrait:fontTrait];
-	    }
-	}
-    }
-#if USE_QUICKDRAW
-  else if (font->mac_fontnum != -1)
-    {
-      OSStatus err;
-      CFStringRef name;
-      FMFont font_id;
-      FMFontStyle style;
-
-      err = FMGetFontFromFontFamilyInstance (font->mac_fontnum,
-					     font->mac_fontface,
-					     &font_id, &style);
-      if (err == noErr)
-	{
-	  ATSFontRef ats_font = FMGetATSFontRefFromFont (font_id);
-
-	  err = ATSFontGetPostScriptName (ats_font, kATSOptionFlagsDefault,
-					  &name);
-	}
-      if (err == noErr)
-	{
-	  nsFont = [NSFont fontWithName:((NSString *) name)
-			   size:font->mac_fontsize];
-	  CFRelease (name);
-	}
-    }
-#endif
-
-  return nsFont;
+  return macfont_get_nsctfont (face->font);
 }
 
 @end				// NSFont (Emacs)
@@ -1270,14 +1206,12 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   [self release];
 }
 
-#if USE_MAC_TOOLBAR
 - (void)windowWillMove:(NSNotification *)aNotification
 {
   struct frame *f = emacsFrame;
 
   f->output_data.mac->toolbar_win_gravity = 0;
 }
-#endif
 
 - (NSSize)windowWillResize:(NSWindow *)sender
 		    toSize:(NSSize)proposedFrameSize
@@ -1564,6 +1498,16 @@ mac_size_window (window, w, h, update)
   [(NSWindow *)window setFrame:windowFrame display:update];
 }
 
+OSStatus
+mac_set_window_alpha (window, alpha)
+     Window window;
+     CGFloat alpha;
+{
+  [(NSWindow *)window setAlphaValue:alpha];
+
+  return noErr;
+}
+
 void
 mac_get_window_bounds (f, inner, outer)
      struct frame *f;
@@ -1588,19 +1532,6 @@ mac_get_window_bounds (f, inner, outer)
 	   - NSMaxY (emacsViewFrame) + NSMaxY (baseScreenFrame),
 	   NSMaxX (emacsViewFrame) + NSMinX (baseScreenFrame),
 	   - NSMinY (emacsViewFrame) + NSMaxY (baseScreenFrame));
-}
-
-Rect *
-mac_get_frame_bounds (f, r)
-     struct frame *f;
-     Rect *r;
-{
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-  NSRect emacsViewFrame = [emacsView frame];
-
-  SetRect (r, 0, 0, NSWidth (emacsViewFrame), NSHeight (emacsViewFrame));
-
-  return r;
 }
 
 void
@@ -1722,6 +1653,8 @@ mac_set_frame_window_background (f, color)
 
 /* Flush display of frame F, or of all frames if F is null.  */
 
+static struct frame *global_focus_view_frame;
+
 void
 x_flush (f)
      struct frame *f;
@@ -1740,16 +1673,7 @@ x_flush (f)
       NSWindow *window = FRAME_MAC_WINDOW (f);
 
       if ([window isVisible] && ![window isFlushWindowDisabled])
-	{
-#if USE_QUICKDRAW
-	  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-
-	  [emacsView lockFocus];
-	  QDFlushPortBuffer ([emacsView qdPort], NULL);
-	  [emacsView unlockFocus];
-#endif
-	  [window flushWindow];
-	}
+	[window flushWindow];
     }
 
   UNBLOCK_INPUT;
@@ -1908,19 +1832,16 @@ extern int input_signal_count;
 extern struct frame *pending_autoraise_frame;
 extern int mac_screen_config_changed;
 
-extern int note_mouse_movement P_ ((FRAME_PTR, Point *));
-
 extern int mac_get_emulated_btn P_ ((UInt32));
 extern int mac_to_emacs_modifiers P_ ((UInt32, UInt32));
 
-extern int fast_find_position P_ ((struct window *, int, int *, int *,
+extern int fast_find_position P_ ((struct window *, EMACS_INT, int *, int *,
 				   int *, int *, Lisp_Object));
 extern struct glyph *x_y_to_hpos_vpos P_ ((struct window *, int, int,
 					   int *, int *, int *, int *, int *));
 
-#if USE_MAC_TOOLBAR
+static int note_mouse_movement P_ ((FRAME_PTR, NSPoint));
 static void mac_tool_bar_note_mouse_movement P_ ((struct frame *, NSEvent *));
-#endif
 
 static int mac_get_mouse_btn P_ ((NSEvent *));
 static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
@@ -1939,51 +1860,11 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   struct frame *f = [self emacsFrame];
   int x = NSMinX (aRect), y = NSMinY (aRect);
   int width = NSWidth (aRect), height = NSHeight (aRect);
-#if USE_QUICKDRAW
-  RgnHandle saved_clip_region = NewRgn (), new_region = NewRgn ();
-  GrafPtr saved_port;
-
-  GetPort (&saved_port);
-  SetPort ([self qdPort]);
-  GetClip (saved_clip_region);
-  if ([self respondsToSelector:@selector(getRectsBeingDrawn:count:)])
-    {
-      const NSRect *rects;
-      int i, count;
-
-      [self getRectsBeingDrawn:&rects count:&count];
-      SetRectRgn (new_region, NSMinX (*rects), NSMinY (*rects),
-		  NSMaxX (*rects), NSMaxY (*rects));
-      if (count > 1)
-	{
-	  RgnHandle region = NewRgn ();
-
-	  for (i = 1; i < count; i++)
-	    {
-	      SetRectRgn (region, NSMinX (rects[i]), NSMinY (rects[i]),
-			  NSMaxX (rects[i]), NSMaxY (rects[i]));
-	      UnionRgn (new_region, region, new_region);
-	    }
-	  DisposeRgn (region);
-	}
-    }
-  else
-    SetRectRgn (new_region, x, y, x + width, y + height);
-  SectRgn (saved_clip_region, new_region, new_region);
-  SetClip (new_region);
-  DisposeRgn (new_region);
-#endif
 
   set_global_focus_view_frame (f);
   mac_clear_area (f, x, y, width, height);
   expose_frame (f, x, y, width, height);
   unset_global_focus_view_frame ();
-#if USE_QUICKDRAW
-  SetPort ([self qdPort]);
-  SetClip (saved_clip_region);
-  DisposeRgn (saved_clip_region);
-  SetPort (saved_port);
-#endif
 }
 
 - (BOOL)isFlipped
@@ -2194,7 +2075,6 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   struct frame *f;
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-  Point mouse_pos;
   static Lisp_Object last_window;
 
   previous_help_echo_string = help_echo_string;
@@ -2212,15 +2092,12 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       clear_mouse_face (dpyinfo);
     }
 
-  SetPt (&mouse_pos, point.x, point.y);
-
   /* Generate SELECT_WINDOW_EVENTs when needed.  */
   if (!NILP (Vmouse_autoselect_window))
     {
       Lisp_Object window;
 
-      window = window_from_coordinates (f, mouse_pos.h, mouse_pos.v,
-					0, 0, 0, 0);
+      window = window_from_coordinates (f, point.x, point.y, 0, 0, 0, 0);
 
       /* Window will be selected only when it is not selected now and
 	 last mouse movement event was not in it.  Minibuffer window
@@ -2244,12 +2121,10 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       last_window=window;
     }
 
-  if (!note_mouse_movement (f, &mouse_pos))
+  if (!note_mouse_movement (f, point))
     help_echo_string = previous_help_echo_string;
-#if USE_MAC_TOOLBAR
   else
     mac_tool_bar_note_mouse_movement (f, theEvent);
-#endif
 
   /* If the contents of the global variable help_echo_string has
      changed, generate a HELP_EVENT.  */
@@ -2521,7 +2396,8 @@ get_text_input_script_language (slrec)
 
 extern void mac_ax_selected_text_range P_ ((struct frame *, CFRange *));
 extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
-						       int, int, UniChar *));
+						       EMACS_INT, EMACS_INT,
+						       UniChar *));
 
 - (NSAttributedString *)attributedSubstringFromRange:(NSRange)theRange
 {
@@ -2556,7 +2432,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  && XINT (w->last_modified) == BUF_MODIFF (b)
 	  && XINT (w->last_overlay_modified) == BUF_OVERLAY_MODIFF (b))
 	{
-	  int start = BUF_BEGV (b) + theRange.location;
+	  EMACS_INT start = BUF_BEGV (b) + theRange.location;
 	  unichar *characters = xmalloc (theRange.length * sizeof (unichar));
 
 	  if (mac_store_buffer_text_to_unicode_chars (b, start,
@@ -2568,7 +2444,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	      NSMutableAttributedString *attributedString =
 		[[[NSMutableAttributedString alloc] initWithString:string]
 		  autorelease];
-	      int i;
+	      NSUInteger i;
 
 	      [attributedString beginEditing];
 	      for (i = 0; i < theRange.length; i++)
@@ -2671,7 +2547,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 	  && XINT (w->last_modified) == BUF_MODIFF (b)
 	  && XINT (w->last_overlay_modified) == BUF_OVERLAY_MODIFF (b))
 	{
-	  int charpos = theRange.location + BUF_BEGV (b);
+	  EMACS_INT charpos = theRange.location + BUF_BEGV (b);
 
 	  if (fast_find_position (w, charpos, &hpos, &vpos, &x, &y, Qnil))
 	    {
@@ -2872,60 +2748,6 @@ mac_end_cg_clip (f)
     }
 }
 
-#if USE_QUICKDRAW
-static RgnHandle saved_port_clip_region = NULL;
-static GrafPtr saved_port = NULL;
-
-void
-mac_begin_clip (f, gc)
-     struct frame *f;
-     GC gc;
-{
-  static RgnHandle new_region = NULL;
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-
-  if (![emacsView canDraw])
-    {
-      xassert (gc == NULL);
-      return;
-    }
-
-  if (saved_port_clip_region == NULL)
-    saved_port_clip_region = NewRgn ();
-  if (new_region == NULL)
-    new_region = NewRgn ();
-
-  if (global_focus_view_frame != f)
-    [emacsView lockFocus];
-  GetPort (&saved_port);
-  SetPort ([emacsView qdPort]);
-  if (gc && gc->n_clip_rects)
-    {
-      GetClip (saved_port_clip_region);
-      SectRgn (saved_port_clip_region, gc->clip_region, new_region);
-      SetClip (new_region);
-    }
-}
-
-void
-mac_end_clip (f, gc)
-     struct frame *f;
-     GC gc;
-{
-  if (saved_port == NULL)
-    return;
-  if (gc && gc->n_clip_rects)
-    SetClip (saved_port_clip_region);
-  SetPort (saved_port);
-  saved_port = NULL;
-  if (global_focus_view_frame != f)
-    {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-
-      [emacsView unlockFocus];
-    }
-}
-#else  /* !USE_QUICKDRAW */
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
 
 /* Last resort for the case that neither CGContextSetBlendMode nor
@@ -2980,7 +2802,6 @@ mac_appkit_invert_rectangle (f, x, y, width, height)
     [emacsView unlockFocus];
 }
 #endif
-#endif	/* !USE_QUICKDRAW */
 
 /* Mac replacement for XCopyArea: used only for scrolling.  */
 
@@ -3004,6 +2825,7 @@ mac_scroll_area (f, gc, src_x, src_y, width, height, dest_x, dest_y)
 /************************************************************************
 			     Scroll bars
  ************************************************************************/
+extern Time last_mouse_movement_time;
 
 #define SCROLL_BAR_FIRST_DELAY 0.5
 #define SCROLL_BAR_CONTINUOUS_DELAY (1.0 / 15)
@@ -3625,8 +3447,6 @@ x_set_toolkit_scroll_bar_thumb (bar, portion, position, whole)
 
 #define TOOLBAR_IDENTIFIER_FORMAT (@"org.gnu.Emacs.%p.toolbar")
 
-#if USE_MAC_TOOLBAR
-
 /* In identifiers such as function/variable names, Emacs tool bar is
    referred to as `tool_bar', and Carbon HIToolbar as `toolbar'.  */
 
@@ -3965,8 +3785,6 @@ mac_tool_bar_note_mouse_movement (f, event)
 #undef PROP
 }
 
-#endif	/* USE_MAC_TOOLBAR */
-
 /* Create a tool bar for frame F.  */
 
 static OSStatus
@@ -3983,38 +3801,16 @@ mac_create_frame_tool_bar (f)
     return memFullErr;
 
   [toolbar setDisplayMode:NSToolbarDisplayModeIconOnly];
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   [toolbar setSizeMode:NSToolbarSizeModeSmall];
-#endif
   [toolbar setAllowsUserCustomization:NO];
   [toolbar setAutosavesConfiguration:NO];
-#if USE_MAC_TOOLBAR
   [toolbar setDelegate:[window delegate]];
-#endif
   [toolbar setVisible:NO];
 
   [window setToolbar:toolbar];
   [toolbar release];
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   button = [window standardWindowButton:NSWindowToolbarButton];
-#else
-  {
-    NSArray *subviews = [[[window contentView] superview] subviews];
-    NSEnumerator *enumerator;
-    id value;
-
-    button = nil;
-    enumerator = [subviews objectEnumerator];
-    while ((value = [enumerator nextObject]) != nil)
-      if ([value isKindOfClass:[NSButton class]]
-	  && [value action] == @selector(_toolbarPillButtonClicked:))
-	{
-	  button = value;
-	  break;
-	}
-  }
-#endif
   [button setTarget:[NSApp delegate]];
   [button setAction:(NSSelectorFromString (@"toolbar-pill-button-clicked:"))];
 
@@ -4026,8 +3822,8 @@ mac_create_frame_tool_bar (f)
 			      Font Panel
  ***********************************************************************/
 
-#if USE_MAC_FONT_PANEL
 extern Lisp_Object Qpanel_closed, Qselection;
+extern Lisp_Object Qfont_spec;
 
 extern OSStatus mac_store_event_ref_as_apple_event P_ ((AEEventClass, AEEventID,
 							Lisp_Object,
@@ -4035,39 +3831,6 @@ extern OSStatus mac_store_event_ref_as_apple_event P_ ((AEEventClass, AEEventID,
 							EventRef, UInt32,
 							const EventParamName *,
 							const EventParamType *));
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1020
-/* Carbon event constants related to font selection or handling.  */
-
-/* Event classes */
-enum {
-  kEventClassFont               = 'font'
-};
-
-/* Font Events */
-enum {
-  kEventFontPanelClosed         = 1,
-  kEventFontSelection           = 2
-};
-
-/* Event parameter names and types.  */
-enum {
-  kEventParamATSUFontID         = 'auid', /* typeATSUFontID */
-  kEventParamATSUFontSize       = 'ausz', /* typeATSUSize */
-  kEventParamFMFontFamily       = 'fmfm', /* typeFMFontFamily */
-  kEventParamFMFontStyle        = 'fmst', /* typeFMFontSize */
-  kEventParamFMFontSize         = 'fmsz', /* typeFontColor */
-  typeATSUFontID                = typeUInt32,
-  typeATSUSize                  = typeFixed,
-  typeFMFontFamily              = typeSInt16,
-  typeFMFontStyle               = typeSInt16,
-  typeFMFontSize                = typeSInt16
-};
-#endif
-
-#ifndef FloatToFixed
-#define FloatToFixed(a)     ((Fixed)((float)(a) * fixed1))
-#endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
 /* Font panel mode masks used as a return value of validModesForFontPanel:. */
@@ -4158,6 +3921,7 @@ enum {
 /* Return the NSFont object for the face FACEID and the character C.  */
 
 - (NSFont *)fontForFace:(int)faceId character:(int)c
+	       position:(int)pos object:(Lisp_Object)object
 {
   struct frame *f = emacsFrame;
 
@@ -4165,7 +3929,7 @@ enum {
     {
       struct face *face;
 
-      faceId = FACE_FOR_CHAR (f, FACE_FROM_ID (f, faceId), c);
+      faceId = FACE_FOR_CHAR (f, FACE_FROM_ID (f, faceId), c, pos, object);
       face = FACE_FROM_ID (f, faceId);
 
       return [NSFont fontWithFace:face];
@@ -4178,25 +3942,12 @@ enum {
 
 - (void)changeFont:(id)sender
 {
-  OSStatus err;
-  static const EventParamName names[] = {kEventParamATSUFontID,
-					 kEventParamATSUFontSize,
-#if !__LP64__
-					 kEventParamFMFontFamily,
-					 kEventParamFMFontStyle,
-#endif	/* !__LP64__ */
-					 kEventParamFMFontSize};
-  static const EventParamType types[] = {typeATSUFontID,
-					 typeATSUSize,
-#if !__LP64__
-					 typeFMFontFamily,
-					 typeFMFontStyle,
-#endif	/* !__LP64__ */
-					 typeFMFontSize};
   NSEvent *currentEvent = [NSApp currentEvent];
-  NSFont *oldFont = [self fontForFace:DEFAULT_FACE_ID character:0];
+  NSFont *oldFont = [self fontForFace:DEFAULT_FACE_ID character:0
+			  position:-1 object:Qnil];
   NSFont *newFont = [sender convertFont:oldFont];
-  EventRef event;
+  Lisp_Object arg = Qnil;
+  struct input_event inev;
 
   if ([currentEvent type] == NSLeftMouseDragged)
     {
@@ -4205,49 +3956,20 @@ enum {
       [fontPanel suspendSliderTracking:currentEvent];
     }
 
-  err = CreateEvent (NULL, kEventClassFont, kEventFontSelection, 0,
-		     kEventAttributeNone, &event);
-  if (err == noErr)
-    {
-      CFStringRef name;
-      ATSFontRef ats_font;
-      ATSUFontID font_id;
-      Fixed size;
-      FMFontFamily fm_family;
-      FMFontStyle fm_style;
-      FMFontSize fm_size;
+  if (newFont)
+    arg = Fcons (Fcons (Qfont_spec,
+			Fcons (build_string ("Lisp"),
+			       macfont_nsctfont_to_spec (newFont))),
+		 arg);
 
-      name = (CFStringRef) [newFont fontName];
-      ats_font = ATSFontFindFromPostScriptName (name, kATSOptionFlagsDefault);
-      font_id = FMGetFontFromATSFontRef (ats_font);
-      SetEventParameter (event, kEventParamATSUFontID, typeATSUFontID,
-			 sizeof (ATSUFontID), &font_id);
-
-      size = FloatToFixed ([newFont pointSize]);
-      SetEventParameter (event, kEventParamATSUFontSize, typeATSUSize,
-			 sizeof (Fixed), &size);
-
-#if !__LP64__
-      err = FMGetFontFamilyInstanceFromFont (font_id, &fm_family, &fm_style);
-      if (err == noErr)
-	{
-	  SetEventParameter (event, kEventParamFMFontFamily, typeFMFontFamily,
-			     sizeof (FMFontFamily), &fm_family);
-	  SetEventParameter (event, kEventParamFMFontStyle, typeFMFontStyle,
-			     sizeof (FMFontStyle), &fm_style);
-	}
-#endif	/* !__LP64__ */
-
-      fm_size = [newFont pointSize] + 0.5f;
-      SetEventParameter (event, kEventParamFMFontSize, typeFMFontSize,
-			 sizeof (FMFontSize), &fm_size);
-
-      err = mac_store_event_ref_as_apple_event (0, 0, Qfont, Qselection,
-						event, (sizeof (names)
-							/ sizeof (names[0])),
-						names, types);
-      ReleaseEvent (event);
-    }
+  EVENT_INIT (inev);
+  inev.kind = MAC_APPLE_EVENT;
+  inev.x = Qfont;
+  inev.y = Qselection;
+  XSETFRAME (inev.frame_or_window,
+	     mac_focus_frame (&one_mac_display_info));
+  inev.arg = Fcons (build_string ("aevt"), arg);
+  [[NSApp delegate] storeEvent:&inev];
 }
 
 /* Hide unused features in font panels.  */
@@ -4278,18 +4000,18 @@ mac_font_panel_visible_p ()
 OSStatus
 mac_show_hide_font_panel ()
 {
+  static BOOL initialized;
   NSFontManager *fontManager = [NSFontManager sharedFontManager];
-  NSFontPanel *fontPanel = [fontManager fontPanel:NO];
+  NSFontPanel *fontPanel = [fontManager fontPanel:YES];
 
-  if (fontPanel == nil)
+  if (!initialized)
     {
-      fontPanel = [fontManager fontPanel:YES];
-
       [[NSNotificationCenter defaultCenter]
 	addObserver:[NSApp delegate]
 	selector:@selector(fontPanelWillClose:)
 	name:@"NSWindowWillCloseNotification"
 	object:fontPanel];
+      initialized = YES;
     }
 
   if ([fontPanel isVisible])
@@ -4304,21 +4026,22 @@ mac_show_hide_font_panel ()
    the face FACE_ID and the charcacter C in the frame F.  */
 
 OSStatus
-mac_set_font_info_for_selection (f, face_id, c)
+mac_set_font_info_for_selection (f, face_id, c, pos, object)
      struct frame *f;
-     int face_id, c;
+     int face_id, c, pos;
+     Lisp_Object object;
 {
   if (mac_font_panel_visible_p () && f)
     {
       NSWindow *window = FRAME_MAC_WINDOW (f);
-      NSFont *font = [[window delegate] fontForFace:face_id character:c];
+      NSFont *font = [[window delegate] fontForFace:face_id character:c
+					position:pos object:object];
 
       [[NSFontManager sharedFontManager] setSelectedFont:font isMultiple:NO];
     }
 
   return noErr;
 }
-#endif	/* USE_MAC_FONT_PANEL */
 
 
 /************************************************************************
@@ -4413,6 +4136,71 @@ mac_event_to_emacs_modifiers (event)
     modifiers &= ~(optionKey | cmdKey);
 
   return mac_to_emacs_modifiers (modifiers, 0);
+}
+
+/* Function to report a mouse movement to the mainstream Emacs code.
+   The input handler calls this.
+
+   We have received a mouse movement event, which is given in *event.
+   If the mouse is over a different glyph than it was last time, tell
+   the mainstream emacs code by setting mouse_moved.  If not, ask for
+   another motion event, so we can check again the next time it moves.  */
+
+static int
+note_mouse_movement (frame, point)
+     FRAME_PTR frame;
+     NSPoint point;
+{
+  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (frame);
+  EmacsView *emacsView = FRAME_EMACS_VIEW (frame);
+  NSRect emacsViewFrame = [emacsView frame];
+  int x, y;
+
+  last_mouse_movement_time = TickCount () * (1000 / 60);  /* to milliseconds */
+
+  if (frame == dpyinfo->mouse_face_mouse_frame
+      && ! (point.x >= 0 && point.x < NSMaxX (emacsViewFrame)
+	    && point.y >= 0 && point.y < NSMaxY (emacsViewFrame)))
+    {
+      /* This case corresponds to LeaveNotify in X11.  If we move
+	 outside the frame, then we're certainly no longer on any text
+	 in the frame.  */
+      clear_mouse_face (dpyinfo);
+      dpyinfo->mouse_face_mouse_frame = 0;
+      if (!dpyinfo->grabbed)
+	{
+	  struct redisplay_interface *rif = FRAME_RIF (frame);
+
+	  rif->define_frame_cursor (frame,
+				    frame->output_data.mac->nontext_cursor);
+	}
+    }
+
+  x = point.x;
+  y = point.y;
+
+  /* Has the mouse moved off the glyph it was on at the last sighting?  */
+  if (frame != last_mouse_glyph_frame
+      || x < last_mouse_glyph.left
+      || x >= last_mouse_glyph.right
+      || y < last_mouse_glyph.top
+      || y >= last_mouse_glyph.bottom)
+    {
+      EmacsView *emacsView = FRAME_EMACS_VIEW (frame);
+
+      frame->mouse_moved = 1;
+      [emacsView lockFocus];
+      set_global_focus_view_frame (frame);
+      note_mouse_highlight (frame, x, y);
+      unset_global_focus_view_frame ();
+      [emacsView unlockFocus];
+      /* Remember which glyph we're now on.  */
+      remember_mouse_glyph (frame, x, y, &last_mouse_glyph);
+      last_mouse_glyph_frame = frame;
+      return 1;
+    }
+
+  return 0;
 }
 
 /* Run the current run loop in the default mode until some input
@@ -4525,8 +4313,9 @@ peek_if_next_event_activates_menu_bar ()
    user. */
 
 int
-XTread_socket (sd, expected, hold_quit)
-     int sd, expected;
+XTread_socket (terminal, expected, hold_quit)
+     struct terminal *terminal;
+     int expected;
      struct input_event *hold_quit;
 {
   int count;
@@ -4539,10 +4328,16 @@ XTread_socket (sd, expected, hold_quit)
   if (interrupt_input_blocked)
     {
       interrupt_input_pending = 1;
+#ifdef SYNC_INPUT
+      pending_signals = 1;
+#endif
       return -1;
     }
 
   interrupt_input_pending = 0;
+#ifdef SYNC_INPUT
+  pending_signals = pending_atimers;
+#endif
   BLOCK_INPUT;
 
   /* So people can tell when we have read the available input.  */
@@ -4662,7 +4457,6 @@ void
 mac_show_hourglass (f)
      struct frame *f;
 {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   NSProgressIndicator *indicator =
     (NSProgressIndicator *) f->output_data.mac->hourglass_control;
 
@@ -4688,7 +4482,6 @@ mac_show_hourglass (f)
     }
 
   [indicator startAnimation:nil];
-#endif
 }
 
 /* Hide the spinning progress indicator for the frame F.  Do nothing
@@ -4698,12 +4491,10 @@ void
 mac_hide_hourglass (f)
      struct frame *f;
 {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   NSProgressIndicator *indicator =
     (NSProgressIndicator *) f->output_data.mac->hourglass_control;
 
   [indicator stopAnimation:nil];
-#endif
 }
 
 /* Reposition the spinning progress indicator for the frame F.  Do
@@ -4934,6 +4725,140 @@ mac_file_dialog (prompt, dir, default_filename, mustmatch, only_dir_p)
 }
 
 
+/***********************************************************************
+			Font selection dialog
+ ***********************************************************************/
+
+@implementation EmacsFontDialogController
+
+- (void)windowWillClose:(NSNotification *)aNotification
+{
+  [NSApp abortModal];
+}
+
+- (void)cancel:(id)sender
+{
+  [NSApp abortModal];
+}
+
+- (void)ok:(id)sender
+{
+  [NSApp stopModal];
+}
+
+- (void)changeFont:(id)sender
+{
+}
+
+- (NSUInteger)validModesForFontPanel:(NSFontPanel *)fontPanel
+{
+  /* Underline, Strikethrough, TextColor, DocumentColor, and Shadow
+     are not used in font panels.  */
+  return (NSFontPanelFaceModeMask
+	  | NSFontPanelSizeModeMask
+	  | NSFontPanelCollectionModeMask);
+}
+
+@end				// EmacsFontDialogController
+
+@implementation NSFontPanel (Emacs)
+
+- (NSInteger)runModal
+{
+  NSMethodSignature *signature =
+    [NSApp methodSignatureForSelector:@selector(runModalForWindow:)];
+  NSInvocation *invocation =
+    [NSInvocation invocationWithMethodSignature:signature];
+  NSInteger response;
+
+  [invocation setTarget:NSApp];
+  [invocation setSelector:@selector(runModalForWindow:)];
+  [invocation setArgument:&self atIndex:2];
+
+  [NSApp runTemporarilyWithInvocation:invocation];
+
+  [invocation getReturnValue:&response];
+
+  return response;
+}
+
+@end				// NSFontPanel (Emacs)
+
+static NSView *
+create_ok_cancel_buttons_view ()
+{
+  NSMatrix *view;
+  NSButtonCell *prototype = [[NSButtonCell alloc] init];
+  NSSize cellSize;
+  NSRect frame;
+  NSButtonCell *cancelButton, *okButton;
+
+  [prototype setBezelStyle:NSRoundedBezelStyle];
+  cellSize = [prototype cellSize];
+  frame = NSMakeRect (0, 0, cellSize.width * 2, cellSize.height);
+  view = [[NSMatrix alloc] initWithFrame:frame
+				    mode:NSTrackModeMatrix
+				    prototype:prototype
+				    numberOfRows:1 numberOfColumns:2];
+  [prototype release];
+  cancelButton = [view cellAtRow:0 column:0];
+  okButton = [view cellAtRow:0 column:1];
+  [cancelButton setTitle:@"Cancel"];
+  [okButton setTitle:@"OK"];
+  [cancelButton setAction:@selector(cancel:)];
+  [okButton setAction:@selector(ok:)];
+  [cancelButton setKeyEquivalent:@"\e"];
+  [okButton setKeyEquivalent:@"\r"];
+
+  return view;
+}
+
+Lisp_Object
+mac_font_dialog (f)
+     FRAME_PTR f;
+{
+  Lisp_Object result = Qnil;
+  NSFontManager *fontManager = [NSFontManager sharedFontManager];
+  NSFontPanel *fontPanel = [fontManager fontPanel:YES];
+  NSFont *savedSelectedFont, *selectedFont;
+  BOOL savedIsMultiple;
+  NSView *savedAccessoryView, *accessoryView;
+  id savedDelegate, delegate;
+  NSInteger response;
+
+  savedSelectedFont = [fontManager selectedFont];
+  savedIsMultiple = [fontManager isMultiple];
+  selectedFont = macfont_get_nsctfont (FRAME_FONT (f));
+  [fontManager setSelectedFont:selectedFont isMultiple:NO];
+
+  savedAccessoryView = [fontPanel accessoryView];
+  accessoryView = create_ok_cancel_buttons_view ();
+  [fontPanel setAccessoryView:accessoryView];
+  [accessoryView release];
+
+  savedDelegate = [fontPanel delegate];
+  delegate = [[EmacsFontDialogController alloc] init];
+  [fontPanel setDelegate:delegate];
+
+  [fontManager orderFrontFontPanel:nil];
+  response = [fontPanel runModal];
+  if (response != NSRunAbortedResponse)
+    {
+      selectedFont = [fontManager convertFont:[fontManager selectedFont]];
+      result = macfont_nsctfont_to_spec (selectedFont);
+    }
+
+  [fontPanel setAccessoryView:savedAccessoryView];
+  [fontPanel setDelegate:savedDelegate];
+  [delegate release];
+  [fontManager setSelectedFont:savedSelectedFont isMultiple:savedIsMultiple];
+
+  [fontPanel close];
+
+  return result;
+}
+
+
 /************************************************************************
 				 Menu
  ************************************************************************/
@@ -5151,9 +5076,6 @@ restore_show_help_function (old_show_help_function)
 {
   id object = [item representedObject];
   Lisp_Object help;
-#if USE_QUICKDRAW
-  GrafPtr port;
-#endif
   int specpdl_count = SPECPDL_INDEX ();
 
   if (object)
@@ -5164,15 +5086,9 @@ restore_show_help_function (old_show_help_function)
   /* Temporarily bind Vshow_help_function to Qnil because we don't
      want tooltips during menu tracking.  */
   record_unwind_protect (restore_show_help_function, Vshow_help_function);
-  Vshow_help_function = Qnil;
+  Vshow_help_function = intern ("tooltip-show-help-non-mode");
 
-#if USE_QUICKDRAW
-  GetPort (&port);
-#endif
   show_help_echo (help, Qnil, Qnil, Qnil, 1);
-#if USE_QUICKDRAW
-  SetPort (port);
-#endif
   unbind_to (specpdl_count, Qnil);
 }
 
@@ -6101,11 +6017,7 @@ static NSMutableSet *registered_apple_event_specs;
 
 - (OSErr)copyDescTo:(AEDesc *)desc
 {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   return AEDuplicateDesc ([self aeDesc], desc);
-#else
-  return AEDuplicateDesc (&_desc, desc);
-#endif
 }
 
 @end				// NSAppleEventDescriptor (Emacs)
@@ -6123,23 +6035,11 @@ static NSMutableSet *registered_apple_event_specs;
     {
       const AEDesc *event_ptr = NULL;
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
       event_ptr = [event aeDesc];
-#else
-      AEDesc apple_event;
-
-      err = [event copyDescTo:&apple_event];
-      if (err == noErr)
-	event_ptr = &apple_event;
-#endif
 
       if (event_ptr)
 	err = mac_handle_apple_event (event_ptr, &reply, 0);
       AEDisposeDesc (&reply);
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1020
-      if (event_ptr == &apple_event)
-	AEDisposeDesc (&apple_event);
-#endif
     }
 }
 
@@ -6786,3 +6686,1167 @@ mac_appkit_do_applescript (script, result)
 {
   return [[NSApp delegate] doAppleScript:script result:result];
 }
+
+
+/***********************************************************************
+				Fonts
+***********************************************************************/
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+
+#define FONT_NAME_ATTRIBUTE (@"NSFontNameAttribute")
+#define FONT_FAMILY_ATTRIBUTE (@"NSFontFamilyAttribute")
+#define FONT_TRAITS_ATTRIBUTE (@"NSCTFontTraitsAttribute")
+#define FONT_SIZE_ATTRIBUTE (@"NSFontSizeAttribute")
+#define FONT_CASCADE_LIST_ATTRIBUTE (@"NSCTFontCascadeListAttribute")
+#define FONT_CHARACTER_SET_ATTRIBUTE (@"NSCTFontCharacterSetAttribute")
+#define FONT_LANGUAGES_ATTRIBUTE (@"NSCTFontLanguagesAttribute")
+#define FONT_SYMBOLIC_TRAIT (@"NSCTFontSymbolicTrait")
+#define FONT_WEIGHT_TRAIT (@"NSCTFontWeightTrait")
+#define FONT_WIDTH_TRAIT (@"NSCTFontProportionTrait")
+#define FONT_SLANT_TRAIT (@"NSCTFontSlantTrait")
+
+const CFStringRef MAC_FONT_NAME_ATTRIBUTE = (CFStringRef) FONT_NAME_ATTRIBUTE;
+const CFStringRef MAC_FONT_FAMILY_NAME_ATTRIBUTE = (CFStringRef) FONT_FAMILY_ATTRIBUTE;
+const CFStringRef MAC_FONT_TRAITS_ATTRIBUTE = (CFStringRef) FONT_TRAITS_ATTRIBUTE;
+const CFStringRef MAC_FONT_SIZE_ATTRIBUTE = (CFStringRef) FONT_SIZE_ATTRIBUTE;
+const CFStringRef MAC_FONT_CASCADE_LIST_ATTRIBUTE = (CFStringRef) FONT_CASCADE_LIST_ATTRIBUTE;
+const CFStringRef MAC_FONT_CHARACTER_SET_ATTRIBUTE = (CFStringRef) FONT_CHARACTER_SET_ATTRIBUTE;
+const CFStringRef MAC_FONT_LANGUAGES_ATTRIBUTE = (CFStringRef) FONT_LANGUAGES_ATTRIBUTE;
+const CFStringRef MAC_FONT_SYMBOLIC_TRAIT = (CFStringRef) FONT_SYMBOLIC_TRAIT;
+const CFStringRef MAC_FONT_WEIGHT_TRAIT = (CFStringRef) FONT_WEIGHT_TRAIT;
+const CFStringRef MAC_FONT_WIDTH_TRAIT = (CFStringRef) FONT_WIDTH_TRAIT;
+const CFStringRef MAC_FONT_SLANT_TRAIT = (CFStringRef) FONT_SLANT_TRAIT;
+
+static BOOL mac_font_name_is_bogus P_ ((NSString *));
+static NSNumber *mac_font_weight_override_for_name P_ ((NSString *));
+
+static BOOL
+mac_font_name_is_bogus (fontName)
+     NSString *fontName;
+{
+  return ([fontName hasPrefix:@"."]
+	  || ([fontName hasSuffix:@"Oblique"]
+	      && ([fontName isEqualToString:@"Courier-Oblique"]
+		  || [fontName isEqualToString:@"Courier-BoldOblique"]
+		  || [fontName isEqualToString:@"Helvetica-Oblique"]
+		  || [fontName isEqualToString:@"Helvetica-BoldOblique"])));
+}
+
+/* We override some weight trait values returned by NSFontDescriptor
+   in 10.4, so that they match with those returned by Core Text.  */
+
+static const struct
+{
+  NSString *fontName;
+  const float weight;
+} mac_font_weight_overrides [] =
+  {{@"HiraKakuPro-W3", 0},	/* -0.23 in 10.4 */
+   {@"HiraMinPro-W3", 0},	/* -0.23 in 10.4 */
+   {@"HiraKakuPro-W6", 0.4},	/* 0.3 in 10.4 */
+   {@"HiraMinPro-W6", 0.4},	/* 0.3 in 10.4 */
+   {@"STFangsong", -0.4},	/* (5 - 5) * 0.1 in 10.3 */
+   {@"STHeiti", 0.24},		/* (5 - 5) * 0.1 in 10.3 */
+   {@"STXihei", -0.1},		/* (3 - 5) * 0.1 in 10.3 */
+   {@"LiHeiPro", 0}};		/* 0.23 in 10.4 */
+
+static NSNumber *
+mac_font_weight_override_for_name (fontName)
+     NSString *fontName;
+{
+  int i;
+
+  for (i = 0; i < (sizeof (mac_font_weight_overrides)
+		   / sizeof (mac_font_weight_overrides[0])); i++)
+    if ([fontName isEqualToString:mac_font_weight_overrides[i].fontName])
+      return [NSNumber numberWithFloat:mac_font_weight_overrides[i].weight];
+
+  return nil;
+}
+
+static Boolean get_glyphs_for_characters P_ ((NSFont *, const UniChar [],
+					      CGGlyph [], CFIndex));
+
+/* Like CTFontGetGlyphsForCharacters, but without cache.  This must be
+   used only in the cache implementation.  */
+
+static Boolean
+get_glyphs_for_characters (font, characters, glyphs, count)
+     NSFont *font;
+     const UniChar characters[];
+     CGGlyph glyphs[];
+     CFIndex count;
+{
+  Boolean result = true;
+  NSString *string = [NSString stringWithCharacters:characters length:count];
+  NSDictionary *attributes = [NSDictionary dictionaryWithObject:font
+					   forKey:NSFontAttributeName];
+  NSAttributedString *attributedString
+    = [[NSAttributedString alloc] initWithString:string attributes:attributes];
+  NSTextStorage *textStorage;
+  NSLayoutManager *layoutManager;
+  NSTextContainer *textContainer;
+  NSString *fontName = [font fontName];
+  CFIndex i;
+
+  textStorage = [[NSTextStorage alloc] init];
+  layoutManager = [[NSLayoutManager alloc] init];
+  textContainer = [[NSTextContainer alloc] init];
+
+  [layoutManager addTextContainer:textContainer];
+  [textContainer release];
+  [textStorage addLayoutManager:layoutManager];
+  [layoutManager release];
+
+  i = 0;
+  while (i < count)
+    {
+      NSRange range = NSMakeRange (i, (characters[i] >= 0xD800
+				       && characters[i] < 0xDC00) ? 2 : 1);
+      NSAttributedString *attributedSubstring
+	= [attributedString attributedSubstringFromRange:range];
+      NSFont *fontInTextStorage;
+
+      [textStorage setAttributedString:attributedSubstring];
+      fontInTextStorage = [textStorage attribute:NSFontAttributeName atIndex:0
+				       effectiveRange:NULL];
+      if ([fontName isEqualToString:[fontInTextStorage fontName]])
+	glyphs[i] = [layoutManager glyphAtIndex:0];
+      else
+	{
+	  glyphs[i] = NSNullGlyph;
+	  result = false;
+	}
+      if (range.length == 2)
+	glyphs[i + 1] = 0;
+      i += range.length;
+    }
+
+  [attributedString release];
+  [textStorage release];
+
+  return result;
+}
+
+@implementation EmacsLocale
+
+/* Initialize the receiver using a given locale identifier.  */
+
+- (id)initWithLocaleIdentifier:(NSString *)string
+{
+  OSStatus err;
+#if MAC_OS_X_VERSION_MAX_ALLOWED == 1040
+  FOUNDATION_EXPORT NSString * const NSLocaleExemplarCharacterSet AVAILABLE_MAC_OS_X_VERSION_10_4_AND_LATER;
+#endif
+
+  self = [self init];
+  if (self == nil)
+    return nil;
+
+  if ([string isEqualToString:@"zh-Hans"])
+    string = @"zh_CN";
+  else if ([string isEqualToString:@"zh-Hant"])
+    string = @"zh_TW";
+
+  err = LocaleStringToLangAndRegionCodes ([string UTF8String],
+					  &langCode, &regionCode);
+  if (err != noErr)
+    {
+      [self release];
+
+      return nil;
+    }
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+  if (NSClassFromString (@"NSLocale"))
+#endif
+    {
+      NSLocale *locale;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+      locale = [[(NSClassFromString (@"NSLocale")) alloc]
+		 initWithLocaleIdentifier:string];
+#else
+      locale = [[NSLocale alloc] initWithLocaleIdentifier:string];
+#endif
+      exemplarCharacterSet =
+	[[locale objectForKey:NSLocaleExemplarCharacterSet] retain];
+      [locale release];
+    }
+#endif
+
+  return self;
+}
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+- (void)dealloc
+{
+  [exemplarCharacterSet release];
+  [super dealloc];
+}
+#endif
+
+/* Return a Boolean value indicating whether the receiver is
+   compatible with the given FONT.  */
+
+- (BOOL)isCompatibleWithFont:(NSFont *)font
+{
+  OSStatus err;
+  NSStringEncoding encoding = [font mostCompatibleStringEncoding];
+  CFStringEncoding fontEncoding =
+    CFStringConvertNSStringEncodingToEncoding (encoding);
+  ScriptCode fontScript;
+  LangCode fontLang;
+  BOOL result;
+
+  err = GetScriptInfoFromTextEncoding (fontEncoding, &fontScript, &fontLang);
+  if (err != noErr)
+    result = NO;
+  else if (langCode == fontLang)
+    result = YES;
+  else if (fontLang != kTextLanguageDontCare)
+    result = NO;
+  else
+    {
+      TextEncoding textEncoding;
+
+      err = GetTextEncodingFromScriptInfo (fontScript, langCode,
+					   regionCode, &textEncoding);
+      result = (err == noErr);
+    }
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+  if (result == NO)
+    if (exemplarCharacterSet
+	&& [[font coveredCharacterSet] isSupersetOfSet:exemplarCharacterSet])
+      result = YES;
+#endif
+
+  return result;
+}
+
+@end				// EmacsLocale
+
+@implementation EmacsFontDescriptor
+
+- (id)initWithFontAttributes:(NSDictionary *)attributes
+{
+  [self doesNotRecognizeSelector:_cmd];
+  [self release];
+
+  return nil;
+}
+
++ (id)fontDescriptorWithFontAttributes:(NSDictionary *)attributes
+{
+  return [[[self alloc] initWithFontAttributes:attributes] autorelease];
+}
+
++ (id)fontDescriptorWithFont:(NSFont *)font
+{
+  [self doesNotRecognizeSelector:_cmd];
+
+  return nil;
+}
+
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys
+{
+  NSMutableArray *locales = nil;
+  NSArray *languages = [self objectForKey:FONT_LANGUAGES_ATTRIBUTE];
+
+  if (languages)
+    {
+      NSEnumerator *enumerator;
+      NSString *language;
+
+      locales = [NSMutableArray arrayWithCapacity:[languages count]];
+      enumerator = [languages objectEnumerator];
+      while ((language = [enumerator nextObject]) != nil)
+	{
+	  EmacsLocale *locale =
+	    [[EmacsLocale alloc] initWithLocaleIdentifier:language];
+
+	  if (locale == nil)
+	    break;
+	  [locales addObject:locale];
+	  [locale release];
+	}
+      if (language)
+	return [NSArray array];
+    }
+
+  return [self matchingFontDescriptorsWithMandatoryKeys:mandatoryKeys
+	       locales:locales];
+}
+
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys
+					      locales:(NSArray *)locales
+{
+  [self doesNotRecognizeSelector:_cmd];
+
+  return nil;
+}
+
+- (EmacsFontDescriptor *)matchingFontDescriptorWithMandatoryKeys:(NSSet *)mandatoryKeys
+{
+  NSArray *descriptors =
+    [self matchingFontDescriptorsWithMandatoryKeys:mandatoryKeys];
+
+  return [descriptors count] > 0 ? [descriptors objectAtIndex:0] : nil;
+}
+
+- (id)objectForKey:(NSString *)anAttribute
+{
+  [self doesNotRecognizeSelector:_cmd];
+
+  return nil;
+}
+
+@end				// EmacsFontDescriptor
+
+#if USE_NS_FONT_DESCRIPTOR
+
+@implementation EmacsFDFontDescriptor
+
+- (id)initWithFontAttributes:(NSDictionary *)attributes
+{
+  NSFontDescriptor *descriptor;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+  descriptor = [(NSClassFromString (@"NSFontDescriptor"))
+		 fontDescriptorWithFontAttributes:attributes];
+#else
+  descriptor = [NSFontDescriptor fontDescriptorWithFontAttributes:attributes];
+#endif
+
+  if (descriptor == nil)
+    {
+      [self release];
+
+      return nil;
+    }
+
+  return [self initWithFontDescriptor:descriptor];
+}
+
+- (id)initWithFontDescriptor:(NSFontDescriptor *)aFontDescriptor
+{
+  self = [self init];
+  if (self == nil)
+    return nil;
+
+  fontDescriptor = [aFontDescriptor copy];
+  if (fontDescriptor == nil)
+    {
+      [self release];
+
+      return nil;
+    }
+
+  return self;
+}
+
+- (void)dealloc
+{
+  [fontDescriptor release];
+  [super dealloc];
+}
+
+- (NSFontDescriptor *)fontDescriptor
+{
+  return [[fontDescriptor retain] autorelease];
+}
+
++ (id)fontDescriptorWithFontDescriptor:(NSFontDescriptor *)aFontDescriptor
+{
+  return [[[self alloc] initWithFontDescriptor:aFontDescriptor] autorelease];
+}
+
++ (id)fontDescriptorWithFont:(NSFont *)font
+{
+  NSFontDescriptor *descriptor = [font fontDescriptor];
+  NSMutableDictionary *attributes =
+    [NSMutableDictionary dictionaryWithDictionary:[descriptor fontAttributes]];
+
+  /* On Mac OS 10.4, the above descriptor doesn't contain family or
+     size information.  */
+  [attributes setObject:[font familyName] forKey:FONT_FAMILY_ATTRIBUTE];
+  [attributes setObject:[NSNumber numberWithFloat:[font pointSize]]
+	      forKey:FONT_SIZE_ATTRIBUTE];
+
+  return [self fontDescriptorWithFontAttributes:attributes];
+}
+
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys
+{
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4)
+    return [super matchingFontDescriptorsWithMandatoryKeys:mandatoryKeys];
+  else
+    return [fontDescriptor
+	     matchingFontDescriptorsWithMandatoryKeys:mandatoryKeys];
+}
+
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys
+					      locales:(NSArray *)locales
+{
+  NSFontDescriptor *lastResort = nil;
+  NSArray *descriptors;
+  NSMutableArray *result;
+  NSEnumerator *enumerator;
+  NSFontDescriptor *descriptor;
+
+  descriptors = [fontDescriptor
+		  matchingFontDescriptorsWithMandatoryKeys:mandatoryKeys];
+  result = [NSMutableArray arrayWithCapacity:[descriptors count]];
+
+  enumerator = [descriptors objectEnumerator];
+  while ((descriptor = [enumerator nextObject]) != nil)
+    {
+      NSString *fontName = [descriptor postscriptName];
+
+      if (mac_font_name_is_bogus (fontName))
+	continue;
+
+      if (locales)
+	{
+	  NSFont *font = [NSFont fontWithName:fontName size:0];
+	  NSEnumerator *localeEnumerator = [locales objectEnumerator];
+	  EmacsLocale *locale;
+
+	  while ((locale = [localeEnumerator nextObject]) != nil)
+	    if (![locale isCompatibleWithFont:font])
+	      break;
+	  if (locale)
+	    continue;
+	}
+
+      if ([fontName isEqualToString:@"LastResort"])
+	{
+	  lastResort = descriptor;
+	  continue;
+	}
+
+      [result addObject:[[self class]
+			  fontDescriptorWithFontDescriptor:descriptor]];
+    }
+
+  if ([result count] == 0 && lastResort)
+    result =
+      [NSMutableArray
+	arrayWithObject:[[self class]
+			  fontDescriptorWithFontDescriptor:lastResort]];
+
+  return result;
+}
+
+- (id)objectForKey:(NSString *)anAttribute;
+{
+  id result = [fontDescriptor objectForKey:anAttribute];
+
+  if ([anAttribute isEqualToString:FONT_TRAITS_ATTRIBUTE])
+    {
+      NSString *fontName = [fontDescriptor postscriptName];
+      NSNumber *weight = mac_font_weight_override_for_name (fontName);
+
+      if (weight)
+	{
+	  NSMutableDictionary *traits =
+	    [NSMutableDictionary dictionaryWithDictionary:result];
+
+	  [traits setObject:weight forKey:FONT_WEIGHT_TRAIT];
+	  result = traits;
+	}
+    }
+
+  return result;
+}
+
+@end				// EmacsFDFontDescriptor
+
+#endif	/* USE_NS_FONT_DESCRIPTOR */
+
+#if USE_NS_FONT_MANAGER
+
+@implementation EmacsFMFontDescriptor
+
+- (id)initWithFontAttributes:(NSDictionary *)attributes
+{
+  self = [self init];
+  if (self == nil)
+    return nil;
+
+  fontAttributes = [[NSMutableDictionary alloc] initWithDictionary:attributes];
+  if (fontAttributes == nil)
+    {
+      [self release];
+
+      return nil;
+    }
+
+  return self;
+}
+
+- (void)dealloc
+{
+  [fontAttributes release];
+  [super dealloc];
+}
+
++ (id)fontDescriptorWithFont:(NSFont *)font
+{
+  NSDictionary *attributes =
+    [NSDictionary
+      dictionaryWithObjectsAndKeys:[font fontName], FONT_NAME_ATTRIBUTE,
+      [NSNumber numberWithFloat:[font pointSize]], FONT_SIZE_ATTRIBUTE,
+      [font familyName], FONT_FAMILY_ATTRIBUTE, nil];
+
+  return [self fontDescriptorWithFontAttributes:attributes];
+}
+
+- (NSArray *)matchingFontDescriptorsWithMandatoryKeys:(NSSet *)mandatoryKeys
+					      locales:(NSArray *)locales
+{
+  NSString *family = [fontAttributes objectForKey:FONT_FAMILY_ATTRIBUTE];
+  NSNumber *size = [fontAttributes objectForKey:FONT_SIZE_ATTRIBUTE];
+  NSCharacterSet *charset =
+    [fontAttributes objectForKey:FONT_CHARACTER_SET_ATTRIBUTE];
+  NSFontManager *fontManager = [NSFontManager sharedFontManager];
+  NSArray *fontNamesOrMembers;
+  NSMutableArray *result;
+  NSEnumerator *enumerator;
+  id value;
+
+  if (family == nil)
+    fontNamesOrMembers = [fontManager availableFonts];
+  else
+    fontNamesOrMembers = [fontManager availableMembersOfFontFamily:family];
+
+  result = [NSMutableArray arrayWithCapacity:[fontNamesOrMembers count]];
+
+  enumerator = [fontNamesOrMembers objectEnumerator];
+  while ((value = [enumerator nextObject]) != nil)
+    {
+      NSString *fontName;
+      NSFont *font = nil;
+      NSDictionary *attributes;
+
+      if (family == nil)
+	fontName = (NSString *) value;
+      else
+	fontName = [(NSArray *)value objectAtIndex:0];
+
+      if (mac_font_name_is_bogus (fontName)
+	  || [fontName isEqualToString:@"LastResort"])
+	continue;
+
+      if (locales)
+	{
+	  NSEnumerator *localeEnumerator = [locales objectEnumerator];
+	  EmacsLocale *locale;
+
+	  font = [NSFont fontWithName:fontName size:0];
+
+	  while ((locale = [localeEnumerator nextObject]) != nil)
+	    if (![locale isCompatibleWithFont:font])
+	      break;
+	  if (locale)
+	    continue;
+	}
+
+      if (charset)
+	{
+	  if (font == nil)
+	    font = [NSFont fontWithName:fontName size:0];
+	  if (![[font coveredCharacterSet] isSupersetOfSet:charset])
+	    continue;
+	}
+
+      /* The value of `size' may be nil.  In that case, the
+	 variable number of arguments below end there.  */
+      if (family || font)
+	attributes =
+	  [NSDictionary
+	    dictionaryWithObjectsAndKeys:fontName, FONT_NAME_ATTRIBUTE,
+	    (family ? family : [font familyName]), FONT_FAMILY_ATTRIBUTE,
+	    size, FONT_SIZE_ATTRIBUTE, nil];
+      else
+	attributes =
+	  [NSDictionary
+	    dictionaryWithObjectsAndKeys:fontName, FONT_NAME_ATTRIBUTE,
+	    size, FONT_SIZE_ATTRIBUTE, nil];
+
+      [result addObject:[[self class]
+			  fontDescriptorWithFontAttributes:attributes]];
+    }
+
+  if (family == nil && [result count] == 0)
+    {
+      NSDictionary *lastResort =
+	[NSDictionary
+	  dictionaryWithObjectsAndKeys:@"LastResort", FONT_NAME_ATTRIBUTE,
+	  @"LastResort", FONT_FAMILY_ATTRIBUTE, size, FONT_SIZE_ATTRIBUTE, nil];
+
+      [result addObject:[[self class]
+			  fontDescriptorWithFontAttributes:lastResort]];
+    }
+
+  return result;
+}
+
+- (id)objectForKey:(NSString *)anAttribute;
+{
+  id result = [fontAttributes objectForKey:anAttribute];
+
+  if (result == nil
+      && ([anAttribute isEqualToString:FONT_FAMILY_ATTRIBUTE]
+	  || [anAttribute isEqualToString:FONT_CHARACTER_SET_ATTRIBUTE]
+	  || [anAttribute isEqualToString:FONT_TRAITS_ATTRIBUTE]))
+    {
+      NSString *fontName = [fontAttributes objectForKey:FONT_NAME_ATTRIBUTE];
+      NSFont *font = [NSFont fontWithName:fontName size:0];
+
+      if ([anAttribute isEqualToString:FONT_FAMILY_ATTRIBUTE])
+	result = [font familyName];
+      else if ([anAttribute isEqualToString:FONT_CHARACTER_SET_ATTRIBUTE])
+	result = [font coveredCharacterSet];
+      else			/* FONT_TRAITS_ATTRIBUTE */
+	if (font)
+	  {
+	    NSFontManager *fontManager = [NSFontManager sharedFontManager];
+	    NSFontTraitMask traits = [fontManager traitsOfFont:font];
+	    FontSymbolicTraits symbolicTraits =
+	      (traits & (MAC_FONT_ITALIC_TRAIT | MAC_FONT_BOLD_TRAIT
+			 | MAC_FONT_MONO_SPACE_TRAIT));
+	    NSNumber *weight = mac_font_weight_override_for_name (fontName);
+	    float width = ((traits & NSCondensedFontMask) ? -0.2f
+			   : (traits & NSExpandedFontMask) ? 0.2f : 0);
+	    float slant = ((traits & NSItalicFontMask)
+			   ? [font italicAngle] / -18.0f : 0);
+
+	    if (weight == nil)
+	      {
+		float value = ([fontManager weightOfFont:font] - 5) * 0.1f;
+
+		weight = [NSNumber numberWithFloat:value];
+	      }
+
+	    result =
+	      [NSDictionary
+		dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:symbolicTraits], FONT_SYMBOLIC_TRAIT,
+		weight, FONT_WEIGHT_TRAIT,
+		[NSNumber numberWithFloat:width], FONT_WIDTH_TRAIT,
+		[NSNumber numberWithFloat:slant], FONT_SLANT_TRAIT, nil];
+	  }
+      if (result)
+	[fontAttributes setObject:result forKey:anAttribute];
+    }
+
+  return result;
+}
+
+@end				// EmacsFMFontDescriptor
+
+#endif	/* USE_NS_FONT_MANAGER */
+
+FontDescriptorRef
+mac_font_descriptor_create_with_attributes (attributes)
+     CFDictionaryRef attributes;
+{
+  EmacsFontDescriptor *result;
+
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return ((FontDescriptorRef)
+	    CTFontDescriptorCreateWithAttributes (attributes));
+#endif
+#if USE_NS_FONT_DESCRIPTOR
+#if USE_NS_FONT_MANAGER
+  if (EQ (macfont_driver_type, Qmac_fd))
+#endif
+    {
+      result =
+	[EmacsFDFontDescriptor
+	  fontDescriptorWithFontAttributes:((NSDictionary *) attributes)];
+    }
+#if USE_NS_FONT_MANAGER
+  else
+#endif
+#endif
+#if USE_NS_FONT_MANAGER
+    {
+      result =
+	[EmacsFMFontDescriptor
+	  fontDescriptorWithFontAttributes:((NSDictionary *) attributes)];
+    }
+#endif
+
+  return result ? CFRetain (result) : NULL;
+}
+
+CFArrayRef
+mac_font_descriptor_create_matching_font_descriptors (descriptor,
+						      mandatoryAttributes)
+     FontDescriptorRef descriptor;
+     CFSetRef mandatoryAttributes;
+{
+  EmacsFontDescriptor *fontDescriptor = (EmacsFontDescriptor *) descriptor;
+  NSSet *mandatoryKeys = (NSSet *) mandatoryAttributes;
+  NSArray *result =
+    [fontDescriptor matchingFontDescriptorsWithMandatoryKeys:mandatoryKeys];
+
+  return result ? CFRetain (result) : NULL;
+}
+
+FontDescriptorRef
+mac_font_descriptor_create_matching_font_descriptor (descriptor,
+						     mandatoryAttributes)
+     FontDescriptorRef descriptor;
+     CFSetRef mandatoryAttributes;
+{
+  EmacsFontDescriptor *fontDescriptor = (EmacsFontDescriptor *) descriptor;
+  NSSet *mandatoryKeys = (NSSet *) mandatoryAttributes;
+  EmacsFontDescriptor *result =
+    [fontDescriptor matchingFontDescriptorWithMandatoryKeys:mandatoryKeys];
+
+  return result ? CFRetain (result) : NULL;
+}
+
+CFTypeRef
+mac_font_descriptor_copy_attribute (descriptor, attribute)
+     FontDescriptorRef descriptor;
+     CFStringRef attribute;
+{
+  EmacsFontDescriptor *fontDescriptor = (EmacsFontDescriptor *) descriptor;
+  id result = [fontDescriptor objectForKey:((NSString *) attribute)];
+
+  return result ? CFRetain (result) : NULL;
+}
+
+Boolean
+mac_font_descriptor_supports_languages (descriptor, languages)
+     FontDescriptorRef descriptor;
+     CFArrayRef languages;
+{
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return mac_ctfont_descriptor_supports_languages (((CTFontDescriptorRef)
+						      descriptor), languages);
+#endif
+  {
+    Boolean result = true;
+    NSString *name =
+      [(EmacsFontDescriptor *)descriptor objectForKey:FONT_NAME_ATTRIBUTE];
+    NSFont *font = [NSFont fontWithName:name size:0];
+
+    if (font == nil)
+      result = false;
+    else
+      {
+	NSEnumerator *enumerator;
+	NSString *language;
+
+	enumerator = [(NSArray *)languages objectEnumerator];
+	while ((language = [enumerator nextObject]) != nil)
+	  {
+	    EmacsLocale *locale =
+	      [[EmacsLocale alloc] initWithLocaleIdentifier:language];
+	    BOOL isCompatible = [locale isCompatibleWithFont:font];
+
+	    [locale release];
+	    if (!isCompatible)
+	      {
+		result = false;
+		break;
+	      }
+	  }
+      }
+
+    return result;
+  }
+}
+
+FontRef
+mac_font_create_with_name (name, size)
+     CFStringRef name;
+     CGFloat size;
+{
+  NSFont *result;
+  NSFont *font;
+
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return (FontRef) CTFontCreateWithName (name, size, NULL);
+#endif
+  font = [NSFont fontWithName:((NSString *) name) size:size];
+  result = (NSFont *) font;
+
+  return result ? CFRetain (result) : NULL;
+}
+
+CGFloat
+mac_font_get_size (font)
+     FontRef font;
+{
+  return [(NSFont *)font pointSize];
+}
+
+CFStringRef
+mac_font_copy_family_name (font)
+     FontRef font;
+{
+  return CFRetain ([(NSFont *)font familyName]);
+}
+
+CFCharacterSetRef
+mac_font_copy_character_set (font)
+     FontRef font;
+{
+  return CFRetain ([(NSFont *)font coveredCharacterSet]);
+}
+
+Boolean
+mac_font_get_glyphs_for_characters (font, characters, glyphs, count)
+     FontRef font;
+     const UniChar characters[];
+     CGGlyph glyphs[];
+     CFIndex count;
+{
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return CTFontGetGlyphsForCharacters ((CTFontRef) font, characters,
+					 glyphs, count);
+#endif
+#if USE_NS_FONT_DESCRIPTOR
+#if USE_NS_FONT_MANAGER
+  if (EQ (macfont_driver_type, Qmac_fd))
+#endif
+    {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+      return CTFontGetGlyphsForCharacters ((CTFontRef) font, characters,
+					   glyphs, count);
+#else
+      extern Boolean CTFontGetGlyphsForCharacters P_ ((const void *,
+						       const UniChar [],
+						       CGGlyph glyphs [],
+						       CFIndex)) AVAILABLE_MAC_OS_X_VERSION_10_4_AND_LATER;
+
+      return CTFontGetGlyphsForCharacters (font, characters, glyphs, count);
+#endif
+    }
+#if USE_NS_FONT_MANAGER
+  else
+#endif
+#endif
+#if USE_NS_FONT_MANAGER
+    {
+      return get_glyphs_for_characters ((NSFont *) font, characters,
+					glyphs, count);
+    }
+#endif
+}
+
+CGFloat
+mac_font_get_ascent (font)
+     FontRef font;
+{
+  return [(NSFont *)font ascender];
+}
+
+CGFloat
+mac_font_get_descent (font)
+     FontRef font;
+{
+  return - [(NSFont *)font descender];
+}
+
+CGFloat
+mac_font_get_leading (font)
+     FontRef font;
+{
+  NSFont *nsFont = (NSFont *) font;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040
+  if ([nsFont respondsToSelector:@selector(leading)])
+#endif
+    return [nsFont leading];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040
+  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040
+    return ([nsFont defaultLineHeightForFont]
+	    - ([nsFont ascender] - [nsFont descender]));
+#endif
+}
+
+CGFloat
+mac_font_get_underline_position (font)
+     FontRef font;
+{
+  return [(NSFont *)font underlinePosition];
+}
+
+CGFloat
+mac_font_get_underline_thickness (font)
+     FontRef font;
+{
+  return [(NSFont *)font underlineThickness];
+}
+
+CGFloat
+mac_font_get_advance_width_for_glyph (font, glyph)
+     FontRef font;
+     CGGlyph glyph;
+{
+  NSSize advancement = [(NSFont *)font advancementForGlyph:glyph];
+
+  return advancement.width;
+}
+
+CFStringRef
+mac_font_create_preferred_family_for_attributes (attributes)
+     CFDictionaryRef attributes;
+{
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return mac_ctfont_create_preferred_family_for_attributes (attributes);
+#endif
+  {
+    NSString *result = nil;
+    CFStringRef charsetString =
+      CFDictionaryGetValue (attributes,
+			    MAC_FONT_CHARACTER_SET_STRING_ATTRIBUTE);
+    CFIndex length;
+
+    if (charsetString
+	&& (length = CFStringGetLength (charsetString)) > 0)
+      {
+	NSMutableAttributedString *attrString =
+	  [[[NSMutableAttributedString alloc]
+	     initWithString:((NSString *) charsetString)] autorelease];
+	NSRange attrStringRange = NSMakeRange(0, [attrString length]), range;
+	NSFont *font;
+
+	[attrString fixFontAttributeInRange:attrStringRange];
+	font = [attrString attribute:NSFontAttributeName atIndex:0
+			   longestEffectiveRange:&range
+			   inRange:attrStringRange];
+	if (NSEqualRanges (range, attrStringRange))
+	  {
+	    result = [font familyName];
+	    if ([result isEqualToString:@"LastResort"])
+	      result = nil;
+	  }
+      }
+
+    return result ? CFRetain (result) : result;
+  }
+}
+
+CGRect
+mac_font_get_bounding_rect_for_glyph (font, glyph)
+     FontRef font;
+     CGGlyph glyph;
+{
+  NSRect rect = [(NSFont *)font boundingRectForGlyph:glyph];
+
+  return NSRectToCGRect (rect);
+}
+
+CGFontRef
+mac_font_copy_graphics_font (font)
+     FontRef font;
+{
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return CTFontCopyGraphicsFont ((CTFontRef) font, NULL);
+#endif
+  {
+    ATSFontRef atsfont =
+      ATSFontFindFromPostScriptName ((CFStringRef) [(NSFont *)font fontName],
+				     kATSOptionFlagsDefault);
+
+    return CGFontCreateWithPlatformFont (&atsfont);
+  }
+}
+
+CFArrayRef
+mac_font_create_available_families ()
+{
+  NSArray *families = [[NSFontManager sharedFontManager] availableFontFamilies];
+  CFIndex count = [families count];
+  CFMutableArrayRef result =
+    CFArrayCreateMutableCopy (NULL, count, (CFArrayRef) families);
+
+  while (count-- > 0)
+    if (CFStringHasPrefix (CFArrayGetValueAtIndex (result, count),
+			   CFSTR (".")))
+      CFArrayRemoveValueAtIndex (result, count);
+
+  CFArraySortValues (result, CFRangeMake (0, CFArrayGetCount (result)),
+		     mac_font_family_compare, NULL);
+
+  return result;
+}
+
+FontDescriptorRef
+mac_nsctfont_copy_font_descriptor (font)
+     void *font;
+{
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return (FontDescriptorRef) CTFontCopyFontDescriptor ((CTFontRef) font);
+#endif
+  {
+    EmacsFontDescriptor *result;
+    NSFont *nsFont = (NSFont *) font;
+
+#if USE_NS_FONT_DESCRIPTOR
+#if USE_NS_FONT_MANAGER
+    if (EQ (macfont_driver_type, Qmac_fd))
+#endif
+      {
+	result = [EmacsFDFontDescriptor fontDescriptorWithFont:nsFont];
+      }
+#if USE_NS_FONT_MANAGER
+    else
+#endif
+#endif
+#if USE_NS_FONT_MANAGER
+      {
+	result = [EmacsFMFontDescriptor fontDescriptorWithFont:nsFont];
+      }
+#endif
+
+    return result ? CFRetain (result) : NULL;
+  }
+}
+
+CFIndex
+mac_font_shape (font, string, glyph_layouts, glyph_len)
+     FontRef font;
+     CFStringRef string;
+     struct mac_glyph_layout *glyph_layouts;
+     CFIndex glyph_len;
+{
+  NSUInteger i;
+  CFIndex result = 0;
+  NSFont *nsFont;
+  NSTextStorage *textStorage;
+  NSLayoutManager *layoutManager;
+  NSTextContainer *textContainer;
+  NSUInteger stringLength;
+  NSPoint spaceLocation;
+  NSUInteger used, numberOfGlyphs;
+
+#if USE_CORE_TEXT
+  if (EQ (macfont_driver_type, Qmac_ct))
+    return mac_ctfont_shape ((CTFontRef) font, string,
+			     glyph_layouts, glyph_len);
+#endif
+  nsFont = (NSFont *) font;
+
+  textStorage = [[NSTextStorage alloc] initWithString:((NSString *) string)];
+  layoutManager = [[NSLayoutManager alloc] init];
+  textContainer = [[NSTextContainer alloc] init];
+
+  /* Append a trailing space to measure baseline position.  */
+  [textStorage appendAttributedString:[[[NSAttributedString alloc]
+					 initWithString:@" "] autorelease]];
+  [textStorage setFont:nsFont];
+  [textContainer setLineFragmentPadding:0];
+
+  [layoutManager addTextContainer:textContainer];
+  [textContainer release];
+  [textStorage addLayoutManager:layoutManager];
+  [layoutManager release];
+
+  if (!(textStorage && layoutManager && textContainer))
+    {
+      [textStorage release];
+
+      return 0;
+    }
+
+  stringLength = CFStringGetLength (string);
+
+  /* Force layout.  */
+  (void) [layoutManager glyphRangeForTextContainer:textContainer];
+
+  spaceLocation = [layoutManager locationForGlyphAtIndex:stringLength];
+
+  {
+    NSRange range = NSMakeRange (0, stringLength);
+
+    range = [layoutManager glyphRangeForCharacterRange:range
+			   actualCharacterRange:NULL];
+    numberOfGlyphs = NSMaxRange (range);
+  }
+
+  // XXX: Check fonts in textStorage.
+
+  used = numberOfGlyphs;
+  for (i = 0; i < numberOfGlyphs; i++)
+    if ([layoutManager notShownAttributeForGlyphAtIndex:i])
+      used--;
+
+  if (used <= glyph_len)
+    {
+      NSUInteger glyphIndex = 0;
+      NSRange compRange = NSMakeRange (0, 0);
+      CGFloat totalAdvance = 0;
+
+      while ([layoutManager notShownAttributeForGlyphAtIndex:glyphIndex])
+	glyphIndex++;
+
+      for (i = 0; i < used; i++)
+	{
+	  struct mac_glyph_layout *gl = glyph_layouts + i;
+	  NSUInteger characterIndex;
+	  NSPoint location;
+	  NSRect *glyphRects;
+	  NSUInteger nrects;
+
+	  characterIndex = [layoutManager
+			     characterIndexForGlyphAtIndex:glyphIndex];
+	  if (characterIndex >= NSMaxRange (compRange))
+	    {
+	      compRange.location = NSMaxRange (compRange);
+	      compRange.length =
+		(NSMaxRange
+		 ([((NSString *) string)
+		    rangeOfComposedCharacterSequenceAtIndex:characterIndex])
+		 - compRange.location);
+	    }
+
+	  gl->comp_range.location = compRange.location;
+	  gl->comp_range.length = compRange.length;
+	  gl->glyph_id = [layoutManager glyphAtIndex:glyphIndex];
+
+	  location = [layoutManager locationForGlyphAtIndex:glyphIndex];
+	  gl->advance_delta = location.x - totalAdvance;
+	  gl->baseline_delta = spaceLocation.y - location.y;
+
+	  while (glyphIndex + 1 < numberOfGlyphs
+		 && [layoutManager
+		      notShownAttributeForGlyphAtIndex:(glyphIndex + 1)])
+	    glyphIndex++;
+	  glyphRects = [layoutManager
+			 rectArrayForGlyphRange:(NSMakeRange (glyphIndex, 1))
+			 withinSelectedGlyphRange:(NSMakeRange (NSNotFound, 0))
+			 inTextContainer:textContainer rectCount:&nrects];
+	  gl->advance = NSMaxX (glyphRects[0]) - totalAdvance;
+	  totalAdvance = NSMaxX (glyphRects[0]);
+
+	  glyphIndex++;
+	}
+      result = used;
+    }
+  [textStorage release];
+
+  return result;
+}
+
+#endif	/* MAC_OS_X_VERSION_MIN_REQUIRED < 1050 */

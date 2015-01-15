@@ -1,4 +1,4 @@
-Copyright (C) 2007, 2008  Free Software Foundation, Inc.
+Copyright (C) 2007, 2008, 2009  Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
@@ -63,7 +63,7 @@ It can be helpful to put a reminder comment at the start of a trivial
 file, eg: "add a license notice if this grows to > 10 lines of code".
 
 The years in the copyright notice should be updated every year (see
-file "years" in this directory). The PS versions of refcards etc
+file "years" in this directory). The PDF versions of refcards etc
 should display copyright notices (an exception to the rule about
 "generated" files), but these can just display the latest year. The
 full list of years should be kept in comments in the source file. If
@@ -123,15 +123,14 @@ from others, without recording the true authorship.
 rms, 2007/1, "Copyright years".]
 
 
+lisp/version.el           # emacs-copyright
+lib-src/ebrowse.c         # version
 lib-src/etags.c           # print_version
 lib-src/rcs2log           # Copyright
-lisp/calc/calc-help.el    # calc-full-help
-lisp/startup.el           # fancy-splash-tail
-mac/Emacs.app/Contents/Resources/English.lproj/InfoPlist.strings
-mac/src/Emacs.r           # resource 'vers'
-src/emacs.c
-  - remember to change the latest copyright year in the --version output.
-  [Post-release, will automate this like set-version does for version.]
+Cocoa/Emacs.base/Contents/Info.plist
+Cocoa/Emacs.base/Contents/Resources/English.lproj/InfoPlist.strings
+GNUstep/Emacs.base/Resources/Info-gnustep.plist
+   `set-copyright' in admin.el will do all the above.
 
 <top-level>/install-sh
 lispintro/install-sh
@@ -139,6 +138,9 @@ lispintro/install-sh
 
 src/m/news-r6.h
   public domain, leave alone.
+
+etc/refcards/*.tex
+  also update the \def\year macro for the latest year.
 
 etc/BABYL, ms-kermit
   no notices (see below).
@@ -151,7 +153,7 @@ etc/emacs.csh
  enough to not need license.
 
 etc/future-bug
- - doesn't need a humourless disclaimer, because Karl Fogel says we
+ - doesn't need a humorless disclaimer, because Karl Fogel says we
  can consider it part of Emacs, and he has a blanker disclaimer for
  Emacs changes. (email to rgm "[Emacs-commit] emacs/etc future-bug",
  2007028)
@@ -230,9 +232,6 @@ lisp/play/tetris.el
   <http://lists.gnu.org/archive/html/emacs-devel/2007-01/msg00960.html>
   rms: Legal advice is that we are ok and need not worry about this.
 
-lispref/doclicense.texi
-man/doclicense.texi
-  - leave the copyright alone in this imported file.
 
 lisp/net/tramp.el
   - there are also copyrights in the body of the file. Update these too.
@@ -307,11 +306,20 @@ originally. Although we have the legal right to switch to v2 or later,
 rms prefers that we do not do so.
 
 
-man/*.texi - All manuals should be under GFDL, and should include a
-copy of it, so that they can be distributed separately.  faq.texi has
-a different license, for some reason no-one can remember.
+doc/*/doclicense.texi
+  - leave the copyright alone in this imported file.
+
+doc/*/*.texi - All manuals should be under GFDL (but see below), and
+should include a copy of it, so that they can be distributed
+separately. faq.texi has a different license, for some reason no-one
+can remember.
 http://lists.gnu.org/archive/html/emacs-devel/2007-04/msg00583.html
 http://lists.gnu.org/archive/html/emacs-devel/2007-04/msg00618.html
+
+doc/misc/mh-e.texi is dual-licensed (GPL and GFDL) per agreement with
+FSF (reconfirmed by rms Aug 25 2008).  Discussion with
+licensing@fsf.org starting on Thu, 07 Aug 2003 with subject:
+"[gnu.org #58812] Changing license of MH-E manual"
 
 
 msdos/is_exec.c, sigaction.c - these files are copyright DJ Delorie.
@@ -405,7 +413,7 @@ lisp/term/README
 
   Accordingly, FSF copyright was added.
 
-src/unexhp9k800.c  (and dependent src/m/sr2k.h)
+src/unexhp9k800.c
   http://lists.gnu.org/archive/html/emacs-devel/2007-02/msg00138.html
   - briefly removed due to legal uncertainly Jan-Mar 2007. The
   relevant assignment is under "hp9k800" in copyright.list. File was
@@ -480,7 +488,7 @@ says it is obsolete:
 
 src/m/mips4.h, news-risc.h, pmax.h
 src/s/aix3-2.h, bsd386.h, hpux8.h, hpux9.h, irix4-0.h, irix5-0.h,
-isc2-2.h, netbsd.h, osf1.h, sol2-3.h, sunos4-0.h, usg5-4-2.h
+netbsd.h, sol2-3.h, usg5-4-2.h
   - all these (not obviously trivial) files were missing copyrights
   till Feb 2007, when FSF copyright was added. Matt Norwood advised:
 
@@ -515,16 +523,6 @@ pmax.h
   I would say started non-trivial (1993, jimb, heavily based
   on irix4-0.h). A few borderline non-tiny changes since.
 
-? isc2-2.h
- started trivial. 2 non-tiny change, in 1993. looks to
- be made up of several small tweaks from various sources. maybe
- non-tiny total changes from Karl Berry (no emacs assignment).
-
-osf1.h
-  started trivial. grown in tiny changes (one borderline tiny change
-  by fx in 2000, but most code was later removed). non-tiny addition
-  in 2002 from m/alpha.h, but that was and is copyright FSF.
-
 usg5-4-2.h
  started non-trivial, but was heavily based on usg5-4.h, which was and is
  copyright FSF. only tiny changes since installed.
@@ -533,7 +531,7 @@ sol2-3.h
  started trivial. only non-tiny change (1994) incorporated code from
  usg5-4.h, which was and is copyright FSF.
 
-aix3-2.h, bsd386.h, hpux8.h, hpux9.h, netbsd.h, sunos4-0.h
+aix3-2.h, bsd386.h, hpux8.h, hpux9.h, netbsd.h
   started trivial, grown in tiny changes.
 
 netbsd.h:
@@ -548,8 +546,8 @@ Someone might want to tweak the copyright years (for dates before
 Note: erring on the side of caution, I also added notices to some
 files I thought might be considered non-trivial (if one includes
 comment) in s/:
-  aix4-1.h hiuxmpp.h hiuxwe2.h hpux10.h irix6-0.h irix6-5.h isc3-0.h
-  ptx4.h sol2.h sunos4-0.h
+  aix4-1.h hpux10.h irix6-0.h irix6-5.h
+  ptx4.h sol2.h 
 
 (everything with > 30 non-blank lines, which at least is _some_ kind of
 system)
@@ -598,13 +596,76 @@ Done: TUTORIAL.eo
 None known.
 
 
+** NOTES ON RELICENSING TO GPL3
+
+The EMACS_22_BASE branch was changed to GPLv3 (or later) 2007/07/25.
+
+Some notes:
+(see http://lists.gnu.org/archive/html/emacs-devel/2007-07/msg01431.html)
+
+1. There are some files in Emacs CVS which are not part of Emacs (eg
+those included from Gnulib). These are all copyright FSF and (at time
+of writing) GPL >= 2. rms says may as well leave the licenses of these
+alone (may import them from Gnulib again). These are:
+
+    Gnulib:
+    src/getloadavg.c
+    src/gmalloc.c
+    src/md5.c
+    src/md5.h
+    src/mktime.c
+    src/strftime.c
+    src/termcap.c
+    src/tparam.c
+
+    Others:
+    config.guess
+    config.sub
+    doc/man/texinfo.tex
+
+Note _not_ included in the above are src/regex.{c,h} (rms: "That
+forked version is only in Emacs, so definitely relicense that."), and
+oldXMenu/insque.c (rms: "We wrote that specifically for Emacs, so
+definitely relicense that.").
+
+2. The files that are copyright FSF and AIST, or AIST alone, should be
+and were updated, ditto the oldXMenu files with FSF copyright, and
+msdos/is_exec.c and sigaction.c.
+
+3. lwlib/
+
+Files originally in Lucid Widget Library were left alone (excludes
+ChangeLog, etc), ie remain under GPL v1 or later, or v2 or later.
+(rms: "We may as well leave this alone, since we are never going to
+change it much.")
+
+4. There are some files where the FSF holds no copyright. These were
+left alone:
+
+   leim/MISC-DIC/CTLau-b5.html  >= v2
+   leim/MISC-DIC/CTLau.html     >= v2
+     (above included in lisp/international/titdic-cnv.el)
+   leim/MISC-DIC/pinyin.map     >= v1
+   leim/MISC-DIC/ziranma.cin    >= v1
+   leim/SKK-DIC/SKK-JISYO.L     >= v2
+   leim/SKK-DIC/README          >= v2
+   leim/ja-dic/ja-dic.el        >= v2
+
+5. At time of writing, some non-Emacs icons included from Gnome remain
+under GPLv2 (no "or later"). See:
+
+   etc/images/gnus/README
+   etc/images/mail/README
+   etc/images/README
+   nt/icons/README
+
 
 This file is part of GNU Emacs.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -612,6 +673,4 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.
+along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.

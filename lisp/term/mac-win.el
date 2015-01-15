@@ -1,27 +1,27 @@
-;;; mac-win.el --- parse switches controlling interface with Mac window system -*-coding: iso-2022-7bit;-*-
+;;; mac-win.el --- parse switches controlling interface with Mac window system -*-coding: utf-8-*-
 
-;; Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004,
-;;   2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+;; Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
+;;   2008  Free Software Foundation, Inc.
+;; Copyright (C) 2009 YAMAMOTO Mitsuharu
 
 ;; Author: Andrew Choi <akochoi@mac.com>
+;;	YAMAMOTO Mitsuharu <mituharu@math.s.chiba-u.ac.jp>
 ;; Keywords: terminals
 
-;; This file is part of GNU Emacs.
+;; This file is part of GNU Emacs Mac port.
 
-;; GNU Emacs is free software; you can redistribute it and/or modify
+;; GNU Emacs Mac port is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation; either version 3, or (at your option)
-;; any later version.
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 
-;; GNU Emacs is distributed in the hope that it will be useful,
+;; GNU Emacs Mac port is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs; see the file COPYING.  If not, write to the
-;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-;; Boston, MA 02110-1301, USA.
+;; along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -65,8 +65,8 @@
 ;; An alist of X options and the function which handles them.  See
 ;; ../startup.el.
 
-(if (not (eq window-system 'mac))
-    (error "%s: Loading mac-win.el but not compiled for Mac" (invocation-name)))
+;; (if (not (eq window-system 'mac))
+;;     (error "%s: Loading mac-win.el but not compiled for Mac" (invocation-name)))
 
 (require 'frame)
 (require 'mouse)
@@ -77,182 +77,11 @@
 (require 'fontset)
 (require 'dnd)
 
-(defvar mac-charset-info-alist)
 (defvar mac-service-selection)
 (defvar mac-system-script-code)
 (defvar mac-apple-event-map)
-(defvar mac-font-panel-mode)
 (defvar mac-ts-active-input-overlay)
 (defvar mac-ts-active-input-buf)
-(defvar x-invocation-args)
-
-(defvar x-command-line-resources nil)
-
-;; Handler for switches of the form "-switch value" or "-switch".
-(defun x-handle-switch (switch)
-  (let ((aelt (assoc switch command-line-x-option-alist)))
-    (if aelt
-	(let ((param (nth 3 aelt))
-	      (value (nth 4 aelt)))
-	  (if value
-	      (setq default-frame-alist
-		    (cons (cons param value)
-			  default-frame-alist))
-	    (setq default-frame-alist
-		  (cons (cons param
-			      (car x-invocation-args))
-			default-frame-alist)
-		  x-invocation-args (cdr x-invocation-args)))))))
-
-;; Handler for switches of the form "-switch n"
-(defun x-handle-numeric-switch (switch)
-  (let ((aelt (assoc switch command-line-x-option-alist)))
-    (if aelt
-	(let ((param (nth 3 aelt)))
-	  (setq default-frame-alist
-		(cons (cons param
-			    (string-to-number (car x-invocation-args)))
-		      default-frame-alist)
-		x-invocation-args
-		(cdr x-invocation-args))))))
-
-;; Handle options that apply to initial frame only
-(defun x-handle-initial-switch (switch)
-  (let ((aelt (assoc switch command-line-x-option-alist)))
-    (if aelt
-	(let ((param (nth 3 aelt))
-	      (value (nth 4 aelt)))
-	  (if value
-	      (setq initial-frame-alist
-		    (cons (cons param value)
-			  initial-frame-alist))
-	    (setq initial-frame-alist
-		  (cons (cons param
-			      (car x-invocation-args))
-			initial-frame-alist)
-		  x-invocation-args (cdr x-invocation-args)))))))
-
-;; Make -iconic apply only to the initial frame!
-(defun x-handle-iconic (switch)
-  (setq initial-frame-alist
-	(cons '(visibility . icon) initial-frame-alist)))
-
-;; Handle the -xrm option.
-(defun x-handle-xrm-switch (switch)
-  (unless (consp x-invocation-args)
-    (error "%s: missing argument to `%s' option" (invocation-name) switch))
-  (setq x-command-line-resources
-	(if (null x-command-line-resources)
-	    (car x-invocation-args)
-	  (concat x-command-line-resources "\n" (car x-invocation-args))))
-  (setq x-invocation-args (cdr x-invocation-args)))
-
-;; Handle the geometry option
-(defun x-handle-geometry (switch)
-  (let* ((geo (x-parse-geometry (car x-invocation-args)))
-	 (left (assq 'left geo))
-	 (top (assq 'top geo))
-	 (height (assq 'height geo))
-	 (width (assq 'width geo)))
-    (if (or height width)
-	(setq default-frame-alist
-	      (append default-frame-alist
-		      '((user-size . t))
-		      (if height (list height))
-		      (if width (list width)))
-	      initial-frame-alist
-	      (append initial-frame-alist
-		      '((user-size . t))
-		      (if height (list height))
-		      (if width (list width)))))
-    (if (or left top)
-	(setq initial-frame-alist
-	      (append initial-frame-alist
-		      '((user-position . t))
-		      (if left (list left))
-		      (if top (list top)))))
-    (setq x-invocation-args (cdr x-invocation-args))))
-
-;; Handle the -name option.  Set the variable x-resource-name
-;; to the option's operand; set the name of
-;; the initial frame, too.
-(defun x-handle-name-switch (switch)
-  (or (consp x-invocation-args)
-      (error "%s: missing argument to `%s' option" (invocation-name) switch))
-  (setq x-resource-name (car x-invocation-args)
-	x-invocation-args (cdr x-invocation-args))
-  (setq initial-frame-alist (cons (cons 'name x-resource-name)
-				  initial-frame-alist)))
-
-(defvar x-display-name nil
-  "The display name specifying server and frame.")
-
-(defun x-handle-display (switch)
-  (setq x-display-name (car x-invocation-args)
-	x-invocation-args (cdr x-invocation-args)))
-
-(defun x-handle-args (args)
-  "Process the X-related command line options in ARGS.
-This is done before the user's startup file is loaded.  They are copied to
-`x-invocation-args', from which the X-related things are extracted, first
-the switch (e.g., \"-fg\") in the following code, and possible values
-\(e.g., \"black\") in the option handler code (e.g., x-handle-switch).
-This function returns ARGS minus the arguments that have been processed."
-  ;; We use ARGS to accumulate the args that we don't handle here, to return.
-  (setq x-invocation-args args
-	args nil)
-  (while (and x-invocation-args
-	      (not (equal (car x-invocation-args) "--")))
-    (let* ((this-switch (car x-invocation-args))
-	   (orig-this-switch this-switch)
-	   completion argval aelt handler)
-      (setq x-invocation-args (cdr x-invocation-args))
-      ;; Check for long options with attached arguments
-      ;; and separate out the attached option argument into argval.
-      (if (string-match "^--[^=]*=" this-switch)
-	  (setq argval (substring this-switch (match-end 0))
-		this-switch (substring this-switch 0 (1- (match-end 0)))))
-      ;; Complete names of long options.
-      (if (string-match "^--" this-switch)
-	  (progn
-	    (setq completion (try-completion this-switch command-line-x-option-alist))
-	    (if (eq completion t)
-		;; Exact match for long option.
-		nil
-	      (if (stringp completion)
-		  (let ((elt (assoc completion command-line-x-option-alist)))
-		    ;; Check for abbreviated long option.
-		    (or elt
-			(error "Option `%s' is ambiguous" this-switch))
-		    (setq this-switch completion))))))
-      (setq aelt (assoc this-switch command-line-x-option-alist))
-      (if aelt (setq handler (nth 2 aelt)))
-      (if handler
-	  (if argval
-	      (let ((x-invocation-args
-		     (cons argval x-invocation-args)))
-		(funcall handler this-switch))
-	    (funcall handler this-switch))
-	(setq args (cons orig-this-switch args)))))
-  (nconc (nreverse args) x-invocation-args))
-
-(defvar mac-startup-options nil
-  "Alist of Mac-specific startup options.
-Each element looks like (OPTION-TYPE . OPTIONS).
-OPTION-TYPE is a symbol specifying the type of startup options:
-
- command-line -- List of Mac-specific command line options.")
-
-(defun mac-handle-args (args)
-  "Process the Mac-related command line options in ARGS.
-It records Mac-specific options (currently -psn_HIGH_LOW added by
-Launch Services) in `mac-startup-options' as a value for the key
-symbol `command-line' and forwards the remaining ones to
-`x-handle-args'."
-  (when (and (cadr args) (string-match "\\`-psn_" (cadr args)))
-    (push (cons 'command-line (list (cadr args))) mac-startup-options)
-    (setq args (cons (car args) (cddr args))))
-  (x-handle-args args))
 
 
 ;;
@@ -303,767 +132,10 @@ symbol `command-line' and forwards the remaining ones to
 (defconst x-pointer-sb-v-double-arrow mac-pointer-resize-up-down)
 
 
-;;
-;; Available colors
-;;
-
-(defvar x-colors '("LightGreen"
-		   "light green"
-		   "DarkRed"
-		   "dark red"
-		   "DarkMagenta"
-		   "dark magenta"
-		   "DarkCyan"
-		   "dark cyan"
-		   "DarkBlue"
-		   "dark blue"
-		   "DarkGray"
-		   "dark gray"
-		   "DarkGrey"
-		   "dark grey"
-		   "grey100"
-		   "gray100"
-		   "grey99"
-		   "gray99"
-		   "grey98"
-		   "gray98"
-		   "grey97"
-		   "gray97"
-		   "grey96"
-		   "gray96"
-		   "grey95"
-		   "gray95"
-		   "grey94"
-		   "gray94"
-		   "grey93"
-		   "gray93"
-		   "grey92"
-		   "gray92"
-		   "grey91"
-		   "gray91"
-		   "grey90"
-		   "gray90"
-		   "grey89"
-		   "gray89"
-		   "grey88"
-		   "gray88"
-		   "grey87"
-		   "gray87"
-		   "grey86"
-		   "gray86"
-		   "grey85"
-		   "gray85"
-		   "grey84"
-		   "gray84"
-		   "grey83"
-		   "gray83"
-		   "grey82"
-		   "gray82"
-		   "grey81"
-		   "gray81"
-		   "grey80"
-		   "gray80"
-		   "grey79"
-		   "gray79"
-		   "grey78"
-		   "gray78"
-		   "grey77"
-		   "gray77"
-		   "grey76"
-		   "gray76"
-		   "grey75"
-		   "gray75"
-		   "grey74"
-		   "gray74"
-		   "grey73"
-		   "gray73"
-		   "grey72"
-		   "gray72"
-		   "grey71"
-		   "gray71"
-		   "grey70"
-		   "gray70"
-		   "grey69"
-		   "gray69"
-		   "grey68"
-		   "gray68"
-		   "grey67"
-		   "gray67"
-		   "grey66"
-		   "gray66"
-		   "grey65"
-		   "gray65"
-		   "grey64"
-		   "gray64"
-		   "grey63"
-		   "gray63"
-		   "grey62"
-		   "gray62"
-		   "grey61"
-		   "gray61"
-		   "grey60"
-		   "gray60"
-		   "grey59"
-		   "gray59"
-		   "grey58"
-		   "gray58"
-		   "grey57"
-		   "gray57"
-		   "grey56"
-		   "gray56"
-		   "grey55"
-		   "gray55"
-		   "grey54"
-		   "gray54"
-		   "grey53"
-		   "gray53"
-		   "grey52"
-		   "gray52"
-		   "grey51"
-		   "gray51"
-		   "grey50"
-		   "gray50"
-		   "grey49"
-		   "gray49"
-		   "grey48"
-		   "gray48"
-		   "grey47"
-		   "gray47"
-		   "grey46"
-		   "gray46"
-		   "grey45"
-		   "gray45"
-		   "grey44"
-		   "gray44"
-		   "grey43"
-		   "gray43"
-		   "grey42"
-		   "gray42"
-		   "grey41"
-		   "gray41"
-		   "grey40"
-		   "gray40"
-		   "grey39"
-		   "gray39"
-		   "grey38"
-		   "gray38"
-		   "grey37"
-		   "gray37"
-		   "grey36"
-		   "gray36"
-		   "grey35"
-		   "gray35"
-		   "grey34"
-		   "gray34"
-		   "grey33"
-		   "gray33"
-		   "grey32"
-		   "gray32"
-		   "grey31"
-		   "gray31"
-		   "grey30"
-		   "gray30"
-		   "grey29"
-		   "gray29"
-		   "grey28"
-		   "gray28"
-		   "grey27"
-		   "gray27"
-		   "grey26"
-		   "gray26"
-		   "grey25"
-		   "gray25"
-		   "grey24"
-		   "gray24"
-		   "grey23"
-		   "gray23"
-		   "grey22"
-		   "gray22"
-		   "grey21"
-		   "gray21"
-		   "grey20"
-		   "gray20"
-		   "grey19"
-		   "gray19"
-		   "grey18"
-		   "gray18"
-		   "grey17"
-		   "gray17"
-		   "grey16"
-		   "gray16"
-		   "grey15"
-		   "gray15"
-		   "grey14"
-		   "gray14"
-		   "grey13"
-		   "gray13"
-		   "grey12"
-		   "gray12"
-		   "grey11"
-		   "gray11"
-		   "grey10"
-		   "gray10"
-		   "grey9"
-		   "gray9"
-		   "grey8"
-		   "gray8"
-		   "grey7"
-		   "gray7"
-		   "grey6"
-		   "gray6"
-		   "grey5"
-		   "gray5"
-		   "grey4"
-		   "gray4"
-		   "grey3"
-		   "gray3"
-		   "grey2"
-		   "gray2"
-		   "grey1"
-		   "gray1"
-		   "grey0"
-		   "gray0"
-		   "thistle4"
-		   "thistle3"
-		   "thistle2"
-		   "thistle1"
-		   "MediumPurple4"
-		   "MediumPurple3"
-		   "MediumPurple2"
-		   "MediumPurple1"
-		   "purple4"
-		   "purple3"
-		   "purple2"
-		   "purple1"
-		   "DarkOrchid4"
-		   "DarkOrchid3"
-		   "DarkOrchid2"
-		   "DarkOrchid1"
-		   "MediumOrchid4"
-		   "MediumOrchid3"
-		   "MediumOrchid2"
-		   "MediumOrchid1"
-		   "plum4"
-		   "plum3"
-		   "plum2"
-		   "plum1"
-		   "orchid4"
-		   "orchid3"
-		   "orchid2"
-		   "orchid1"
-		   "magenta4"
-		   "magenta3"
-		   "magenta2"
-		   "magenta1"
-		   "VioletRed4"
-		   "VioletRed3"
-		   "VioletRed2"
-		   "VioletRed1"
-		   "maroon4"
-		   "maroon3"
-		   "maroon2"
-		   "maroon1"
-		   "PaleVioletRed4"
-		   "PaleVioletRed3"
-		   "PaleVioletRed2"
-		   "PaleVioletRed1"
-		   "LightPink4"
-		   "LightPink3"
-		   "LightPink2"
-		   "LightPink1"
-		   "pink4"
-		   "pink3"
-		   "pink2"
-		   "pink1"
-		   "HotPink4"
-		   "HotPink3"
-		   "HotPink2"
-		   "HotPink1"
-		   "DeepPink4"
-		   "DeepPink3"
-		   "DeepPink2"
-		   "DeepPink1"
-		   "red4"
-		   "red3"
-		   "red2"
-		   "red1"
-		   "OrangeRed4"
-		   "OrangeRed3"
-		   "OrangeRed2"
-		   "OrangeRed1"
-		   "tomato4"
-		   "tomato3"
-		   "tomato2"
-		   "tomato1"
-		   "coral4"
-		   "coral3"
-		   "coral2"
-		   "coral1"
-		   "DarkOrange4"
-		   "DarkOrange3"
-		   "DarkOrange2"
-		   "DarkOrange1"
-		   "orange4"
-		   "orange3"
-		   "orange2"
-		   "orange1"
-		   "LightSalmon4"
-		   "LightSalmon3"
-		   "LightSalmon2"
-		   "LightSalmon1"
-		   "salmon4"
-		   "salmon3"
-		   "salmon2"
-		   "salmon1"
-		   "brown4"
-		   "brown3"
-		   "brown2"
-		   "brown1"
-		   "firebrick4"
-		   "firebrick3"
-		   "firebrick2"
-		   "firebrick1"
-		   "chocolate4"
-		   "chocolate3"
-		   "chocolate2"
-		   "chocolate1"
-		   "tan4"
-		   "tan3"
-		   "tan2"
-		   "tan1"
-		   "wheat4"
-		   "wheat3"
-		   "wheat2"
-		   "wheat1"
-		   "burlywood4"
-		   "burlywood3"
-		   "burlywood2"
-		   "burlywood1"
-		   "sienna4"
-		   "sienna3"
-		   "sienna2"
-		   "sienna1"
-		   "IndianRed4"
-		   "IndianRed3"
-		   "IndianRed2"
-		   "IndianRed1"
-		   "RosyBrown4"
-		   "RosyBrown3"
-		   "RosyBrown2"
-		   "RosyBrown1"
-		   "DarkGoldenrod4"
-		   "DarkGoldenrod3"
-		   "DarkGoldenrod2"
-		   "DarkGoldenrod1"
-		   "goldenrod4"
-		   "goldenrod3"
-		   "goldenrod2"
-		   "goldenrod1"
-		   "gold4"
-		   "gold3"
-		   "gold2"
-		   "gold1"
-		   "yellow4"
-		   "yellow3"
-		   "yellow2"
-		   "yellow1"
-		   "LightYellow4"
-		   "LightYellow3"
-		   "LightYellow2"
-		   "LightYellow1"
-		   "LightGoldenrod4"
-		   "LightGoldenrod3"
-		   "LightGoldenrod2"
-		   "LightGoldenrod1"
-		   "khaki4"
-		   "khaki3"
-		   "khaki2"
-		   "khaki1"
-		   "DarkOliveGreen4"
-		   "DarkOliveGreen3"
-		   "DarkOliveGreen2"
-		   "DarkOliveGreen1"
-		   "OliveDrab4"
-		   "OliveDrab3"
-		   "OliveDrab2"
-		   "OliveDrab1"
-		   "chartreuse4"
-		   "chartreuse3"
-		   "chartreuse2"
-		   "chartreuse1"
-		   "green4"
-		   "green3"
-		   "green2"
-		   "green1"
-		   "SpringGreen4"
-		   "SpringGreen3"
-		   "SpringGreen2"
-		   "SpringGreen1"
-		   "PaleGreen4"
-		   "PaleGreen3"
-		   "PaleGreen2"
-		   "PaleGreen1"
-		   "SeaGreen4"
-		   "SeaGreen3"
-		   "SeaGreen2"
-		   "SeaGreen1"
-		   "DarkSeaGreen4"
-		   "DarkSeaGreen3"
-		   "DarkSeaGreen2"
-		   "DarkSeaGreen1"
-		   "aquamarine4"
-		   "aquamarine3"
-		   "aquamarine2"
-		   "aquamarine1"
-		   "DarkSlateGray4"
-		   "DarkSlateGray3"
-		   "DarkSlateGray2"
-		   "DarkSlateGray1"
-		   "cyan4"
-		   "cyan3"
-		   "cyan2"
-		   "cyan1"
-		   "turquoise4"
-		   "turquoise3"
-		   "turquoise2"
-		   "turquoise1"
-		   "CadetBlue4"
-		   "CadetBlue3"
-		   "CadetBlue2"
-		   "CadetBlue1"
-		   "PaleTurquoise4"
-		   "PaleTurquoise3"
-		   "PaleTurquoise2"
-		   "PaleTurquoise1"
-		   "LightCyan4"
-		   "LightCyan3"
-		   "LightCyan2"
-		   "LightCyan1"
-		   "LightBlue4"
-		   "LightBlue3"
-		   "LightBlue2"
-		   "LightBlue1"
-		   "LightSteelBlue4"
-		   "LightSteelBlue3"
-		   "LightSteelBlue2"
-		   "LightSteelBlue1"
-		   "SlateGray4"
-		   "SlateGray3"
-		   "SlateGray2"
-		   "SlateGray1"
-		   "LightSkyBlue4"
-		   "LightSkyBlue3"
-		   "LightSkyBlue2"
-		   "LightSkyBlue1"
-		   "SkyBlue4"
-		   "SkyBlue3"
-		   "SkyBlue2"
-		   "SkyBlue1"
-		   "DeepSkyBlue4"
-		   "DeepSkyBlue3"
-		   "DeepSkyBlue2"
-		   "DeepSkyBlue1"
-		   "SteelBlue4"
-		   "SteelBlue3"
-		   "SteelBlue2"
-		   "SteelBlue1"
-		   "DodgerBlue4"
-		   "DodgerBlue3"
-		   "DodgerBlue2"
-		   "DodgerBlue1"
-		   "blue4"
-		   "blue3"
-		   "blue2"
-		   "blue1"
-		   "RoyalBlue4"
-		   "RoyalBlue3"
-		   "RoyalBlue2"
-		   "RoyalBlue1"
-		   "SlateBlue4"
-		   "SlateBlue3"
-		   "SlateBlue2"
-		   "SlateBlue1"
-		   "azure4"
-		   "azure3"
-		   "azure2"
-		   "azure1"
-		   "MistyRose4"
-		   "MistyRose3"
-		   "MistyRose2"
-		   "MistyRose1"
-		   "LavenderBlush4"
-		   "LavenderBlush3"
-		   "LavenderBlush2"
-		   "LavenderBlush1"
-		   "honeydew4"
-		   "honeydew3"
-		   "honeydew2"
-		   "honeydew1"
-		   "ivory4"
-		   "ivory3"
-		   "ivory2"
-		   "ivory1"
-		   "cornsilk4"
-		   "cornsilk3"
-		   "cornsilk2"
-		   "cornsilk1"
-		   "LemonChiffon4"
-		   "LemonChiffon3"
-		   "LemonChiffon2"
-		   "LemonChiffon1"
-		   "NavajoWhite4"
-		   "NavajoWhite3"
-		   "NavajoWhite2"
-		   "NavajoWhite1"
-		   "PeachPuff4"
-		   "PeachPuff3"
-		   "PeachPuff2"
-		   "PeachPuff1"
-		   "bisque4"
-		   "bisque3"
-		   "bisque2"
-		   "bisque1"
-		   "AntiqueWhite4"
-		   "AntiqueWhite3"
-		   "AntiqueWhite2"
-		   "AntiqueWhite1"
-		   "seashell4"
-		   "seashell3"
-		   "seashell2"
-		   "seashell1"
-		   "snow4"
-		   "snow3"
-		   "snow2"
-		   "snow1"
-		   "thistle"
-		   "MediumPurple"
-		   "medium purple"
-		   "purple"
-		   "BlueViolet"
-		   "blue violet"
-		   "DarkViolet"
-		   "dark violet"
-		   "DarkOrchid"
-		   "dark orchid"
-		   "MediumOrchid"
-		   "medium orchid"
-		   "orchid"
-		   "plum"
-		   "violet"
-		   "magenta"
-		   "VioletRed"
-		   "violet red"
-		   "MediumVioletRed"
-		   "medium violet red"
-		   "maroon"
-		   "PaleVioletRed"
-		   "pale violet red"
-		   "LightPink"
-		   "light pink"
-		   "pink"
-		   "DeepPink"
-		   "deep pink"
-		   "HotPink"
-		   "hot pink"
-		   "red"
-		   "OrangeRed"
-		   "orange red"
-		   "tomato"
-		   "LightCoral"
-		   "light coral"
-		   "coral"
-		   "DarkOrange"
-		   "dark orange"
-		   "orange"
-		   "LightSalmon"
-		   "light salmon"
-		   "salmon"
-		   "DarkSalmon"
-		   "dark salmon"
-		   "brown"
-		   "firebrick"
-		   "chocolate"
-		   "tan"
-		   "SandyBrown"
-		   "sandy brown"
-		   "wheat"
-		   "beige"
-		   "burlywood"
-		   "peru"
-		   "sienna"
-		   "SaddleBrown"
-		   "saddle brown"
-		   "IndianRed"
-		   "indian red"
-		   "RosyBrown"
-		   "rosy brown"
-		   "DarkGoldenrod"
-		   "dark goldenrod"
-		   "goldenrod"
-		   "LightGoldenrod"
-		   "light goldenrod"
-		   "gold"
-		   "yellow"
-		   "LightYellow"
-		   "light yellow"
-		   "LightGoldenrodYellow"
-		   "light goldenrod yellow"
-		   "PaleGoldenrod"
-		   "pale goldenrod"
-		   "khaki"
-		   "DarkKhaki"
-		   "dark khaki"
-		   "OliveDrab"
-		   "olive drab"
-		   "ForestGreen"
-		   "forest green"
-		   "YellowGreen"
-		   "yellow green"
-		   "LimeGreen"
-		   "lime green"
-		   "GreenYellow"
-		   "green yellow"
-		   "MediumSpringGreen"
-		   "medium spring green"
-		   "chartreuse"
-		   "green"
-		   "LawnGreen"
-		   "lawn green"
-		   "SpringGreen"
-		   "spring green"
-		   "PaleGreen"
-		   "pale green"
-		   "LightSeaGreen"
-		   "light sea green"
-		   "MediumSeaGreen"
-		   "medium sea green"
-		   "SeaGreen"
-		   "sea green"
-		   "DarkSeaGreen"
-		   "dark sea green"
-		   "DarkOliveGreen"
-		   "dark olive green"
-		   "DarkGreen"
-		   "dark green"
-		   "aquamarine"
-		   "MediumAquamarine"
-		   "medium aquamarine"
-		   "CadetBlue"
-		   "cadet blue"
-		   "LightCyan"
-		   "light cyan"
-		   "cyan"
-		   "turquoise"
-		   "MediumTurquoise"
-		   "medium turquoise"
-		   "DarkTurquoise"
-		   "dark turquoise"
-		   "PaleTurquoise"
-		   "pale turquoise"
-		   "PowderBlue"
-		   "powder blue"
-		   "LightBlue"
-		   "light blue"
-		   "LightSteelBlue"
-		   "light steel blue"
-		   "SteelBlue"
-		   "steel blue"
-		   "LightSkyBlue"
-		   "light sky blue"
-		   "SkyBlue"
-		   "sky blue"
-		   "DeepSkyBlue"
-		   "deep sky blue"
-		   "DodgerBlue"
-		   "dodger blue"
-		   "blue"
-		   "RoyalBlue"
-		   "royal blue"
-		   "MediumBlue"
-		   "medium blue"
-		   "LightSlateBlue"
-		   "light slate blue"
-		   "MediumSlateBlue"
-		   "medium slate blue"
-		   "SlateBlue"
-		   "slate blue"
-		   "DarkSlateBlue"
-		   "dark slate blue"
-		   "CornflowerBlue"
-		   "cornflower blue"
-		   "NavyBlue"
-		   "navy blue"
-		   "navy"
-		   "MidnightBlue"
-		   "midnight blue"
-		   "LightGray"
-		   "light gray"
-		   "LightGrey"
-		   "light grey"
-		   "grey"
-		   "gray"
-		   "LightSlateGrey"
-		   "light slate grey"
-		   "LightSlateGray"
-		   "light slate gray"
-		   "SlateGrey"
-		   "slate grey"
-		   "SlateGray"
-		   "slate gray"
-		   "DimGrey"
-		   "dim grey"
-		   "DimGray"
-		   "dim gray"
-		   "DarkSlateGrey"
-		   "dark slate grey"
-		   "DarkSlateGray"
-		   "dark slate gray"
-		   "black"
-		   "white"
-		   "MistyRose"
-		   "misty rose"
-		   "LavenderBlush"
-		   "lavender blush"
-		   "lavender"
-		   "AliceBlue"
-		   "alice blue"
-		   "azure"
-		   "MintCream"
-		   "mint cream"
-		   "honeydew"
-		   "seashell"
-		   "LemonChiffon"
-		   "lemon chiffon"
-		   "ivory"
-		   "cornsilk"
-		   "moccasin"
-		   "NavajoWhite"
-		   "navajo white"
-		   "PeachPuff"
-		   "peach puff"
-		   "bisque"
-		   "BlanchedAlmond"
-		   "blanched almond"
-		   "PapayaWhip"
-		   "papaya whip"
-		   "AntiqueWhite"
-		   "antique white"
-		   "linen"
-		   "OldLace"
-		   "old lace"
-		   "FloralWhite"
-		   "floral white"
-		   "gainsboro"
-		   "WhiteSmoke"
-		   "white smoke"
-		   "GhostWhite"
-		   "ghost white"
-		   "snow")
-  "The list of X colors from the `rgb.txt' file.
-XConsortium: rgb.txt,v 10.41 94/02/20 18:39:36 rws Exp")
+(defvar x-colors)
 
 (defun xw-defined-colors (&optional frame)
-  "Internal function called by `defined-colors', which see."
+  "Internal function called by `defined-colors'."
   (or frame (setq frame (selected-frame)))
   (let ((all-colors x-colors)
 	(this-color nil)
@@ -1077,25 +149,29 @@ XConsortium: rgb.txt,v 10.41 94/02/20 18:39:36 rws Exp")
 
 ;;;; Function keys
 
-(substitute-key-definition 'suspend-emacs 'iconify-or-deiconify-frame
-			   global-map)
-
-;; Map certain keypad keys into ASCII characters
-;; that people usually expect.
-(define-key function-key-map [backspace] [?\d])
-(define-key function-key-map [delete] [?\d])
-(define-key function-key-map [tab] [?\t])
-(define-key function-key-map [linefeed] [?\n])
-(define-key function-key-map [clear] [?\C-l])
-(define-key function-key-map [return] [?\C-m])
-(define-key function-key-map [escape] [?\e])
-(define-key function-key-map [M-backspace] [?\M-\d])
-(define-key function-key-map [M-delete] [?\M-\d])
-(define-key function-key-map [M-tab] [?\M-\t])
-(define-key function-key-map [M-linefeed] [?\M-\n])
-(define-key function-key-map [M-clear] [?\M-\C-l])
-(define-key function-key-map [M-return] [?\M-\C-m])
-(define-key function-key-map [M-escape] [?\M-\e])
+(defun x-setup-function-keys (frame)
+  "Set up `function-key-map' on the graphical frame FRAME."
+  ;; Don't do this twice on the same display, or it would break
+  ;; normal-erase-is-backspace-mode.
+  (unless (terminal-parameter frame 'x-setup-function-keys)
+    (with-selected-frame frame
+      ;; Map certain keypad keys into ASCII characters
+      ;; that people usually expect.
+      (define-key local-function-key-map [backspace] [?\d])
+      (define-key local-function-key-map [delete] [?\d])
+      (define-key local-function-key-map [tab] [?\t])
+      (define-key local-function-key-map [linefeed] [?\n])
+      (define-key local-function-key-map [clear] [?\C-l])
+      (define-key local-function-key-map [return] [?\C-m])
+      (define-key local-function-key-map [escape] [?\e])
+      (define-key local-function-key-map [M-backspace] [?\M-\d])
+      (define-key local-function-key-map [M-delete] [?\M-\d])
+      (define-key local-function-key-map [M-tab] [?\M-\t])
+      (define-key local-function-key-map [M-linefeed] [?\M-\n])
+      (define-key local-function-key-map [M-clear] [?\M-\C-l])
+      (define-key local-function-key-map [M-return] [?\M-\C-m])
+      (define-key local-function-key-map [M-escape] [?\M-\e]))
+    (set-terminal-parameter frame 'x-setup-function-keys t)))
 
 ;; These tell read-char how to convert
 ;; these special chars to ASCII.
@@ -1123,131 +199,154 @@ XConsortium: rgb.txt,v 10.41 94/02/20 18:39:36 rws Exp")
     )
   "Alist of Mac script codes vs Emacs coding systems.")
 
-(defun mac-add-charset-info (xlfd-charset mac-text-encoding)
-  "Add a character set to display with Mac fonts.
-Create an entry in `mac-charset-info-alist'.
-XLFD-CHARSET is a string which will appear in the XLFD font name
-to identify the character set.  MAC-TEXT-ENCODING is the
-correspoinding TextEncodingBase value."
-  (add-to-list 'mac-charset-info-alist
-               (list xlfd-charset mac-text-encoding
-		     (cdr (assq mac-text-encoding
-				mac-script-code-coding-systems)))))
+(define-charset 'mac-centraleurroman
+  "Mac Central European Roman"
+  :short-name "Mac CE"
+  :ascii-compatible-p t
+  :code-space [0 255]
+  :map
+  (let ((tbl
+	 [?\Ä ?\Ā ?\ā ?\É ?\Ą ?\Ö ?\Ü ?\á ?\ą ?\Č ?\ä ?\č ?\Ć ?\ć ?\é ?\Ź
+	  ?\ź ?\Ď ?\í ?\ď ?\Ē ?\ē ?\Ė ?\ó ?\ė ?\ô ?\ö ?\õ ?\ú ?\Ě ?\ě ?\ü
+	  ?\† ?\° ?\Ę ?\£ ?\§ ?\• ?\¶ ?\ß ?\® ?\© ?\™ ?\ę ?\¨ ?\≠ ?\ģ ?\Į
+	  ?\į ?\Ī ?\≤ ?\≥ ?\ī ?\Ķ ?\∂ ?\∑ ?\ł ?\Ļ ?\ļ ?\Ľ ?\ľ ?\Ĺ ?\ĺ ?\Ņ
+	  ?\ņ ?\Ń ?\¬ ?\√ ?\ń ?\Ň ?\∆ ?\« ?\» ?\… ?\  ?\ň ?\Ő ?\Õ ?\ő ?\Ō
+	  ?\– ?\— ?\“ ?\” ?\‘ ?\’ ?\÷ ?\◊ ?\ō ?\Ŕ ?\ŕ ?\Ř ?\‹ ?\› ?\ř ?\Ŗ
+	  ?\ŗ ?\Š ?\‚ ?\„ ?\š ?\Ś ?\ś ?\Á ?\Ť ?\ť ?\Í ?\Ž ?\ž ?\Ū ?\Ó ?\Ô
+	  ?\ū ?\Ů ?\Ú ?\ů ?\Ű ?\ű ?\Ų ?\ų ?\Ý ?\ý ?\ķ ?\Ż ?\Ł ?\ż ?\Ģ ?\ˇ])
+	(map (make-vector 512 nil)))
+    (or (= (length tbl) 128)
+	(error "Invalid vector length: %d" (length tbl)))
+    (dotimes (i 128)
+      (aset map (* i 2) i)
+      (aset map (1+ (* i 2)) i))
+    (dotimes (i 128)
+      (aset map (+ 256 (* i 2)) (+ 128 i))
+      (aset map (+ 256 (1+ (* i 2))) (aref tbl i)))
+    map))
 
-(setq mac-charset-info-alist nil)
-(mac-add-charset-info "mac-roman" 0)
-(mac-add-charset-info "jisx0208.1983-sjis" 1)
-(mac-add-charset-info "jisx0201.1976-0" 1)
-(mac-add-charset-info "big5-0" 2)
-(mac-add-charset-info "ksc5601.1989-0" 3)
-(mac-add-charset-info "mac-cyrillic" 7)
-(mac-add-charset-info "gb2312.1980-0" 25)
-(mac-add-charset-info "mac-centraleurroman" 29)
-(mac-add-charset-info "mac-symbol" 33)
-(mac-add-charset-info "adobe-fontspecific" 33) ; for X-Symbol
-(mac-add-charset-info "mac-dingbats" 34)
-(mac-add-charset-info "iso10646-1" 126) ; for ATSUI
+(define-coding-system 'mac-centraleurroman
+  "Mac Central European Roman Encoding (MIME:x-mac-centraleurroman)."
+  :coding-type 'charset
+  :mnemonic ?*
+  :charset-list '(mac-centraleurroman)
+  :mime-charset 'x-mac-centraleurroman)
 
-(cp-make-coding-system
- mac-centraleurroman
- [?\,AD(B ?\$,1  (B ?\$,1 !(B ?\,AI(B ?\$,1 $(B ?\,AV(B ?\,A\(B ?\,Aa(B ?\$,1 %(B ?\$,1 ,(B ?\,Ad(B ?\$,1 -(B ?\$,1 &(B ?\$,1 '(B ?\,Ai(B ?\$,1!9(B
-  ?\$,1!:(B ?\$,1 .(B ?\,Am(B ?\$,1 /(B ?\$,1 2(B ?\$,1 3(B ?\$,1 6(B ?\,As(B ?\$,1 7(B ?\,At(B ?\,Av(B ?\,Au(B ?\,Az(B ?\$,1 :(B ?\$,1 ;(B ?\,A|(B
-  ?\$,1s (B ?\,A0(B ?\$,1 8(B ?\,A#(B ?\,A'(B ?\$,1s"(B ?\,A6(B ?\,A_(B ?\,A.(B ?\,A)(B ?\$,1ub(B ?\$,1 9(B ?\,A((B ?\$,1y (B ?\$,1 C(B ?\$,1 N(B
-  ?\$,1 O(B ?\$,1 J(B ?\$,1y$(B ?\$,1y%(B ?\$,1 K(B ?\$,1 V(B ?\$,1x"(B ?\$,1x1(B ?\$,1 b(B ?\$,1 [(B ?\$,1 \(B ?\$,1 ](B ?\$,1 ^(B ?\$,1 Y(B ?\$,1 Z(B ?\$,1 e(B
-  ?\$,1 f(B ?\$,1 c(B ?\,A,(B ?\$,1x:(B ?\$,1 d(B ?\$,1 g(B ?\$,1x&(B ?\,A+(B ?\,A;(B ?\$,1s&(B ?\,A (B ?\$,1 h(B ?\$,1 p(B ?\,AU(B ?\$,1 q(B ?\$,1 l(B
-  ?\$,1rs(B ?\$,1rt(B ?\$,1r|(B ?\$,1r}(B ?\$,1rx(B ?\$,1ry(B ?\,Aw(B ?\$,2"*(B ?\$,1 m(B ?\$,1 t(B ?\$,1 u(B ?\$,1 x(B ?\$,1s9(B ?\$,1s:(B ?\$,1 y(B ?\$,1 v(B
-  ?\$,1 w(B ?\$,1! (B ?\$,1rz(B ?\$,1r~(B ?\$,1!!(B ?\$,1 z(B ?\$,1 {(B ?\,AA(B ?\$,1!$(B ?\$,1!%(B ?\,AM(B ?\$,1!=(B ?\$,1!>(B ?\$,1!*(B ?\,AS(B ?\,AT(B
-  ?\$,1!+(B ?\$,1!.(B ?\,AZ(B ?\$,1!/(B ?\$,1!0(B ?\$,1!1(B ?\$,1!2(B ?\$,1!3(B ?\,A](B ?\,A}(B ?\$,1 W(B ?\$,1!;(B ?\$,1 a(B ?\$,1!<(B ?\$,1 B(B ?\$,1$g(B]
- "Mac Central European Roman Encoding (MIME:x-mac-centraleurroman).")
-(coding-system-put 'mac-centraleurroman 'mime-charset 'x-mac-centraleurroman)
+(define-charset 'mac-cyrillic
+  "Mac Cyrillic"
+  :short-name "Mac CYRILLIC"
+  :ascii-compatible-p t
+  :code-space [0 255]
+  :map
+  (let ((tbl
+	 [?\А ?\Б ?\В ?\Г ?\Д ?\Е ?\Ж ?\З ?\И ?\Й ?\К ?\Л ?\М ?\Н ?\О ?\П
+	  ?\Р ?\С ?\Т ?\У ?\Ф ?\Х ?\Ц ?\Ч ?\Ш ?\Щ ?\Ъ ?\Ы ?\Ь ?\Э ?\Ю ?\Я
+	  ?\† ?\° ?\Ґ ?\£ ?\§ ?\• ?\¶ ?\І ?\® ?\© ?\™ ?\Ђ ?\ђ ?\≠ ?\Ѓ ?\ѓ
+	  ?\∞ ?\± ?\≤ ?\≥ ?\і ?\µ ?\ґ ?\Ј ?\Є ?\є ?\Ї ?\ї ?\Љ ?\љ ?\Њ ?\њ
+	  ?\ј ?\Ѕ ?\¬ ?\√ ?\ƒ ?\≈ ?\∆ ?\« ?\» ?\… ?\  ?\Ћ ?\ћ ?\Ќ ?\ќ ?\ѕ
+	  ?\– ?\— ?\“ ?\” ?\‘ ?\’ ?\÷ ?\„ ?\Ў ?\ў ?\Џ ?\џ ?\№ ?\Ё ?\ё ?\я
+	  ?\а ?\б ?\в ?\г ?\д ?\е ?\ж ?\з ?\и ?\й ?\к ?\л ?\м ?\н ?\о ?\п
+	  ?\р ?\с ?\т ?\у ?\ф ?\х ?\ц ?\ч ?\ш ?\щ ?\ъ ?\ы ?\ь ?\э ?\ю ?\€])
+	(map (make-vector 512 nil)))
+    (or (= (length tbl) 128)
+	(error "Invalid vector length: %d" (length tbl)))
+    (dotimes (i 128)
+      (aset map (* i 2) i)
+      (aset map (1+ (* i 2)) i))
+    (dotimes (i 128)
+      (aset map (+ 256 (* i 2)) (+ 128 i))
+      (aset map (+ 256 (1+ (* i 2))) (aref tbl i)))
+    map))
 
-(cp-make-coding-system
- mac-cyrillic
- [?\$,1(0(B ?\$,1(1(B ?\$,1(2(B ?\$,1(3(B ?\$,1(4(B ?\$,1(5(B ?\$,1(6(B ?\$,1(7(B ?\$,1(8(B ?\$,1(9(B ?\$,1(:(B ?\$,1(;(B ?\$,1(<(B ?\$,1(=(B ?\$,1(>(B ?\$,1(?(B
-  ?\$,1(@(B ?\$,1(A(B ?\$,1(B(B ?\$,1(C(B ?\$,1(D(B ?\$,1(E(B ?\$,1(F(B ?\$,1(G(B ?\$,1(H(B ?\$,1(I(B ?\$,1(J(B ?\$,1(K(B ?\$,1(L(B ?\$,1(M(B ?\$,1(N(B ?\$,1(O(B
-  ?\$,1s (B ?\,A0(B ?\$,1)P(B ?\,A#(B ?\,A'(B ?\$,1s"(B ?\,A6(B ?\$,1(&(B ?\,A.(B ?\,A)(B ?\$,1ub(B ?\$,1("(B ?\$,1(r(B ?\$,1y (B ?\$,1(#(B ?\$,1(s(B
-  ?\$,1x>(B ?\,A1(B ?\$,1y$(B ?\$,1y%(B ?\$,1(v(B ?\,A5(B ?\$,1)Q(B ?\$,1(((B ?\$,1($(B ?\$,1(t(B ?\$,1('(B ?\$,1(w(B ?\$,1()(B ?\$,1(y(B ?\$,1(*(B ?\$,1(z(B
-  ?\$,1(x(B ?\$,1(%(B ?\,A,(B ?\$,1x:(B ?\$,1!R(B ?\$,1xh(B ?\$,1x&(B ?\,A+(B ?\,A;(B ?\$,1s&(B ?\,A (B ?\$,1(+(B ?\$,1({(B ?\$,1(,(B ?\$,1(|(B ?\$,1(u(B
-  ?\$,1rs(B ?\$,1rt(B ?\$,1r|(B ?\$,1r}(B ?\$,1rx(B ?\$,1ry(B ?\,Aw(B ?\$,1r~(B ?\$,1(.(B ?\$,1(~(B ?\$,1(/(B ?\$,1((B ?\$,1uV(B ?\$,1(!(B ?\$,1(q(B ?\$,1(o(B
-  ?\$,1(P(B ?\$,1(Q(B ?\$,1(R(B ?\$,1(S(B ?\$,1(T(B ?\$,1(U(B ?\$,1(V(B ?\$,1(W(B ?\$,1(X(B ?\$,1(Y(B ?\$,1(Z(B ?\$,1([(B ?\$,1(\(B ?\$,1(](B ?\$,1(^(B ?\$,1(_(B
-  ?\$,1(`(B ?\$,1(a(B ?\$,1(b(B ?\$,1(c(B ?\$,1(d(B ?\$,1(e(B ?\$,1(f(B ?\$,1(g(B ?\$,1(h(B ?\$,1(i(B ?\$,1(j(B ?\$,1(k(B ?\$,1(l(B ?\$,1(m(B ?\$,1(n(B ?\$,1tL(B]
- "Mac Cyrillic Encoding (MIME:x-mac-cyrillic).")
-(coding-system-put 'mac-cyrillic 'mime-charset 'x-mac-cyrillic)
+(define-coding-system 'mac-cyrillic
+  "Mac Cyrillic Encoding (MIME:x-mac-cyrillic)."
+  :coding-type 'charset
+  :mnemonic ?*
+  :charset-list '(mac-cyrillic)
+  :mime-charset 'x-mac-cyrillic)
 
-(let
-    ((encoding-vector
-      (vconcat
-       (make-vector 32 nil)
-       ;; mac-symbol (32..126) -> emacs-mule mapping
-       [?\  ?\! ?\$,1x (B ?\# ?\$,1x#(B ?\% ?\& ?\$,1x-(B ?\( ?\) ?\$,1x7(B ?\+ ?\, ?\$,1x2(B ?\. ?\/
-	?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?\: ?\; ?\< ?\= ?\> ?\?
-	?\$,1xe(B ?\$,1&q(B ?\$,1&r(B ?\$,1''(B ?\$,1&t(B ?\$,1&u(B ?\$,1'&(B ?\$,1&s(B ?\$,1&w(B ?\$,1&y(B ?\$,1'Q(B ?\$,1&z(B ?\$,1&{(B ?\$,1&|(B ?\$,1&}(B ?\$,1&(B
-	?\$,1' (B ?\$,1&x(B ?\$,1'!(B ?\$,1'#(B ?\$,1'$(B ?\$,1'%(B ?\$,1'B(B ?\$,1')(B ?\$,1&~(B ?\$,1'((B ?\$,1&v(B ?\[ ?\$,1xT(B ?\] ?\$,1ye(B ?\_
-	?\$,3bE(B ?\$,1'1(B ?\$,1'2(B ?\$,1'G(B ?\$,1'4(B ?\$,1'5(B ?\$,1'F(B ?\$,1'3(B ?\$,1'7(B ?\$,1'9(B ?\$,1'U(B ?\$,1':(B ?\$,1';(B ?\$,1'<(B ?\$,1'=(B ?\$,1'?(B
-	?\$,1'@(B ?\$,1'8(B ?\$,1'A(B ?\$,1'C(B ?\$,1'D(B ?\$,1'E(B ?\$,1'V(B ?\$,1'I(B ?\$,1'>(B ?\$,1'H(B ?\$,1'6(B ?\{ ?\| ?\} ?\$,1x\(B]
-       (make-vector (- 160 127) nil)
-       ;; mac-symbol (160..254) -> emacs-mule mapping
-       ;; Mapping of the following characters are changed from the
-       ;; original one:
-       ;; 0xE2	0x00AE+0xF87F -> 0x00AE # REGISTERED SIGN, alternate: sans serif
-       ;; 0xE3	0x00A9+0xF87F -> 0x00A9	# COPYRIGHT SIGN, alternate: sans serif
-       ;; 0xE4	0x2122+0xF87F -> 0x2122	# TRADE MARK SIGN, alternate: sans serif
-       [?\$,1tL(B ?\$,1'R(B ?\$,1s2(B ?\$,1y$(B ?\$,1sD(B ?\$,1x>(B ?\$,1!R(B ?\$,2#c(B ?\$,2#f(B ?\$,2#e(B ?\$,2#`(B ?\$,1vt(B ?\$,1vp(B ?\$,1vq(B ?\$,1vr(B ?\$,1vs(B
-	?\,A0(B ?\,A1(B ?\$,1s3(B ?\$,1y%(B ?\,AW(B ?\$,1x=(B ?\$,1x"(B ?\$,1s"(B ?\,Aw(B ?\$,1y (B ?\$,1y!(B ?\$,1xh(B ?\$,1s&(B ?\$,1|p(B ?\$,1|O(B ?\$,1w5(B
-	?\$,1uu(B ?\$,1uQ(B ?\$,1u\(B ?\$,1uX(B ?\$,1yW(B ?\$,1yU(B ?\$,1x%(B ?\$,1xI(B ?\$,1xJ(B ?\$,1yC(B ?\$,1yG(B ?\$,1yD(B ?\$,1yB(B ?\$,1yF(B ?\$,1x((B ?\$,1x)(B
-	?\$,1x@(B ?\$,1x'(B ?\,A.(B ?\,A)(B ?\$,1ub(B ?\$,1x/(B ?\$,1x:(B ?\$,1z%(B ?\,A,(B ?\$,1xG(B ?\$,1xH(B ?\$,1wT(B ?\$,1wP(B ?\$,1wQ(B ?\$,1wR(B ?\$,1wS(B
-	?\$,2"*(B ?\$,2=H(B ?\,A.(B ?\,A)(B ?\$,1ub(B ?\$,1x1(B ?\$,1|;(B ?\$,1|<(B ?\$,1|=(B ?\$,1|A(B ?\$,1|B(B ?\$,1|C(B ?\$,1|G(B ?\$,1|H(B ?\$,1|I(B ?\$,1|J(B
-	?\$,3b_(B ?\$,2=I(B ?\$,1xK(B ?\$,1{ (B ?\$,1|N(B ?\$,1{!(B ?\$,1|>(B ?\$,1|?(B ?\$,1|@(B ?\$,1|D(B ?\$,1|E(B ?\$,1|F(B ?\$,1|K(B ?\$,1|L(B ?\$,1|M(B
-	nil]))
-     translation-table)
-  (setq translation-table
-	(make-translation-table-from-vector encoding-vector))
-;;  (define-translation-table 'mac-symbol-decoder translation-table)
-  (define-translation-table 'mac-symbol-encoder
-    (char-table-extra-slot translation-table 0)))
+(define-charset 'mac-symbol
+  "Mac Symbol"
+  :short-name "Mac SYMBOL"
+  :code-space [32 254]
+  :map
+  (let ((tbl-32-126
+	 [?\  ?\! ?\∀ ?\# ?\∃ ?\% ?\& ?\∍ ?\( ?\) ?\∗ ?\+ ?\, ?\− ?\. ?\/
+	  ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?\: ?\; ?\< ?\= ?\> ?\?
+	  ?\≅ ?\Α ?\Β ?\Χ ?\Δ ?\Ε ?\Φ ?\Γ ?\Η ?\Ι ?\ϑ ?\Κ ?\Λ ?\Μ ?\Ν ?\Ο
+	  ?\Π ?\Θ ?\Ρ ?\Σ ?\Τ ?\Υ ?\ς ?\Ω ?\Ξ ?\Ψ ?\Ζ ?\[ ?\∴ ?\] ?\⊥ ?\_
+	  ?\ ?\α ?\β ?\χ ?\δ ?\ε ?\φ ?\γ ?\η ?\ι ?\ϕ ?\κ ?\λ ?\μ ?\ν ?\ο
+	  ?\π ?\θ ?\ρ ?\σ ?\τ ?\υ ?\ϖ ?\ω ?\ξ ?\ψ ?\ζ ?\{ ?\| ?\} ?\∼])
+	(map-32-126 (make-vector (* (1+ (- 126 32)) 2) nil))
+	(tbl-160-254
+	 ;; Mapping of the following characters are changed from the
+	 ;; original one:
+	 ;; 0xE2 0x00AE+0xF87F->0x00AE # REGISTERED SIGN, alternate: sans serif
+	 ;; 0xE3 0x00A9+0xF87F->0x00A9 # COPYRIGHT SIGN, alternate: sans serif
+	 ;; 0xE4 0x2122+0xF87F->0x2122 # TRADE MARK SIGN, alternate: sans serif
+	 [?\€ ?\ϒ ?\′ ?\≤ ?\⁄ ?\∞ ?\ƒ ?\♣ ?\♦ ?\♥ ?\♠ ?\↔ ?\← ?\↑ ?\→ ?\↓
+	  ?\° ?\± ?\″ ?\≥ ?\× ?\∝ ?\∂ ?\• ?\÷ ?\≠ ?\≡ ?\≈ ?\… ?\⏐ ?\⎯ ?\↵
+	  ?\ℵ ?\ℑ ?\ℜ ?\℘ ?\⊗ ?\⊕ ?\∅ ?\∩ ?\∪ ?\⊃ ?\⊇ ?\⊄ ?\⊂ ?\⊆ ?\∈ ?\∉
+	  ?\∠ ?\∇ ?\® ?\© ?\™ ?\∏ ?\√ ?\⋅ ?\¬ ?\∧ ?\∨ ?\⇔ ?\⇐ ?\⇑ ?\⇒ ?\⇓
+	  ?\◊ ?\〈 ?\® ?\© ?\™ ?\∑ ?\⎛ ?\⎜ ?\⎝ ?\⎡ ?\⎢ ?\⎣ ?\⎧ ?\⎨ ?\⎩ ?\⎪
+	  ?\ ?\〉 ?\∫ ?\⌠ ?\⎮ ?\⌡ ?\⎞ ?\⎟ ?\⎠ ?\⎤ ?\⎥ ?\⎦ ?\⎫ ?\⎬ ?\⎭])
+	(map-160-254 (make-vector (* (1+ (- 254 160)) 2) nil)))
+    (dotimes (i (1+ (- 126 32)))
+      (aset map-32-126 (* i 2) (+ 32 i))
+      (aset map-32-126 (1+ (* i 2)) (aref tbl-32-126 i)))
+    (dotimes (i (1+ (- 254 160)))
+      (aset map-160-254 (* i 2) (+ 160 i))
+      (aset map-160-254 (1+ (* i 2)) (aref tbl-160-254 i)))
+    (vconcat map-32-126 map-160-254)))
 
-(let
-    ((encoding-vector
-      (vconcat
-       (make-vector 32 nil)
-       ;; mac-dingbats (32..126) -> emacs-mule mapping
-       [?\  ?\$,2%A(B ?\$,2%B(B ?\$,2%C(B ?\$,2%D(B ?\$,2"n(B ?\$,2%F(B ?\$,2%G(B ?\$,2%H(B ?\$,2%I(B ?\$,2"{(B ?\$,2"~(B ?\$,2%L(B ?\$,2%M(B ?\$,2%N(B ?\$,2%O(B
-	?\$,2%P(B ?\$,2%Q(B ?\$,2%R(B ?\$,2%S(B ?\$,2%T(B ?\$,2%U(B ?\$,2%V(B ?\$,2%W(B ?\$,2%X(B ?\$,2%Y(B ?\$,2%Z(B ?\$,2%[(B ?\$,2%\(B ?\$,2%](B ?\$,2%^(B ?\$,2%_(B
-	?\$,2%`(B ?\$,2%a(B ?\$,2%b(B ?\$,2%c(B ?\$,2%d(B ?\$,2%e(B ?\$,2%f(B ?\$,2%g(B ?\$,2"e(B ?\$,2%i(B ?\$,2%j(B ?\$,2%k(B ?\$,2%l(B ?\$,2%m(B ?\$,2%n(B ?\$,2%o(B
-	?\$,2%p(B ?\$,2%q(B ?\$,2%r(B ?\$,2%s(B ?\$,2%t(B ?\$,2%u(B ?\$,2%v(B ?\$,2%w(B ?\$,2%x(B ?\$,2%y(B ?\$,2%z(B ?\$,2%{(B ?\$,2%|(B ?\$,2%}(B ?\$,2%~(B ?\$,2%(B
-	?\$,2& (B ?\$,2&!(B ?\$,2&"(B ?\$,2&#(B ?\$,2&$(B ?\$,2&%(B ?\$,2&&(B ?\$,2&'(B ?\$,2&((B ?\$,2&)(B ?\$,2&*(B ?\$,2&+(B ?\$,2"/(B ?\$,2&-(B ?\$,2!`(B ?\$,2&/(B
-	?\$,2&0(B ?\$,2&1(B ?\$,2&2(B ?\$,2!r(B ?\$,2!|(B ?\$,2"&(B ?\$,2&6(B ?\$,2"7(B ?\$,2&8(B ?\$,2&9(B ?\$,2&:(B ?\$,2&;(B ?\$,2&<(B ?\$,2&=(B ?\$,2&>(B
-       nil
-       ;; mac-dingbats (128..141) -> emacs-mule mapping
-       ?\$,2&H(B ?\$,2&I(B ?\$,2&J(B ?\$,2&K(B ?\$,2&L(B ?\$,2&M(B ?\$,2&N(B ?\$,2&O(B ?\$,2&P(B ?\$,2&Q(B ?\$,2&R(B ?\$,2&S(B ?\$,2&T(B ?\$,2&U(B]
-       (make-vector (- 161 142) nil)
-       ;; mac-dingbats (161..239) -> emacs-mule mapping
-       [?\$,2&A(B ?\$,2&B(B ?\$,2&C(B ?\$,2&D(B ?\$,2&E(B ?\$,2&F(B ?\$,2&G(B ?\$,2#c(B ?\$,2#f(B ?\$,2#e(B ?\$,2#`(B ?\$,1~@(B ?\$,1~A(B ?\$,1~B(B ?\$,1~C(B
-	?\$,1~D(B ?\$,1~E(B ?\$,1~F(B ?\$,1~G(B ?\$,1~H(B ?\$,1~I(B ?\$,2&V(B ?\$,2&W(B ?\$,2&X(B ?\$,2&Y(B ?\$,2&Z(B ?\$,2&[(B ?\$,2&\(B ?\$,2&](B ?\$,2&^(B ?\$,2&_(B
-	?\$,2&`(B ?\$,2&a(B ?\$,2&b(B ?\$,2&c(B ?\$,2&d(B ?\$,2&e(B ?\$,2&f(B ?\$,2&g(B ?\$,2&h(B ?\$,2&i(B ?\$,2&j(B ?\$,2&k(B ?\$,2&l(B ?\$,2&m(B ?\$,2&n(B ?\$,2&o(B
-	?\$,2&p(B ?\$,2&q(B ?\$,2&r(B ?\$,2&s(B ?\$,2&t(B ?\$,1vr(B ?\$,1vt(B ?\$,1vu(B ?\$,2&x(B ?\$,2&y(B ?\$,2&z(B ?\$,2&{(B ?\$,2&|(B ?\$,2&}(B ?\$,2&~(B ?\$,2&(B
-	?\$,2' (B ?\$,2'!(B ?\$,2'"(B ?\$,2'#(B ?\$,2'$(B ?\$,2'%(B ?\$,2'&(B ?\$,2''(B ?\$,2'((B ?\$,2')(B ?\$,2'*(B ?\$,2'+(B ?\$,2',(B ?\$,2'-(B ?\$,2'.(B ?\$,2'/(B
-	nil
-       ;; mac-dingbats (241..254) -> emacs-mule mapping
-	?\$,2'1(B ?\$,2'2(B ?\$,2'3(B ?\$,2'4(B ?\$,2'5(B ?\$,2'6(B ?\$,2'7(B ?\$,2'8(B ?\$,2'9(B ?\$,2':(B ?\$,2';(B ?\$,2'<(B ?\$,2'=(B ?\$,2'>(B
-	nil]))
-     translation-table)
-  (setq translation-table
-	(make-translation-table-from-vector encoding-vector))
-;;  (define-translation-table 'mac-dingbats-decoder translation-table)
-  (define-translation-table 'mac-dingbats-encoder
-    (char-table-extra-slot translation-table 0)))
+(define-charset 'mac-dingbats
+  "Mac Dingbats"
+  :short-name "Mac Dingbats"
+  :code-space [32 254]
+  :map
+  (let ((tbl-32-126
+	 [?\  ?\✁ ?\✂ ?\✃ ?\✄ ?\☎ ?\✆ ?\✇ ?\✈ ?\✉ ?\☛ ?\☞ ?\✌ ?\✍ ?\✎ ?\✏
+	  ?\✐ ?\✑ ?\✒ ?\✓ ?\✔ ?\✕ ?\✖ ?\✗ ?\✘ ?\✙ ?\✚ ?\✛ ?\✜ ?\✝ ?\✞ ?\✟
+	  ?\✠ ?\✡ ?\✢ ?\✣ ?\✤ ?\✥ ?\✦ ?\✧ ?\★ ?\✩ ?\✪ ?\✫ ?\✬ ?\✭ ?\✮ ?\✯
+	  ?\✰ ?\✱ ?\✲ ?\✳ ?\✴ ?\✵ ?\✶ ?\✷ ?\✸ ?\✹ ?\✺ ?\✻ ?\✼ ?\✽ ?\✾ ?\✿
+	  ?\❀ ?\❁ ?\❂ ?\❃ ?\❄ ?\❅ ?\❆ ?\❇ ?\❈ ?\❉ ?\❊ ?\❋ ?\● ?\❍ ?\■ ?\❏
+	  ?\❐ ?\❑ ?\❒ ?\▲ ?\▼ ?\◆ ?\❖ ?\◗ ?\❘ ?\❙ ?\❚ ?\❛ ?\❜ ?\❝ ?\❞])
+	(map-32-126 (make-vector (* (1+ (- 126 32)) 2) nil))
+	(tbl-128-141
+	 [?\❨ ?\❩ ?\❪ ?\❫ ?\❬ ?\❭ ?\❮ ?\❯ ?\❰ ?\❱ ?\❲ ?\❳ ?\❴ ?\❵])
+	(map-128-141 (make-vector (* (1+ (- 141 128)) 2) nil))
+	(tbl-161-239
+	 [?\❡ ?\❢ ?\❣ ?\❤ ?\❥ ?\❦ ?\❧ ?\♣ ?\♦ ?\♥ ?\♠ ?\① ?\② ?\③ ?\④
+	  ?\⑤ ?\⑥ ?\⑦ ?\⑧ ?\⑨ ?\⑩ ?\❶ ?\❷ ?\❸ ?\❹ ?\❺ ?\❻ ?\❼ ?\❽ ?\❾ ?\❿
+	  ?\➀ ?\➁ ?\➂ ?\➃ ?\➄ ?\➅ ?\➆ ?\➇ ?\➈ ?\➉ ?\➊ ?\➋ ?\➌ ?\➍ ?\➎ ?\➏
+	  ?\➐ ?\➑ ?\➒ ?\➓ ?\➔ ?\→ ?\↔ ?\↕ ?\➘ ?\➙ ?\➚ ?\➛ ?\➜ ?\➝ ?\➞ ?\➟
+	  ?\➠ ?\➡ ?\➢ ?\➣ ?\➤ ?\➥ ?\➦ ?\➧ ?\➨ ?\➩ ?\➪ ?\➫ ?\➬ ?\➭ ?\➮ ?\➯])
+	(map-161-239 (make-vector (* (1+ (- 239 161)) 2) nil))
+	(tbl-241-254
+	 [?\➱ ?\➲ ?\➳ ?\➴ ?\➵ ?\➶ ?\➷ ?\➸ ?\➹ ?\➺ ?\➻ ?\➼ ?\➽ ?\➾])
+	(map-241-254 (make-vector (* (1+ (- 254 241)) 2) nil)))
+    (dotimes (i (1+ (- 126 32)))
+      (aset map-32-126 (* i 2) (+ 32 i))
+      (aset map-32-126 (1+ (* i 2)) (aref tbl-32-126 i)))
+    (dotimes (i (1+ (- 141 128)))
+      (aset map-128-141 (* i 2) (+ 128 i))
+      (aset map-128-141 (1+ (* i 2)) (aref tbl-128-141 i)))
+    (dotimes (i (1+ (- 239 161)))
+      (aset map-161-239 (* i 2) (+ 161 i))
+      (aset map-161-239 (1+ (* i 2)) (aref tbl-161-239 i)))
+    (dotimes (i (1+ (- 254 241)))
+      (aset map-241-254 (* i 2) (+ 241 i))
+      (aset map-241-254 (1+ (* i 2)) (aref tbl-241-254 i)))
+    (vconcat map-32-126 map-128-141 map-161-239 map-241-254)))
 
-(defconst mac-system-coding-system
-  (let ((base (or (cdr (assq mac-system-script-code
-			     mac-script-code-coding-systems))
-		  'mac-roman)))
-    (if (eq system-type 'darwin)
-	base
-      (coding-system-change-eol-conversion base 'mac)))
+(defvar mac-system-coding-system nil
   "Coding system derived from the system script code.")
 
-(set-selection-coding-system mac-system-coding-system)
+(defun mac-setup-system-coding-system ()
+  (setq mac-system-coding-system
+	(or (cdr (assq mac-system-script-code mac-script-code-coding-systems))
+	    'mac-roman))
+  (set-selection-coding-system mac-system-coding-system))
 
 
 ;;;; Keyboard layout/language change events
@@ -1272,89 +371,44 @@ correspoinding TextEncodingBase value."
 (defconst mac-text-encoding-mac-japanese-basic-variant #x20001
   "MacJapanese text encoding without Apple double-byte extensions.")
 
-(defun mac-utxt-to-string (data &optional coding-system)
+(declare-function mac-code-convert-string "mac.c"
+		  (string source target &optional normalization-form))
+
+(defun mac-utxt-to-string (data &optional coding-system source-encoding)
   (or coding-system (setq coding-system mac-system-coding-system))
   (let* ((encoding
-	  (and (eq system-type 'darwin)
-	       (eq (coding-system-base coding-system) 'japanese-shift-jis)
+	  (and (eq (coding-system-base coding-system) 'japanese-shift-jis)
 	       mac-text-encoding-mac-japanese-basic-variant))
 	 (str (let (bytes data1)
-		(and (fboundp 'mac-code-convert-string)
-		     (setq bytes (mac-code-convert-string
-				  data nil (or encoding coding-system)))
+		(and (setq bytes (mac-code-convert-string
+				  data source-encoding
+				  (or encoding coding-system)))
 		     ;; Check if round-trip conversion gives the same
 		     ;; result.
 		     (setq data1 (mac-code-convert-string
-				  bytes (or encoding coding-system) nil))
+				  bytes (or encoding coding-system)
+				  source-encoding))
 		     (string= data1 data)
 		     (decode-coding-string bytes coding-system)))))
     (if (and str (eq encoding mac-text-encoding-mac-japanese-basic-variant))
 	;; Does it contain Apple one-byte extensions other than
 	;; reverse solidus?
-	(if (string-match "[\xa0\xfd-\xff]" str)
+	(if (string-match
+	     ;; Character alternatives in multibyte eight-bit is unreliable.
+	     ;; (Bug#3687)
+	     ;; (string-to-multibyte "[\xa0\xfd-\xff]")
+	     (string-to-multibyte "\xa0\\|\xfd\\|\xfe\\|\xff") str)
 	    (setq str nil)
 	  ;; ASCII-only?
-	  (unless (mac-code-convert-string data nil mac-text-encoding-ascii)
-	    (subst-char-in-string ?\x5c ?\(J\(B str t)
-	    (subst-char-in-string ?\x80 ?\\ str t))))
-    (or str
-	(decode-coding-string data
-			      (if (eq (byteorder) ?B) 'utf-16be 'utf-16le)))))
-
-(defun mac-string-to-utxt (string &optional coding-system)
-  (or coding-system (setq coding-system mac-system-coding-system))
-  (let (data encoding)
-    (when (and (fboundp 'mac-code-convert-string)
-	       (memq (coding-system-base coding-system)
-		     (find-coding-systems-string string)))
-      (setq coding-system
-	    (coding-system-change-eol-conversion coding-system 'mac))
-      (let ((str string))
-	(when (and (eq system-type 'darwin)
-		   (eq coding-system 'japanese-shift-jis-mac))
-	  (setq encoding mac-text-encoding-mac-japanese-basic-variant)
-	  (setq str (subst-char-in-string ?\\ ?\x80 str))
-	  (subst-char-in-string ?\(J\(B ?\x5c str t)
-	  ;; ASCII-only?
-	  (if (string-match "\\`[\x00-\x7f]*\\'" str)
-	      (setq str nil)))
-	(and str
-	     (setq data (mac-code-convert-string
-			 (encode-coding-string str coding-system)
-			 (or encoding coding-system) nil)))))
-    (or data (encode-coding-string string (if (eq (byteorder) ?B)
-					      'utf-16be-mac
-					    'utf-16le-mac)))))
-
-(defun mac-TEXT-to-string (data &optional coding-system)
-  (or coding-system (setq coding-system mac-system-coding-system))
-  (prog1 (setq data (decode-coding-string data coding-system))
-    (when (eq (coding-system-base coding-system) 'japanese-shift-jis)
-      ;; (subst-char-in-string ?\x5c ?\(J\(B data t)
-      (subst-char-in-string ?\x80 ?\\ data t))))
-
-(defun mac-string-to-TEXT (string &optional coding-system)
-  (or coding-system (setq coding-system mac-system-coding-system))
-  (let ((encodables (find-coding-systems-string string))
-	(rest mac-script-code-coding-systems))
-    (unless (memq (coding-system-base coding-system) encodables)
-      (while (and rest (not (memq (cdar rest) encodables)))
-	(setq rest (cdr rest)))
-      (if rest
-	  (setq coding-system (cdar rest)))))
-  (setq coding-system
-	(coding-system-change-eol-conversion coding-system 'mac))
-  (when (eq coding-system 'japanese-shift-jis-mac)
-    ;; (setq string (subst-char-in-string ?\\ ?\x80 string))
-    (setq string (subst-char-in-string ?\(J\(B ?\x5c string)))
-  (encode-coding-string string coding-system))
-
-(defun mac-furl-to-string (data)
-  ;; Remove a trailing nul character.
-  (let ((len (length data)))
-    (if (and (> len 0) (= (aref data (1- len)) ?\0))
-	(substring data 0 (1- len))
-      data)))
+	  (unless (mac-code-convert-string data source-encoding
+					   mac-text-encoding-ascii)
+	    (subst-char-in-string ?\x5c ?\¥ str t)
+	    (subst-char-in-string (unibyte-char-to-multibyte ?\x80) ?\\
+				  str t))))
+    (or str (decode-coding-string data
+				  (or source-encoding
+				      (if (eq (byteorder) ?B)
+					  'utf-16be 'utf-16le))))))
 
 (defun mac-TIFF-to-string (data &optional text)
   (prog1 (or text (setq text (copy-sequence " ")))
@@ -1362,29 +416,7 @@ correspoinding TextEncodingBase value."
 		       text)))
 
 (defun mac-pasteboard-string-to-string (data &optional coding-system)
-  (or coding-system (setq coding-system mac-system-coding-system))
-  (let* ((encoding
-	  (and (eq (coding-system-base coding-system) 'japanese-shift-jis)
-	       mac-text-encoding-mac-japanese-basic-variant))
-	 (str (let (bytes data1)
-		(and (setq bytes (mac-code-convert-string
-				  data 'utf-8 (or encoding coding-system)))
-		     ;; Check if round-trip conversion gives the same
-		     ;; result.
-		     (setq data1 (mac-code-convert-string
-				  bytes (or encoding coding-system) 'utf-8))
-		     (string= data1 data)
-		     (decode-coding-string bytes coding-system)))))
-    (if (and str (eq encoding mac-text-encoding-mac-japanese-basic-variant))
-	;; Does it contain Apple one-byte extensions other than
-	;; reverse solidus?
-	(if (string-match "[\xa0\xfd-\xff]" str)
-	    (setq str nil)
-	  ;; ASCII-only?
-	  (unless (mac-code-convert-string data 'utf-8 mac-text-encoding-ascii)
-	    (subst-char-in-string ?\x5c ?\(J\(B str t)
-	    (subst-char-in-string ?\x80 ?\\ str t))))
-    (or str (decode-coding-string data 'utf-8))))
+  (mac-utxt-to-string data coding-system 'utf-8))
 
 (defun mac-string-to-pasteboard-string (string &optional coding-system)
   (or coding-system (setq coding-system mac-system-coding-system))
@@ -1394,8 +426,9 @@ correspoinding TextEncodingBase value."
       (let ((str string))
 	(when (eq coding-system 'japanese-shift-jis)
 	  (setq encoding mac-text-encoding-mac-japanese-basic-variant)
-	  (setq str (subst-char-in-string ?\\ ?\x80 str))
-	  (subst-char-in-string ?\(J\(B ?\x5c str t)
+	  (setq str (subst-char-in-string ?\\ (unibyte-char-to-multibyte ?\x80)
+					  str))
+	  (subst-char-in-string ?\¥ ?\x5c str t)
 	  ;; ASCII-only?
 	  (if (string-match "\\`[\x00-\x7f]*\\'" str)
 	      (setq str nil)))
@@ -1425,9 +458,9 @@ correspoinding TextEncodingBase value."
 
 ;;;; Selections
 
-;;; We keep track of the last text selected here, so we can check the
-;;; current selection against it, and avoid passing back our own text
-;;; from x-get-selection-value.
+;; We keep track of the last text selected here, so we can check the
+;; current selection against it, and avoid passing back our own text
+;; from x-get-selection-value.
 (defvar x-last-selected-text-clipboard nil
   "The value of the CLIPBOARD selection last time we selected or
 pasted text.")
@@ -1436,20 +469,43 @@ pasted text.")
 pasted text.")
 
 (defcustom x-select-enable-clipboard t
-  "*Non-nil means cutting and pasting uses the clipboard.
-This is in addition to the primary selection."
+  "Non-nil means cutting and pasting uses the clipboard.
+This is in addition to, but in preference to, the primary selection.
+
+On MS-Windows, this is non-nil by default, since Windows does not
+support other types of selections.  \(The primary selection that is
+set by Emacs is not accessible to other programs on Windows.\)"
   :type 'boolean
   :group 'killing)
 
-;;; Make TEXT, a string, the primary selection.
+(defcustom x-select-enable-primary t
+  "Non-nil means cutting and pasting uses the primary selection."
+  :type 'boolean
+  :group 'killing)
+
 (defun x-select-text (text &optional push)
-  (x-set-selection 'PRIMARY text)
-  (setq x-last-selected-text-primary text)
-  (if (not x-select-enable-clipboard)
-      (setq x-last-selected-text-clipboard nil)
+  "Select TEXT, a string, according to the window system.
+
+On X, put TEXT in the primary X selection.  For backward
+compatibility with older X applications, set the value of X cut
+buffer 0 as well, and if the optional argument PUSH is non-nil,
+rotate the cut buffers.  If `x-select-enable-clipboard' is
+non-nil, copy the text to the X clipboard as well.
+
+On Windows, make TEXT the current selection.  If
+`x-select-enable-clipboard' is non-nil, copy the text to the
+clipboard as well.  The argument PUSH is ignored.
+
+On Nextstep, put TEXT in the pasteboard; PUSH is ignored."
+  (when x-select-enable-primary
+    (x-set-selection 'PRIMARY text)
+    (setq x-last-selected-text-primary text))
+  (when x-select-enable-clipboard
     (x-set-selection 'CLIPBOARD text)
-    (setq x-last-selected-text-clipboard text))
-  )
+    (setq x-last-selected-text-clipboard text)))
+
+(declare-function x-get-selection-internal "macselect.c"
+		  (selection-symbol target-type &optional time-stamp))
 
 (defun x-get-selection (&optional type data-type)
   "Return the value of a selection.
@@ -1470,22 +526,13 @@ in `selection-converter-alist', which see."
 		    selection-coding-system)))
     (when (and (stringp data)
 	       (setq data-type (get-text-property 0 'foreign-selection data)))
-      (cond ((eq data-type 'public.utf16-plain-text)
-	     (setq data (mac-utxt-to-string data coding)))
-	    ((eq data-type 'NSStringPboardType)
-	     (setq data (mac-pasteboard-string-to-string data coding)))
-	    ((eq data-type 'com.apple.traditional-mac-plain-text)
-	     (setq data (mac-TEXT-to-string data coding)))
-	    ((eq data-type 'public.file-url)
-	     (setq data (mac-furl-to-string data))))
+      (cond ((eq data-type 'NSStringPboardType)
+	     (setq data (mac-pasteboard-string-to-string data coding))))
       (put-text-property 0 (length data) 'foreign-selection data-type data))
     data))
 
 (defun x-selection-value (type)
-  (let ((data-types '(public.utf16-plain-text
-		      NSStringPboardType
-		      com.apple.traditional-mac-plain-text
-		      public.file-url))
+  (let ((data-types '(NSStringPboardType))
 	text tiff-image)
     (while (and (null text) data-types)
       (setq text (condition-case nil
@@ -1494,27 +541,23 @@ in `selection-converter-alist', which see."
       (setq data-types (cdr data-types)))
     (if text
 	(remove-text-properties 0 (length text) '(foreign-selection nil) text))
-    (setq tiff-image (or (condition-case nil
-			     (x-get-selection type 'public.tiff)
-			   (error nil))
-			 (condition-case nil
-			     (x-get-selection type 'NSTIFFPboardType)
-			   (error nil))))
+    (setq tiff-image (condition-case nil
+			 (x-get-selection type 'NSTIFFPboardType)
+		       (error nil)))
     (when tiff-image
       (remove-text-properties 0 (length tiff-image)
 			      '(foreign-selection nil) tiff-image)
       (setq text (mac-TIFF-to-string tiff-image text)))
     text))
 
-;;; Return the value of the current selection.
-;;; Treat empty strings as if they were unset.
-;;; If this function is called twice and finds the same text,
-;;; it returns nil the second time.  This is so that a single
-;;; selection won't be added to the kill ring over and over.
+;; Return the value of the current selection.
+;; Treat empty strings as if they were unset.
+;; If this function is called twice and finds the same text,
+;; it returns nil the second time.  This is so that a single
+;; selection won't be added to the kill ring over and over.
 (defun x-get-selection-value ()
   (let (clip-text primary-text)
-    (if (not x-select-enable-clipboard)
-	(setq x-last-selected-text-clipboard nil)
+    (when x-select-enable-clipboard
       (setq clip-text (x-selection-value 'CLIPBOARD))
       (if (string= clip-text "") (setq clip-text nil))
 
@@ -1522,7 +565,7 @@ in `selection-converter-alist', which see."
       ;; from what we remebered them to be last time we did a
       ;; cut/paste operation.
       (setq clip-text
-	    (cond;; check clipboard
+	    (cond ;; check clipboard
 	     ((or (not clip-text) (string= clip-text ""))
 	      (setq x-last-selected-text-clipboard nil))
 	     ((eq      clip-text x-last-selected-text-clipboard) nil)
@@ -1532,25 +575,25 @@ in `selection-converter-alist', which see."
 	      (setq x-last-selected-text-clipboard clip-text)
 	      nil)
 	     (t
-	      (setq x-last-selected-text-clipboard clip-text))))
-      )
+	      (setq x-last-selected-text-clipboard clip-text)))))
 
-    (setq primary-text (x-selection-value 'PRIMARY))
-    ;; Check the PRIMARY selection for 'newness', is it different
-    ;; from what we remebered them to be last time we did a
-    ;; cut/paste operation.
-    (setq primary-text
-	  (cond;; check primary selection
-	   ((or (not primary-text) (string= primary-text ""))
-	    (setq x-last-selected-text-primary nil))
-	   ((eq      primary-text x-last-selected-text-primary) nil)
-	   ((string= primary-text x-last-selected-text-primary)
-	    ;; Record the newer string,
-	    ;; so subsequent calls can use the `eq' test.
-	    (setq x-last-selected-text-primary primary-text)
-	    nil)
-	   (t
-	    (setq x-last-selected-text-primary primary-text))))
+    (when x-select-enable-primary
+      (setq primary-text (x-selection-value 'PRIMARY))
+      ;; Check the PRIMARY selection for 'newness', is it different
+      ;; from what we remebered them to be last time we did a
+      ;; cut/paste operation.
+      (setq primary-text
+	    (cond ;; check primary selection
+	     ((or (not primary-text) (string= primary-text ""))
+	      (setq x-last-selected-text-primary nil))
+	     ((eq      primary-text x-last-selected-text-primary) nil)
+	     ((string= primary-text x-last-selected-text-primary)
+	      ;; Record the newer string,
+	      ;; so subsequent calls can use the `eq' test.
+	      (setq x-last-selected-text-primary primary-text)
+	      nil)
+	     (t
+	      (setq x-last-selected-text-primary primary-text)))))
 
     ;; As we have done one selection, clear this now.
     (setq next-selection-coding-system nil)
@@ -1562,26 +605,22 @@ in `selection-converter-alist', which see."
     (or clip-text primary-text)
     ))
 
-(put 'CLIPBOARD 'mac-scrap-name "com.apple.scrap.clipboard")
-(when (eq system-type 'darwin)
-  (put 'FIND 'mac-scrap-name "com.apple.scrap.find")
-  (put 'PRIMARY 'mac-scrap-name
-       (format "org.gnu.Emacs.%d.selection.PRIMARY" (emacs-pid))))
-(put 'com.apple.traditional-mac-plain-text 'mac-ostype "TEXT")
-(put 'public.utf16-plain-text 'mac-ostype "utxt")
-(put 'public.tiff 'mac-ostype "TIFF")
-(put 'public.file-url 'mac-ostype "furl")
+;; Arrange for the kill and yank functions to set and check the clipboard.
+(setq interprogram-cut-function 'x-select-text)
+(setq interprogram-paste-function 'x-get-selection-value)
 
-(put 'CLIPBOARD 'mac-pasteboard-name
-     "Apple CFPasteboard general")	; NSGeneralPboard
-(put 'FIND 'mac-pasteboard-name
-     "Apple CFPasteboard find")		; NSFindPboard
-(put 'PRIMARY 'mac-pasteboard-name
-     (format "GNU Emacs CFPasteboard primary %d" (emacs-pid)))
-(put 'NSStringPboardType 'mac-pasteboard-data-type "NSStringPboardType")
-(put 'NSTIFFPboardType 'mac-pasteboard-data-type
-     "NeXT TIFF v4.0 pasteboard type")
-(put 'NSFilenamesPboardType 'mac-pasteboard-data-type "NSFilenamesPboardType")
+(defun mac-setup-selection-properties ()
+  (put 'CLIPBOARD 'mac-pasteboard-name
+       "Apple CFPasteboard general")	; NSGeneralPboard
+  (put 'FIND 'mac-pasteboard-name
+       "Apple CFPasteboard find")	; NSFindPboard
+  (put 'PRIMARY 'mac-pasteboard-name
+       (format "GNU Emacs CFPasteboard primary %d" (emacs-pid)))
+  (put 'NSStringPboardType 'mac-pasteboard-data-type "NSStringPboardType")
+  (put 'NSTIFFPboardType 'mac-pasteboard-data-type
+       "NeXT TIFF v4.0 pasteboard type")
+  (put 'NSFilenamesPboardType 'mac-pasteboard-data-type
+       "NSFilenamesPboardType"))
 
 (defun mac-select-convert-to-string (selection type value)
   (let ((str (cdr (xselect-convert-to-string selection nil value)))
@@ -1594,28 +633,14 @@ in `selection-converter-alist', which see."
 	(let ((inhibit-read-only t))
 	  (remove-text-properties 0 (length str) '(composition nil) str)
 	  (cond
-	   ((eq type 'public.utf16-plain-text)
-	    (setq str (mac-string-to-utxt str coding)))
 	   ((eq type 'NSStringPboardType)
 	    (setq str (mac-string-to-pasteboard-string str coding)))
-	   ((eq type 'com.apple.traditional-mac-plain-text)
-	    (setq str (mac-string-to-TEXT str coding)))
 	   (t
 	    (error "Unknown selection type: %S" type))
 	   )))
 
       (setq next-selection-coding-system nil)
       (cons type str))))
-
-(defun mac-select-convert-to-file-url (selection type value)
-  (let ((filename (xselect-convert-to-filename selection type value))
-	(coding (or file-name-coding-system default-file-name-coding-system)))
-    (if (and filename coding)
-	(setq filename (encode-coding-string filename coding)))
-    (and filename
-	 (concat "file://localhost"
-		 (mapconcat 'url-hexify-string
-			    (split-string filename "/") "/")))))
 
 (defun mac-select-convert-to-pasteboard-filenames (selection type value)
   (let ((filename (xselect-convert-to-filename selection type value)))
@@ -1625,14 +650,8 @@ in `selection-converter-alist', which see."
 
 (setq selection-converter-alist
       (nconc
-       '((public.utf16-plain-text . mac-select-convert-to-string)
-	 (NSStringPboardType . mac-select-convert-to-string)
-	 (com.apple.traditional-mac-plain-text . mac-select-convert-to-string)
-	 ;; This is not enabled by default because the `Import Image'
-	 ;; menu makes Emacs crash or hang for unknown reasons.
-	 ;; (public.tiff . nil)
+       '((NSStringPboardType . mac-select-convert-to-string)
 	 (NSTIFFPboardType . nil)
-	 (public.file-url . mac-select-convert-to-file-url)
 	 (NSFilenamesPboardType . mac-select-convert-to-pasteboard-filenames)
 	 )
        selection-converter-alist))
@@ -1656,15 +675,14 @@ in `selection-converter-alist', which see."
 (put 'autosave-now         'mac-apple-event-id "asav") ; kAEAutosaveNow
 ;; kAEInternetEventClass
 (put 'get-url              'mac-apple-event-id "GURL") ; kAEGetURL
-;; Converted HI command events
-(put 'about                'mac-apple-event-id "abou") ; kHICommandAbout
-(put 'show-hide-font-panel 'mac-apple-event-id "shfp") ; kHICommandShowHideFontPanel
 
 (defmacro mac-event-spec (event)
   `(nth 1 ,event))
 
 (defmacro mac-event-ae (event)
   `(nth 2 ,event))
+
+(declare-function mac-coerce-ae-data "mac.c" (src-type src-data dst-type))
 
 (defun mac-ae-parameter (ae &optional keyword type)
   (or keyword (setq keyword "----")) ;; Direct object.
@@ -1823,6 +841,20 @@ in `selection-converter-alist', which see."
 	      (setq modifiers (cons (car modifier-mask) modifiers)))))
     modifiers))
 
+(defun mac-ae-type-string (ae keyword)
+  (let ((bytes (cdr (mac-ae-parameter ae keyword "type"))))
+    (and bytes
+	 (if (eq (byteorder) ?B)
+	     bytes
+	   (apply 'unibyte-string (nreverse (append bytes '())))))))
+
+(defun mac-ae-open-application (event)
+  "Open the application Emacs with the Apple event EVENT.
+It records the Apple event in `mac-startup-options' as a value
+for the key symbol `apple-event' so it can be inspected later."
+  (interactive "e")
+  (push (cons 'apple-event (mac-event-ae event)) mac-startup-options))
+  
 (defun mac-ae-reopen-application (event)
   "Show some frame in response to the Apple event EVENT.
 The frame to be shown is chosen from visible or iconified frames
@@ -1863,6 +895,9 @@ if possible.  If there's no such frame, a new frame is created."
 	      nil t)))))
   (select-frame-set-input-focus (selected-frame)))
 
+(declare-function mac-resume-apple-event "macselect.c"
+		  (apple-event &optional error-code))
+
 (defun mac-ae-quit-application (event)
   "Quit the application Emacs with the Apple event EVENT."
   (interactive "e")
@@ -1871,6 +906,9 @@ if possible.  If there's no such frame, a new frame is created."
 	(save-buffers-kill-emacs)
       ;; Reaches here if the user has canceled the quit.
       (mac-resume-apple-event ae -128)))) ; userCanceledErr
+
+;; url-generic-parse-url is autoloaded from url-parse.
+(declare-function url-type "url-parse" t t) ; defstruct
 
 (defun mac-ae-get-url (event)
   "Open the URL specified by the Apple event EVENT.
@@ -1887,9 +925,15 @@ Currently the `mailto' scheme is supported."
 (setq mac-apple-event-map (make-sparse-keymap))
 
 ;; Received when Emacs is launched without associated documents.
-;; Accept it as an Apple event, but no Emacs event is generated so as
-;; not to erase the splash screen.
-(define-key mac-apple-event-map [core-event open-application] 0)
+;; We record the received Apple event in `mac-startup-options' as a
+;; value for the key symbol `apple-event' so we can inspect some
+;; parameters such as keyAEPropData ("prdt") that may contain
+;; keyAELaunchedAsLogInItem ("lgit") or keyAELaunchedAsServiceItem
+;; ("svit") on Mac OS X 10.4 and later.  You should use
+;; `mac-ae-type-string' for extracting data for keyAEPropData in order
+;; to take byte order into account.
+(define-key mac-apple-event-map [core-event open-application]
+  'mac-ae-open-application)
 
 ;; Received when a dock or application icon is clicked and Emacs is
 ;; already running.
@@ -1904,31 +948,7 @@ Currently the `mailto' scheme is supported."
 
 (define-key mac-apple-event-map [internet-event get-url] 'mac-ae-get-url)
 
-(define-key mac-apple-event-map [hi-command about] 'about-emacs)
-
-;;; Converted Carbon Events
-(defun mac-handle-toolbar-switch-mode (event)
-  "Toggle visibility of tool-bars in response to EVENT.
-With no keyboard modifiers, it toggles the visibility of the
-frame where the tool-bar toggle button was pressed.  With some
-modifiers, it changes the global tool-bar visibility setting."
-  (interactive "e")
-  (let ((ae (mac-event-ae event)))
-    (if (mac-ae-keyboard-modifiers ae)
-	;; Globally toggle tool-bar-mode if some modifier key is pressed.
-	(tool-bar-mode 'toggle)
-      (let ((frame (mac-ae-frame ae)))
-	(set-frame-parameter frame 'tool-bar-lines
-			     (if (= (frame-parameter frame 'tool-bar-lines) 0)
-				 1 0))))))
-
-;; kEventClassWindow/kEventWindowToolbarSwitchMode
-(define-key mac-apple-event-map [window toolbar-switch-mode]
-  'mac-handle-toolbar-switch-mode)
-
 ;;; Font panel
-(when (fboundp 'mac-set-font-panel-visible-p)
-
 (define-minor-mode mac-font-panel-mode
   "Toggle use of the font panel.
 With numeric ARG, display the font panel if and only if ARG is positive."
@@ -1947,22 +967,15 @@ With numeric ARG, display the font panel if and only if ARG is positive."
   "Change default face attributes according to font selection EVENT."
   (interactive "e")
   (let* ((ae (mac-event-ae event))
-	 (fm-font-size (mac-ae-number ae "fmsz"))
-	 (atsu-font-id (mac-ae-number ae "auid"))
-	 (attribute-values (and atsu-font-id
-				(mac-atsu-font-face-attributes atsu-font-id))))
-    (if fm-font-size
-	(setq attribute-values
-	      `(:height ,(* 10 fm-font-size) ,@attribute-values)))
-    (apply 'set-face-attribute 'default (selected-frame) attribute-values)))
+	 (font-spec (cdr (mac-ae-parameter ae 'font-spec))))
+    (if font-spec
+	(set-face-attribute 'default (selected-frame) :font font-spec))))
 
 ;; kEventClassFont/kEventFontPanelClosed
 (define-key mac-apple-event-map [font panel-closed]
   'mac-handle-font-panel-closed)
 ;; kEventClassFont/kEventFontSelection
 (define-key mac-apple-event-map [font selection] 'mac-handle-font-selection)
-(define-key mac-apple-event-map [hi-command show-hide-font-panel]
-  'mac-font-panel-mode)
 
 (define-key-after menu-bar-showhide-menu [mac-font-panel-mode]
   (menu-bar-make-mm-toggle mac-font-panel-mode
@@ -1970,11 +983,7 @@ With numeric ARG, display the font panel if and only if ARG is positive."
 			   "Show the font panel as a floating dialog")
   'showhide-speedbar)
 
-) ;; (fboundp 'mac-set-font-panel-visible-p)
-
 ;;; Text Services
-(defvar mac-ts-update-active-input-area-seqno 0
-  "Number of processed update-active-input-area events.")
 (setq mac-ts-active-input-overlay (make-overlay 0 0))
 
 (defface mac-ts-caret-position
@@ -1984,125 +993,21 @@ This is used when the active input area is displayed either in
 the echo area or in a buffer where the cursor is not displayed."
   :group 'mac)
 
-(defface mac-ts-raw-text
+(defface mac-ts-raw-text		; kTSMHiliteRawText
   '((t :underline t))
   "Face for raw text in Mac TSM active input area."
   :group 'mac)
 
-(defface mac-ts-selected-raw-text
-  '((t :underline t))
-  "Face for selected raw text in Mac TSM active input area."
-  :group 'mac)
-
-(defface mac-ts-converted-text
+(defface mac-ts-converted-text		; kTSMHiliteConvertedText
   '((((background dark)) :underline "gray20")
     (t :underline "gray80"))
   "Face for converted text in Mac TSM active input area."
   :group 'mac)
 
-(defface mac-ts-selected-converted-text
+(defface mac-ts-selected-converted-text ; kTSMHiliteSelectedConvertedText
   '((t :underline t))
   "Face for selected converted text in Mac TSM active input area."
   :group 'mac)
-
-(defface mac-ts-block-fill-text
-  '((t :underline t))
-  "Face for block fill text in Mac TSM active input area."
-  :group 'mac)
-
-(defface mac-ts-outline-text
-  '((t :underline t))
-  "Face for outline text in Mac TSM active input area."
-  :group 'mac)
-
-(defface mac-ts-selected-text
-  '((t :underline t))
-  "Face for selected text in Mac TSM active input area."
-  :group 'mac)
-
-(defface mac-ts-no-hilite
-  '((t :inherit default))
-  "Face for no hilite in Mac TSM active input area."
-  :group 'mac)
-
-(defconst mac-ts-hilite-style-faces
-  '((2 . mac-ts-raw-text)		 ; kTSMHiliteRawText
-    (3 . mac-ts-selected-raw-text)	 ; kTSMHiliteSelectedRawText
-    (4 . mac-ts-converted-text)		 ; kTSMHiliteConvertedText
-    (5 . mac-ts-selected-converted-text) ; kTSMHiliteSelectedConvertedText
-    (6 . mac-ts-block-fill-text)	 ; kTSMHiliteBlockFillText
-    (7 . mac-ts-outline-text)		 ; kTSMHiliteOutlineText
-    (8 . mac-ts-selected-text)		 ; kTSMHiliteSelectedText
-    (9 . mac-ts-no-hilite))		 ; kTSMHiliteNoHilite
-  "Alist of Mac TSM hilite style vs Emacs face.")
-
-(defun mac-ts-update-active-input-buf (text fix-len hilite-rng update-rng)
-  (let ((buf-len (length mac-ts-active-input-buf))
-	confirmed)
-    (if (or (null update-rng)
-	    (/= (% (length update-rng) 2) 0))
-	;; The parameter is missing (or in a bad format).  The
-	;; existing inline input session is completely replaced with
-	;; the new text.
-	(setq mac-ts-active-input-buf text)
-      ;; Otherwise, the current subtext specified by the (2*j)-th
-      ;; range is replaced with the new subtext specified by the
-      ;; (2*j+1)-th range.
-      (let ((tail buf-len)
-	    (i (length update-rng))
-	    segments rng)
-	(while (> i 0)
-	  (setq i (- i 2))
-	  (setq rng (aref update-rng i))
-	  (if (and (<= 0 (cadr rng)) (< (cadr rng) tail)
-		   (<= tail buf-len))
-	      (setq segments
-		    (cons (substring mac-ts-active-input-buf (cadr rng) tail)
-			  segments)))
-	  (setq tail (car rng))
-	  (setq rng (aref update-rng (1+ i)))
-	  (if (and (<= 0 (car rng)) (< (car rng) (cadr rng))
-		   (<= (cadr rng) (length text)))
-	      (setq segments
-		    (cons (substring text (car rng) (cadr rng))
-			  segments))))
-	(if (and (< 0 tail) (<= tail buf-len))
-	    (setq segments
-		  (cons (substring mac-ts-active-input-buf 0 tail)
-			segments)))
-	(setq mac-ts-active-input-buf (apply 'concat segments))))
-    (setq buf-len (length mac-ts-active-input-buf))
-    ;; Confirm (a part of) inline input session.
-    (cond ((< fix-len 0)
-	   ;; Entire inline session is being confirmed.
-	   (setq confirmed mac-ts-active-input-buf)
-	   (setq mac-ts-active-input-buf ""))
-	  ((= fix-len 0)
-	   ;; None of the text is being confirmed (yet).
-	   (setq confirmed ""))
-	  (t
-	   (if (> fix-len buf-len)
-	       (setq fix-len buf-len))
-	   (setq confirmed (substring mac-ts-active-input-buf 0 fix-len))
-	   (setq mac-ts-active-input-buf
-		 (substring mac-ts-active-input-buf fix-len))))
-    (setq buf-len (length mac-ts-active-input-buf))
-    ;; Update highlighting and the caret position in the new inline
-    ;; input session.
-    (remove-text-properties 0 buf-len '(cursor nil) mac-ts-active-input-buf)
-    (mapc (lambda (rng)
-	    (cond ((and (= (nth 2 rng) 1) ; kTSMHiliteCaretPosition
-			(<= 0 (car rng)) (< (car rng) buf-len))
-		   (put-text-property (car rng) buf-len
-				      'cursor t mac-ts-active-input-buf))
-		  ((and (<= 0 (car rng)) (< (car rng) (cadr rng))
-			(<= (cadr rng) buf-len))
-		   (put-text-property (car rng) (cadr rng) 'face
-				      (cdr (assq (nth 2 rng)
-						 mac-ts-hilite-style-faces))
-				      mac-ts-active-input-buf))))
-	  hilite-rng)
-    confirmed))
 
 (defun mac-split-string-by-property-change (string)
   (let ((tail (length string))
@@ -2114,7 +1019,7 @@ the echo area or in a buffer where the cursor is not displayed."
     result))
 
 (defun mac-replace-untranslated-utf-8-chars (string &optional to-string)
-  (or to-string (setq to-string "$,3u=(B"))
+  (or to-string (setq to-string "�"))
   (mapconcat
    (lambda (str)
      (if (get-text-property 0 'untranslated-utf-8 str) to-string str))
@@ -2122,7 +1027,7 @@ the echo area or in a buffer where the cursor is not displayed."
    ""))
 
 (defun mac-keyboard-translate-char (ch)
-  (if (and (char-valid-p ch)
+  (if (and (characterp ch)
 	   (or (char-table-p keyboard-translate-table)
 	       (and (or (stringp keyboard-translate-table)
 			(vectorp keyboard-translate-table))
@@ -2136,107 +1041,6 @@ the echo area or in a buffer where the cursor is not displayed."
   (apply 'isearch-unread
 	 (mapcar 'mac-keyboard-translate-char
 		 (mac-replace-untranslated-utf-8-chars string))))
-
-(defun mac-ts-update-active-input-area (event)
-  "Update Mac TSM active input area according to EVENT.
-The confirmed text is converted to Emacs input events and pushed
-into `unread-command-events'.  The unconfirmed text is displayed
-either in the current buffer or in the echo area."
-  (interactive "e")
-  (let* ((ae (mac-event-ae event))
-	 (type-text (mac-ae-parameter ae "tstx"))
-	 (text (or (cdr type-text) ""))
-	 (decode-fun (if (equal (car type-text) "TEXT")
-			 'mac-TEXT-to-string 'mac-utxt-to-string))
-	 (script-language (mac-ae-script-language ae "tssl"))
-	 (coding (or (cdr (assq (car script-language)
-				mac-script-code-coding-systems))
-		     'mac-roman))
-	 (fix-len (mac-ae-number ae "tsfx"))
-	 ;; Optional parameters
-	 (hilite-rng (mac-ae-text-range-array ae "tshi"))
-	 (update-rng (mac-ae-text-range-array ae "tsup"))
-	 ;;(pin-rng (mac-bytes-to-text-range (cdr (mac-ae-parameter ae "tspn" "txrn"))))
-	 ;;(clause-offsets (cdr (mac-ae-parameter ae "tscl" "ofay")))
-	 (seqno (mac-ae-number ae "tsSn"))
-	 confirmed)
-    (unless (= seqno mac-ts-update-active-input-area-seqno)
-      ;; Reset internal states if sequence number is out of sync.
-      (setq mac-ts-active-input-buf ""))
-    (setq confirmed
-	  (mac-ts-update-active-input-buf text fix-len hilite-rng update-rng))
-    (let ((use-echo-area
-	   (or isearch-mode
-	       (and cursor-in-echo-area (current-message))
-	       ;; Overlay strings are not shown in some cases.
-	       (get-char-property (point) 'invisible)
-	       (and (not (bobp))
-		    (or (and (get-char-property (point) 'display)
-			     (eq (get-char-property (1- (point)) 'display)
-				 (get-char-property (point) 'display)))
-			(and (get-char-property (point) 'composition)
-			     (eq (get-char-property (1- (point)) 'composition)
-				 (get-char-property (point) 'composition)))))))
-	  active-input-string caret-seen)
-      ;; Decode the active input area text with inheriting faces and
-      ;; the caret position.
-      (setq active-input-string
-	    (mapconcat
-	     (lambda (str)
-	       (let ((decoded (funcall decode-fun str coding)))
-		 (put-text-property 0 (length decoded) 'face
-				    (get-text-property 0 'face str) decoded)
-		 (when (and (not caret-seen)
-			    (get-text-property 0 'cursor str))
-		   (setq caret-seen t)
-		   (if (or use-echo-area (null cursor-type))
-		       (put-text-property 0 1 'face 'mac-ts-caret-position
-					  decoded)
-		     (put-text-property 0 1 'cursor t decoded)))
-		 decoded))
-	     (mac-split-string-by-property-change mac-ts-active-input-buf)
-	     ""))
-      (put-text-property 0 (length active-input-string)
-			 'mac-ts-active-input-string t active-input-string)
-      (if use-echo-area
-	  (let ((msg (current-message))
-		message-log-max)
-	    (if (and msg
-		     ;; Don't get confused by previously displayed
-		     ;; `active-input-string'.
-		     (null (get-text-property 0 'mac-ts-active-input-string
-					      msg)))
-		(setq msg (propertize msg 'display
-				      (concat msg active-input-string)))
-	      (setq msg active-input-string))
-	    (message "%s" msg)
-	    (overlay-put mac-ts-active-input-overlay 'before-string nil))
-	(move-overlay mac-ts-active-input-overlay
-		      (point) (point) (current-buffer))
-	(overlay-put mac-ts-active-input-overlay 'before-string
-		     active-input-string))
-      (mac-unread-string (funcall decode-fun confirmed coding)))
-    ;; The event is successfully processed.  Sync the sequence number.
-    (setq mac-ts-update-active-input-area-seqno (1+ seqno))))
-
-(defun mac-ts-unicode-for-key-event (event)
-  "Convert Unicode key EVENT to Emacs key events and unread them."
-  (interactive "e")
-  (let* ((ae (mac-event-ae event))
-	 (text (cdr (mac-ae-parameter ae "tstx" "utxt")))
-	 (script-language (mac-ae-script-language ae "tssl"))
-	 (coding (or (cdr (assq (car script-language)
-				mac-script-code-coding-systems))
-		     'mac-roman)))
-    (if text
-	(mac-unread-string (mac-utxt-to-string text coding)))))
-
-;; kEventClassTextInput/kEventTextInputUpdateActiveInputArea
-(define-key mac-apple-event-map [text-input update-active-input-area]
-  'mac-ts-update-active-input-area)
-;; kEventClassTextInput/kEventTextInputUnicodeForKeyEvent
-(define-key mac-apple-event-map [text-input unicode-for-key-event]
-  'mac-ts-unicode-for-key-event)
 
 (defconst mac-marked-text-underline-style-faces
   '((0 . mac-ts-raw-text)		  ; NSUnderlineStyleNone
@@ -2341,6 +1145,8 @@ either in the current buffer or in the echo area."
   'mac-text-input-insert-text)
 
 ;;; Converted Actions
+(declare-function tool-bar-mode "tool-bar" (&optional arg))
+
 (defun mac-handle-toolbar-pill-button-clicked (event)
   "Toggle visibility of tool-bars in response to EVENT.
 With no keyboard modifiers, it toggles the visibility of the
@@ -2367,20 +1173,15 @@ modifiers, it changes the global tool-bar visibility setting."
   "Open the file specified by the selection value for Services."
   (interactive)
   ;; The selection seems not to contain the file name as
-  ;; public.utf16-plain-text or NSStringPboardType data on Mac OS X 10.4.
+  ;; NSStringPboardType data on Mac OS X 10.4.
   (let (data file-urls)
-    (setq data (condition-case nil
-		   (x-get-selection mac-service-selection 'public.file-url)
-		 (error nil)))
+    (setq data
+	  (condition-case nil
+	      (x-get-selection mac-service-selection 'NSFilenamesPboardType)
+	    (error nil)))
     (if data
-	(setq file-urls (list data))
-      (setq data
-	    (condition-case nil
-		(x-get-selection mac-service-selection 'NSFilenamesPboardType)
-	      (error nil)))
-      (if data
-	  (setq file-urls
-		(mac-pasteboard-filenames-to-file-urls data))))
+	(setq file-urls
+	      (mac-pasteboard-filenames-to-file-urls data)))
     (when file-urls
       (dolist (file-url file-urls)
 	(dnd-open-file file-url nil))
@@ -2415,7 +1216,7 @@ modifiers, it changes the global tool-bar visibility setting."
     (if (not buffer-read-only)
 	(insert text)
       (kill-new text)
-      (message
+      (message "%s"
        (substitute-command-keys
 	"The text from the Services menu can be accessed with \\[yank]")))))
 
@@ -2430,6 +1231,9 @@ modifiers, it changes the global tool-bar visibility setting."
   'mac-service-mail-selection)
 (define-key mac-apple-event-map [service perform mail-to]
   'mac-service-mail-to)
+
+(declare-function mac-ae-set-reply-parameter "macselect.c"
+		  (apple-event keyword descriptor))
 
 (defun mac-dispatch-apple-event (event)
   "Dispatch EVENT according to the keymap `mac-apple-event-map'."
@@ -2458,24 +1262,11 @@ modifiers, it changes the global tool-bar visibility setting."
 
 (define-key special-event-map [mac-apple-event] 'mac-dispatch-apple-event)
 
-;; Processing of Apple events are deferred at the startup time.  For
-;; example, files dropped onto the Emacs application icon can only be
-;; processed when the initial frame has been created: this is where
-;; the files should be opened.
-(add-hook 'after-init-hook 'mac-process-deferred-apple-events)
-
-(run-with-idle-timer 5 t 'mac-cleanup-expired-apple-events)
-
 
 ;;;; Drag and drop
 
 (defcustom mac-dnd-types-alist
-  '(("furl" . mac-dnd-handle-furl)
-    ("hfs " . mac-dnd-handle-hfs)
-    ("utxt" . mac-dnd-insert-utxt)
-    ("TEXT" . mac-dnd-insert-TEXT)
-    ("TIFF" . mac-dnd-insert-TIFF)
-    ("NSFilenamesPboardType" . mac-dnd-handle-pasteboard-filenames)
+  '(("NSFilenamesPboardType" . mac-dnd-handle-pasteboard-filenames)
 					; NSFilenamesPboardType
     ("NSStringPboardType" . mac-dnd-insert-pasteboard-string)
 					; NSStringPboardType
@@ -2492,32 +1283,9 @@ See also `mac-dnd-known-types'."
   :type 'alist
   :group 'mac)
 
-(defun mac-dnd-handle-furl (window action data)
-  (dnd-handle-one-url window action (mac-furl-to-string data)))
-
-(defun mac-dnd-handle-hfs (window action data)
-;; struct HFSFlavor {
-;;   OSType fileType;
-;;   OSType fileCreator;
-;;   UInt16 fdFlags;
-;;   FSSpec fileSpec;
-;; };
-  (let* ((file-name (mac-coerce-ae-data "fss " (substring data 10)
-					'undecoded-file-name))
-	 (url (concat "file://"
-		      (mapconcat 'url-hexify-string
-				 (split-string file-name "/") "/"))))
-    (dnd-handle-one-url window action url)))
-
 (defun mac-dnd-handle-pasteboard-filenames (window action data)
   (dolist (file-url (mac-pasteboard-filenames-to-file-urls data))
     (dnd-handle-one-url window action file-url)))
-
-(defun mac-dnd-insert-utxt (window action data)
-  (dnd-insert-text window action (mac-utxt-to-string data)))
-
-(defun mac-dnd-insert-TEXT (window action data)
-  (dnd-insert-text window action (mac-TEXT-to-string data)))
 
 (defun mac-dnd-insert-TIFF (window action data)
   (dnd-insert-text window action (mac-TIFF-to-string data)))
@@ -2553,482 +1321,152 @@ See also `mac-dnd-known-types'."
 	(ae (mac-event-ae event))
 	action)
     (when (windowp window) (select-window window))
-    (if (not (equal (car ae) "aevt"))
-	;; NSPasteboard-style drag-n-drop event of the form:
-	;; (:type TYPE-STRING :actions ACTION-LIST :data OBJECT)
-	(let ((type (plist-get ae :type))
-	      (actions (plist-get ae :actions))
-	      (data (plist-get ae :data)))
-	  (if (and (not (memq 'generic actions)) (memq 'copy actions))
-	      (setq action 'copy))
-	  (mac-dnd-drop-data event (selected-frame) window data type action))
-      ;; Apple event style drag-n-drop event.
-      (if (memq 'option (mac-ae-keyboard-modifiers ae))
+    ;; NSPasteboard-style drag-n-drop event of the form:
+    ;; (:type TYPE-STRING :actions ACTION-LIST :data OBJECT)
+    (let ((type (plist-get ae :type))
+	  (actions (plist-get ae :actions))
+	  (data (plist-get ae :data)))
+      (if (and (not (memq 'generic actions)) (memq 'copy actions))
 	  (setq action 'copy))
-      (dolist (item (mac-ae-list ae))
-	(if (not (equal (car item) "null"))
-	    (mac-dnd-drop-data event (selected-frame) window
-			       (cdr item) (car item) action))))))
+      (mac-dnd-drop-data event (selected-frame) window data type action))))
 
-;;; Do the actual Windows setup here; the above code just defines
-;;; functions and variables that we use now.
-
-(setq command-line-args (mac-handle-args command-line-args))
-
-;;; Make sure we have a valid resource name.
-(or (stringp x-resource-name)
-    (let (i)
-      (setq x-resource-name (invocation-name))
-
-      ;; Change any . or * characters in x-resource-name to hyphens,
-      ;; so as not to choke when we use it in X resource queries.
-      (while (setq i (string-match "[.*]" x-resource-name))
-	(aset x-resource-name i ?-))))
-
-(if (x-display-list)
-    ;; On Mac OS 8/9, Most coding systems used in code conversion for
-    ;; font names are not ready at the time when the terminal frame is
-    ;; created.  So we reconstruct font name table for the initial
-    ;; frame.
-    (mac-clear-font-name-table)
-  (x-open-connection "Mac"
-		     x-command-line-resources
-		     ;; Exit Emacs with fatal error if this fails.
-		     t))
-
-(setq frame-creation-function 'x-create-frame-with-faces)
-
-
-(when (x-list-fonts "*-mac-roman" nil nil 1)
-
-(defvar mac-font-encoder-list
-  '(("mac-roman" mac-roman-encoder
-     ccl-encode-mac-roman-font "%s")
-    ("mac-centraleurroman" encode-mac-centraleurroman
-     ccl-encode-mac-centraleurroman-font "%s ce")
-    ("mac-cyrillic" encode-mac-cyrillic
-     ccl-encode-mac-cyrillic-font "%s cy")
-    ("mac-symbol" mac-symbol-encoder
-     ccl-encode-mac-symbol-font "symbol")
-    ("mac-dingbats" mac-dingbats-encoder
-     ccl-encode-mac-dingbats-font "zapf dingbats")))
-
-(let ((encoder-list
-       (mapcar (lambda (lst) (nth 1 lst)) mac-font-encoder-list))
-      (charset-list
-       '(latin-iso8859-2
-	 latin-iso8859-3 latin-iso8859-4
-	 cyrillic-iso8859-5 greek-iso8859-7 hebrew-iso8859-8
-	 latin-iso8859-9 latin-iso8859-14 latin-iso8859-15)))
-  (dolist (encoder encoder-list)
-    (let ((table (get encoder 'translation-table)))
-      (dolist (charset charset-list)
-	(dotimes (i 96)
-	  (let* ((c (make-char charset (+ i 32)))
-		 (mu (aref ucs-mule-to-mule-unicode c))
-		 (mac-encoded (and mu (aref table mu))))
-	    (if mac-encoded
-		(aset table c mac-encoded))))))))
-
-;; We assume none of official dim2 charsets (0x90..0x99) are encoded
-;; to these fonts.
-
-(define-ccl-program ccl-encode-mac-roman-font
-  `(0
-    (if (r0 <= ?\xef)
-	(translate-character mac-roman-encoder r0 r1)
-      ((r1 <<= 7)
-       (r1 |= r2)
-       (translate-character mac-roman-encoder r0 r1))))
-  "CCL program for Mac Roman font")
-
-(define-ccl-program ccl-encode-mac-centraleurroman-font
-  `(0
-    (if (r0 <= ?\xef)
-	(translate-character encode-mac-centraleurroman r0 r1)
-      ((r1 <<= 7)
-       (r1 |= r2)
-       (translate-character encode-mac-centraleurroman r0 r1))))
-  "CCL program for Mac Central European Roman font")
-
-(define-ccl-program ccl-encode-mac-cyrillic-font
-  `(0
-    (if (r0 <= ?\xef)
-	(translate-character encode-mac-cyrillic r0 r1)
-      ((r1 <<= 7)
-       (r1 |= r2)
-       (translate-character encode-mac-cyrillic r0 r1))))
-  "CCL program for Mac Cyrillic font")
-
-(define-ccl-program ccl-encode-mac-symbol-font
-  `(0
-    (if (r0 <= ?\xef)
-	(translate-character mac-symbol-encoder r0 r1)
-      ((r1 <<= 7)
-       (r1 |= r2)
-       (translate-character mac-symbol-encoder r0 r1))))
-  "CCL program for Mac Symbol font")
-
-(define-ccl-program ccl-encode-mac-dingbats-font
-  `(0
-    (if (r0 <= ?\xef)
-	(translate-character mac-dingbats-encoder r0 r1)
-      ((r1 <<= 7)
-       (r1 |= r2)
-       (translate-character mac-dingbats-encoder r0 r1))))
-  "CCL program for Mac Dingbats font")
-
-
-(setq font-ccl-encoder-alist
-      (nconc
-       (mapcar (lambda (lst) (cons (nth 0 lst) (nth 2 lst)))
-	       mac-font-encoder-list)
-       font-ccl-encoder-alist))
-
-(defconst mac-char-fontspec-list
-  ;; Directly operate on a char-table instead of a fontset so that it
-  ;; may not create a dummy fontset.
-  (let ((template (make-char-table 'fontset)))
-    (dolist
-	(font-encoder
-	 (nreverse
-	  (mapcar (lambda (lst)
-		    (cons (cons (nth 3 lst) (nth 0 lst)) (nth 1 lst)))
-		  mac-font-encoder-list)))
-      (let ((font (car font-encoder))
-	    (encoder (cdr font-encoder)))
-	(map-char-table
-	 (lambda (key val)
-	   (or (null val)
-	       (generic-char-p key)
-	       (memq (char-charset key)
-		     '(ascii eight-bit-control eight-bit-graphic))
-	       (aset template key font)))
-	 (get encoder 'translation-table))))
-
-    ;; Like fontset-info, but extend a range only if its "to" part is
-    ;; the predecessor of the current char.
-    (let* ((last '((0 nil)))
-	   (accumulator last)
-	   last-char-or-range last-char last-elt)
-      (map-char-table
-       (lambda (char elt)
-	 (when elt
-	   (setq last-char-or-range (car (car last))
-		 last-char (if (consp last-char-or-range)
-			       (cdr last-char-or-range)
-			     last-char-or-range)
-		 last-elt (cdr (car last)))
-	   (if (and (eq elt last-elt)
-		    (= char (1+ last-char))
-		    (eq (char-charset char) (char-charset last-char)))
-	       (if (consp last-char-or-range)
-		   (setcdr last-char-or-range char)
-		 (setcar (car last) (cons last-char char)))
-	     (setcdr last (list (cons char elt)))
-	     (setq last (cdr last)))))
-       template)
-      (cdr accumulator))))
-
-(defun fontset-add-mac-fonts (fontset &optional base-family)
-  "Add font-specs for Mac fonts to FONTSET.
-The added font-specs are determined by BASE-FAMILY and the value
-of `mac-char-fontspec-list', which is a list
-of (CHARACTER-OR-RANGE . (FAMILY-FORMAT . REGISTRY)).  If
-BASE-FAMILY is nil, the font family in the added font-specs is
-also nil.  If BASE-FAMILY is a string, `%s' in FAMILY-FORMAT is
-replaced with the string.  Otherwise, `%s' in FAMILY-FORMAT is
-replaced with the ASCII font family name in FONTSET."
-  (if base-family
-      (if (stringp base-family)
-	  (setq base-family (downcase base-family))
-	(let ((ascii-font (fontset-font fontset (charset-id 'ascii))))
-	  (if ascii-font
-	      (setq base-family
-		    (aref (x-decompose-font-name
-			   (downcase (x-resolve-font-name ascii-font)))
-			  xlfd-regexp-family-subnum))))))
-  (let (fontspec-cache fontspec)
-    (dolist (char-fontspec mac-char-fontspec-list)
-      (setq fontspec (cdr (assq (cdr char-fontspec) fontspec-cache)))
-      (when (null fontspec)
-	(setq fontspec
-	      (cons (and base-family
-			 (format (car (cdr char-fontspec)) base-family))
-		    (cdr (cdr char-fontspec))))
-	(setq fontspec-cache (cons (cons (cdr char-fontspec) fontspec)
-				   fontspec-cache)))
-      (set-fontset-font fontset (car char-fontspec) fontspec))))
-
-(defun create-fontset-from-mac-roman-font (font &optional resolved-font
-						fontset-name)
-  "Create a fontset from a Mac roman font FONT.
-
-Optional 1st arg RESOLVED-FONT is a resolved name of FONT.  If
-omitted, `x-resolve-font-name' is called to get the resolved name.  At
-this time, if FONT is not available, error is signaled.
-
-Optional 2nd arg FONTSET-NAME is a string to be used in
-`<CHARSET_ENCODING>' fields of a new fontset name.  If it is omitted,
-an appropriate name is generated automatically.
-
-It returns a name of the created fontset."
-  (let ((fontset
-	 (create-fontset-from-ascii-font font resolved-font fontset-name)))
-    (fontset-add-mac-fonts fontset t)
-    fontset))
-
-) ;; (x-list-fonts "*-mac-roman" nil nil 1)
-
-;; Adjust Courier font specifications in x-fixed-font-alist.
-(let ((courier-fonts (assoc "Courier" x-fixed-font-alist)))
-  (if courier-fonts
-      (dolist (label-fonts (cdr courier-fonts))
-	(setcdr label-fonts
-		(mapcar
-		 (lambda (font)
-		   (if (string-match "\\`-adobe-courier-\\([^-]*\\)-\\(.\\)-\\(.*\\)-iso8859-1\\'" font)
-		       (replace-match
-			(if (string= (match-string 2 font) "o")
-			    "-*-courier-\\1-i-\\3-*-*"
-			  "-*-courier-\\1-\\2-\\3-*-*")
-			t nil font)
-		     font))
-		 (cdr label-fonts))))))
-
-;; Setup the default fontset.
-(setup-default-fontset)
-(cond ((x-list-fonts "*-iso10646-1" nil nil 1)
-       ;; Use ATSUI (if available) for the following charsets.
-       (dolist
-	   (charset (append
-		     (unless (x-list-fonts "*-mac-roman" nil nil 1)
-		       '(katakana-jisx0201
-			 latin-jisx0201
-			 chinese-gb2312 japanese-jisx0208 korean-ksc5601
-			 chinese-big5-1 chinese-big5-2))
-		     '(latin-iso8859-1
-		       latin-iso8859-2 latin-iso8859-3 latin-iso8859-4
-		       thai-tis620 greek-iso8859-7 arabic-iso8859-6
-		       hebrew-iso8859-8 cyrillic-iso8859-5
-		       latin-iso8859-9 latin-iso8859-15 latin-iso8859-14
-		       japanese-jisx0212 chinese-sisheng ipa
-		       vietnamese-viscii-lower vietnamese-viscii-upper
-		       lao ethiopic tibetan)))
-	 (set-fontset-font nil charset '(nil . "iso10646-1"))))
-      ((null (x-list-fonts "*-iso8859-1" nil nil 1))
-       ;; Add Mac-encoding fonts unless ETL fonts are installed.
-       (fontset-add-mac-fonts "fontset-default")))
-
-;; Create a fontset that uses mac-roman font.  With this fontset,
-;; characters decoded from mac-roman encoding (ascii, latin-iso8859-1,
-;; and mule-unicode-xxxx-yyyy) are displayed by a mac-roman font.
-(when (x-list-fonts "*-mac-roman" nil nil 1)
-  (create-fontset-from-fontset-spec
-   "-etl-fixed-medium-r-normal-*-16-*-*-*-*-*-fontset-standard,
-ascii:-*-Monaco-*-*-*-*-12-*-*-*-*-*-mac-roman")
-  (fontset-add-mac-fonts "fontset-standard" t))
-
-;; Create fontset specified in X resources "Fontset-N" (N is 0, 1, ...).
-(create-fontset-from-x-resource)
-
-;; Try to create a fontset from a font specification which comes
-;; from initial-frame-alist, default-frame-alist, or X resource.
-;; A font specification in command line argument (i.e. -fn XXXX)
-;; should be already in default-frame-alist as a `font'
-;; parameter.  However, any font specifications in site-start
-;; library, user's init file (.emacs), and default.el are not
-;; yet handled here.
-
-(let ((font (or (cdr (assq 'font initial-frame-alist))
-		(cdr (assq 'font default-frame-alist))
-		(x-get-resource "font" "Font")))
-      xlfd-fields resolved-name)
-  (if (and font
-	   (not (query-fontset font))
-	   (setq resolved-name (x-resolve-font-name font))
-	   (setq xlfd-fields (x-decompose-font-name font)))
-      (if (string= "fontset" (aref xlfd-fields xlfd-regexp-registry-subnum))
-	  (new-fontset font (x-complement-fontset-spec xlfd-fields nil))
-	;; Create a fontset from FONT.  The fontset name is
-	;; generated from FONT.
-	(if (and (string= "mac" (aref xlfd-fields xlfd-regexp-registry-subnum))
-		 (string= "roman" (aref xlfd-fields xlfd-regexp-encoding-subnum)))
-	    (create-fontset-from-mac-roman-font font resolved-name "startup")
-	  (create-fontset-from-ascii-font font resolved-name "startup")))))
-
-;; Apply a geometry resource to the initial frame.  Put it at the end
-;; of the alist, so that anything specified on the command line takes
-;; precedence.
-(let* ((res-geometry (x-get-resource "geometry" "Geometry"))
-       parsed)
-  (if res-geometry
-      (progn
-	(setq parsed (x-parse-geometry res-geometry))
-	;; If the resource specifies a position,
-	;; call the position and size "user-specified".
-	(if (or (assq 'top parsed) (assq 'left parsed))
-	    (setq parsed (cons '(user-position . t)
-			       (cons '(user-size . t) parsed))))
-	;; All geometry parms apply to the initial frame.
-	(setq initial-frame-alist (append initial-frame-alist parsed))
-	;; The size parms apply to all frames.  Don't set it if there are
-	;; sizes there already (from command line).
-	(if (and (assq 'height parsed)
-		 (not (assq 'height default-frame-alist)))
-	    (setq default-frame-alist
-		  (cons (cons 'height (cdr (assq 'height parsed)))
-			default-frame-alist)))
-	(if (and (assq 'width parsed)
-		 (not (assq 'width default-frame-alist)))
-	    (setq default-frame-alist
-		  (cons (cons 'width (cdr (assq 'width parsed)))
-			default-frame-alist))))))
-
-;; Check the reverseVideo resource.
-(let ((case-fold-search t))
-  (let ((rv (x-get-resource "reverseVideo" "ReverseVideo")))
-    (if (and rv
-	     (string-match "^\\(true\\|yes\\|on\\)$" rv))
-	(setq default-frame-alist
-	      (cons '(reverse . t) default-frame-alist)))))
+;;; Window system initialization.
 
 (defun x-win-suspend-error ()
   (error "Suspending an Emacs running under Mac makes no sense"))
-(add-hook 'suspend-hook 'x-win-suspend-error)
-
-;;; Arrange for the kill and yank functions to set and check the clipboard.
-(setq interprogram-cut-function 'x-select-text)
-(setq interprogram-paste-function 'x-get-selection-value)
 
 (defalias 'x-cut-buffer-or-selection-value 'x-get-selection-value)
 
-;;; Turn off window-splitting optimization; Mac is usually fast enough
-;;; that this is only annoying.
-(setq split-window-keep-point t)
+(defvar mac-initialized nil
+  "Non-nil if the Mac window system has been initialized.")
 
-;; Don't show the frame name; that's redundant.
-(setq-default mode-line-frame-identification "  ")
+(defvar mac-startup-options nil
+  "Alist of Mac-specific startup options.
+Each element looks like (OPTION-TYPE . OPTIONS).
+OPTION-TYPE is a symbol specifying the type of startup options:
 
-;; Turn on support for mouse wheels.
-(mouse-wheel-mode 1)
+ command-line -- List of Mac-specific command line options.
+ apple-event  -- Apple event that came with the \"Open Application\" event.")
 
+(declare-function x-open-connection "macfns.c"
+		  (display &optional xrm-string must-succeed))
+(declare-function x-get-resource "frame.c"
+		  (attribute class &optional component subclass))
+(declare-function x-parse-geometry "frame.c" (string))
 
-;; Enable CLIPBOARD copy/paste through menu bar commands.
-(menu-bar-enable-clipboard)
+(defun mac-handle-args (args)
+  "Process the Mac-related command line options in ARGS.
+It records Mac-specific options (currently -psn_HIGH_LOW added by
+Launch Services) in `mac-startup-options' as a value for the key
+symbol `command-line' and forwards the remaining ones to
+`x-handle-args'."
+  (when (and (cadr args) (string-match "\\`-psn_" (cadr args)))
+    (push (cons 'command-line (list (cadr args))) mac-startup-options)
+    (setq args (cons (car args) (cddr args))))
+  (x-handle-args args))
+
+(defun mac-initialize-window-system ()
+  "Initialize Emacs for Mac GUI frames."
+  ;; Make sure we have a valid resource name.
+  (or (stringp x-resource-name)
+      (let (i)
+	(setq x-resource-name (invocation-name))
+
+	;; Change any . or * characters in x-resource-name to hyphens,
+	;; so as not to choke when we use it in X resource queries.
+	(while (setq i (string-match "[.*]" x-resource-name))
+	  (aset x-resource-name i ?-))))
+
+  (x-open-connection "Mac"
+		     x-command-line-resources
+		     ;; Exit Emacs with fatal error if this fails.
+		     t)
+
+  ;; Create the default fontset.
+  (create-default-fontset)
+
+  (set-fontset-font t nil (font-spec :family "Apple Symbols") nil 'prepend)
+
+  ;; Create fontset specified in X resources "Fontset-N" (N is 0, 1, ...).
+  (create-fontset-from-x-resource)
+
+  ;; Apply a geometry resource to the initial frame.  Put it at the end
+  ;; of the alist, so that anything specified on the command line takes
+  ;; precedence.
+  (let* ((res-geometry (x-get-resource "geometry" "Geometry"))
+	 parsed)
+    (if res-geometry
+	(progn
+	  (setq parsed (x-parse-geometry res-geometry))
+	  ;; If the resource specifies a position,
+	  ;; call the position and size "user-specified".
+	  (if (or (assq 'top parsed) (assq 'left parsed))
+	      (setq parsed (cons '(user-position . t)
+				 (cons '(user-size . t) parsed))))
+	  ;; All geometry parms apply to the initial frame.
+	  (setq initial-frame-alist (append initial-frame-alist parsed))
+	  ;; The size parms apply to all frames.  Don't set it if there are
+	  ;; sizes there already (from command line).
+	  (if (and (assq 'height parsed)
+		   (not (assq 'height default-frame-alist)))
+	      (setq default-frame-alist
+		    (cons (cons 'height (cdr (assq 'height parsed)))
+			  default-frame-alist)))
+	  (if (and (assq 'width parsed)
+		   (not (assq 'width default-frame-alist)))
+	      (setq default-frame-alist
+		    (cons (cons 'width (cdr (assq 'width parsed)))
+			  default-frame-alist))))))
+
+  ;; Check the reverseVideo resource.
+  (let ((case-fold-search t))
+    (let ((rv (x-get-resource "reverseVideo" "ReverseVideo")))
+      (if (and rv
+	       (string-match "^\\(true\\|yes\\|on\\)$" rv))
+	  (setq default-frame-alist
+		(cons '(reverse . t) default-frame-alist)))))
+
+  ;; Don't let Emacs suspend under Mac.
+  (add-hook 'suspend-hook 'x-win-suspend-error)
+
+  ;; Turn off window-splitting optimization; Mac is usually fast enough
+  ;; that this is only annoying.
+  (setq split-window-keep-point t)
+
+  ;; Turn on support for mouse wheels.
+  (mouse-wheel-mode 1)
+
+  ;; Enable CLIPBOARD copy/paste through menu bar commands.
+  (menu-bar-enable-clipboard)
+
+  (mac-setup-system-coding-system)
+  (mac-setup-selection-properties)
+
+  ;; Processing of Apple events are deferred at the startup time.  For
+  ;; example, files dropped onto the Emacs application icon can only
+  ;; be processed when the initial frame has been created: this is
+  ;; where the files should be opened.
+  (add-hook 'after-init-hook 'mac-process-deferred-apple-events)
+  (run-with-idle-timer 5 t 'mac-cleanup-expired-apple-events)
+
+  ;; If Emacs is invoked from the command line, the initial frame
+  ;; doesn't get focused.
+  (add-hook 'after-init-hook
+	    (lambda () (if (and (null (cdr (assq 'command-line
+						 mac-startup-options)))
+				(eq (frame-visible-p (selected-frame)) t))
+			   (x-focus-frame (selected-frame)))))
+
+  (setq mac-initialized t))
+
+(add-to-list 'handle-args-function-alist '(mac . mac-handle-args))
+(add-to-list 'frame-creation-function-alist '(mac . x-create-frame-with-faces))
+(add-to-list 'window-system-initialization-alist '(mac . mac-initialize-window-system))
 
 ;; Initiate drag and drop
-
 (define-key special-event-map [drag-n-drop] 'mac-dnd-handle-drag-n-drop-event)
 
-
-;;;; Non-toolkit Scroll bars
-
-(unless x-toolkit-scroll-bars
-
-;; for debugging
-;; (defun mac-handle-scroll-bar-event (event) (interactive "e") (princ event))
-
-;;(global-set-key [vertical-scroll-bar mouse-1] 'mac-handle-scroll-bar-event)
-
-(global-set-key
- [vertical-scroll-bar down-mouse-1]
- 'mac-handle-scroll-bar-event)
-
-(global-unset-key [vertical-scroll-bar drag-mouse-1])
-(global-unset-key [vertical-scroll-bar mouse-1])
-
-(defun mac-handle-scroll-bar-event (event)
-  "Handle scroll bar EVENT to emulate Mac Toolbox style scrolling."
-  (interactive "e")
-  (let* ((position (event-start event))
-	 (window (nth 0 position))
-	 (bar-part (nth 4 position)))
-    (select-window window)
-    (cond
-     ((eq bar-part 'up)
-      (goto-char (window-start window))
-      (mac-scroll-down-line))
-     ((eq bar-part 'above-handle)
-      (mac-scroll-down))
-     ((eq bar-part 'handle)
-      (scroll-bar-drag event))
-     ((eq bar-part 'below-handle)
-      (mac-scroll-up))
-     ((eq bar-part 'down)
-      (goto-char (window-start window))
-      (mac-scroll-up-line)))))
-
-(defun mac-scroll-ignore-events ()
-  ;; Ignore confusing non-mouse events
-  (while (not (memq (car-safe (read-event))
-		    '(mouse-1 double-mouse-1 triple-mouse-1))) nil))
-
-(defun mac-scroll-down ()
-  (track-mouse
-    (mac-scroll-ignore-events)
-    (scroll-down)))
-
-(defun mac-scroll-down-line ()
-  (track-mouse
-    (mac-scroll-ignore-events)
-    (scroll-down 1)))
-
-(defun mac-scroll-up ()
-  (track-mouse
-    (mac-scroll-ignore-events)
-    (scroll-up)))
-
-(defun mac-scroll-up-line ()
-  (track-mouse
-    (mac-scroll-ignore-events)
-    (scroll-up 1)))
-
-)
-
-
-;;;; Others
-
-(unless (eq system-type 'darwin)
-  ;; This variable specifies the Unix program to call (as a process) to
-  ;; determine the amount of free space on a file system (defaults to
-  ;; df).  If it is not set to nil, ls-lisp will not work correctly
-  ;; unless an external application df is implemented on the Mac.
-  (setq directory-free-space-program nil)
-
-  ;; Set this so that Emacs calls subprocesses with "sh" as shell to
-  ;; expand filenames Note no subprocess for the shell is actually
-  ;; started (see run_mac_command in sysdep.c).
-  (setq shell-file-name "sh")
-
-  ;; Some system variables are encoded with the system script code.
-  (dolist (v '(system-name
-	       emacs-build-system	; Mac OS 9 version cannot dump
-	       user-login-name user-real-login-name user-full-name))
-    (set v (decode-coding-string (symbol-value v) mac-system-coding-system))))
-
-;; Now the default directory is changed to the user's home directory
-;; in emacs.c if invoked from the WindowServer (with -psn_* option).
-;; (if (string= default-directory "/")
-;;     (cd "~"))
-
-;; Darwin 6- pty breakage is now controlled from the C code so that
-;; it applies to all builds on darwin.  See s/darwin.h PTY_ITERATION.
-;; (setq process-connection-type t)
-
-;; Assume that fonts are always scalable on the Mac.  This sometimes
-;; results in characters with jagged edges.  However, without it,
-;; fonts with both truetype and bitmap representations but no italic
-;; or bold bitmap versions will not display these variants correctly.
-(setq scalable-fonts-allowed t)
-
-;; If Emacs is invoked from the command line, the initial frame
-;; doesn't get focused.
-(add-hook 'after-init-hook
-	  (lambda () (if (and (null (cdr (assq 'command-line
-					       mac-startup-options)))
-			      (eq (frame-visible-p (selected-frame)) t))
-			 (x-focus-frame (selected-frame)))))
+(provide 'mac-win)
 
 ;; arch-tag: 71dfcd14-cde8-4d66-b05c-85ec94fb23a6
 ;;; mac-win.el ends here

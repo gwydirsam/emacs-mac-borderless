@@ -1,17 +1,17 @@
 #!/bin/sh
 ### quick-install-emacs --- do a halfway-decent job of installing emacs quickly
 
-## Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+## Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
 ##   Free Software Foundation, Inc.
 
 ## Author: Miles Bader <miles@gnu.org>
 
 ## This file is part of GNU Emacs.
 
-## GNU Emacs is free software; you can redistribute it and/or modify
+## GNU Emacs is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
-## the Free Software Foundation; either version 3, or (at your option)
-## any later version.
+## the Free Software Foundation, either version 3 of the License, or
+## (at your option) any later version.
 
 ## GNU Emacs is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,9 +19,8 @@
 ## GNU General Public License for more details.
 
 ## You should have received a copy of the GNU General Public License
-## along with GNU Emacs; see the file COPYING.  If not, write to the
-## Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-## Boston, MA 02110-1301, USA.
+## along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+
 
 ### Commentary:
 
@@ -160,11 +159,12 @@ fi
 CONFIG_STATUS="$BUILD/config.status"
 get_config_var ()
 {
-  if ! sed -n "s/^s\(.\)@$1@\1\(|#_!!_#|\)*\(.*\)\1.*$/\3/p" $CONFIG_STATUS | sed q | grep ''
-  then
+  { sed -n "s/^S[[]\"$1\"[]]=\"\([^\"]*\)\"/\1/p" $CONFIG_STATUS | sed q | grep ''; } ||
+  { sed -n "s/^s\(.\)@$1@\1\(|#_!!_#|\)*\(.*\)\1.*$/\3/p" $CONFIG_STATUS | sed q | grep ''; } ||
+  {
     echo 1>&2 "$me: $1: Configuration variable not found in $CONFIG_STATUS"
     exit 4
-  fi
+  }
 }
 
 test x"$SRC" = x && { SRC="`get_config_var srcdir`" || exit 4 ; }
@@ -177,7 +177,19 @@ VERSION=`grep 'defconst[	 ]*emacs-version' $SRC/lisp/version.el \
 DST_SHARE="$prefix/share/emacs/$VERSION"
 DST_BIN="$prefix/bin"
 DST_LIBEXEC="$prefix/libexec/emacs/$VERSION/$ARCH"
-DST_INFO="$prefix/info"
+
+# There are various common places for the info dir to be, so try to
+# use whatever's already there, defaulting to (and preferring)
+# .../share/info.
+#
+DST_INFO=''
+for D in "$prefix/share/info" "$prefix/info"; do
+  if test -d "$D"; then
+    DST_INFO="$D"
+    break
+  fi
+done
+DST_INFO=${DST_INFO:-"$prefix/share/info"}
 
 maybe_mkdir ()
 {

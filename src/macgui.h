@@ -1,25 +1,24 @@
 /* Definitions and headers for communication on the Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004,
                  2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs is distributed in the hope that it will be useful,
+GNU Emacs Mac port is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to
-the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
-/* Contributed by Andrew Choi (akochoi@mac.com).  */
+/* Originally contributed by Andrew Choi (akochoi@mac.com) for Emacs 21.  */
 
 #ifndef EMACS_MACGUI_H
 #define EMACS_MACGUI_H
@@ -30,9 +29,8 @@ typedef Lisp_Object XrmDatabase;
 
 typedef unsigned long Time;
 
-#ifdef HAVE_CARBON
+#ifdef HAVE_MACGUI
 #undef Z
-#ifdef MAC_OSX
 #if ! HAVE_MKTIME || BROKEN_MKTIME
 #undef mktime
 #endif
@@ -63,104 +61,21 @@ typedef unsigned long Time;
 #undef init_process
 #define init_process emacs_init_process
 #undef INFINITY
-#else  /* not MAC_OSX */
-#undef SIGHUP
-#define OLDP2C 1
-#include <Carbon.h>
-#endif  /* not MAC_OSX */
 #undef Z
 #define Z (current_buffer->text->z)
-#else /* not HAVE_CARBON */
+#else /* not HAVE_MACGUI */
 #include <Quickdraw.h>		/* for WindowRef */
 #include <QDOffscreen.h>	/* for GWorldPtr */
 #include <Appearance.h>		/* for ThemeCursor */
 #include <Windows.h>
 #include <Controls.h>
 #include <Gestalt.h>
-#endif /* not HAVE_CARBON */
-
-/* Whether to use ATSUI (Apple Type Services for Unicode Imaging) for
-   text drawing.  */
-#ifndef USE_ATSUI
-#ifdef MAC_OSX
-#define USE_ATSUI 1
-#endif
-#endif
-
-/* Whether to use low-level Quartz 2D (aka Core Graphics) text drawing
-   in preference to ATSUI for ASCII and Latin-1 characters.  */
-#ifndef USE_CG_TEXT_DRAWING
-#if USE_ATSUI && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
-#define USE_CG_TEXT_DRAWING 1
-#endif
-#endif
-
-/* Whether to use Quartz 2D routines for drawing operations other than
-   texts.  */
-#ifndef USE_CG_DRAWING
-#if USE_APPKIT || MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
-#define USE_CG_DRAWING 1
-#endif
-#endif
-
-/* Whether to use the standard Font Panel floating dialog.  */
-#ifndef USE_MAC_FONT_PANEL
-#if USE_ATSUI && (USE_APPKIT || MAC_OS_X_VERSION_MAX_ALLOWED >= 1020)
-#define USE_MAC_FONT_PANEL 1
-#endif
-#endif
-
-/* Whether to use Text Services Manager.  */
-#ifndef USE_MAC_TSM
-#if TARGET_API_MAC_CARBON && !USE_APPKIT
-#define USE_MAC_TSM 1
-#endif
-#endif
-
-/* Whether to use QuickDraw.  */
-#ifndef USE_QUICKDRAW
-#if !__LP64__
-#define USE_QUICKDRAW 1
-#endif
-#endif
-
-/* Whether to use Carbon HIToolbar or Cocoa NSToolbar.  */
-#ifndef USE_MAC_TOOLBAR
-#if USE_CG_DRAWING && (USE_APPKIT || (MAC_OS_X_VERSION_MAX_ALLOWED >= 1030 && MAC_OS_X_VERSION_MIN_REQUIRED != 1020))
-#define USE_MAC_TOOLBAR 1
-#endif
-#endif
+#endif /* not HAVE_MACGUI */
 
 #ifndef CGFLOAT_DEFINED
 typedef float CGFloat;
 #endif
 
-#if !USE_APPKIT
-typedef WindowRef Window;
-#if TARGET_API_MAC_CARBON
-typedef ScrapRef Selection;
-#else
-typedef int Selection;
-#endif
-#define mac_set_window_title	SetWindowTitleWithCFString
-#define mac_set_window_modified	SetWindowModified
-#define mac_is_window_visible	IsWindowVisible
-#define mac_is_window_collapsed	IsWindowCollapsed
-#define mac_bring_window_to_front	BringToFront
-#define mac_send_window_behind	SendBehind
-#define mac_hide_window		HideWindow
-#define mac_show_window		ShowWindow
-#define mac_collapse_window	CollapseWindow
-#define mac_front_non_floating_window	FrontNonFloatingWindow
-#define mac_active_non_floating_window	ActiveNonFloatingWindow
-#define mac_activate_window	ActivateWindow
-#define mac_move_window_structure	MoveWindowStructure
-#define mac_move_window		MoveWindow
-#define mac_size_window		SizeWindow
-#define mac_get_global_mouse	GetGlobalMouse
-#define mac_is_window_toolbar_visible	IsWindowToolbarVisible
-#define mac_rect_make(f, x, y, w, h)	CGRectMake (x, y, w, h)
-#else
 typedef void *Window;
 typedef void *Selection;
 extern void mac_set_window_title P_ ((Window, CFStringRef));
@@ -178,11 +93,11 @@ extern void mac_activate_window P_ ((Window, Boolean));
 extern OSStatus mac_move_window_structure P_ ((Window, short, short));
 extern void mac_move_window P_ ((Window, short, short, Boolean));
 extern void mac_size_window P_ ((Window, short, short, Boolean));
+extern OSStatus mac_set_window_alpha P_ ((Window, CGFloat));
 extern void mac_get_global_mouse P_ ((Point *));
 extern Boolean mac_is_window_toolbar_visible P_ ((Window));
 extern CGRect mac_rect_make P_ ((struct frame *, CGFloat, CGFloat,
 				 CGFloat, CGFloat));
-#endif
 
 #if USE_MAC_IMAGE_IO
 typedef struct _XImage
@@ -201,86 +116,6 @@ typedef GWorldPtr Pixmap;
 
 #define FACE_DEFAULT (~0)
 
-#if !TARGET_API_MAC_CARBON
-#define GetPixDepth(pmh) ((*(pmh))->pixelSize)
-#endif
-
-
-/* Emulate XCharStruct.  */
-/* If the sum of ascent and descent is negative, that means some
-   special status specified by enum pcm_status.  */
-typedef struct _XCharStruct
-{
-  short	lbearing;		/* origin to left edge of raster */
-  short	rbearing;		/* origin to right edge of raster */
-  short	width;			/* advance to next char's origin */
-  short	ascent;			/* baseline to top edge of raster */
-  short	descent;		/* baseline to bottom edge of raster */
-#if 0
-  unsigned short attributes;	/* per char flags (not predefined) */
-#endif
-} XCharStruct;
-
-enum pcm_status
-  {
-    PCM_VALID = 0,		/* pcm data is valid */
-    PCM_INVALID = -1,		/* pcm data is invalid */
-  };
-
-#define STORE_XCHARSTRUCT(xcs, w, bds)			\
-  ((xcs).width = (w),					\
-   (xcs).lbearing = (bds).left,				\
-   (xcs).rbearing = (bds).right,			\
-   (xcs).ascent = -(bds).top,				\
-   (xcs).descent = (bds).bottom)
-
-struct MacFontStruct {
-  char *full_name;
-
-  short mac_fontnum;  /* font number of font used in this window */
-  int mac_fontsize;  /* size of font */
-  short mac_fontface;  /* plain, bold, italics, etc. */
-#if TARGET_API_MAC_CARBON
-  int mac_scriptcode;  /* Mac OS script code for font used */
-#else
-  short mac_scriptcode;  /* Mac OS script code for font used */
-#endif
-#if USE_ATSUI
-  ATSUStyle mac_style;		/* NULL if QuickDraw Text is used */
-#if USE_CG_TEXT_DRAWING
-  CGFontRef cg_font;		/* NULL if ATSUI text drawing is used */
-  CGGlyph *cg_glyphs;		/* Likewise  */
-#endif
-#endif
-
-/* from Xlib.h */
-#if 0
-  XExtData *ext_data;      /* hook for extension to hang data */
-  Font fid;                /* Font id for this font */
-  unsigned direction;      /* hint about the direction font is painted */
-#endif /* 0 */
-  unsigned min_char_or_byte2;/* first character */
-  unsigned max_char_or_byte2;/* last character */
-  unsigned min_byte1;      /* first row that exists */
-  unsigned max_byte1;      /* last row that exists */
-#if 0
-  Bool all_chars_exist;    /* flag if all characters have nonzero size */
-  unsigned default_char;   /* char to print for undefined character */
-  int n_properties;        /* how many properties there are */
-  XFontProp *properties;   /* pointer to array of additional properties */
-#endif /* 0 */
-  XCharStruct min_bounds;  /* minimum bounds over all existing char */
-  XCharStruct max_bounds;  /* maximum bounds over all existing char */
-  union {
-    XCharStruct *per_char; /* first_char to last_char information */
-    XCharStruct **rows;    /* first row to last row information */
-  } bounds;
-  int ascent;              /* logical extent above baseline for spacing */
-  int descent;             /* logical decent below baseline for spacing */
-};
-
-typedef struct MacFontStruct MacFontStruct;
-typedef struct MacFontStruct XFontStruct;
 
 /* Structure borrowed from Xlib.h to represent two-byte characters.  */
 
@@ -304,7 +139,6 @@ typedef struct _XGCValues
 {
   unsigned long foreground;
   unsigned long background;
-  XFontStruct *font;
 } XGCValues;
 
 typedef struct _XGC
@@ -314,15 +148,7 @@ typedef struct _XGC
 
   /* Cached data members follow.  */
 
-#if USE_QUICKDRAW
-  /* QuickDraw foreground color.  */
-  RGBColor fore_color;
-
-  /* QuickDraw background color.  */
-  RGBColor back_color;
-#endif
-
-#if USE_CG_DRAWING && MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
   /* Quartz 2D foreground color.  */
   CGColorRef cg_fore_color;
 
@@ -334,21 +160,13 @@ typedef struct _XGC
   /* Number of clipping rectangles.  */
   int n_clip_rects;
 
-#if USE_QUICKDRAW
-  /* QuickDraw clipping region.  Ignored if n_clip_rects == 0.  */
-  RgnHandle clip_region;
-#endif
-
-#if defined (MAC_OSX) && (USE_ATSUI || USE_CG_DRAWING)
   /* Clipping rectangles used in Quartz 2D drawing.  The y-coordinate
      is in QuickDraw's.  */
   CGRect clip_rects[MAX_CLIP_RECTS];
-#endif
 } *GC;
 
 #define GCForeground            (1L<<2)
 #define GCBackground            (1L<<3)
-#define GCFont 			(1L<<14)
 #define GCGraphicsExposures	0
 
 /* Bit Gravity */
@@ -503,17 +321,10 @@ typedef struct _widget_value
   struct _widget_value *free_list;
 #endif
 } widget_value;
-
-#if MAC_OS8
-#define M_APPLE 234
-#define I_ABOUT 1
-
-#define EXTRA_STACK_ALLOC (256 * 1024)
-
-#define ARGV_STRING_LIST_ID 129
-#define RAM_TOO_LARGE_ALERT_ID 129
-#define ABOUT_ALERT_ID	128
-#endif
+/* Assumed by other routines to zero area returned.  */
+#define malloc_widget_value() (void *)memset (xmalloc (sizeof (widget_value)),\
+                                              0, (sizeof (widget_value)))
+#define free_widget_value(wv) xfree (wv)
 
 #define DIALOG_LEFT_MARGIN (112)
 #define DIALOG_TOP_MARGIN (24)

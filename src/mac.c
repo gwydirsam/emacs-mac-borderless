@@ -1,25 +1,24 @@
 /* Unix emulation routines for GNU Emacs on the Mac OS.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
+                 2008  Free Software Foundation, Inc.
+   Copyright (C) 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs is distributed in the hope that it will be useful,
+GNU Emacs Mac port is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to
-the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
-/* Contributed by Andrew Choi (akochoi@mac.com).  */
+/* Originally contributed by Andrew Choi (akochoi@mac.com) for Emacs 21.  */
 
 #include <config.h>
 
@@ -28,9 +27,7 @@ Boston, MA 02110-1301, USA.  */
 
 #include "lisp.h"
 #include "process.h"
-#ifdef MAC_OSX
 #undef select
-#endif
 #include "systime.h"
 #include "sysselect.h"
 #include "blockinput.h"
@@ -39,41 +36,15 @@ Boston, MA 02110-1301, USA.  */
 
 #include "charset.h"
 #include "coding.h"
-#if !TARGET_API_MAC_CARBON
-#include <Files.h>
-#include <MacTypes.h>
-#include <TextUtils.h>
-#include <Folders.h>
-#include <Resources.h>
-#include <Aliases.h>
-#include <Timer.h>
-#include <OSA.h>
-#include <AppleScript.h>
-#include <Events.h>
-#include <Processes.h>
-#include <EPPC.h>
-#include <MacLocales.h>
-#include <Endian.h>
-#endif	/* not TARGET_API_MAC_CARBON */
 
-#include <utime.h>
-#include <dirent.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <pwd.h>
-#include <grp.h>
 #include <sys/param.h>
 #include <fcntl.h>
-#if __MWERKS__
-#include <unistd.h>
-#endif
 
-#ifdef MAC_OSX
 #undef init_process
 #include <mach/mach.h>
 #include <servers/bootstrap.h>
 #define init_process emacs_init_process
-#endif
 
 /* The system script code. */
 static EMACS_INT mac_system_script_code;
@@ -85,201 +56,6 @@ static Lisp_Object Vmac_system_locale;
 static ComponentInstance as_scripting_component;
 /* The single script context used for all script executions.  */
 static OSAID as_script_context;
-
-#ifndef MAC_OSX
-#if TARGET_API_MAC_CARBON
-static int wakeup_from_rne_enabled_p = 0;
-#define ENABLE_WAKEUP_FROM_RNE (wakeup_from_rne_enabled_p = 1)
-#define DISABLE_WAKEUP_FROM_RNE (wakeup_from_rne_enabled_p = 0)
-#else
-#define ENABLE_WAKEUP_FROM_RNE 0
-#define DISABLE_WAKEUP_FROM_RNE 0
-#endif
-#endif
-
-#ifndef MAC_OSX
-static OSErr posix_pathname_to_fsspec P_ ((const char *, FSSpec *));
-static OSErr fsspec_to_posix_pathname P_ ((const FSSpec *, char *, int));
-#endif
-
-#if !__LP64__
-/* When converting from Mac to Unix pathnames, /'s in folder names are
-   converted to :'s.  This function, used in copying folder names,
-   performs a strncat and converts all character a to b in the copy of
-   the string s2 appended to the end of s1.  */
-
-void
-string_cat_and_replace (char *s1, const char *s2, int n, char a, char b)
-{
-  int l1 = strlen (s1);
-  int l2 = strlen (s2);
-  char *p = s1 + l1;
-  int i;
-
-  strncat (s1, s2, n);
-  for (i = 0; i < l2; i++)
-    {
-      if (*p == a)
-        *p = b;
-      p++;
-    }
-}
-
-
-/* Convert a Mac pathname to Posix form.  A Mac full pathname is one
-   that does not begin with a ':' and contains at least one ':'. A Mac
-   full pathname causes a '/' to be prepended to the Posix pathname.
-   The algorithm for the rest of the pathname is as follows:
-     For each segment between two ':',
-       if it is non-null, copy as is and then add a '/' at the end,
-       otherwise, insert a "../" into the Posix pathname.
-   Returns 1 if successful; 0 if fails.  */
-
-int
-mac_to_posix_pathname (const char *mfn, char *ufn, int ufnbuflen)
-{
-  const char *p, *q, *pe;
-
-  strcpy (ufn, "");
-
-  if (*mfn == '\0')
-    return 1;
-
-  p = strchr (mfn, ':');
-  if (p != 0 && p != mfn)  /* full pathname */
-    strcat (ufn, "/");
-
-  p = mfn;
-  if (*p == ':')
-    p++;
-
-  pe = mfn + strlen (mfn);
-  while (p < pe)
-    {
-      q = strchr (p, ':');
-      if (q)
-	{
-	  if (q == p)
-	    {  /* two consecutive ':' */
-	      if (strlen (ufn) + 3 >= ufnbuflen)
-		return 0;
-	      strcat (ufn, "../");
-	    }
-	  else
-	    {
-	      if (strlen (ufn) + (q - p) + 1 >= ufnbuflen)
-		return 0;
-	      string_cat_and_replace (ufn, p, q - p, '/', ':');
-	      strcat (ufn, "/");
-	    }
-	  p = q + 1;
-	}
-      else
-	{
-	  if (strlen (ufn) + (pe - p) >= ufnbuflen)
-	    return 0;
-	  string_cat_and_replace (ufn, p, pe - p, '/', ':');
-	    /* no separator for last one */
-	  p = pe;
-	}
-    }
-
-  return 1;
-}
-
-
-extern char *get_temp_dir_name ();
-
-
-/* Convert a Posix pathname to Mac form.  Approximately reverse of the
-   above in algorithm.  */
-
-int
-posix_to_mac_pathname (const char *ufn, char *mfn, int mfnbuflen)
-{
-  const char *p, *q, *pe;
-  char expanded_pathname[MAXPATHLEN+1];
-
-  strcpy (mfn, "");
-
-  if (*ufn == '\0')
-    return 1;
-
-  p = ufn;
-
-  /* Check for and handle volume names.  Last comparison: strangely
-     somewhere "/.emacs" is passed.  A temporary fix for now.  */
-  if (*p == '/' && strchr (p+1, '/') == NULL && strcmp (p, "/.emacs") != 0)
-    {
-      if (strlen (p) + 1 > mfnbuflen)
-	return 0;
-      strcpy (mfn, p+1);
-      strcat (mfn, ":");
-      return 1;
-    }
-
-  /* expand to emacs dir found by init_emacs_passwd_dir */
-  if (strncmp (p, "~emacs/", 7) == 0)
-    {
-      struct passwd *pw = getpwnam ("emacs");
-      p += 7;
-      if (strlen (pw->pw_dir) + strlen (p) > MAXPATHLEN)
-	return 0;
-      strcpy (expanded_pathname, pw->pw_dir);
-      strcat (expanded_pathname, p);
-      p = expanded_pathname;
-        /* now p points to the pathname with emacs dir prefix */
-    }
-  else if (strncmp (p, "/tmp/", 5) == 0)
-    {
-      char *t = get_temp_dir_name ();
-      p += 5;
-      if (strlen (t) + strlen (p) > MAXPATHLEN)
-	return 0;
-      strcpy (expanded_pathname, t);
-      strcat (expanded_pathname, p);
-      p = expanded_pathname;
-        /* now p points to the pathname with emacs dir prefix */
-    }
-  else if (*p != '/')  /* relative pathname */
-    strcat (mfn, ":");
-
-  if (*p == '/')
-    p++;
-
-  pe = p + strlen (p);
-  while (p < pe)
-    {
-      q = strchr (p, '/');
-      if (q)
-	{
-	  if (q - p == 2 && *p == '.' && *(p+1) == '.')
-	    {
-	      if (strlen (mfn) + 1 >= mfnbuflen)
-		return 0;
-	      strcat (mfn, ":");
-	    }
-	  else
-	    {
-	      if (strlen (mfn) + (q - p) + 1 >= mfnbuflen)
-		return 0;
-	      string_cat_and_replace (mfn, p, q - p, ':', '/');
-	      strcat (mfn, ":");
-	    }
-	  p = q + 1;
-	}
-      else
-	{
-	  if (strlen (mfn) + (pe - p) >= mfnbuflen)
-	    return 0;
-	  string_cat_and_replace (mfn, p, pe - p, ':', '/');
-	  p = pe;
-	}
-    }
-
-  return 1;
-}
-#endif	/* !__LP64__ */
 
 
 /***********************************************************************
@@ -460,13 +236,8 @@ mac_aedesc_to_lisp (desc)
       break;
 
     default:
-#if TARGET_API_MAC_CARBON
       result = make_uninit_string (AEGetDescDataSize (desc));
       err = AEGetDescData (desc, SDATA (result), SBYTES (result));
-#else
-      result = make_uninit_string (GetHandleSize (desc->dataHandle));
-      memcpy (SDATA (result), *(desc->dataHandle), SBYTES (result));
-#endif
       break;
     }
 
@@ -583,7 +354,6 @@ mac_coerce_file_name_ptr (type_code, data_ptr, data_size,
   else if (type_code == TYPE_FILE_NAME)
     /* Coercion from undecoded file name.  */
     {
-#ifdef MAC_OSX
       CFStringRef str;
       CFURLRef url = NULL;
       CFDataRef data = NULL;
@@ -625,23 +395,10 @@ mac_coerce_file_name_ptr (type_code, data_ptr, data_size,
 	    err = AECoercePtr (typeFSRef, &fref, sizeof (FSRef),
 			       to_type, result);
 	}
-#else
-      FSSpec fs;
-      char *buf;
-
-      buf = xmalloc (data_size + 1);
-      memcpy (buf, data_ptr, data_size);
-      buf[data_size] = '\0';
-      err = posix_pathname_to_fsspec (buf, &fs);
-      xfree (buf);
-      if (err == noErr)
-	err = AECoercePtr (typeFSS, &fs, sizeof (FSSpec), to_type, result);
-#endif
     }
   else if (to_type == TYPE_FILE_NAME)
     /* Coercion to undecoded file name.  */
     {
-#ifdef MAC_OSX
       CFURLRef url = NULL;
       CFStringRef str = NULL;
       CFDataRef data = NULL;
@@ -715,35 +472,6 @@ mac_coerce_file_name_ptr (type_code, data_ptr, data_size,
 	    err = AECreateDesc (TYPE_FILE_NAME, file_name,
 				strlen (file_name), result);
 	}
-#else
-      char file_name[MAXPATHLEN];
-
-      if (type_code == typeFSS && data_size == sizeof (FSSpec))
-	err = fsspec_to_posix_pathname (data_ptr, file_name,
-					sizeof (file_name) - 1);
-      else
-	{
-	  AEDesc desc;
-	  FSSpec fs;
-
-	  err = AECoercePtr (type_code, data_ptr, data_size, typeFSS, &desc);
-	  if (err == noErr)
-	    {
-#if TARGET_API_MAC_CARBON
-	      err = AEGetDescData (&desc, &fs, sizeof (FSSpec));
-#else
-	      fs = *(FSSpec *)(*(desc.dataHandle));
-#endif
-	      AEDisposeDesc (&desc);
-	    }
-	  if (err == noErr)
-	    err = fsspec_to_posix_pathname (&fs, file_name,
-					    sizeof (file_name) - 1);
-	}
-      if (err == noErr)
-	err = AECreateDesc (TYPE_FILE_NAME, file_name,
-			    strlen (file_name), result);
-#endif
     }
   else
     abort ();
@@ -772,17 +500,9 @@ mac_coerce_file_name_desc (from_desc, to_type, handler_refcon, result)
       char *data_ptr;
       Size data_size;
 
-#if TARGET_API_MAC_CARBON
       data_size = AEGetDescDataSize (from_desc);
-#else
-      data_size = GetHandleSize (from_desc->dataHandle);
-#endif
       data_ptr = xmalloc (data_size);
-#if TARGET_API_MAC_CARBON
       err = AEGetDescData (from_desc, data_ptr, data_size);
-#else
-      memcpy (data_ptr, *(from_desc->dataHandle), data_size);
-#endif
       if (err == noErr)
 	err = mac_coerce_file_name_ptr (from_type, data_ptr,
 					data_size, to_type,
@@ -825,7 +545,6 @@ init_coercion_handler ()
   return err;
 }
 
-#if TARGET_API_MAC_CARBON
 OSErr
 create_apple_event (class, id, result)
      AEEventClass class;
@@ -862,10 +581,8 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
   Lisp_Object result = Qnil;
   UInt32 i;
   ByteCount size;
-#ifdef MAC_OSX
   CFStringRef string;
   CFDataRef data;
-#endif
   char *buf = NULL;
 
   for (i = 0; i < num_params; i++)
@@ -875,7 +592,6 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
 
       switch (type)
 	{
-#ifdef MAC_OSX
 	case typeCFStringRef:
 	  err = GetEventParameter (event, name, typeCFStringRef, NULL,
 				   sizeof (CFStringRef), NULL, &string);
@@ -896,7 +612,6 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
 		   result);
 	  CFRelease (data);
 	  break;
-#endif
 
 	default:
 	  err = GetEventParameter (event, name, type, NULL, 0, &size, NULL);
@@ -917,18 +632,16 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
 	  break;
 	}
     }
-  if (buf)
-    xfree (buf);
+  xfree (buf);
 
   return result;
 }
-#endif	/* TARGET_API_MAC_CARBON */
+
 
 /***********************************************************************
 	 Conversion between Lisp and Core Foundation objects
  ***********************************************************************/
 
-#if TARGET_API_MAC_CARBON
 Lisp_Object Qstring, Qnumber, Qboolean, Qdate, Qdata, Qarray, Qdictionary;
 static Lisp_Object Qdescription;
 
@@ -1374,11 +1087,7 @@ cfproperty_list_create_with_lisp_data (obj)
 				     &XFLOAT_DATA (data));
 	  else if (STRINGP (data))
 	    {
-#if !defined (MAC_OSX) || MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
 	      SInt64 value = strtoll (SDATA (data), NULL, 0);
-#else
-	      SInt64 value = strtoq (SDATA (data), NULL, 0);
-#endif
 
 	      result = CFNumberCreate (NULL, kCFNumberSInt64Type, &value);
 	    }
@@ -1499,7 +1208,6 @@ cfproperty_list_create_with_lisp_data (obj)
 
   return result;
 }
-#endif
 
 
 /***********************************************************************
@@ -1966,7 +1674,6 @@ xrm_get_resource (database, name, class)
     }
 }
 
-#if TARGET_API_MAC_CARBON
 static Lisp_Object
 xrm_cfproperty_list_to_value (plist)
      CFPropertyListRef plist;
@@ -1995,7 +1702,6 @@ xrm_cfproperty_list_to_value (plist)
   else
     return Qnil;
 }
-#endif
 
 /* Create a new resource database from the preferences for the
    application APPLICATION.  APPLICATION is either a string that
@@ -2006,7 +1712,6 @@ XrmDatabase
 xrm_get_preference_database (application)
      const char *application;
 {
-#if TARGET_API_MAC_CARBON
   CFStringRef app_id, *keys, user_doms[2], host_doms[2];
   CFMutableSetRef key_set = NULL;
   CFArrayRef key_array;
@@ -2081,2258 +1786,9 @@ xrm_get_preference_database (application)
   UNGCPRO;
 
   return database;
-#else
-  return xrm_create_database ();
-#endif
 }
 
 
-#ifndef MAC_OSX
-
-/* The following functions with "sys_" prefix are stubs to Unix
-   functions that have already been implemented by CW or MPW.  The
-   calls to them in Emacs source course are #define'd to call the sys_
-   versions by the header files s-mac.h.  In these stubs pathnames are
-   converted between their Unix and Mac forms.  */
-
-
-/* Unix epoch is Jan 1, 1970 while Mac epoch is Jan 1, 1904: 66 years
-   + 17 leap days.  These are for adjusting time values returned by
-   MacOS Toolbox functions.  */
-
-#define MAC_UNIX_EPOCH_DIFF  ((365L * 66 + 17) * 24 * 60 * 60)
-
-#ifdef __MWERKS__
-#if __MSL__ < 0x6000
-/* CW Pro 5 epoch is Jan 1, 1900 (aaarghhhhh!); remember, 1900 is not
-   a leap year!  This is for adjusting time_t values returned by MSL
-   functions.  */
-#define CW_OR_MPW_UNIX_EPOCH_DIFF ((365L * 70 + 17) * 24 * 60 * 60)
-#else /* __MSL__ >= 0x6000 */
-/* CW changes Pro 6 to follow Unix!  */
-#define CW_OR_MPW_UNIX_EPOCH_DIFF ((365L * 66 + 17) * 24 * 60 * 60)
-#endif /* __MSL__ >= 0x6000 */
-#elif __MRC__
-/* MPW library functions follow Unix (confused?).  */
-#define CW_OR_MPW_UNIX_EPOCH_DIFF ((365L * 66 + 17) * 24 * 60 * 60)
-#else /* not __MRC__ */
-You lose!!!
-#endif /* not __MRC__ */
-
-
-/* Define our own stat function for both MrC and CW.  The reason for
-   doing this: "stat" is both the name of a struct and function name:
-   can't use the same trick like that for sys_open, sys_close, etc. to
-   redirect Emacs's calls to our own version that converts Unix style
-   filenames to Mac style filename because all sorts of compilation
-   errors will be generated if stat is #define'd to be sys_stat.  */
-
-int
-stat_noalias (const char *path, struct stat *buf)
-{
-  char mac_pathname[MAXPATHLEN+1];
-  CInfoPBRec cipb;
-
-  if (posix_to_mac_pathname (path, mac_pathname, MAXPATHLEN+1) == 0)
-    return -1;
-
-  c2pstr (mac_pathname);
-  cipb.hFileInfo.ioNamePtr = mac_pathname;
-  cipb.hFileInfo.ioVRefNum = 0;
-  cipb.hFileInfo.ioDirID = 0;
-  cipb.hFileInfo.ioFDirIndex = 0;
-    /* set to 0 to get information about specific dir or file */
-
-  errno = PBGetCatInfo (&cipb, false);
-  if (errno == -43) /* -43: fnfErr defined in Errors.h */
-    errno = ENOENT;
-  if (errno != noErr)
-    return -1;
-
-  if (cipb.hFileInfo.ioFlAttrib & 0x10)  /* bit 4 = 1 for directories */
-    {
-      buf->st_mode = S_IFDIR | S_IREAD | S_IEXEC;
-
-      if (!(cipb.hFileInfo.ioFlAttrib & 0x1))
-	buf->st_mode |= S_IWRITE;  /* bit 1 = 1 for locked files/directories */
-      buf->st_ino = cipb.dirInfo.ioDrDirID;
-      buf->st_dev = cipb.dirInfo.ioVRefNum;
-      buf->st_size = cipb.dirInfo.ioDrNmFls;
-        /* size of dir = number of files and dirs */
-      buf->st_atime
-	= buf->st_mtime
-	= cipb.dirInfo.ioDrMdDat - MAC_UNIX_EPOCH_DIFF;
-      buf->st_ctime = cipb.dirInfo.ioDrCrDat - MAC_UNIX_EPOCH_DIFF;
-    }
-  else
-    {
-      buf->st_mode = S_IFREG | S_IREAD;
-      if (!(cipb.hFileInfo.ioFlAttrib & 0x1))
-	buf->st_mode |= S_IWRITE;  /* bit 1 = 1 for locked files/directories */
-      if (cipb.hFileInfo.ioFlFndrInfo.fdType == 'APPL')
-	buf->st_mode |= S_IEXEC;
-      buf->st_ino = cipb.hFileInfo.ioDirID;
-      buf->st_dev = cipb.hFileInfo.ioVRefNum;
-      buf->st_size = cipb.hFileInfo.ioFlLgLen;
-      buf->st_atime
-	= buf->st_mtime
-	= cipb.hFileInfo.ioFlMdDat - MAC_UNIX_EPOCH_DIFF;
-      buf->st_ctime = cipb.hFileInfo.ioFlCrDat - MAC_UNIX_EPOCH_DIFF;
-    }
-
-  if (cipb.hFileInfo.ioFlFndrInfo.fdFlags & 0x8000)
-    {
-      /* identify alias files as symlinks */
-      buf->st_mode &= ~S_IFREG;
-      buf->st_mode |= S_IFLNK;
-    }
-
-  buf->st_nlink = 1;
-  buf->st_uid = getuid ();
-  buf->st_gid = getgid ();
-  buf->st_rdev = 0;
-
-  return 0;
-}
-
-
-int
-lstat (const char *path, struct stat *buf)
-{
-  int result;
-  char true_pathname[MAXPATHLEN+1];
-
-  /* Try looking for the file without resolving aliases first.  */
-  if ((result = stat_noalias (path, buf)) >= 0)
-    return result;
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  return stat_noalias (true_pathname, buf);
-}
-
-
-int
-stat (const char *path, struct stat *sb)
-{
-  int result;
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  int len;
-
-  if ((result = stat_noalias (path, sb)) >= 0 &&
-      ! (sb->st_mode & S_IFLNK))
-    return result;
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    {
-      fully_resolved_name[len] = '\0';
-        /* in fact our readlink terminates strings */
-      return lstat (fully_resolved_name, sb);
-    }
-  else
-    return lstat (true_pathname, sb);
-}
-
-
-#if __MRC__
-/* CW defines fstat in stat.mac.c while MPW does not provide this
-   function.  Without the information of how to get from a file
-   descriptor in MPW StdCLib to a Mac OS file spec, it should be hard
-   to implement this function.  Fortunately, there is only one place
-   where this function is called in our configuration: in fileio.c,
-   where only the st_dev and st_ino fields are used to determine
-   whether two fildes point to different i-nodes to prevent copying
-   a file onto itself equal.  What we have here probably needs
-   improvement.  */
-
-int
-fstat (int fildes, struct stat *buf)
-{
-  buf->st_dev = 0;
-  buf->st_ino = fildes;
-  buf->st_mode = S_IFREG;  /* added by T.I. for the copy-file */
-  return 0;  /* success */
-}
-#endif  /* __MRC__ */
-
-
-int
-mkdir (const char *dirname, int mode)
-{
-#pragma unused(mode)
-
-  HFileParam hfpb;
-  char true_pathname[MAXPATHLEN+1], mac_pathname[MAXPATHLEN+1];
-
-  if (find_true_pathname (dirname, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  if (posix_to_mac_pathname (true_pathname, mac_pathname, MAXPATHLEN+1) == 0)
-    return -1;
-
-  c2pstr (mac_pathname);
-  hfpb.ioNamePtr = mac_pathname;
-  hfpb.ioVRefNum = 0;  /* ignored unless name is invalid */
-  hfpb.ioDirID = 0;  /* parent is the root */
-
-  errno = PBDirCreate ((HParmBlkPtr) &hfpb, false);
-    /* just return the Mac OSErr code for now */
-  return errno == noErr ? 0 : -1;
-}
-
-
-#undef rmdir
-sys_rmdir (const char *dirname)
-{
-  HFileParam hfpb;
-  char mac_pathname[MAXPATHLEN+1];
-
-  if (posix_to_mac_pathname (dirname, mac_pathname, MAXPATHLEN+1) == 0)
-    return -1;
-
-  c2pstr (mac_pathname);
-  hfpb.ioNamePtr = mac_pathname;
-  hfpb.ioVRefNum = 0;  /* ignored unless name is invalid */
-  hfpb.ioDirID = 0;  /* parent is the root */
-
-  errno = PBHDelete ((HParmBlkPtr) &hfpb, false);
-  return errno == noErr ? 0 : -1;
-}
-
-
-#ifdef __MRC__
-/* No implementation yet. */
-int
-execvp (const char *path, ...)
-{
-  return -1;
-}
-#endif /* __MRC__ */
-
-
-int
-utime (const char *path, const struct utimbuf *times)
-{
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  int len;
-  char mac_pathname[MAXPATHLEN+1];
-  CInfoPBRec cipb;
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_name[len] = '\0';
-  else
-    strcpy (fully_resolved_name, true_pathname);
-
-  if (!posix_to_mac_pathname (fully_resolved_name, mac_pathname, MAXPATHLEN+1))
-    return -1;
-
-  c2pstr (mac_pathname);
-  cipb.hFileInfo.ioNamePtr = mac_pathname;
-  cipb.hFileInfo.ioVRefNum = 0;
-  cipb.hFileInfo.ioDirID = 0;
-  cipb.hFileInfo.ioFDirIndex = 0;
-    /* set to 0 to get information about specific dir or file */
-
-  errno = PBGetCatInfo (&cipb, false);
-  if (errno != noErr)
-    return -1;
-
-  if (cipb.hFileInfo.ioFlAttrib & 0x10)  /* bit 4 = 1 for directories */
-    {
-      if (times)
-	cipb.dirInfo.ioDrMdDat = times->modtime + MAC_UNIX_EPOCH_DIFF;
-      else
-	GetDateTime (&cipb.dirInfo.ioDrMdDat);
-    }
-  else
-    {
-      if (times)
-	cipb.hFileInfo.ioFlMdDat = times->modtime + MAC_UNIX_EPOCH_DIFF;
-      else
-	GetDateTime (&cipb.hFileInfo.ioFlMdDat);
-    }
-
-  errno = PBSetCatInfo (&cipb, false);
-  return errno == noErr ? 0 : -1;
-}
-
-
-#ifndef F_OK
-#define F_OK 0
-#endif
-#ifndef X_OK
-#define X_OK 1
-#endif
-#ifndef W_OK
-#define W_OK 2
-#endif
-
-/* Like stat, but test for access mode in hfpb.ioFlAttrib */
-int
-access (const char *path, int mode)
-{
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  int len;
-  char mac_pathname[MAXPATHLEN+1];
-  CInfoPBRec cipb;
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_name[len] = '\0';
-  else
-    strcpy (fully_resolved_name, true_pathname);
-
-  if (!posix_to_mac_pathname (fully_resolved_name, mac_pathname, MAXPATHLEN+1))
-    return -1;
-
-  c2pstr (mac_pathname);
-  cipb.hFileInfo.ioNamePtr = mac_pathname;
-  cipb.hFileInfo.ioVRefNum = 0;
-  cipb.hFileInfo.ioDirID = 0;
-  cipb.hFileInfo.ioFDirIndex = 0;
-    /* set to 0 to get information about specific dir or file */
-
-  errno = PBGetCatInfo (&cipb, false);
-  if (errno != noErr)
-    return -1;
-
-  if (mode == F_OK)  /* got this far, file exists */
-    return 0;
-
-  if (mode & X_OK)
-    if (cipb.hFileInfo.ioFlAttrib & 0x10)  /* path refers to a directory */
-      return 0;
-    else
-      {
-	if (cipb.hFileInfo.ioFlFndrInfo.fdType == 'APPL')
-	  return 0;
-	else
-	  return -1;
-      }
-
-  if (mode & W_OK)
-    return (cipb.hFileInfo.ioFlAttrib & 0x1) ? -1 : 0;
-      /* don't allow if lock bit is on */
-
-  return -1;
-}
-
-
-#define DEV_NULL_FD 0x10000
-
-#undef open
-int
-sys_open (const char *path, int oflag)
-{
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  int len;
-  char mac_pathname[MAXPATHLEN+1];
-
-  if (strcmp (path, "/dev/null") == 0)
-    return DEV_NULL_FD;  /* some bogus fd to be ignored in write */
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_name[len] = '\0';
-  else
-    strcpy (fully_resolved_name, true_pathname);
-
-  if (!posix_to_mac_pathname (fully_resolved_name, mac_pathname, MAXPATHLEN+1))
-    return -1;
-  else
-    {
-#ifdef __MRC__
-      int res = open (mac_pathname, oflag);
-      /* if (oflag == O_WRONLY || oflag == O_RDWR) */
-      if (oflag & O_CREAT)
-        fsetfileinfo (mac_pathname, MAC_EMACS_CREATOR_CODE, 'TEXT');
-      return res;
-#else /* not __MRC__ */
-      return open (mac_pathname, oflag);
-#endif /* not __MRC__ */
-    }
-}
-
-
-#undef creat
-int
-sys_creat (const char *path, mode_t mode)
-{
-  char true_pathname[MAXPATHLEN+1];
-  int len;
-  char mac_pathname[MAXPATHLEN+1];
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  if (!posix_to_mac_pathname (true_pathname, mac_pathname, MAXPATHLEN+1))
-    return -1;
-  else
-    {
-#ifdef __MRC__
-      int result = creat (mac_pathname);
-      fsetfileinfo (mac_pathname, MAC_EMACS_CREATOR_CODE, 'TEXT');
-      return result;
-#else /* not __MRC__ */
-      return creat (mac_pathname, mode);
-#endif /* not __MRC__ */
-    }
-}
-
-
-#undef unlink
-int
-sys_unlink (const char *path)
-{
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  int len;
-  char mac_pathname[MAXPATHLEN+1];
-
-  if (find_true_pathname (path, true_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_name[len] = '\0';
-  else
-    strcpy (fully_resolved_name, true_pathname);
-
-  if (!posix_to_mac_pathname (fully_resolved_name, mac_pathname, MAXPATHLEN+1))
-    return -1;
-  else
-    return unlink (mac_pathname);
-}
-
-
-#undef read
-int
-sys_read (int fildes, char *buf, int count)
-{
-  if (fildes == 0)  /* this should not be used for console input */
-    return -1;
-  else
-#if __MSL__ >= 0x6000
-    return _read (fildes, buf, count);
-#else
-    return read (fildes, buf, count);
-#endif
-}
-
-
-#undef write
-int
-sys_write (int fildes, const char *buf, int count)
-{
-  if (fildes == DEV_NULL_FD)
-    return count;
-  else
-#if __MSL__ >= 0x6000
-    return _write (fildes, buf, count);
-#else
-    return write (fildes, buf, count);
-#endif
-}
-
-
-#undef rename
-int
-sys_rename (const char * old_name, const char * new_name)
-{
-  char true_old_pathname[MAXPATHLEN+1], true_new_pathname[MAXPATHLEN+1];
-  char fully_resolved_old_name[MAXPATHLEN+1];
-  int len;
-  char mac_old_name[MAXPATHLEN+1], mac_new_name[MAXPATHLEN+1];
-
-  if (find_true_pathname (old_name, true_old_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  len = readlink (true_old_pathname, fully_resolved_old_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_old_name[len] = '\0';
-  else
-    strcpy (fully_resolved_old_name, true_old_pathname);
-
-  if (find_true_pathname (new_name, true_new_pathname, MAXPATHLEN+1) == -1)
-    return -1;
-
-  if (strcmp (fully_resolved_old_name, true_new_pathname) == 0)
-    return 0;
-
-  if (!posix_to_mac_pathname (fully_resolved_old_name,
-			     mac_old_name,
-			     MAXPATHLEN+1))
-    return -1;
-
-  if (!posix_to_mac_pathname(true_new_pathname, mac_new_name, MAXPATHLEN+1))
-    return -1;
-
-  /* If a file with new_name already exists, rename deletes the old
-     file in Unix.  CW version fails in these situation.  So we add a
-     call to unlink here.  */
-  (void) unlink (mac_new_name);
-
-  return rename (mac_old_name, mac_new_name);
-}
-
-
-#undef fopen
-extern FILE *fopen (const char *name, const char *mode);
-FILE *
-sys_fopen (const char *name, const char *mode)
-{
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  int len;
-  char mac_pathname[MAXPATHLEN+1];
-
-  if (find_true_pathname (name, true_pathname, MAXPATHLEN+1) == -1)
-    return 0;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_name[len] = '\0';
-  else
-    strcpy (fully_resolved_name, true_pathname);
-
-  if (!posix_to_mac_pathname (fully_resolved_name, mac_pathname, MAXPATHLEN+1))
-    return 0;
-  else
-    {
-#ifdef __MRC__
-      if (mode[0] == 'w' || mode[0] == 'a')
-        fsetfileinfo (mac_pathname, MAC_EMACS_CREATOR_CODE, 'TEXT');
-#endif /* not __MRC__ */
-      return fopen (mac_pathname, mode);
-    }
-}
-
-
-extern Boolean mac_wait_next_event P_ ((EventRecord *, UInt32, Boolean));
-
-int
-select (nfds, rfds, wfds, efds, timeout)
-     int nfds;
-     SELECT_TYPE *rfds, *wfds, *efds;
-     EMACS_TIME *timeout;
-{
-  OSStatus err = noErr;
-
-  /* Can only handle wait for keyboard input.  */
-  if (nfds > 1 || wfds || efds)
-    return -1;
-
-  /* Try detect_input_pending before ReceiveNextEvent in the same
-     BLOCK_INPUT block, in case that some input has already been read
-     asynchronously.  */
-  BLOCK_INPUT;
-  ENABLE_WAKEUP_FROM_RNE;
-  if (!detect_input_pending ())
-    {
-#if TARGET_API_MAC_CARBON
-      EventTimeout timeoutval =
-	(timeout
-	 ? (EMACS_SECS (*timeout) * kEventDurationSecond
-	    + EMACS_USECS (*timeout) * kEventDurationMicrosecond)
-	 : kEventDurationForever);
-
-      if (timeoutval == 0.0)
-	err = eventLoopTimedOutErr;
-      else
-	err = ReceiveNextEvent (0, NULL, timeoutval,
-				kEventLeaveInQueue, NULL);
-#else /* not TARGET_API_MAC_CARBON */
-      EventRecord e;
-      UInt32 sleep_time = EMACS_SECS (*timeout) * 60 +
-	((EMACS_USECS (*timeout) * 60) / 1000000);
-
-      if (sleep_time == 0)
-	err = -9875;		/* eventLoopTimedOutErr */
-      else
-	{
-	  if (mac_wait_next_event (&e, sleep_time, false))
-	    err = noErr;
-	  else
-	    err = -9875;	/* eventLoopTimedOutErr */
-	}
-#endif /* not TARGET_API_MAC_CARBON */
-    }
-  DISABLE_WAKEUP_FROM_RNE;
-  UNBLOCK_INPUT;
-
-  if (err == noErr)
-    {
-      /* Pretend that `select' is interrupted by a signal.  */
-      detect_input_pending ();
-      errno = EINTR;
-      return -1;
-    }
-  else
-    {
-      if (rfds)
-	FD_ZERO (rfds);
-      return 0;
-    }
-}
-
-
-/* Simulation of SIGALRM.  The stub for function signal stores the
-   signal handler function in alarm_signal_func if a SIGALRM is
-   encountered.  */
-
-#include <signal.h>
-#include "syssignal.h"
-
-static TMTask mac_atimer_task;
-
-static QElemPtr mac_atimer_qlink = (QElemPtr) &mac_atimer_task;
-
-static int signal_mask = 0;
-
-#ifdef __MRC__
-__sigfun alarm_signal_func = (__sigfun) 0;
-#elif __MWERKS__
-__signal_func_ptr alarm_signal_func = (__signal_func_ptr) 0;
-#else /* not __MRC__ and not __MWERKS__ */
-You lose!!!
-#endif /* not __MRC__ and not __MWERKS__ */
-
-#undef signal
-#ifdef __MRC__
-extern __sigfun signal (int signal, __sigfun signal_func);
-__sigfun
-sys_signal (int signal_num, __sigfun signal_func)
-#elif __MWERKS__
-extern __signal_func_ptr signal (int signal, __signal_func_ptr signal_func);
-__signal_func_ptr
-sys_signal (int signal_num, __signal_func_ptr signal_func)
-#else /* not __MRC__ and not __MWERKS__ */
-     You lose!!!
-#endif /* not __MRC__ and not __MWERKS__ */
-{
-  if (signal_num != SIGALRM)
-    return signal (signal_num, signal_func);
-  else
-    {
-#ifdef __MRC__
-      __sigfun old_signal_func;
-#elif __MWERKS__
-      __signal_func_ptr old_signal_func;
-#else
-      You lose!!!
-#endif
-      old_signal_func = alarm_signal_func;
-      alarm_signal_func = signal_func;
-      return old_signal_func;
-    }
-}
-
-
-static pascal void
-mac_atimer_handler (qlink)
-     TMTaskPtr qlink;
-{
-  if (alarm_signal_func)
-    (alarm_signal_func) (SIGALRM);
-}
-
-
-static void
-set_mac_atimer (count)
-     long count;
-{
-  static TimerUPP mac_atimer_handlerUPP = NULL;
-
-  if (mac_atimer_handlerUPP == NULL)
-    mac_atimer_handlerUPP = NewTimerUPP (mac_atimer_handler);
-  mac_atimer_task.tmCount = 0;
-  mac_atimer_task.tmAddr = mac_atimer_handlerUPP;
-  mac_atimer_qlink = (QElemPtr) &mac_atimer_task;
-  InsTime (mac_atimer_qlink);
-  if (count)
-    PrimeTime (mac_atimer_qlink, count);
-}
-
-
-int
-remove_mac_atimer (remaining_count)
-     long *remaining_count;
-{
-  if (mac_atimer_qlink)
-    {
-      RmvTime (mac_atimer_qlink);
-      if (remaining_count)
-	*remaining_count = mac_atimer_task.tmCount;
-      mac_atimer_qlink = NULL;
-
-      return 0;
-    }
-  else
-    return -1;
-}
-
-
-int
-sigblock (int mask)
-{
-  int old_mask = signal_mask;
-
-  signal_mask |= mask;
-
-  if ((old_mask ^ signal_mask) & sigmask (SIGALRM))
-    remove_mac_atimer (NULL);
-
-  return old_mask;
-}
-
-
-int
-sigsetmask (int mask)
-{
-  int old_mask = signal_mask;
-
-  signal_mask = mask;
-
-  if ((old_mask ^ signal_mask) & sigmask (SIGALRM))
-    if (signal_mask & sigmask (SIGALRM))
-      remove_mac_atimer (NULL);
-    else
-      set_mac_atimer (mac_atimer_task.tmCount);
-
-  return old_mask;
-}
-
-
-int
-alarm (int seconds)
-{
-  long remaining_count;
-
-  if (remove_mac_atimer (&remaining_count) == 0)
-    {
-      set_mac_atimer (seconds * 1000);
-
-      return remaining_count / 1000;
-    }
-  else
-    {
-      mac_atimer_task.tmCount = seconds * 1000;
-
-      return 0;
-    }
-}
-
-
-int
-setitimer (which, value, ovalue)
-     int which;
-     const struct itimerval *value;
-     struct itimerval *ovalue;
-{
-  long remaining_count;
-  long count = (EMACS_SECS (value->it_value) * 1000
-		+ (EMACS_USECS (value->it_value) + 999) / 1000);
-
-  if (remove_mac_atimer (&remaining_count) == 0)
-    {
-      if (ovalue)
-	{
-	  bzero (ovalue, sizeof (*ovalue));
-	  EMACS_SET_SECS_USECS (ovalue->it_value, remaining_count / 1000,
-				(remaining_count % 1000) * 1000);
-	}
-      set_mac_atimer (count);
-    }
-  else
-    mac_atimer_task.tmCount = count;
-
-  return 0;
-}
-
-
-/* gettimeofday should return the amount of time (in a timeval
-   structure) since midnight today.  The toolbox function Microseconds
-   returns the number of microseconds (in a UnsignedWide value) since
-   the machine was booted.  Also making this complicated is WideAdd,
-   WideSubtract, etc.  take wide values.  */
-
-int
-gettimeofday (tp)
-     struct timeval *tp;
-{
-  static inited = 0;
-  static wide wall_clock_at_epoch, clicks_at_epoch;
-  UnsignedWide uw_microseconds;
-  wide w_microseconds;
-  time_t sys_time (time_t *);
-
-  /* If this function is called for the first time, record the number
-     of seconds since midnight and the number of microseconds since
-     boot at the time of this first call.  */
-  if (!inited)
-    {
-      time_t systime;
-      inited = 1;
-      systime = sys_time (NULL);
-      /* Store microseconds since midnight in wall_clock_at_epoch.  */
-      WideMultiply (systime, 1000000L, &wall_clock_at_epoch);
-      Microseconds (&uw_microseconds);
-      /* Store microseconds since boot in clicks_at_epoch.  */
-      clicks_at_epoch.hi = uw_microseconds.hi;
-      clicks_at_epoch.lo = uw_microseconds.lo;
-    }
-
-  /* Get time since boot */
-  Microseconds (&uw_microseconds);
-
-  /* Convert to time since midnight*/
-  w_microseconds.hi = uw_microseconds.hi;
-  w_microseconds.lo = uw_microseconds.lo;
-  WideSubtract (&w_microseconds, &clicks_at_epoch);
-  WideAdd (&w_microseconds, &wall_clock_at_epoch);
-  tp->tv_sec = WideDivide (&w_microseconds, 1000000L, &tp->tv_usec);
-
-  return 0;
-}
-
-
-#ifdef __MRC__
-unsigned int
-sleep (unsigned int seconds)
-{
-  unsigned long time_up;
-  EventRecord e;
-
-  time_up = TickCount () + seconds * 60;
-  while (TickCount () < time_up)
-    {
-      /* Accept no event; just wait. by T.I.  */
-      WaitNextEvent (0, &e, 30, NULL);
-    }
-
-  return (0);
-}
-#endif /* __MRC__ */
-
-
-/* The time functions adjust time values according to the difference
-   between the Unix and CW epoches. */
-
-#undef gmtime
-extern struct tm *gmtime (const time_t *);
-struct tm *
-sys_gmtime (const time_t *timer)
-{
-  time_t unix_time = *timer + CW_OR_MPW_UNIX_EPOCH_DIFF;
-
-  return gmtime (&unix_time);
-}
-
-
-#undef localtime
-extern struct tm *localtime (const time_t *);
-struct tm *
-sys_localtime (const time_t *timer)
-{
-#if __MSL__ >= 0x6000
-  time_t unix_time = *timer;
-#else
-  time_t unix_time = *timer + CW_OR_MPW_UNIX_EPOCH_DIFF;
-#endif
-
-  return localtime (&unix_time);
-}
-
-
-#undef ctime
-extern char *ctime (const time_t *);
-char *
-sys_ctime (const time_t *timer)
-{
-#if __MSL__ >= 0x6000
-  time_t unix_time = *timer;
-#else
-  time_t unix_time = *timer + CW_OR_MPW_UNIX_EPOCH_DIFF;
-#endif
-
-  return ctime (&unix_time);
-}
-
-
-#undef time
-extern time_t time (time_t *);
-time_t
-sys_time (time_t *timer)
-{
-#if __MSL__ >= 0x6000
-  time_t mac_time = time (NULL);
-#else
-  time_t mac_time = time (NULL) - CW_OR_MPW_UNIX_EPOCH_DIFF;
-#endif
-
-  if (timer)
-    *timer = mac_time;
-
-  return mac_time;
-}
-
-
-/* no subprocesses, empty wait */
-
-int
-wait (int pid)
-{
-  return 0;
-}
-
-
-void
-croak (char *badfunc)
-{
-  printf ("%s not yet implemented\r\n", badfunc);
-  exit (1);
-}
-
-
-char *
-mktemp (char *template)
-{
-  int len, k;
-  static seqnum = 0;
-
-  len = strlen (template);
-  k = len - 1;
-  while (k >= 0 && template[k] == 'X')
-    k--;
-
-  k++;  /* make k index of first 'X' */
-
-  if (k < len)
-    {
-      /* Zero filled, number of digits equal to the number of X's.  */
-      sprintf (&template[k], "%0*d", len-k, seqnum++);
-
-      return template;
-    }
-  else
-    return 0;
-}
-
-
-/* Emulate getpwuid, getpwnam and others.  */
-
-#define PASSWD_FIELD_SIZE 256
-
-static char my_passwd_name[PASSWD_FIELD_SIZE];
-static char my_passwd_dir[MAXPATHLEN+1];
-
-static struct passwd my_passwd =
-{
-  my_passwd_name,
-  my_passwd_dir,
-};
-
-static struct group my_group =
-{
-  /* There are no groups on the mac, so we just return "root" as the
-     group name.  */
-  "root",
-};
-
-
-/* Initialized by main () in macterm.c to pathname of emacs directory.  */
-
-char emacs_passwd_dir[MAXPATHLEN+1];
-
-char *
-getwd (char *);
-
-void
-init_emacs_passwd_dir ()
-{
-  int found = false;
-
-  if (getwd (emacs_passwd_dir) && getwd (my_passwd_dir))
-    {
-      /* Need pathname of first ancestor that begins with "emacs"
-	 since Mac emacs application is somewhere in the emacs-*
-	 tree.  */
-      int len = strlen (emacs_passwd_dir);
-      int j = len - 1;
-        /* j points to the "/" following the directory name being
-	   compared.  */
-      int i = j - 1;
-      while (i >= 0 && !found)
-	{
-	  while (i >= 0 && emacs_passwd_dir[i] != '/')
-	    i--;
-	  if (emacs_passwd_dir[i] == '/' && i+5 < len)
-	    found = (strncmp (&(emacs_passwd_dir[i+1]), "emacs", 5) == 0);
-	  if (found)
-	    emacs_passwd_dir[j+1] = '\0';
-	  else
-	    {
-	      j = i;
-	      i = j - 1;
-	    }
-	}
-    }
-
-  if (!found)
-    {
-      /* Setting to "/" probably won't work but set it to something
-	 anyway.  */
-      strcpy (emacs_passwd_dir, "/");
-      strcpy (my_passwd_dir, "/");
-    }
-}
-
-
-static struct passwd emacs_passwd =
-{
-  "emacs",
-  emacs_passwd_dir,
-};
-
-static int my_passwd_inited = 0;
-
-
-static void
-init_my_passwd ()
-{
-  char **owner_name;
-
-  /* Note: my_passwd_dir initialized in int_emacs_passwd_dir to
-     directory where Emacs was started.  */
-
-  owner_name = (char **) GetResource ('STR ',-16096);
-  if (owner_name)
-    {
-      HLock (owner_name);
-      BlockMove ((unsigned char *) *owner_name,
-		 (unsigned char *) my_passwd_name,
-		 *owner_name[0]+1);
-      HUnlock (owner_name);
-      p2cstr ((unsigned char *) my_passwd_name);
-    }
-  else
-    my_passwd_name[0] = 0;
-}
-
-
-struct passwd *
-getpwuid (uid_t uid)
-{
-  if (!my_passwd_inited)
-    {
-      init_my_passwd ();
-      my_passwd_inited = 1;
-    }
-
-  return &my_passwd;
-}
-
-
-struct group *
-getgrgid (gid_t gid)
-{
-  return &my_group;
-}
-
-
-struct passwd *
-getpwnam (const char *name)
-{
-  if (strcmp (name, "emacs") == 0)
-  	return &emacs_passwd;
-
-  if (!my_passwd_inited)
-    {
-      init_my_passwd ();
-      my_passwd_inited = 1;
-    }
-
-  return &my_passwd;
-}
-
-
-/* The functions fork, kill, sigsetmask, sigblock, request_sigio,
-   setpgrp, setpriority, and unrequest_sigio are defined to be empty
-   as in msdos.c.  */
-
-
-int
-fork ()
-{
-  return -1;
-}
-
-
-int
-kill (int x, int y)
-{
-  return -1;
-}
-
-
-void
-sys_subshell ()
-{
-  error ("Can't spawn subshell");
-}
-
-
-void
-request_sigio (void)
-{
-}
-
-
-void
-unrequest_sigio (void)
-{
-}
-
-
-int
-setpgrp ()
-{
-  return 0;
-}
-
-
-/* No pipes yet.  */
-
-int
-pipe (int _fildes[2])
-{
-  errno = EACCES;
-  return -1;
-}
-
-
-/* Hard and symbolic links.  */
-
-int
-symlink (const char *name1, const char *name2)
-{
-  errno = ENOENT;
-  return -1;
-}
-
-
-int
-link (const char *name1, const char *name2)
-{
-  errno = ENOENT;
-  return -1;
-}
-
-#endif  /* ! MAC_OSX */
-
-
-#if !__LP64__
-/* Determine the path name of the file specified by VREFNUM, DIRID,
-   and NAME and place that in the buffer PATH of length
-   MAXPATHLEN.  */
-static int
-path_from_vol_dir_name (char *path, int man_path_len, short vol_ref_num,
-			long dir_id, ConstStr255Param name)
-{
-  Str255 dir_name;
-  CInfoPBRec cipb;
-  OSErr err;
-
-  if (strlen (name) > man_path_len)
-    return 0;
-
-  memcpy (dir_name, name, name[0]+1);
-  memcpy (path, name, name[0]+1);
-  p2cstr (path);
-
-  cipb.dirInfo.ioDrParID = dir_id;
-  cipb.dirInfo.ioNamePtr = dir_name;
-
-  do
-    {
-      cipb.dirInfo.ioVRefNum = vol_ref_num;
-      cipb.dirInfo.ioFDirIndex = -1;
-      cipb.dirInfo.ioDrDirID = cipb.dirInfo.ioDrParID;
-        /* go up to parent each time */
-
-      err = PBGetCatInfo (&cipb, false);
-      if (err != noErr)
-        return 0;
-
-      p2cstr (dir_name);
-      if (strlen (dir_name) + strlen (path) + 1 >= man_path_len)
-        return 0;
-
-      strcat (dir_name, ":");
-      strcat (dir_name, path);
-        /* attach to front since we're going up directory tree */
-      strcpy (path, dir_name);
-    }
-  while (cipb.dirInfo.ioDrDirID != fsRtDirID);
-    /* stop when we see the volume's root directory */
-
-  return 1;  /* success */
-}
-#endif
-
-
-#ifndef MAC_OSX
-
-static OSErr
-posix_pathname_to_fsspec (ufn, fs)
-     const char *ufn;
-     FSSpec *fs;
-{
-  Str255 mac_pathname;
-
-  if (posix_to_mac_pathname (ufn, mac_pathname, sizeof (mac_pathname)) == 0)
-    return fnfErr;
-  else
-    {
-      c2pstr (mac_pathname);
-      return FSMakeFSSpec (0, 0, mac_pathname, fs);
-    }
-}
-
-static OSErr
-fsspec_to_posix_pathname (fs, ufn, ufnbuflen)
-     const FSSpec *fs;
-     char *ufn;
-     int ufnbuflen;
-{
-  char mac_pathname[MAXPATHLEN];
-
-  if (path_from_vol_dir_name (mac_pathname, sizeof (mac_pathname) - 1,
-			      fs->vRefNum, fs->parID, fs->name)
-      && mac_to_posix_pathname (mac_pathname, ufn, ufnbuflen))
-    return noErr;
-  else
-    return fnfErr;
-}
-
-int
-readlink (const char *path, char *buf, int bufsiz)
-{
-  char mac_sym_link_name[MAXPATHLEN+1];
-  OSErr err;
-  FSSpec fsspec;
-  Boolean target_is_folder, was_aliased;
-  Str255 directory_name, mac_pathname;
-  CInfoPBRec cipb;
-
-  if (posix_to_mac_pathname (path, mac_sym_link_name, MAXPATHLEN+1) == 0)
-    return -1;
-
-  c2pstr (mac_sym_link_name);
-  err = FSMakeFSSpec (0, 0, mac_sym_link_name, &fsspec);
-  if (err != noErr)
-    {
-      errno = ENOENT;
-      return -1;
-    }
-
-  err = ResolveAliasFile (&fsspec, true, &target_is_folder, &was_aliased);
-  if (err != noErr || !was_aliased)
-    {
-      errno = ENOENT;
-      return -1;
-    }
-
-  if (path_from_vol_dir_name (mac_pathname, 255, fsspec.vRefNum, fsspec.parID,
-			      fsspec.name) == 0)
-    {
-      errno = ENOENT;
-      return -1;
-    }
-
-  if (mac_to_posix_pathname (mac_pathname, buf, bufsiz) == 0)
-    {
-      errno = ENOENT;
-      return -1;
-    }
-
-  return strlen (buf);
-}
-
-
-/* Convert a path to one with aliases fully expanded.  */
-
-static int
-find_true_pathname (const char *path, char *buf, int bufsiz)
-{
-  char *q, temp[MAXPATHLEN+1];
-  const char *p;
-  int len;
-
-  if (bufsiz <= 0 || path == 0 || path[0] == '\0')
-    return -1;
-
-  buf[0] = '\0';
-
-  p = path;
-  if (*p == '/')
-    q = strchr (p + 1, '/');
-  else
-    q = strchr (p, '/');
-  len = 0;  /* loop may not be entered, e.g., for "/" */
-
-  while (q)
-    {
-      strcpy (temp, buf);
-      strncat (temp, p, q - p);
-      len = readlink (temp, buf, bufsiz);
-      if (len <= -1)
-        {
-          if (strlen (temp) + 1 > bufsiz)
-            return -1;
-          strcpy (buf, temp);
-        }
-      strcat (buf, "/");
-      len++;
-      p = q + 1;
-      q = strchr(p, '/');
-    }
-
-  if (len + strlen (p) + 1 >= bufsiz)
-    return -1;
-
-  strcat (buf, p);
-  return len + strlen (p);
-}
-
-
-mode_t
-umask (mode_t numask)
-{
-  static mode_t mask = 022;
-  mode_t oldmask = mask;
-  mask = numask;
-  return oldmask;
-}
-
-
-int
-chmod (const char *path, mode_t mode)
-{
-  /* say it always succeed for now */
-  return 0;
-}
-
-
-int
-fchmod (int fd, mode_t mode)
-{
-  /* say it always succeed for now */
-  return 0;
-}
-
-
-int
-fchown (int fd, uid_t owner, gid_t group)
-{
-  /* say it always succeed for now */
-  return 0;
-}
-
-
-int
-dup (int oldd)
-{
-#ifdef __MRC__
-  return fcntl (oldd, F_DUPFD, 0);
-#elif __MWERKS__
-  /* current implementation of fcntl in fcntl.mac.c simply returns old
-     descriptor */
-  return fcntl (oldd, F_DUPFD);
-#else
-You lose!!!
-#endif
-}
-
-
-/* This is from the original sysdep.c.  Emulate BSD dup2.  First close
-   newd if it already exists.  Then, attempt to dup oldd.  If not
-   successful, call dup2 recursively until we are, then close the
-   unsuccessful ones.  */
-
-int
-dup2 (int oldd, int newd)
-{
-  int fd, ret;
-
-  close (newd);
-
-  fd = dup (oldd);
-  if (fd == -1)
-    return -1;
-  if (fd == newd)
-    return newd;
-  ret = dup2 (oldd, newd);
-  close (fd);
-  return ret;
-}
-
-
-/* let it fail for now */
-
-char *
-sbrk (int incr)
-{
-  return (char *) -1;
-}
-
-
-int
-fsync (int fd)
-{
-  return 0;
-}
-
-
-int
-ioctl (int d, int request, void *argp)
-{
-  return -1;
-}
-
-
-#ifdef __MRC__
-int
-isatty (int fildes)
-{
-  if (fildes >=0 && fildes <= 2)
-    return 1;
-  else
-    return 0;
-}
-
-
-int
-getgid ()
-{
-  return 100;
-}
-
-
-int
-getegid ()
-{
-  return 100;
-}
-
-
-int
-getuid ()
-{
-  return 200;
-}
-
-
-int
-geteuid ()
-{
-  return 200;
-}
-#endif /* __MRC__ */
-
-
-#ifdef __MWERKS__
-#if __MSL__ < 0x6000
-#undef getpid
-int
-getpid ()
-{
-  return 9999;
-}
-#endif
-#endif /* __MWERKS__ */
-
-#endif /* ! MAC_OSX */
-
-
-#if !__LP64__
-/* Return the path to the directory in which Emacs can create
-   temporary files.  The MacOS "temporary items" directory cannot be
-   used because it removes the file written by a process when it
-   exits.  In that sense it's more like "/dev/null" than "/tmp" (but
-   again not exactly).  And of course Emacs needs to read back the
-   files written by its subprocesses.  So here we write the files to a
-   directory "Emacs" in the Preferences Folder.  This directory is
-   created if it does not exist.  */
-
-char *
-get_temp_dir_name ()
-{
-  static char *temp_dir_name = NULL;
-  short vol_ref_num;
-  long dir_id;
-  OSErr err;
-  Str255 full_path;
-  char unix_dir_name[MAXPATHLEN+1];
-  DIR *dir;
-
-  /* Cache directory name with pointer temp_dir_name.
-     Look for it only the first time.  */
-  if (!temp_dir_name)
-    {
-      err = FindFolder (kOnSystemDisk, kPreferencesFolderType, kCreateFolder,
-			&vol_ref_num, &dir_id);
-      if (err != noErr)
-	return NULL;
-
-      if (!path_from_vol_dir_name (full_path, 255, vol_ref_num, dir_id, "\p"))
-        return NULL;
-
-      if (strlen (full_path) + 6 <= MAXPATHLEN)
-	strcat (full_path, "Emacs:");
-      else
-	return NULL;
-
-      if (!mac_to_posix_pathname (full_path, unix_dir_name, MAXPATHLEN+1))
-	return NULL;
-
-      dir = opendir (unix_dir_name);  /* check whether temp directory exists */
-      if (dir)
-	closedir (dir);
-      else if (mkdir (unix_dir_name, 0700) != 0)  /* create it if not */
-	return NULL;
-
-      temp_dir_name = (char *) malloc (strlen (unix_dir_name) + 1);
-      strcpy (temp_dir_name, unix_dir_name);
-    }
-
-  return temp_dir_name;
-}
-#endif
-
-#ifndef MAC_OSX
-
-/* Allocate and construct an array of pointers to strings from a list
-   of strings stored in a 'STR#' resource.  The returned pointer array
-   is stored in the style of argv and environ: if the 'STR#' resource
-   contains numString strings, a pointer array with numString+1
-   elements is returned in which the last entry contains a null
-   pointer.  The pointer to the pointer array is passed by pointer in
-   parameter t.  The resource ID of the 'STR#' resource is passed in
-   parameter StringListID.
-   */
-
-void
-get_string_list (char ***t, short string_list_id)
-{
-  Handle h;
-  Ptr p;
-  int i, num_strings;
-
-  h = GetResource ('STR#', string_list_id);
-  if (h)
-    {
-      HLock (h);
-      p = *h;
-      num_strings = * (short *) p;
-      p += sizeof(short);
-      *t = (char **) malloc (sizeof (char *) * (num_strings + 1));
-      for (i = 0; i < num_strings; i++)
-        {
-          short length = *p++;
-          (*t)[i] = (char *) malloc (length + 1);
-          strncpy ((*t)[i], p, length);
-          (*t)[i][length] = '\0';
-          p += length;
-        }
-      (*t)[num_strings] = 0;
-      HUnlock (h);
-    }
-  else
-    {
-      /* Return no string in case GetResource fails.  Bug fixed by
-         Ikegami Tsutomu.  Caused MPW build to crash without sym -on
-         option (no sym -on implies -opt local). */
-      *t = (char **) malloc (sizeof (char *));
-      (*t)[0] = 0;
-    }
-}
-
-
-static char *
-get_path_to_system_folder ()
-{
-  short vol_ref_num;
-  long dir_id;
-  OSErr err;
-  Str255 full_path;
-  static char system_folder_unix_name[MAXPATHLEN+1];
-  DIR *dir;
-
-  err = FindFolder (kOnSystemDisk, kSystemFolderType, kDontCreateFolder,
-		    &vol_ref_num, &dir_id);
-  if (err != noErr)
-    return NULL;
-
-  if (!path_from_vol_dir_name (full_path, 255, vol_ref_num, dir_id, "\p"))
-    return NULL;
-
-  if (!mac_to_posix_pathname (full_path, system_folder_unix_name,
-			      MAXPATHLEN+1))
-    return NULL;
-
-  return system_folder_unix_name;
-}
-
-
-char **environ;
-
-#define ENVIRON_STRING_LIST_ID 128
-
-/* Get environment variable definitions from STR# resource.  */
-
-void
-init_environ ()
-{
-  int i;
-
-  get_string_list (&environ, ENVIRON_STRING_LIST_ID);
-
-  i = 0;
-  while (environ[i])
-    i++;
-
-  /* Make HOME directory the one Emacs starts up in if not specified
-     by resource.  */
-  if (getenv ("HOME") == NULL)
-    {
-      environ = (char **) realloc (environ, sizeof (char *) * (i + 2));
-      if (environ)
-        {
-          environ[i] = (char *) malloc (strlen (my_passwd_dir) + 6);
-          if (environ[i])
-            {
-              strcpy (environ[i], "HOME=");
-              strcat (environ[i], my_passwd_dir);
-            }
-          environ[i+1] = 0;
-          i++;
-        }
-    }
-
-  /* Make HOME directory the one Emacs starts up in if not specified
-     by resource.  */
-  if (getenv ("MAIL") == NULL)
-    {
-      environ = (char **) realloc (environ, sizeof (char *) * (i + 2));
-      if (environ)
-        {
-          char * path_to_system_folder = get_path_to_system_folder ();
-          environ[i] = (char *) malloc (strlen (path_to_system_folder) + 22);
-          if (environ[i])
-            {
-              strcpy (environ[i], "MAIL=");
-              strcat (environ[i], path_to_system_folder);
-              strcat (environ[i], "Eudora Folder/In");
-            }
-          environ[i+1] = 0;
-        }
-    }
-}
-
-
-/* Return the value of the environment variable NAME.  */
-
-char *
-getenv (const char *name)
-{
-  int length = strlen(name);
-  char **e;
-
-  for (e = environ; *e != 0; e++)
-    if (strncmp(*e, name, length) == 0 && (*e)[length] == '=')
-      return &(*e)[length + 1];
-
-  if (strcmp (name, "TMPDIR") == 0)
-    return get_temp_dir_name ();
-
-  return 0;
-}
-
-
-#ifdef __MRC__
-/* see Interfaces&Libraries:Interfaces:CIncludes:signal.h */
-char *sys_siglist[] =
-{
-  "Zero is not a signal!!!",
-  "Abort", /* 1 */
-  "Interactive user interrupt", /* 2 */ "?",
-  "Floating point exception", /* 4 */ "?", "?", "?",
-  "Illegal instruction", /* 8 */ "?", "?", "?", "?", "?", "?", "?",
-  "Segment violation", /* 16 */ "?", "?", "?", "?", "?", "?", "?",
-    "?", "?", "?", "?", "?", "?", "?", "?",
-  "Terminal"  /* 32 */
-};
-#elif __MWERKS__
-char *sys_siglist[] =
-{
-  "Zero is not a signal!!!",
-  "Abort",
-  "Floating point exception",
-  "Illegal instruction",
-  "Interactive user interrupt",
-  "Segment violation",
-  "Terminal"
-};
-#else /* not __MRC__ and not __MWERKS__ */
-You lose!!!
-#endif /* not __MRC__ and not __MWERKS__ */
-
-
-#include <utsname.h>
-
-int
-uname (struct utsname *name)
-{
-  char **system_name;
-  system_name = GetString (-16413);  /* IM - Resource Manager Reference */
-  if (system_name)
-    {
-      BlockMove (*system_name, name->nodename, (*system_name)[0]+1);
-      p2cstr (name->nodename);
-      return 0;
-    }
-  else
-    return -1;
-}
-
-
-/* Event class of HLE sent to subprocess.  */
-const OSType kEmacsSubprocessSend = 'ESND';
-
-/* Event class of HLE sent back from subprocess.  */
-const OSType kEmacsSubprocessReply = 'ERPY';
-
-
-char *
-mystrchr (char *s, char c)
-{
-  while (*s && *s != c)
-    {
-      if (*s == '\\')
-	s++;
-      s++;
-    }
-
-  if (*s)
-    {
-      *s = '\0';
-      return s;
-    }
-  else
-    return NULL;
-}
-
-
-char *
-mystrtok (char *s)
-{
-  while (*s)
-    s++;
-
-  return s + 1;
-}
-
-
-void
-mystrcpy (char *to, char *from)
-{
-  while (*from)
-    {
-      if (*from == '\\')
-	from++;
-      *to++ = *from++;
-    }
-  *to = '\0';
-}
-
-
-/* Start a Mac subprocess.  Arguments for it is passed in argv (null
-   terminated).  The process should run with the default directory
-   "workdir", read input from "infn", and write output and error to
-   "outfn" and "errfn", resp.  The Process Manager call
-   LaunchApplication is used to start the subprocess.  We use high
-   level events as the mechanism to pass arguments to the subprocess
-   and to make Emacs wait for the subprocess to terminate and pass
-   back a result code.  The bulk of the code here packs the arguments
-   into one message to be passed together with the high level event.
-   Emacs also sometimes starts a subprocess using a shell to perform
-   wildcard filename expansion.  Since we don't really have a shell on
-   the Mac, this case is detected and the starting of the shell is
-   by-passed.  We really need to add code here to do filename
-   expansion to support such functionality.
-
-   We can't use this strategy in Carbon because the High Level Event
-   APIs are not available.  */
-
-int
-run_mac_command (argv, workdir, infn, outfn, errfn)
-     unsigned char **argv;
-     const char *workdir;
-     const char *infn, *outfn, *errfn;
-{
-#if TARGET_API_MAC_CARBON
-  return -1;
-#else /* not TARGET_API_MAC_CARBON */
-  char macappname[MAXPATHLEN+1], macworkdir[MAXPATHLEN+1];
-  char macinfn[MAXPATHLEN+1], macoutfn[MAXPATHLEN+1], macerrfn[MAXPATHLEN+1];
-  int paramlen, argc, newargc, j, retries;
-  char **newargv, *param, *p;
-  OSErr iErr;
-  FSSpec spec;
-  LaunchParamBlockRec lpbr;
-  EventRecord send_event, reply_event;
-  RgnHandle cursor_region_handle;
-  TargetID targ;
-  unsigned long ref_con, len;
-
-  if (posix_to_mac_pathname (workdir, macworkdir, MAXPATHLEN+1) == 0)
-    return -1;
-  if (posix_to_mac_pathname (infn, macinfn, MAXPATHLEN+1) == 0)
-    return -1;
-  if (posix_to_mac_pathname (outfn, macoutfn, MAXPATHLEN+1) == 0)
-    return -1;
-  if (posix_to_mac_pathname (errfn, macerrfn, MAXPATHLEN+1) == 0)
-    return -1;
-
-  paramlen = strlen (macworkdir) + strlen (macinfn) + strlen (macoutfn)
-             + strlen (macerrfn) + 4;  /* count nulls at end of strings */
-
-  argc = 0;
-  while (argv[argc])
-    argc++;
-
-  if (argc == 0)
-    return -1;
-
-  /* If a subprocess is invoked with a shell, we receive 3 arguments
-     of the form: "<path to emacs bins>/sh" "-c" "<path to emacs
-     bins>/<command> <command args>" */
-  j = strlen (argv[0]);
-  if (j >= 3 && strcmp (argv[0]+j-3, "/sh") == 0
-      && argc == 3 && strcmp (argv[1], "-c") == 0)
-    {
-      char *command, *t, tempmacpathname[MAXPATHLEN+1];
-
-      /* The arguments for the command in argv[2] are separated by
-	 spaces.  Count them and put the count in newargc.  */
-      command = (char *) alloca (strlen (argv[2])+2);
-      strcpy (command, argv[2]);
-      if (command[strlen (command) - 1] != ' ')
-	strcat (command, " ");
-
-      t = command;
-      newargc = 0;
-      t = mystrchr (t, ' ');
-      while (t)
-	{
-	  newargc++;
-	  t = mystrchr (t+1, ' ');
-	}
-
-      newargv = (char **) alloca (sizeof (char *) * newargc);
-
-      t = command;
-      for (j = 0; j < newargc; j++)
-	{
-	  newargv[j] = (char *) alloca (strlen (t) + 1);
-	  mystrcpy (newargv[j], t);
-
-	  t = mystrtok (t);
-	  paramlen += strlen (newargv[j]) + 1;
-	}
-
-      if (strncmp (newargv[0], "~emacs/", 7) == 0)
-	{
-	  if (posix_to_mac_pathname (newargv[0], tempmacpathname, MAXPATHLEN+1)
-	      == 0)
-	    return -1;
-	}
-      else
-	{  /* sometimes Emacs call "sh" without a path for the command */
-#if 0
-	  char *t = (char *) alloca (strlen (newargv[0]) + 7 + 1);
-	  strcpy (t, "~emacs/");
-	  strcat (t, newargv[0]);
-#endif /* 0 */
-	  Lisp_Object path;
-	  openp (Vexec_path, build_string (newargv[0]), Vexec_suffixes, &path,
-		 make_number (X_OK));
-
-	  if (NILP (path))
-	    return -1;
-	  if (posix_to_mac_pathname (SDATA (path), tempmacpathname,
-				    MAXPATHLEN+1) == 0)
-	    return -1;
-	}
-      strcpy (macappname, tempmacpathname);
-    }
-  else
-    {
-      if (posix_to_mac_pathname (argv[0], macappname, MAXPATHLEN+1) == 0)
-	return -1;
-
-      newargv = (char **) alloca (sizeof (char *) * argc);
-      newargc = argc;
-      for (j = 1; j < argc; j++)
-	{
-	  if (strncmp (argv[j], "~emacs/", 7) == 0)
-	    {
-	      char *t = strchr (argv[j], ' ');
-	      if (t)
-		{
-		  char tempcmdname[MAXPATHLEN+1], tempmaccmdname[MAXPATHLEN+1];
-		  strncpy (tempcmdname, argv[j], t-argv[j]);
-		  tempcmdname[t-argv[j]] = '\0';
-		  if (posix_to_mac_pathname (tempcmdname, tempmaccmdname,
-					    MAXPATHLEN+1) == 0)
-		    return -1;
-		  newargv[j] = (char *) alloca (strlen (tempmaccmdname)
-						+ strlen (t) + 1);
-		  strcpy (newargv[j], tempmaccmdname);
-		  strcat (newargv[j], t);
-		}
-	      else
-		{
-		  char tempmaccmdname[MAXPATHLEN+1];
-		  if (posix_to_mac_pathname (argv[j], tempmaccmdname,
-					    MAXPATHLEN+1) == 0)
-		    return -1;
-		  newargv[j] = (char *) alloca (strlen (tempmaccmdname)+1);
-		  strcpy (newargv[j], tempmaccmdname);
-		}
-	    }
-	  else
-	    newargv[j] = argv[j];
-	  paramlen += strlen (newargv[j]) + 1;
-	}
-    }
-
-  /* After expanding all the arguments, we now know the length of the
-     parameter block to be sent to the subprocess as a message
-     attached to the HLE.  */
-  param = (char *) malloc (paramlen + 1);
-  if (!param)
-    return -1;
-
-  p = param;
-  *p++ = newargc;
-    /* first byte of message contains number of arguments for command */
-  strcpy (p, macworkdir);
-  p += strlen (macworkdir);
-  *p++ = '\0';
-    /* null terminate strings sent so it's possible to use strcpy over there */
-  strcpy (p, macinfn);
-  p += strlen (macinfn);
-  *p++ = '\0';
-  strcpy (p, macoutfn);
-  p += strlen (macoutfn);
-  *p++ = '\0';
-  strcpy (p, macerrfn);
-  p += strlen (macerrfn);
-  *p++ = '\0';
-  for (j = 1; j < newargc; j++)
-    {
-      strcpy (p, newargv[j]);
-      p += strlen (newargv[j]);
-      *p++ = '\0';
-    }
-
-  c2pstr (macappname);
-
-  iErr = FSMakeFSSpec (0, 0, macappname, &spec);
-
-  if (iErr != noErr)
-    {
-      free (param);
-      return -1;
-    }
-
-  lpbr.launchBlockID = extendedBlock;
-  lpbr.launchEPBLength = extendedBlockLen;
-  lpbr.launchControlFlags = launchContinue + launchNoFileFlags;
-  lpbr.launchAppSpec = &spec;
-  lpbr.launchAppParameters = NULL;
-
-  iErr = LaunchApplication (&lpbr);  /* call the subprocess */
-  if (iErr != noErr)
-    {
-      free (param);
-      return -1;
-    }
-
-  send_event.what = kHighLevelEvent;
-  send_event.message = kEmacsSubprocessSend;
-    /* Event ID stored in "where" unused */
-
-  retries = 3;
-  /* OS may think current subprocess has terminated if previous one
-     terminated recently.  */
-  do
-    {
-      iErr = PostHighLevelEvent (&send_event, &lpbr.launchProcessSN, 0, param,
-				 paramlen + 1, receiverIDisPSN);
-    }
-  while (iErr == sessClosedErr && retries-- > 0);
-
-  if (iErr != noErr)
-    {
-      free (param);
-      return -1;
-    }
-
-  cursor_region_handle = NewRgn ();
-
-  /* Wait for the subprocess to finish, when it will send us a ERPY
-     high level event.  */
-  while (1)
-    if (WaitNextEvent (highLevelEventMask, &reply_event, 180,
-		       cursor_region_handle)
-	&& reply_event.message == kEmacsSubprocessReply)
-      break;
-
-  /* The return code is sent through the refCon */
-  iErr = AcceptHighLevelEvent (&targ, &ref_con, NULL, &len);
-  if (iErr != noErr)
-    {
-      DisposeHandle ((Handle) cursor_region_handle);
-      free (param);
-      return -1;
-    }
-
-  DisposeHandle ((Handle) cursor_region_handle);
-  free (param);
-
-  return ref_con;
-#endif /* not TARGET_API_MAC_CARBON */
-}
-
-
-DIR *
-opendir (const char *dirname)
-{
-  char true_pathname[MAXPATHLEN+1], fully_resolved_name[MAXPATHLEN+1];
-  char mac_pathname[MAXPATHLEN+1], vol_name[MAXPATHLEN+1];
-  DIR *dirp;
-  CInfoPBRec cipb;
-  HVolumeParam vpb;
-  int len, vol_name_len;
-
-  if (find_true_pathname (dirname, true_pathname, MAXPATHLEN+1) == -1)
-    return 0;
-
-  len = readlink (true_pathname, fully_resolved_name, MAXPATHLEN);
-  if (len > -1)
-    fully_resolved_name[len] = '\0';
-  else
-    strcpy (fully_resolved_name, true_pathname);
-
-  dirp = (DIR *) malloc (sizeof(DIR));
-  if (!dirp)
-    return 0;
-
-  /* Handle special case when dirname is "/": sets up for readir to
-     get all mount volumes.  */
-  if (strcmp (fully_resolved_name, "/") == 0)
-    {
-      dirp->getting_volumes = 1;  /* special all mounted volumes DIR struct */
-      dirp->current_index = 1;  /* index for first volume */
-      return dirp;
-    }
-
-  /* Handle typical cases: not accessing all mounted volumes.  */
-  if (!posix_to_mac_pathname (fully_resolved_name, mac_pathname, MAXPATHLEN+1))
-    return 0;
-
-  /* Emacs calls opendir without the trailing '/', Mac needs trailing ':' */
-  len = strlen (mac_pathname);
-  if (mac_pathname[len - 1] != ':' && len < MAXPATHLEN)
-    strcat (mac_pathname, ":");
-
-  /* Extract volume name */
-  vol_name_len = strchr (mac_pathname, ':') - mac_pathname;
-  strncpy (vol_name, mac_pathname, vol_name_len);
-  vol_name[vol_name_len] = '\0';
-  strcat (vol_name, ":");
-
-  c2pstr (mac_pathname);
-  cipb.hFileInfo.ioNamePtr = mac_pathname;
-    /* using full pathname so vRefNum and DirID ignored */
-  cipb.hFileInfo.ioVRefNum = 0;
-  cipb.hFileInfo.ioDirID = 0;
-  cipb.hFileInfo.ioFDirIndex = 0;
-    /* set to 0 to get information about specific dir or file */
-
-  errno = PBGetCatInfo (&cipb, false);
-  if (errno != noErr)
-    {
-      errno = ENOENT;
-      return 0;
-    }
-
-  if (!(cipb.hFileInfo.ioFlAttrib & 0x10))  /* bit 4 = 1 for directories */
-    return 0;  /* not a directory */
-
-  dirp->dir_id = cipb.dirInfo.ioDrDirID;  /* used later in readdir */
-  dirp->getting_volumes = 0;
-  dirp->current_index = 1;  /* index for first file/directory */
-
-  c2pstr (vol_name);
-  vpb.ioNamePtr = vol_name;
-    /* using full pathname so vRefNum and DirID ignored */
-  vpb.ioVRefNum = 0;
-  vpb.ioVolIndex = -1;
-  errno = PBHGetVInfo ((union HParamBlockRec *) &vpb, false);
-  if (errno != noErr)
-    {
-      errno = ENOENT;
-      return 0;
-    }
-
-  dirp->vol_ref_num = vpb.ioVRefNum;
-
-  return dirp;
-}
-
-int
-closedir (DIR *dp)
-{
-  free (dp);
-
-  return 0;
-}
-
-
-struct dirent *
-readdir (DIR *dp)
-{
-  HParamBlockRec hpblock;
-  CInfoPBRec cipb;
-  static struct dirent s_dirent;
-  static Str255 s_name;
-  int done;
-  char *p;
-
-  /* Handle the root directory containing the mounted volumes.  Call
-     PBHGetVInfo specifying an index to obtain the info for a volume.
-     PBHGetVInfo returns an error when it receives an index beyond the
-     last volume, at which time we should return a nil dirent struct
-     pointer.  */
-  if (dp->getting_volumes)
-    {
-      hpblock.volumeParam.ioNamePtr = s_name;
-      hpblock.volumeParam.ioVRefNum = 0;
-      hpblock.volumeParam.ioVolIndex = dp->current_index;
-
-      errno = PBHGetVInfo (&hpblock, false);
-      if (errno != noErr)
-	{
-	  errno = ENOENT;
-	  return 0;
-	}
-
-      p2cstr (s_name);
-      strcat (s_name, "/");  /* need "/" for stat to work correctly */
-
-      dp->current_index++;
-
-      s_dirent.d_ino = hpblock.volumeParam.ioVRefNum;
-      s_dirent.d_name = s_name;
-
-      return &s_dirent;
-    }
-  else
-    {
-      cipb.hFileInfo.ioVRefNum = dp->vol_ref_num;
-      cipb.hFileInfo.ioNamePtr = s_name;
-        /* location to receive filename returned */
-
-      /* return only visible files */
-      done = false;
-      while (!done)
-	{
-	  cipb.hFileInfo.ioDirID = dp->dir_id;
-	    /* directory ID found by opendir */
-	  cipb.hFileInfo.ioFDirIndex = dp->current_index;
-
-	  errno = PBGetCatInfo (&cipb, false);
-	  if (errno != noErr)
-	    {
-	      errno = ENOENT;
-	      return 0;
-	    }
-
-	  /* insist on a visible entry */
-	  if (cipb.hFileInfo.ioFlAttrib & 0x10)  /* directory? */
-	    done = !(cipb.dirInfo.ioDrUsrWds.frFlags & fInvisible);
-	  else
-	    done = !(cipb.hFileInfo.ioFlFndrInfo.fdFlags & fInvisible);
-
-	  dp->current_index++;
-	}
-
-      p2cstr (s_name);
-
-      p = s_name;
-      while (*p)
-        {
-          if (*p == '/')
-            *p = ':';
-          p++;
-        }
-
-      s_dirent.d_ino = cipb.dirInfo.ioDrDirID;
-        /* value unimportant: non-zero for valid file */
-      s_dirent.d_name = s_name;
-
-      return &s_dirent;
-    }
-}
-
-
-char *
-getwd (char *path)
-{
-  char mac_pathname[MAXPATHLEN+1];
-  Str255 directory_name;
-  OSErr errno;
-  CInfoPBRec cipb;
-
-  if (path_from_vol_dir_name (mac_pathname, 255, 0, 0, "\p") == 0)
-    return NULL;
-
-  if (mac_to_posix_pathname (mac_pathname, path, MAXPATHLEN+1) == 0)
-    return 0;
-  else
-    return path;
-}
-
-#endif  /* ! MAC_OSX */
-
-
 void
 initialize_applescript ()
 {
@@ -4402,11 +1858,7 @@ DEFUN ("mac-get-file-creator", Fmac_get_file_creator, Smac_get_file_creator, 1, 
      Lisp_Object filename;
 {
   OSStatus status;
-#ifdef MAC_OSX
   FSRef fref;
-#else
-  FSSpec fss;
-#endif
   Lisp_Object result = Qnil;
   CHECK_STRING (filename);
 
@@ -4416,31 +1868,17 @@ DEFUN ("mac-get-file-creator", Fmac_get_file_creator, Smac_get_file_creator, 1, 
   filename = Fexpand_file_name (filename, Qnil);
 
   BLOCK_INPUT;
-#ifdef MAC_OSX
   status = FSPathMakeRef(SDATA(ENCODE_FILE(filename)), &fref, NULL);
-#else
-  status = posix_pathname_to_fsspec (SDATA (ENCODE_FILE (filename)), &fss);
-#endif
 
   if (status == noErr)
     {
-#ifdef MAC_OSX
       FSCatalogInfo catalogInfo;
 
       status = FSGetCatalogInfo(&fref, kFSCatInfoFinderInfo,
 				&catalogInfo, NULL, NULL, NULL);
-#else
-      FInfo finder_info;
-
-      status = FSpGetFInfo (&fss, &finder_info);
-#endif
       if (status == noErr)
 	{
-#ifdef MAC_OSX
 	  result = mac_get_object_from_code(((FileInfo*)&catalogInfo.finderInfo)->fileCreator);
-#else
-	  result = mac_get_object_from_code (finder_info.fdCreator);
-#endif
 	}
     }
   UNBLOCK_INPUT;
@@ -4456,11 +1894,7 @@ DEFUN ("mac-get-file-type", Fmac_get_file_type, Smac_get_file_type, 1, 1, 0,
      Lisp_Object filename;
 {
   OSStatus status;
-#ifdef MAC_OSX
   FSRef fref;
-#else
-  FSSpec fss;
-#endif
   Lisp_Object result = Qnil;
   CHECK_STRING (filename);
 
@@ -4470,31 +1904,17 @@ DEFUN ("mac-get-file-type", Fmac_get_file_type, Smac_get_file_type, 1, 1, 0,
   filename = Fexpand_file_name (filename, Qnil);
 
   BLOCK_INPUT;
-#ifdef MAC_OSX
   status = FSPathMakeRef(SDATA(ENCODE_FILE(filename)), &fref, NULL);
-#else
-  status = posix_pathname_to_fsspec (SDATA (ENCODE_FILE (filename)), &fss);
-#endif
 
   if (status == noErr)
     {
-#ifdef MAC_OSX
       FSCatalogInfo catalogInfo;
 
       status = FSGetCatalogInfo(&fref, kFSCatInfoFinderInfo,
 				&catalogInfo, NULL, NULL, NULL);
-#else
-      FInfo finder_info;
-
-      status = FSpGetFInfo (&fss, &finder_info);
-#endif
       if (status == noErr)
 	{
-#ifdef MAC_OSX
 	  result = mac_get_object_from_code(((FileInfo*)&catalogInfo.finderInfo)->fileType);
-#else
-	  result = mac_get_object_from_code (finder_info.fdType);
-#endif
 	}
     }
   UNBLOCK_INPUT;
@@ -4512,11 +1932,7 @@ assumed. Return non-nil if successful.  */)
      Lisp_Object filename, code;
 {
   OSStatus status;
-#ifdef MAC_OSX
   FSRef fref;
-#else
-  FSSpec fss;
-#endif
   OSType cCode;
   CHECK_STRING (filename);
 
@@ -4528,34 +1944,19 @@ assumed. Return non-nil if successful.  */)
   filename = Fexpand_file_name (filename, Qnil);
 
   BLOCK_INPUT;
-#ifdef MAC_OSX
   status = FSPathMakeRef(SDATA(ENCODE_FILE(filename)), &fref, NULL);
-#else
-  status = posix_pathname_to_fsspec (SDATA (ENCODE_FILE (filename)), &fss);
-#endif
 
   if (status == noErr)
     {
-#ifdef MAC_OSX
       FSCatalogInfo catalogInfo;
       FSRef parentDir;
       status = FSGetCatalogInfo(&fref, kFSCatInfoFinderInfo,
 				&catalogInfo, NULL, NULL, &parentDir);
-#else
-      FInfo finder_info;
-
-      status = FSpGetFInfo (&fss, &finder_info);
-#endif
       if (status == noErr)
 	{
-#ifdef MAC_OSX
 	((FileInfo*)&catalogInfo.finderInfo)->fileCreator = cCode;
 	status = FSSetCatalogInfo(&fref, kFSCatInfoFinderInfo, &catalogInfo);
 	/* TODO: on Mac OS 10.2, we need to touch the parent dir, FNNotify? */
-#else
-	finder_info.fdCreator = cCode;
-	status = FSpSetFInfo (&fss, &finder_info);
-#endif
 	}
     }
   UNBLOCK_INPUT;
@@ -4572,11 +1973,7 @@ CODE must be a 4-character string.  Return non-nil if successful.  */)
      Lisp_Object filename, code;
 {
   OSStatus status;
-#ifdef MAC_OSX
   FSRef fref;
-#else
-  FSSpec fss;
-#endif
   OSType cCode;
   CHECK_STRING (filename);
 
@@ -4588,34 +1985,19 @@ CODE must be a 4-character string.  Return non-nil if successful.  */)
   filename = Fexpand_file_name (filename, Qnil);
 
   BLOCK_INPUT;
-#ifdef MAC_OSX
   status = FSPathMakeRef(SDATA(ENCODE_FILE(filename)), &fref, NULL);
-#else
-  status = posix_pathname_to_fsspec (SDATA (ENCODE_FILE (filename)), &fss);
-#endif
 
   if (status == noErr)
     {
-#ifdef MAC_OSX
       FSCatalogInfo catalogInfo;
       FSRef parentDir;
       status = FSGetCatalogInfo(&fref, kFSCatInfoFinderInfo,
 				&catalogInfo, NULL, NULL, &parentDir);
-#else
-      FInfo finder_info;
-
-      status = FSpGetFInfo (&fss, &finder_info);
-#endif
       if (status == noErr)
 	{
-#ifdef MAC_OSX
 	((FileInfo*)&catalogInfo.finderInfo)->fileType = cCode;
 	status = FSSetCatalogInfo(&fref, kFSCatInfoFinderInfo, &catalogInfo);
 	/* TODO: on Mac OS 10.2, we need to touch the parent dir, FNNotify? */
-#else
-	finder_info.fdType = cCode;
-	status = FSpSetFInfo (&fss, &finder_info);
-#endif
 	}
     }
   UNBLOCK_INPUT;
@@ -4623,6 +2005,225 @@ CODE must be a 4-character string.  Return non-nil if successful.  */)
     error ("Error while setting creator information.");
   }
   return Qt;
+}
+
+
+/* Moving files to the system recycle bin.
+   Used by `move-file-to-trash' instead of the default moving to ~/.Trash  */
+DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
+       Ssystem_move_file_to_trash, 1, 1, 0,
+       doc: /* Move file or directory named FILENAME to the recycle bin.  */)
+     (filename)
+     Lisp_Object filename;
+{
+  OSStatus err;
+  FSRef fref;
+  Lisp_Object errstring = Qnil;
+  Lisp_Object handler;
+  Lisp_Object encoded_file;
+  Lisp_Object operation;
+
+  operation = Qdelete_file;
+  if (!NILP (Ffile_directory_p (filename))
+      && NILP (Ffile_symlink_p (filename)))
+    {
+      operation = Qdelete_directory;
+      filename = Fdirectory_file_name (filename);
+    }
+  filename = Fexpand_file_name (filename, Qnil);
+
+  handler = Ffind_file_name_handler (filename, operation);
+  if (!NILP (handler))
+    return call2 (handler, operation, filename);
+
+  encoded_file = ENCODE_FILE (filename);
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+  if (FSPathMakeRefWithOptions != NULL)
+#endif
+    {
+      BLOCK_INPUT;
+      err = FSPathMakeRefWithOptions (SDATA (encoded_file),
+				      kFSPathMakeRefDoNotFollowLeafSymlink,
+				      &fref, NULL);
+      UNBLOCK_INPUT;
+    }
+#endif
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+  else				/* FSPathMakeRefWithOptions == NULL */
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
+    {
+      struct stat st;
+
+      if (lstat (SDATA (encoded_file), &st) < 0)
+	report_file_error ("Removing old name", list1 (filename));
+
+      BLOCK_INPUT;
+      if (!S_ISLNK (st.st_mode))
+	err = FSPathMakeRef (SDATA (encoded_file), &fref, NULL);
+      else
+	{
+	  char *leaf = rindex (SDATA (encoded_file), '/') + 1;
+	  size_t parent_len = leaf - (char *) SDATA (encoded_file);
+	  char *parent = alloca (parent_len + 1);
+	  FSRef parent_ref;
+
+	  memcpy (parent, SDATA (encoded_file), parent_len);
+	  parent[parent_len] = '\0';
+	  err = FSPathMakeRef (parent, &parent_ref, NULL);
+	  if (err == noErr)
+	    {
+	      CFStringRef name_str =
+		CFStringCreateWithBytes (NULL, leaf,
+					 SBYTES (encoded_file) - parent_len,
+					 kCFStringEncodingUTF8, false);
+
+	      if (name_str)
+		{
+		  UniCharCount name_len = CFStringGetLength (name_str);
+		  UniChar *name = alloca (sizeof (UniChar) * name_len);
+
+		  CFStringGetCharacters (name_str, CFRangeMake (0, name_len),
+					 name);
+		  err = FSMakeFSRefUnicode (&parent_ref, name_len, name,
+					    kTextEncodingUnknown, &fref);
+		  CFRelease (name_str);
+		}
+	      else
+		err = memFullErr;
+	    }
+	}
+      UNBLOCK_INPUT;
+    }
+#endif
+
+  if (err == noErr)
+    {
+      BLOCK_INPUT;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+      if (FSMoveObjectToTrashSync != NULL)
+#endif
+	{
+	  /* FSPathMoveObjectToTrashSync tries to delete the
+	     destination of the specified symbolic link.  So we use
+	     FSMoveObjectToTrashSync for an FSRef created with
+	     kFSPathMakeRefDoNotFollowLeafSymlink.  */
+	  err = FSMoveObjectToTrashSync (&fref, NULL,
+					 kFSFileOperationDefaultOptions);
+	}
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
+      else				/* FSMoveObjectToTrashSync == NULL */
+#endif
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
+	{
+	  const OSType finderSignature = 'MACS';
+	  UInt32 response;
+	  AEDesc desc;
+	  AppleEvent event, reply;
+
+	  err = Gestalt (gestaltSystemVersion, &response);
+	  if (err == noErr)
+	    {
+	      if (response < 0x1030)
+		/* Coerce to typeAlias as Finder on Mac OS X 10.2
+		   doesn't accept FSRef.  We should not do this on
+		   later versions because it leads to the deletion of
+		   the destination of the symbolic link.  */
+		err = AECoercePtr (typeFSRef, &fref, sizeof (FSRef),
+				   typeAlias, &desc);
+	      else
+		/* Specifying typeFileURL as target type enables us to
+		   delete the specified symbolic link itself on Mac OS
+		   X 10.4 and later.  But that doesn't work on Mac OS
+		   X 10.3.  That's why we created an FSRef without
+		   following the link at the leaf position.  */
+		err = AECreateDesc (typeFSRef, &fref, sizeof (FSRef), &desc);
+	    }
+	  if (err == noErr)
+	    {
+	      err = AEBuildAppleEvent (kAECoreSuite, kAEDelete,
+				       typeApplSignature,
+				       &finderSignature, sizeof (OSType),
+				       kAutoGenerateReturnID, kAnyTransactionID,
+				       &event, NULL, "'----':@", &desc);
+	      AEDisposeDesc (&desc);
+	    }
+	  if (err == noErr)
+	    {
+	      err = AESendMessage (&event, &reply,
+				   kAEWaitReply | kAENeverInteract,
+				   kAEDefaultTimeout);
+	      AEDisposeDesc (&event);
+	    }
+	  if (err == noErr)
+	    {
+	      if (reply.descriptorType != typeNull)
+		{
+		  OSStatus err1, handler_err;
+		  AEDesc desc;
+
+		  err1 = AEGetParamPtr (&reply, keyErrorNumber, typeSInt32,
+					NULL, &handler_err,
+					sizeof (OSStatus), NULL);
+		  if (err1 != errAEDescNotFound)
+		    err = handler_err;
+		  err1 = AEGetParamDesc (&reply, keyErrorString,
+					 typeUTF8Text, /* Needs 10.2 */
+					 &desc);
+		  if (err1 == noErr)
+		    {
+		      errstring =
+			make_uninit_string (AEGetDescDataSize (&desc));
+		      err1 = AEGetDescData (&desc, SDATA (errstring),
+					   SBYTES (errstring));
+		      if (err1 == noErr)
+			errstring =
+			  code_convert_string_norecord (errstring, Qutf_8, 0);
+		      else
+			errstring = Qnil;
+		      AEDisposeDesc (&desc);
+		    }
+		}
+	      AEDisposeDesc (&reply);
+	    }
+	}
+#endif
+      UNBLOCK_INPUT;
+    }
+
+  if (err != noErr)
+    {
+      errno = 0;
+      if (NILP (errstring))
+	{
+	  switch (err)
+	    {
+	    case fnfErr:
+	      errno = ENOENT;
+	      break;
+
+	    case afpAccessDenied:
+	      errno = EACCES;
+	      break;
+
+	    default:
+	      errstring = concat2 (build_string ("Mac error "),
+				   Fnumber_to_string (make_number (err)));
+	      break;
+	    }
+	}
+      if (errno)
+	report_file_error ("Removing old name", list1 (filename));
+      else
+	xsignal (Qfile_error, list3 (build_string ("Removing old name"),
+				     errstring, filename));
+    }
+
+  return Qnil;
 }
 
 
@@ -4635,9 +2236,6 @@ CODE must be a 4-character string.  Return non-nil if successful.  */)
    Macintosh - Interapplication Communications: Scripting
    Components.  */
 
-#if !USE_APPKIT
-static
-#endif
 long
 do_applescript (script, result)
      Lisp_Object script, *result;
@@ -4670,13 +2268,8 @@ do_applescript (script, result)
 
   if (desc)
     {
-#if TARGET_API_MAC_CARBON
       *result = make_uninit_string (AEGetDescDataSize (desc));
       AEGetDescData (desc, SDATA (*result), SBYTES (*result));
-#else /* not TARGET_API_MAC_CARBON */
-      *result = make_uninit_string (GetHandleSize (desc->dataHandle));
-      memcpy (SDATA (*result), *(desc->dataHandle), SBYTES (*result));
-#endif /* not TARGET_API_MAC_CARBON */
       AEDisposeDesc (desc);
     }
 
@@ -4701,7 +2294,6 @@ component.  */)
   CHECK_STRING (script);
 
   BLOCK_INPUT;
-#if USE_APPKIT
   {
     extern long mac_appkit_do_applescript P_ ((Lisp_Object, Lisp_Object *));
 
@@ -4710,9 +2302,6 @@ component.  */)
     else
       status = do_applescript (script, &result);
   }
-#else
-  status = do_applescript (script, &result);
-#endif
   UNBLOCK_INPUT;
   if (status == 0)
     return result;
@@ -4721,42 +2310,6 @@ component.  */)
   else
     error ("%s", SDATA (result));
 }
-
-
-#if !__LP64__
-DEFUN ("mac-file-name-to-posix", Fmac_file_name_to_posix,
-       Smac_file_name_to_posix, 1, 1, 0,
-       doc: /* Convert Macintosh FILENAME to Posix form.  */)
-     (filename)
-     Lisp_Object filename;
-{
-  char posix_filename[MAXPATHLEN+1];
-
-  CHECK_STRING (filename);
-
-  if (mac_to_posix_pathname (SDATA (filename), posix_filename, MAXPATHLEN))
-    return build_string (posix_filename);
-  else
-    return Qnil;
-}
-
-
-DEFUN ("posix-file-name-to-mac", Fposix_file_name_to_mac,
-       Sposix_file_name_to_mac, 1, 1, 0,
-       doc: /* Convert Posix FILENAME to Mac form.  */)
-     (filename)
-     Lisp_Object filename;
-{
-  char mac_filename[MAXPATHLEN+1];
-
-  CHECK_STRING (filename);
-
-  if (posix_to_mac_pathname (SDATA (filename), mac_filename, MAXPATHLEN))
-    return build_string (mac_filename);
-  else
-    return Qnil;
-}
-#endif
 
 
 DEFUN ("mac-coerce-ae-data", Fmac_coerce_ae_data, Smac_coerce_ae_data, 3, 3, 0,
@@ -4796,8 +2349,7 @@ Each type should be a string of length 4 or the symbol
 }
 
 
-#if TARGET_API_MAC_CARBON
-static Lisp_Object Qxml, Qmime_charset;
+static Lisp_Object Qxml, QCmime_charset;
 static Lisp_Object QNFD, QNFKD, QNFC, QNFKC, QHFS_plus_D, QHFS_plus_C;
 
 DEFUN ("mac-get-preference", Fmac_get_preference, Smac_get_preference, 1, 4, 0,
@@ -4939,11 +2491,11 @@ get_cfstring_encoding_from_lisp (obj)
 
   if (SYMBOLP (obj) && !NILP (Fcoding_system_p (obj)))
     {
-      Lisp_Object coding_spec, plist;
+      Lisp_Object attrs, plist;
 
-      coding_spec = Fget (obj, Qcoding_system);
-      plist = XVECTOR (coding_spec)->contents[3];
-      obj = Fplist_get (plist, Qmime_charset);
+      attrs = AREF (CODING_SYSTEM_SPEC (obj), 0);
+      plist = CODING_ATTR_PLIST (attrs);
+      obj = Fplist_get (plist, QCmime_charset);
     }
 
   if (SYMBOLP (obj))
@@ -4962,7 +2514,6 @@ get_cfstring_encoding_from_lisp (obj)
   return encoding;
 }
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
 static CFStringRef
 cfstring_create_normalized (str, symbol)
      CFStringRef str;
@@ -5056,10 +2607,8 @@ cfstring_create_normalized (str, symbol)
 					       out_len / sizeof (UniChar));
       if (uni)
 	DisposeUnicodeToTextInfo (&uni);
-      if (out_buf)
-	xfree (out_buf);
-      if (buffer)
-	xfree (buffer);
+      xfree (out_buf);
+      xfree (buffer);
     }
   else
     {
@@ -5069,7 +2618,6 @@ cfstring_create_normalized (str, symbol)
 
   return result;
 }
-#endif
 
 DEFUN ("mac-code-convert-string", Fmac_code_convert_string, Smac_code_convert_string, 3, 4, 0,
        doc: /* Convert STRING from SOURCE encoding to TARGET encoding.
@@ -5112,7 +2660,6 @@ On successful conversion, return the result string, else return nil.  */)
       && tgt_encoding != kCFStringEncodingInvalidId)
     str = CFStringCreateWithBytes (NULL, SDATA (string), SBYTES (string),
 				   src_encoding, !NILP (source));
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
   if (str)
     {
       CFStringRef saved_str = str;
@@ -5120,7 +2667,6 @@ On successful conversion, return the result string, else return nil.  */)
       str = cfstring_create_normalized (saved_str, normalization_form);
       CFRelease (saved_str);
     }
-#endif
   if (str)
     {
       CFIndex str_len, buf_len;
@@ -5166,23 +2712,16 @@ defined in the Carbon Event Manager.  */)
   return Qnil;
 }
 
-#endif	/* TARGET_API_MAC_CARBON */
-
-
 static ScriptCode
 mac_get_system_script_code ()
 {
   ScriptCode result;
-#if TARGET_API_MAC_CARBON
   OSStatus err;
 
   err = RevertTextEncodingToScriptInfo (CFStringGetSystemEncoding (),
 					&result, NULL, NULL);
   if (err != noErr)
     result = 0;
-#else
-  result = (ScriptCode) GetScriptManagerVariable (smSysScript);
-#endif
 
   return result;
 }
@@ -5213,11 +2752,6 @@ mac_get_system_locale ()
 }
 
 
-#ifdef MAC_OSX
-
-extern int inhibit_window_system;
-extern int noninteractive;
-
 /* Unlike in X11, window events in Carbon do not come from sockets.
    So we cannot simply use `select' to monitor two kinds of inputs:
    window events and process outputs.  We emulate such functionality
@@ -5228,8 +2762,7 @@ extern int noninteractive;
       -> Use `select'.
    2. Sockets are not involved.
       -> Use ReceiveNextEvent.
-   3. [If SELECT_USE_CFSOCKET is set]
-      Only the window event channel and socket read/write channels are
+   3. Only the window event channel and socket read/write channels are
       involved, and timeout is not too short (greater than
       SELECT_TIMEOUT_THRESHOLD_RUNLOOP seconds).
       -> Create CFSocket for each socket and add it into the current
@@ -5241,12 +2774,7 @@ extern int noninteractive;
          executing `select' with a short timeout
          (SELECT_POLLING_PERIOD_USEC microseconds).  */
 
-#ifndef SELECT_USE_CFSOCKET
-#define SELECT_USE_CFSOCKET 1
-#endif
-
 #define SELECT_POLLING_PERIOD_USEC 100000
-#if SELECT_USE_CFSOCKET
 #define SELECT_TIMEOUT_THRESHOLD_RUNLOOP 0.2
 
 /* Dictionary of file descriptors vs CFSocketRef's allocated in
@@ -5320,7 +2848,6 @@ socket_callback (s, type, address, data, info)
      void *info;
 {
 }
-#endif	/* SELECT_USE_CFSOCKET */
 
 static int
 select_and_poll_event (nfds, rfds, wfds, efds, timeout)
@@ -5397,7 +2924,6 @@ int
 mac_try_close_socket (fd)
      int fd;
 {
-#if SELECT_USE_CFSOCKET
   if (getpid () == mac_emacs_pid && cfsockets_for_select)
     {
       void *key = (void *) (intptr_t) fd;
@@ -5406,12 +2932,10 @@ mac_try_close_socket (fd)
 
       if (socket)
 	{
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1020
 	  CFOptionFlags flags = CFSocketGetSocketFlags (socket);
 
 	  if (!(flags & kCFSocketCloseOnInvalidate))
 	    CFSocketSetSocketFlags (socket, flags | kCFSocketCloseOnInvalidate);
-#endif
 	  BLOCK_INPUT;
 	  CFSocketInvalidate (socket);
 	  CFDictionaryRemoveValue (cfsockets_for_select, key);
@@ -5420,7 +2944,6 @@ mac_try_close_socket (fd)
 	  return 1;
 	}
     }
-#endif
 
   return 0;
 }
@@ -5481,7 +3004,6 @@ sys_select (nfds, rfds, wfds, efds, timeout)
       if (wfds)
 	*wfds = owfds;
 
-#if SELECT_USE_CFSOCKET
       if (timeoutval > 0 && timeoutval <= SELECT_TIMEOUT_THRESHOLD_RUNLOOP)
 	goto poll_periodically;
 
@@ -5568,7 +3090,6 @@ sys_select (nfds, rfds, wfds, efds, timeout)
 	    FD_ZERO (wfds);
 	  return 0;
 	}
-#endif	/* SELECT_USE_CFSOCKET */
     }
 
  poll_periodically:
@@ -5632,8 +3153,7 @@ mac_service_provider_registered_p ()
 	  CFRelease (identifier);
 	}
     }
-  /* Mac OS X 10.1 doesn't have strlcat.  */
-  strncat (name, ".ServiceProvider", sizeof (name) - strlen (name) - 1);
+  strlcat (name, ".ServiceProvider", sizeof (name));
 
   return bootstrap_look_up (bootstrap_port, name, &port) == KERN_SUCCESS;
 }
@@ -5663,7 +3183,7 @@ init_mac_osx_environment ()
 
   /* Initialize locale related variables.  */
   mac_system_script_code = mac_get_system_script_code ();
-  Vmac_system_locale = mac_get_system_locale ();
+  Vmac_system_locale = IS_DAEMON ? Qnil : mac_get_system_locale ();
 
   /* Fetch the pathname of the application bundle as a C string into
      app_bundle_pathname.  */
@@ -5683,17 +3203,12 @@ init_mac_osx_environment ()
 
   cf_app_bundle_pathname = CFURLCopyFileSystemPath (bundleURL,
 						    kCFURLPOSIXPathStyle);
-  app_bundle_pathname_len = CFStringGetLength (cf_app_bundle_pathname);
-  app_bundle_pathname = (char *) alloca (app_bundle_pathname_len + 1);
+  {
+    Lisp_Object temp = cfstring_to_lisp_nodecode (cf_app_bundle_pathname);
 
-  if (!CFStringGetCString (cf_app_bundle_pathname,
-			   app_bundle_pathname,
-			   app_bundle_pathname_len + 1,
-			   kCFStringEncodingISOLatin1))
-    {
-      CFRelease (cf_app_bundle_pathname);
-      return;
-    }
+    app_bundle_pathname_len = SBYTES (temp);
+    app_bundle_pathname = SDATA (temp);
+  }
 
   CFRelease (cf_app_bundle_pathname);
 
@@ -5780,21 +3295,31 @@ init_mac_osx_environment ()
       if (stat (p, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR)
 	setenv ("INFOPATH", p, 1);
     }
-}
-#endif /* MAC_OSX */
 
-#if TARGET_API_MAC_CARBON
-void
-mac_wakeup_from_rne ()
-{
-#ifndef MAC_OSX
-  if (wakeup_from_rne_enabled_p)
-    /* Post a harmless event so as to wake up from
-       ReceiveNextEvent.  */
-    mac_post_mouse_moved_event ();
+  if (IS_DAEMON)
+    inhibit_window_system = 1;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+  else
+    {
+      /* AVAILABLE_MAC_OS_X_VERSION_10_3_AND_LATER is missing in some SDKs.  */
+      CG_EXTERN CFDictionaryRef CGSessionCopyCurrentDictionary(void)  AVAILABLE_MAC_OS_X_VERSION_10_3_AND_LATER;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+      if (CGSessionCopyCurrentDictionary != NULL)
+#endif
+	{
+	  CFDictionaryRef session_dict = CGSessionCopyCurrentDictionary ();
+
+	  if (session_dict == NULL)
+	    /* No window server session.  */
+	    inhibit_window_system = 1;
+	  else
+	    CFRelease (session_dict);
+	}
+    }
 #endif
 }
-#endif
+
 
 void
 syms_of_mac ()
@@ -5802,7 +3327,6 @@ syms_of_mac ()
   Qundecoded_file_name = intern ("undecoded-file-name");
   staticpro (&Qundecoded_file_name);
 
-#if TARGET_API_MAC_CARBON
   Qstring  = intern ("string");		staticpro (&Qstring);
   Qnumber  = intern ("number");		staticpro (&Qnumber);
   Qboolean = intern ("boolean");	staticpro (&Qboolean);
@@ -5815,8 +3339,8 @@ syms_of_mac ()
   Qxml = intern ("xml");
   staticpro (&Qxml);
 
-  Qmime_charset = intern ("mime-charset");
-  staticpro (&Qmime_charset);
+  QCmime_charset = intern (":mime-charset");
+  staticpro (&QCmime_charset);
 
   QNFD  = intern ("NFD");		staticpro (&QNFD);
   QNFKD = intern ("NFKD");		staticpro (&QNFKD);
@@ -5824,7 +3348,6 @@ syms_of_mac ()
   QNFKC = intern ("NFKC");		staticpro (&QNFKC);
   QHFS_plus_D = intern ("HFS+D");	staticpro (&QHFS_plus_D);
   QHFS_plus_C = intern ("HFS+C");	staticpro (&QHFS_plus_C);
-#endif
 
   {
     int i;
@@ -5837,21 +3360,16 @@ syms_of_mac ()
   }
 
   defsubr (&Smac_coerce_ae_data);
-#if TARGET_API_MAC_CARBON
   defsubr (&Smac_get_preference);
   defsubr (&Smac_code_convert_string);
   defsubr (&Smac_process_hi_command);
-#endif
 
   defsubr (&Smac_set_file_creator);
   defsubr (&Smac_set_file_type);
   defsubr (&Smac_get_file_creator);
   defsubr (&Smac_get_file_type);
+  defsubr (&Ssystem_move_file_to_trash);
   defsubr (&Sdo_applescript);
-#if !__LP64__
-  defsubr (&Smac_file_name_to_posix);
-  defsubr (&Sposix_file_name_to_mac);
-#endif
 
   DEFVAR_INT ("mac-system-script-code", &mac_system_script_code,
     doc: /* The system script code.  */);

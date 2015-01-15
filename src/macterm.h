@@ -1,25 +1,24 @@
 /* Display module for Mac OS.
    Copyright (C) 2000, 2001, 2002, 2003, 2004,
                  2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2009 YAMAMOTO Mitsuharu
 
-This file is part of GNU Emacs.
+This file is part of GNU Emacs Mac port.
 
-GNU Emacs is free software; you can redistribute it and/or modify
+GNU Emacs Mac port is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-GNU Emacs is distributed in the hope that it will be useful,
+GNU Emacs Mac port is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GNU Emacs; see the file COPYING.  If not, write to
-the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
-/* Contributed by Andrew Choi (akochoi@mac.com).  */
+/* Originally contributed by Andrew Choi (akochoi@mac.com) for Emacs 21.  */
 
 #include "macgui.h"
 #include "frame.h"
@@ -41,8 +40,8 @@ Boston, MA 02110-1301, USA.  */
 #define BLACK_PIX_DEFAULT(f) RGB_TO_ULONG(0,0,0)
 #define WHITE_PIX_DEFAULT(f) RGB_TO_ULONG(255,255,255)
 
-#define FONT_WIDTH(f)	((f)->max_bounds.width)
-#define FONT_HEIGHT(f)	((f)->ascent + (f)->descent)
+#define FONT_WIDTH(f)	((f)->max_width)
+#define FONT_HEIGHT(f)	((f)->height)
 #define FONT_BASE(f)    ((f)->ascent)
 #define FONT_DESCENT(f) ((f)->descent)
 
@@ -65,6 +64,9 @@ struct mac_display_info
 {
   /* Chain of all mac_display_info structures.  */
   struct mac_display_info *next;
+
+  /* The generic display parameters corresponding to this display. */
+  struct terminal *terminal;
 
   /* This is a cons cell of the form (NAME . FONT-LIST-CACHE).
      The same cons cell also appears in x_display_name_list.  */
@@ -102,12 +104,6 @@ struct mac_display_info
 
   /* Resource data base */
   XrmDatabase xrdb;
-
-  /* A table of all the fonts we have already loaded.  */
-  struct font_info *font_table;
-
-  /* The current capacity of font_table.  */
-  int font_table_size;
 
   /* Minimum width over all characters in all fonts in font_table.  */
   int smallest_char_width;
@@ -151,9 +147,7 @@ struct mac_display_info
 
   char *mac_id_name;
 
-  /* The number of fonts actually stored in the font table.
-     font_table[n] is used and valid if 0 <= n < n_fonts.  0 <=
-     n_fonts <= font_table_size and font_table[i].name != 0.  */
+  /* The number of fonts opened for this display.  */
   int n_fonts;
 
   /* Pointer to bitmap records.  */
@@ -185,14 +179,9 @@ struct mac_display_info
      minibuffer.  */
   struct frame *x_highlight_frame;
 
-  /* Cache of images.  */
-  struct image_cache *image_cache;
-
-#if USE_APPKIT
   /* This is a button event that wants to activate the menubar.
      We save it here until the command loop gets to think about it.  */
   EventRef saved_menu_event;
-#endif
 };
 
 /* This checks to make sure we have a display.  */
@@ -213,15 +202,14 @@ extern struct mac_display_info one_mac_display_info;
 extern Lisp_Object x_display_name_list;
 
 extern struct x_display_info *x_display_info_for_name P_ ((Lisp_Object));
+extern void x_set_frame_alpha P_ ((struct frame *));
 
 extern struct mac_display_info *mac_term_init P_ ((Lisp_Object, char *, char *));
 
-extern Lisp_Object x_list_fonts P_ ((struct frame *, Lisp_Object, int, int));
-extern struct font_info *x_get_font_info P_ ((struct frame *f, int));
-extern struct font_info *x_load_font P_ ((struct frame *, char *, int));
-extern struct font_info *x_query_font P_ ((struct frame *, char *));
-extern void x_find_ccl_program P_ ((struct font_info *));
 
+struct font;
+
+#if 0
 /* When Emacs uses a tty window, tty_display in frame.c points to an
    x_output struct .  */
 struct x_output
@@ -229,22 +217,21 @@ struct x_output
   unsigned long background_pixel;
   unsigned long foreground_pixel;
 };
+#endif
 
 /* The collection of data describing a window on the Mac.  */
 struct mac_output
 {
+#if 0
   /* Placeholder for things accessed through output_data.x.  Must
      appear first.  */
   struct x_output x_compatible;
+#endif
 
   /* Menubar "widget" handle.  */
   int menubar_widget;
 
-#if USE_APPKIT
   void *emacs_view;
-#else
-  FRAME_PTR mFP;		/* points back to the frame struct */
-#endif
 
   /* Here are the Graphics Contexts for the default font.  */
   GC normal_gc;				/* Normal video */
@@ -263,7 +250,7 @@ struct mac_output
   Window parent_desc;
 
   /* Default ASCII font of this frame. */
-  XFontStruct *font;
+  struct font *font;
 
   /* The baseline offset of the default ASCII font.  */
   int baseline_offset;
@@ -310,15 +297,9 @@ struct mac_output
 
 #endif
 
-#if TARGET_API_MAC_CARBON
   /* The Mac control reference for the hourglass (progress indicator)
      shown at the upper-right corner of the window.  */
-#if USE_APPKIT
   void *hourglass_control;
-#else
-  ControlRef hourglass_control;
-#endif
-#endif
 
   /* This is the Emacs structure for the display this frame is on.  */
   /* struct w32_display_info *display_info; */
@@ -349,7 +330,6 @@ struct mac_output
   /* Hints for the size and the position of a window.  */
   XSizeHints *size_hints;
 
-#if USE_MAC_TOOLBAR
   /* This variable records the gravity value of the window position if
      the window has an external tool bar when it is created.  The
      position of the window is adjusted using this information when
@@ -357,12 +337,9 @@ struct mac_output
      redisplayed, it is set to 0 in order to avoid further
      adjustment.  */
   int toolbar_win_gravity;
-#endif
 
-#if USE_CG_DRAWING
   /* Quartz 2D graphics context.  */
   CGContextRef cg_context;
-#endif
 };
 
 /* Return the X output data for frame F.  */
@@ -371,9 +348,6 @@ struct mac_output
 /* Return the Mac window used for displaying data in frame F.  */
 #define FRAME_MAC_WINDOW(f) ((f)->output_data.mac->window_desc)
 #define FRAME_X_WINDOW(f) ((f)->output_data.mac->window_desc)
-
-#define FRAME_FOREGROUND_PIXEL(f) ((f)->output_data.x->foreground_pixel)
-#define FRAME_BACKGROUND_PIXEL(f) ((f)->output_data.x->background_pixel)
 
 #define FRAME_FONT(f) ((f)->output_data.mac->font)
 #define FRAME_FONTSET(f) ((f)->output_data.mac->fontset)
@@ -403,11 +377,6 @@ struct mac_output
 
 #define FRAME_SMALLEST_FONT_HEIGHT(F) \
      FRAME_MAC_DISPLAY_INFO(F)->smallest_font_height
-
-/* Return a pointer to the image cache of frame F.  */
-
-#define FRAME_X_IMAGE_CACHE(F) FRAME_MAC_DISPLAY_INFO ((F))->image_cache
-
 
 /* Mac-specific scroll bar stuff.  */
 
@@ -431,98 +400,34 @@ struct scroll_bar {
   /* The next and previous in the chain of scroll bars in this frame.  */
   Lisp_Object next, prev;
 
-  /* The Mac control reference of this scroll bar.  Since this is a
-     pointer value, we store it split into two Lisp integers.  */
-  Lisp_Object control_ref_low, control_ref_high;
+  /* Fields from `mac_control_ref' down will not be traced by the GC.  */
+
+  /* The Mac control reference of this scroll bar.  */
+  void *mac_control_ref;
 
   /* The position and size of the scroll bar in pixels, relative to the
      frame.  */
-  Lisp_Object top, left, width, height;
+  int top, left, width, height;
 
-#if !USE_APPKIT
-  /* The starting and ending positions of the handle, relative to the
-     handle area (i.e. zero is the top position, not
-     SCROLL_BAR_TOP_BORDER).  If they're equal, that means the handle
-     hasn't been drawn yet.
-
-     These are not actually the locations where the beginning and end
-     are drawn; in order to keep handles from becoming invisible when
-     editing large files, we establish a minimum height by always
-     drawing handle bottoms VERTICAL_SCROLL_BAR_MIN_HANDLE pixels below
-     where they would be normally; the bottom and top are in a
-     different co-ordinate system.  */
-  Lisp_Object start, end;
-
-  /* If the scroll bar handle is currently being dragged by the user,
-     this is the number of pixels from the top of the handle to the
-     place where the user grabbed it.  If the handle is pressed but
-     not dragged yet, this is a negative integer whose absolute value
-     is the number of pixels plus 1.  If the handle isn't currently
-     being dragged, this is Qnil.  */
-  Lisp_Object dragging;
-
-#ifdef USE_TOOLKIT_SCROLL_BARS
-  /* The position and size of the scroll bar handle track area in
-     pixels, relative to the frame.  */
-  Lisp_Object track_top, track_height;
-
-  /* Minimum length of the scroll bar handle, in pixels.  */
-  Lisp_Object min_handle;
-#endif
-#endif	/* !USE_APPKIT */
-
-#ifdef MAC_OSX
-  /* t if the background of the fringe that is adjacent to a scroll
+  /* 1 if the background of the fringe that is adjacent to a scroll
      bar is extended to the gap between the fringe and the bar.  */
-  Lisp_Object fringe_extended_p;
-#endif
+  unsigned int fringe_extended_p : 1;
 
-  /* t if redraw needed in the next XTset_vertical_scroll_bar call.  */
-  Lisp_Object redraw_needed_p;
+  /* 1 if redraw needed in the next XTset_vertical_scroll_bar call.  */
+  unsigned int redraw_needed_p : 1;
 };
-
-/* The number of elements a vector holding a struct scroll_bar needs.  */
-#define SCROLL_BAR_VEC_SIZE					\
-  ((sizeof (struct scroll_bar)					\
-    - sizeof (EMACS_INT) - sizeof (struct Lisp_Vector *))	\
-   / sizeof (Lisp_Object))
 
 /* Turning a lisp vector value into a pointer to a struct scroll_bar.  */
 #define XSCROLL_BAR(vec) ((struct scroll_bar *) XVECTOR (vec))
 
 
-/* Building a C long integer from two lisp integers.  */
-#define SCROLL_BAR_PACK(low, high) (XINT (high) << 16 | XINT (low))
-
-/* Setting two lisp integers to two parts of a C unsigned long.  */
-#define SCROLL_BAR_UNPACK(low, high, ulong) \
-  (XSETINT ((low),  (ulong) & 0xffff), \
-   XSETINT ((high), (ulong) >> 16))
-
-#if USE_APPKIT
 /* Extract the reference to the scroller control from a struct
    scroll_bar.  */
-#define SCROLL_BAR_SCROLLER(ptr)				\
-  ((EmacsScroller *) SCROLL_BAR_PACK ((ptr)->control_ref_low,	\
-				      (ptr)->control_ref_high))
+#define SCROLL_BAR_SCROLLER(ptr) ((EmacsScroller *) (ptr)->mac_control_ref)
 
 /* Store the reference to a scroller control in a struct
    scroll_bar.  */
-#define SET_SCROLL_BAR_SCROLLER(ptr, ref)				\
-  (SCROLL_BAR_UNPACK ((ptr)->control_ref_low,				\
-                      (ptr)->control_ref_high, (uintptr_t) (ref)))
-#else  /* !USE_APPKIT */
-/* Extract the Mac control handle of the scroll bar from a struct
-   scroll_bar.  */
-#define SCROLL_BAR_CONTROL_REF(ptr)				\
-  ((ControlRef) SCROLL_BAR_PACK ((ptr)->control_ref_low,	\
-				 (ptr)->control_ref_high))
-
-/* Store a Mac control handle in a struct scroll_bar.  */
-#define SET_SCROLL_BAR_CONTROL_REF(ptr, ref)				\
-  (SCROLL_BAR_UNPACK ((ptr)->control_ref_low,				\
-                      (ptr)->control_ref_high, (unsigned long) (ref)))
-#endif  /* !USE_APPKIT */
+#define SET_SCROLL_BAR_SCROLLER(ptr, ref) ((ptr)->mac_control_ref = (ref))
 
 /* Return the inside width of a vertical scroll bar, given the outside
    width.  */
@@ -581,15 +486,10 @@ struct scroll_bar {
 #define MAC_AQUA_SMALL_VERTICAL_SCROLL_BAR_WIDTH (11)
 
 /* Size of hourglass controls */
-#if USE_APPKIT
 #define HOURGLASS_WIDTH (18)
 #define HOURGLASS_HEIGHT (18)
 #define HOURGLASS_TOP_MARGIN (2)
 #define HOURGLASS_RIGHT_MARGIN (32)
-#else
-#define HOURGLASS_WIDTH (15)
-#define HOURGLASS_HEIGHT (15)
-#endif
 
 /* Some constants that are used locally.  */
 /* Creator code for Emacs on Mac OS.  */
@@ -634,25 +534,11 @@ enum {
 #endif
 #endif
 
-#ifdef MAC_OSX
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1020
-/* Apple event descriptor types */
-enum {
-  typeUTF8Text			= 'utf8'
-};
-
-/* Carbon event parameter names */
-enum {
-  kEventParamWindowMouseLocation = 'wmou'
-};
-#endif
-
 /* kCGBitmapByteOrder32Host is defined in Universal SDK for 10.4 but
    not in PPC SDK for 10.4.0.  */
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 && !defined (kCGBitmapByteOrder32Host)
 #define kCGBitmapByteOrder32Host 0
 #endif
-#endif	/* MAC_OSX */
 
 struct frame;
 struct face;
@@ -683,24 +569,42 @@ extern void x_free_frame_resources P_ ((struct frame *));
 extern void x_destroy_window P_ ((struct frame *));
 extern void x_wm_set_size_hint P_ ((struct frame *, long, int));
 extern void x_delete_display P_ ((struct x_display_info *));
+extern void x_delete_terminal P_ ((struct terminal *terminal));
 extern void mac_initialize P_ ((void));
-extern Pixmap XCreatePixmap P_ ((Display *, Window, unsigned int,
-				 unsigned int, unsigned int));
-extern Pixmap XCreatePixmapFromBitmapData P_ ((Display *, Window, char *,
-					       unsigned int, unsigned int,
-					       unsigned long, unsigned long,
-					       unsigned int));
-extern void XFreePixmap P_ ((Display *, Pixmap));
-extern GC XCreateGC P_ ((Display *, void *, unsigned long, XGCValues *));
-extern void XFreeGC P_ ((Display *, GC));
-extern void XSetForeground P_ ((Display *, GC, unsigned long));
-extern void XSetBackground P_ ((Display *, GC, unsigned long));
-extern void XDrawLine P_ ((Display *, Pixmap, GC, int, int, int, int));
+extern Pixmap mac_create_pixmap P_ ((Window, unsigned int, unsigned int,
+				     unsigned int));
+extern Pixmap mac_create_pixmap_from_bitmap_data P_ ((Window, char *,
+						      unsigned int,
+						      unsigned int,
+						      unsigned long,
+						      unsigned long,
+						      unsigned int));
+extern void mac_free_pixmap P_ ((Pixmap));
+extern GC mac_create_gc P_ ((void *, unsigned long, XGCValues *));
+extern void mac_free_gc P_ ((GC));
+extern void mac_set_foreground P_ ((GC, unsigned long));
+extern void mac_set_background P_ ((GC, unsigned long));
+extern void mac_draw_line_to_pixmap P_ ((Pixmap, GC, int, int, int, int));
 extern void mac_clear_area P_ ((struct frame *, int, int,
 				unsigned int, unsigned int));
-extern void mac_unload_font P_ ((struct mac_display_info *, XFontStruct *));
 extern OSStatus mac_post_mouse_moved_event P_ ((void));
 extern int mac_quit_char_key_p P_ ((UInt32, UInt32));
+#define x_display_pixel_height(dpyinfo)	((dpyinfo)->height)
+#define x_display_pixel_width(dpyinfo)	((dpyinfo)->width)
+#define XCreatePixmap(display, w, width, height, depth) \
+  mac_create_pixmap (w, width, height, depth)
+#define XCreatePixmapFromBitmapData(display, w, data, width, height, fg, bg, depth) \
+  mac_create_pixmap_from_bitmap_data (w, data, width, height, fg, bg, depth)
+#define XFreePixmap(display, pixmap)	mac_free_pixmap (pixmap)
+#define XChangeGC(display, gc, mask, xgcv)	mac_change_gc (gc, mask, xgcv)
+#define XCreateGC(display, d, mask, xgcv)	mac_create_gc (d, mask, xgcv)
+#define XFreeGC(display, gc)	mac_free_gc (gc)
+#define XGetGCValues(display, gc, mask, xgcv)	\
+  mac_get_gc_values (gc, mask, xgcv)
+#define XSetForeground(display, gc, color)	mac_set_foreground (gc, color)
+#define XSetBackground(display, gc, color)	mac_set_background (gc, color)
+#define XDrawLine(display, p, gc, x1, y1, x2, y2)	\
+  mac_draw_line_to_pixmap (p, gc, x1, y1, x2, y2)
 
 #define FONT_TYPE_FOR_UNIBYTE(font, ch) 0
 #define FONT_TYPE_FOR_MULTIBYTE(font, ch) 0
@@ -715,8 +619,6 @@ extern void x_clear_frame_selections P_ ((struct frame *));
 EXFUN (Fx_selection_owner_p, 1);
 
 /* Defined in macfns.c */
-
-extern int have_menus_p P_ ((void));
 
 extern void x_real_positions P_ ((struct frame *, int *, int *));
 extern void x_set_menu_bar_lines P_ ((struct frame *, Lisp_Object, Lisp_Object));
@@ -734,7 +636,6 @@ extern Lisp_Object x_get_focus_frame P_ ((struct frame *));
 extern void mac_clear_font_name_table P_ ((void));
 extern Lisp_Object mac_aedesc_to_lisp P_ ((const AEDesc *));
 extern OSErr mac_ae_put_lisp P_ ((AEDescList *, UInt32, Lisp_Object));
-#if TARGET_API_MAC_CARBON
 extern OSErr create_apple_event P_ ((AEEventClass, AEEventID, AppleEvent *));
 extern Lisp_Object mac_event_parameters_to_lisp P_ ((EventRef, UInt32,
 						     const EventParamName *,
@@ -752,8 +653,6 @@ extern Lisp_Object cfobject_desc_to_lisp P_ ((CFTypeRef));
 extern Lisp_Object cfobject_to_lisp P_ ((CFTypeRef, int, int));
 extern Lisp_Object cfproperty_list_to_lisp P_ ((CFPropertyListRef, int, int));
 extern CFPropertyListRef cfproperty_list_create_with_lisp_data P_ ((Lisp_Object));
-extern void mac_wakeup_from_rne P_ ((void));
-#endif
 extern void xrm_merge_string_database P_ ((XrmDatabase, const char *));
 extern Lisp_Object xrm_get_resource P_ ((XrmDatabase, const char *,
 					 const char *));
@@ -761,18 +660,15 @@ extern XrmDatabase xrm_get_preference_database P_ ((const char *));
 EXFUN (Fmac_get_preference, 4);
 extern int mac_service_provider_registered_p P_ ((void));
 
-/* Defined in macappkit.m or mactoolbox.c.  */
+/* Defined in macappkit.m.  */
 
 extern void mac_alert_sound_play P_ ((void));
 extern OSStatus install_application_handler P_ ((void));
 extern void mac_get_window_bounds P_ ((struct frame *, Rect *, Rect *));
-extern Rect *mac_get_frame_bounds P_ ((struct frame *, Rect *));
 extern void mac_get_frame_mouse P_ ((struct frame *, Point *));
 extern void mac_convert_frame_point_to_global P_ ((struct frame *, int *,
 						   int *));
-#if TARGET_API_MAC_CARBON
 extern void mac_update_proxy_icon P_ ((struct frame *));
-#endif
 extern void mac_set_frame_window_background P_ ((struct frame *,
 						 unsigned long));
 extern void mac_update_begin P_ ((struct frame *));
@@ -781,54 +677,34 @@ extern void mac_frame_up_to_date P_ ((struct frame *));
 extern void x_flush P_ ((struct frame *));
 extern void mac_create_frame_window P_ ((struct frame *, int));
 extern void mac_dispose_frame_window P_ ((struct frame *));
-#if USE_CG_DRAWING
 extern CGContextRef mac_begin_cg_clip P_ ((struct frame *, GC));
 extern void mac_end_cg_clip P_ ((struct frame *));
-#endif
-#if USE_QUICKDRAW
-extern void mac_begin_clip P_ ((struct frame *, GC));
-extern void mac_end_clip P_ ((struct frame *, GC));
-#endif
 extern void mac_create_scroll_bar P_ ((struct scroll_bar *, const Rect *,
 				       Boolean));
 extern void mac_dispose_scroll_bar P_ ((struct scroll_bar *));
 extern void mac_set_scroll_bar_bounds P_ ((struct scroll_bar *, const Rect *));
 extern void mac_redraw_scroll_bar P_ ((struct scroll_bar *));
-#ifdef USE_TOOLKIT_SCROLL_BARS
 extern void x_set_toolkit_scroll_bar_thumb P_ ((struct scroll_bar *,
 						int, int, int));
-#else
-extern void x_scroll_bar_set_handle P_ ((scroll_bar *, int, int, int));
-#endif
-#if USE_MAC_FONT_PANEL
 extern int mac_font_panel_visible_p P_ ((void));
 extern OSStatus mac_show_hide_font_panel P_ ((void));
-extern OSStatus mac_set_font_info_for_selection P_ ((struct frame *, int, int));
-#endif
-#ifdef MAC_OSX
+extern OSStatus mac_set_font_info_for_selection P_ ((struct frame *, int, int,
+						     int, Lisp_Object));
 extern Boolean mac_run_loop_run_once P_ ((EventTimeout));
-#endif
-#if USE_MAC_TOOLBAR
 extern void update_frame_tool_bar P_ ((FRAME_PTR f));
 extern void free_frame_tool_bar P_ ((FRAME_PTR f));
-#endif
-#if TARGET_API_MAC_CARBON
 extern void mac_show_hourglass P_ ((struct frame *));
 extern void mac_hide_hourglass P_ ((struct frame *));
 extern void mac_reposition_hourglass P_ ((struct frame *));
 extern Lisp_Object mac_file_dialog P_ ((Lisp_Object, Lisp_Object, Lisp_Object,
 					Lisp_Object, Lisp_Object));
-#endif
+extern Lisp_Object mac_font_dialog P_ ((FRAME_PTR f));
 extern void x_activate_menubar P_ ((struct frame *));
 extern void free_frame_menubar P_ ((struct frame *));
 extern void mac_fill_menubar P_ ((widget_value *, int));
 extern void create_and_show_popup_menu P_ ((FRAME_PTR, widget_value *,
 					    int, int, int));
-#if TARGET_API_MAC_CARBON
 extern void create_and_show_dialog P_ ((FRAME_PTR, widget_value *));
-#else
-extern int mac_dialog P_ ((widget_value *));
-#endif
 extern OSStatus mac_get_selection_from_symbol P_ ((Lisp_Object, int,
 						   Selection *));
 extern int mac_valid_selection_target_p P_ ((Lisp_Object));
@@ -840,14 +716,73 @@ extern OSStatus mac_put_selection_value P_ ((Selection, Lisp_Object,
 extern int mac_selection_has_target_p P_ ((Selection, Lisp_Object));
 extern Lisp_Object mac_get_selection_value P_ ((Selection, Lisp_Object));
 extern Lisp_Object mac_get_selection_target_list P_ ((Selection));
-#if TARGET_API_MAC_CARBON
 extern Lisp_Object mac_dnd_default_known_types P_ ((void));
-#endif
 
-#if USE_APPKIT
 extern void *mac_alloc_autorelease_pool P_ ((void));
 extern void mac_release_autorelease_pool P_ ((void *));
+
+extern CGContextRef mac_begin_cg_clip P_ ((struct frame *, GC));
+extern void mac_end_cg_clip P_ ((struct frame *));
+
+#define CG_SET_FILL_COLOR(context, color)				\
+  CGContextSetRGBFillColor (context,					\
+			    RED_FROM_ULONG (color) / 255.0f,		\
+			    GREEN_FROM_ULONG (color) / 255.0f,		\
+			    BLUE_FROM_ULONG (color) / 255.0f, 1.0f)
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+#define CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
+  do {								       \
+    if (CGColorGetTypeID != NULL)				       \
+      CGContextSetFillColorWithColor (context, cg_color);	       \
+    else							       \
+      CG_SET_FILL_COLOR (context, color);			       \
+  } while (0)
+#else
+#define CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color)	\
+  CGContextSetFillColorWithColor (context, cg_color)
 #endif
+#else
+#define CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color)	\
+  CG_SET_FILL_COLOR (context, color)
+#endif
+#define CG_SET_FILL_COLOR_WITH_GC_FOREGROUND(context, gc)		\
+  CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR (context, (gc)->xgcv.foreground,	\
+					(gc)->cg_fore_color)
+#define CG_SET_FILL_COLOR_WITH_GC_BACKGROUND(context, gc)		\
+  CG_SET_FILL_COLOR_MAYBE_WITH_CGCOLOR (context, (gc)->xgcv.background,	\
+					(gc)->cg_back_color)
+
+
+#define CG_SET_STROKE_COLOR(context, color)				\
+  CGContextSetRGBStrokeColor (context,					\
+			      RED_FROM_ULONG (color) / 255.0f,		\
+			      GREEN_FROM_ULONG (color) / 255.0f,	\
+			      BLUE_FROM_ULONG (color) / 255.0f, 1.0f)
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
+#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+#define CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
+  do {								       \
+    if (CGColorGetTypeID != NULL)				       \
+      CGContextSetStrokeColorWithColor (context, cg_color);	       \
+    else							       \
+      CG_SET_STROKE_COLOR (context, color);			       \
+  } while (0)
+#else
+#define CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
+  CGContextSetStrokeColorWithColor (context, cg_color)
+#endif
+#else
+#define CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR(context, color, cg_color) \
+  CG_SET_STROKE_COLOR (context, color)
+#endif
+#define CG_SET_STROKE_COLOR_WITH_GC_FOREGROUND(context, gc) \
+  CG_SET_STROKE_COLOR_MAYBE_WITH_CGCOLOR (context, (gc)->xgcv.foreground, \
+					  (gc)->cg_fore_color)
+
+/* Defined in macfont.c */
+extern void *macfont_get_nsctfont P_ ((struct font *));
+extern Lisp_Object macfont_nsctfont_to_spec P_ ((void *));
 
 /* arch-tag: 6b4ca125-5bef-476d-8ee8-31ed808b7e79
    (do not change this comment) */
