@@ -1,4 +1,17 @@
+* emacs-23.3-mac-1.9992 [experimental/hackers-only] (2011-03-10)
+Based on Emacs 23.3
+
+** Fixed bugs
+
+*** Doesn't compile with Xcode 4.
+
+*** Crash with invalid default-process-coding-system value.
+Apply Kenichi Handa's fix for Bug#8162.
+
+
 * emacs-23.2.93-mac-1.9991 [experimental/hackers-only] (2011-02-01)
+Based on Emacs 23.2.93
+http://lists.gnu.org/archive/html/emacs-devel/2011-02/msg00010.html
 
 ** Fixed bugs
 
