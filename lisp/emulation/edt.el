@@ -1272,7 +1272,7 @@ Argument BOTTOM is the bottom margin in number of lines or percent of window."
 	      (/ (1- (+ (* (string-to-number bottom) 100) (window-height)))
 		 (window-height)))))
   ;; report scroll margin settings if running interactively
-  (and (interactive-p)
+  (and (called-interactively-p 'interactive)
        (message "Scroll margins set.  Top = %s%%, Bottom = %s%%"
 		edt-top-scroll-margin edt-bottom-scroll-margin)))
 
@@ -2648,7 +2648,7 @@ G-C-\\: Split Window                     |  FNDNXT  |   Yank   |   CUT    |
 (defun edt-electric-helpify (fun)
   (let ((name "*Help*"))
     (if (save-window-excursion
-          (let* ((p (symbol-function 'print-help-return-message))
+          (let* ((p (symbol-function 'help-print-return-message))
                  (b (get-buffer name))
                  (m (buffer-modified-p b)))
             (and b (not (get-buffer-window b))
@@ -2657,20 +2657,18 @@ G-C-\\: Split Window                     |  FNDNXT  |   Yank   |   CUT    |
                 (progn
                   (message "%s..." (capitalize (symbol-name fun)))
                   (and b
-                       (save-excursion
-                         (set-buffer b)
+                       (with-current-buffer b
                          (set-buffer-modified-p t)))
-                  (fset 'print-help-return-message 'ignore)
+                  (fset 'help-print-return-message 'ignore)
                   (call-interactively fun)
                   (and (get-buffer name)
                        (get-buffer-window (get-buffer name))
                        (or (not b)
                            (not (eq b (get-buffer name)))
                            (not (buffer-modified-p b)))))
-              (fset 'print-help-return-message p)
+              (fset 'help-print-return-message p)
               (and b (buffer-name b)
-                   (save-excursion
-                     (set-buffer b)
+                   (with-current-buffer b
                      (set-buffer-modified-p m))))))
         (with-electric-help 'delete-other-windows name t))))
 

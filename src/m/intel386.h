@@ -104,8 +104,7 @@ NOTE-END */
 #endif
 
 #ifdef DARWIN_OS
-#if defined (_LP64) || defined (__llvm__)
-/* For Intel Mac, with CC='gcc -arch x86_64'.  */
+#ifdef __llvm__
 #define NO_ARG_ARRAY
 #endif
 #endif

@@ -23,6 +23,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 
 #include <stdio.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "frame.h"
@@ -60,8 +61,6 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 Lisp_Object Qdebug_on_next_call;
 
-extern Lisp_Object Vmenu_updating_frame;
-
 extern Lisp_Object Qmenu_bar, Qmac_apple_event;
 
 extern Lisp_Object QCtoggle, QCradio;
@@ -79,8 +78,6 @@ void set_frame_menubar P_ ((FRAME_PTR, int, int));
 static Lisp_Object mac_dialog_show P_ ((FRAME_PTR, int, Lisp_Object,
 					Lisp_Object, char **));
 #endif
-static Lisp_Object mac_menu_show P_ ((struct frame *, int, int, int, int,
-				      Lisp_Object, char **));
 
 /* Nonzero means a menu is currently active.  */
 int popup_activated_flag;
@@ -103,245 +100,6 @@ cleanup_popup_menu (arg)
 {
   discard_menu_items ();
   return Qnil;
-}
-
-DEFUN ("x-popup-menu", Fx_popup_menu, Sx_popup_menu, 2, 2, 0,
-       doc: /* Pop up a deck-of-cards menu and return user's selection.
-POSITION is a position specification.  This is either a mouse button event
-or a list ((XOFFSET YOFFSET) WINDOW)
-where XOFFSET and YOFFSET are positions in pixels from the top left
-corner of WINDOW.  (WINDOW may be a window or a frame object.)
-This controls the position of the top left of the menu as a whole.
-If POSITION is t, it means to use the current mouse position.
-
-MENU is a specifier for a menu.  For the simplest case, MENU is a keymap.
-The menu items come from key bindings that have a menu string as well as
-a definition; actually, the "definition" in such a key binding looks like
-\(STRING . REAL-DEFINITION).  To give the menu a title, put a string into
-the keymap as a top-level element.
-
-If REAL-DEFINITION is nil, that puts a nonselectable string in the menu.
-Otherwise, REAL-DEFINITION should be a valid key binding definition.
-
-You can also use a list of keymaps as MENU.
-  Then each keymap makes a separate pane.
-
-When MENU is a keymap or a list of keymaps, the return value is the
-list of events corresponding to the user's choice. Note that
-`x-popup-menu' does not actually execute the command bound to that
-sequence of events.
-
-Alternatively, you can specify a menu of multiple panes
-  with a list of the form (TITLE PANE1 PANE2...),
-where each pane is a list of form (TITLE ITEM1 ITEM2...).
-Each ITEM is normally a cons cell (STRING . VALUE);
-but a string can appear as an item--that makes a nonselectable line
-in the menu.
-With this form of menu, the return value is VALUE from the chosen item.
-
-If POSITION is nil, don't display the menu at all, just precalculate the
-cached information about equivalent key sequences.
-
-If the user gets rid of the menu without making a valid choice, for
-instance by clicking the mouse away from a valid choice or by typing
-keyboard input, then this normally results in a quit and
-`x-popup-menu' does not return.  But if POSITION is a mouse button
-event (indicating that the user invoked the menu with the mouse) then
-no quit occurs and `x-popup-menu' returns nil.  */)
-     (position, menu)
-     Lisp_Object position, menu;
-{
-  Lisp_Object keymap, tem;
-  int xpos = 0, ypos = 0;
-  Lisp_Object title;
-  char *error_name = NULL;
-  Lisp_Object selection;
-  FRAME_PTR f = NULL;
-  Lisp_Object x, y, window;
-  int keymaps = 0;
-  int for_click = 0;
-  int specpdl_count = SPECPDL_INDEX ();
-  struct gcpro gcpro1;
-
-#ifdef HAVE_MENUS
-  if (! NILP (position))
-    {
-      check_mac ();
-
-      /* Decode the first argument: find the window and the coordinates.  */
-      if (EQ (position, Qt)
-	  || (CONSP (position) && (EQ (XCAR (position), Qmenu_bar)
-				   || EQ (XCAR (position), Qtool_bar)
-				   || EQ (XCAR (position), Qmac_apple_event))))
-	{
-	  /* Use the mouse's current position.  */
-	  FRAME_PTR new_f = SELECTED_FRAME ();
-	  Lisp_Object bar_window;
-	  enum scroll_bar_part part;
-	  unsigned long time;
-
-	  if (FRAME_TERMINAL (new_f)->mouse_position_hook)
-	    (*FRAME_TERMINAL (new_f)->mouse_position_hook) (&new_f, 1, &bar_window,
-				    &part, &x, &y, &time);
-	  if (new_f != 0)
-	    XSETFRAME (window, new_f);
-	  else
-	    {
-	      window = selected_window;
-	      XSETFASTINT (x, 0);
-	      XSETFASTINT (y, 0);
-	    }
-	}
-      else
-	{
-	  tem = Fcar (position);
-	  if (CONSP (tem))
-	    {
-	      window = Fcar (Fcdr (position));
-	      x = XCAR (tem);
-	      y = Fcar (XCDR (tem));
-	    }
-	  else
-	    {
-	      for_click = 1;
-	      tem = Fcar (Fcdr (position));  /* EVENT_START (position) */
-	      window = Fcar (tem);	     /* POSN_WINDOW (tem) */
-	      tem = Fcar (Fcdr (Fcdr (tem))); /* POSN_WINDOW_POSN (tem) */
-	      x = Fcar (tem);
-	      y = Fcdr (tem);
-	    }
-	}
-
-      CHECK_NUMBER (x);
-      CHECK_NUMBER (y);
-
-      /* Decode where to put the menu.  */
-
-      if (FRAMEP (window))
-	{
-	  f = XFRAME (window);
-	  xpos = 0;
-	  ypos = 0;
-	}
-      else if (WINDOWP (window))
-	{
-	  CHECK_LIVE_WINDOW (window);
-	  f = XFRAME (WINDOW_FRAME (XWINDOW (window)));
-
-	  xpos = WINDOW_LEFT_EDGE_X (XWINDOW (window));
-	  ypos = WINDOW_TOP_EDGE_Y (XWINDOW (window));
-	}
-      else
-	/* ??? Not really clean; should be CHECK_WINDOW_OR_FRAME,
-	   but I don't want to make one now.  */
-	CHECK_WINDOW (window);
-
-      xpos += XINT (x);
-      ypos += XINT (y);
-
-      if (! FRAME_MAC_P (f))
-        error ("Can not put menu on this terminal");
-
-      XSETFRAME (Vmenu_updating_frame, f);
-    }
-  else
-    Vmenu_updating_frame = Qnil;
-#endif /* HAVE_MENUS */
-
-  record_unwind_protect (unuse_menu_items, Qnil);
-  title = Qnil;
-  GCPRO1 (title);
-
-  /* Decode the menu items from what was specified.  */
-
-  keymap = get_keymap (menu, 0, 0);
-  if (CONSP (keymap))
-    {
-      /* We were given a keymap.  Extract menu info from the keymap.  */
-      Lisp_Object prompt;
-
-      /* Extract the detailed info to make one pane.  */
-      keymap_panes (&menu, 1, NILP (position));
-
-      /* Search for a string appearing directly as an element of the keymap.
-	 That string is the title of the menu.  */
-      prompt = Fkeymap_prompt (keymap);
-      if (NILP (title) && !NILP (prompt))
-	title = prompt;
-
-      /* Make that be the pane title of the first pane.  */
-      if (!NILP (prompt) && menu_items_n_panes >= 0)
-	XVECTOR (menu_items)->contents[MENU_ITEMS_PANE_NAME] = prompt;
-
-      keymaps = 1;
-    }
-  else if (CONSP (menu) && KEYMAPP (XCAR (menu)))
-    {
-      /* We were given a list of keymaps.  */
-      int nmaps = XFASTINT (Flength (menu));
-      Lisp_Object *maps
-	= (Lisp_Object *) alloca (nmaps * sizeof (Lisp_Object));
-      int i;
-
-      title = Qnil;
-
-      /* The first keymap that has a prompt string
-	 supplies the menu title.  */
-      for (tem = menu, i = 0; CONSP (tem); tem = XCDR (tem))
-	{
-	  Lisp_Object prompt;
-
-	  maps[i++] = keymap = get_keymap (XCAR (tem), 1, 0);
-
-	  prompt = Fkeymap_prompt (keymap);
-	  if (NILP (title) && !NILP (prompt))
-	    title = prompt;
-	}
-
-      /* Extract the detailed info to make one pane.  */
-      keymap_panes (maps, nmaps, NILP (position));
-
-      /* Make the title be the pane title of the first pane.  */
-      if (!NILP (title) && menu_items_n_panes >= 0)
-	XVECTOR (menu_items)->contents[MENU_ITEMS_PANE_NAME] = title;
-
-      keymaps = 1;
-    }
-  else
-    {
-      /* We were given an old-fashioned menu.  */
-      title = Fcar (menu);
-      CHECK_STRING (title);
-
-      list_of_panes (Fcdr (menu));
-
-      keymaps = 0;
-    }
-
-  unbind_to (specpdl_count, Qnil);
-
-  if (NILP (position))
-    {
-      discard_menu_items ();
-      UNGCPRO;
-      return Qnil;
-    }
-
-#ifdef HAVE_MENUS
-  /* Display them in a menu.  */
-  record_unwind_protect (cleanup_popup_menu, Qnil);
-  BLOCK_INPUT;
-
-  selection = mac_menu_show (f, xpos, ypos, for_click,
-			     keymaps, title, &error_name);
-  UNBLOCK_INPUT;
-  unbind_to (specpdl_count, Qnil);
-
-  UNGCPRO;
-#endif /* HAVE_MENUS */
-
-  if (error_name) error (error_name);
-  return selection;
 }
 
 #ifdef HAVE_MENUS
@@ -480,6 +238,38 @@ for instance using the window manager, then this produces a quit and
     return selection;
   }
 #endif /* HAVE_DIALOGS */
+}
+
+
+/* Activate the menu bar of frame F.
+   This is called from keyboard.c when it gets the
+   MENU_BAR_ACTIVATE_EVENT out of the Emacs event queue.
+
+   To activate the menu bar, we call mac_activate_menubar.
+
+   But first we recompute the menu bar contents (the whole tree).
+
+   The reason for saving the button event until here, instead of
+   passing it to the toolkit right away, is that we can safely
+   execute Lisp code.  */
+
+void
+x_activate_menubar (f)
+     FRAME_PTR f;
+{
+  int selection;
+
+  if (! FRAME_MAC_P (f))
+    abort ();
+
+  set_frame_menubar (f, 0, 1);
+  BLOCK_INPUT;
+  selection = mac_activate_menubar (f);
+  UNBLOCK_INPUT;
+
+  if (selection)
+    find_and_call_menu_selection (f, f->menu_bar_items_used, f->menu_bar_vector,
+				  (void *) (intptr_t) selection);
 }
 
 
@@ -738,9 +528,6 @@ free_frame_menubar (f)
 }
 
 
-/* The item selected in the popup menu.  */
-int menu_item_selection;
-
 /* Mac_menu_show actually displays a menu using the panes and items in
    menu_items and returns the value selected from it; we assume input
    is blocked by the caller.  */
@@ -756,17 +543,11 @@ int menu_item_selection;
    ERROR is a place to store an error message string in case of failure.
    (We return nil on failure, but the value doesn't actually matter.)  */
 
-static Lisp_Object
-mac_menu_show (f, x, y, for_click, keymaps, title, error)
-     FRAME_PTR f;
-     int x;
-     int y;
-     int for_click;
-     int keymaps;
-     Lisp_Object title;
-     char **error;
+Lisp_Object
+mac_menu_show (FRAME_PTR f, int x, int y, int for_click, int keymaps,
+	       Lisp_Object title, char **error)
 {
-  int i;
+  int i, selection;
   widget_value *wv, *save_wv = 0, *first_wv = 0, *prev_wv = 0;
   widget_value **submenu_stack
     = (widget_value **) alloca (menu_items_used * sizeof (widget_value *));
@@ -963,18 +744,15 @@ mac_menu_show (f, x, y, for_click, keymaps, title, error)
       first_wv->contents = wv_title;
     }
 
-  /* No selection has been chosen yet.  */
-  menu_item_selection = 0;
-
   /* Actually create and show the menu until popped down.  */
-  create_and_show_popup_menu (f, first_wv, x, y, for_click);
+  selection = create_and_show_popup_menu (f, first_wv, x, y, for_click);
 
   /* Free the widget_value objects we used to specify the contents.  */
   free_menubar_widget_value_tree (first_wv);
 
   /* Find the selected item, and its pane, to return
      the proper value.  */
-  if (menu_item_selection != 0)
+  if (selection != 0)
     {
       Lisp_Object prefix, entry;
 
@@ -1007,7 +785,7 @@ mac_menu_show (f, x, y, for_click, keymaps, title, error)
 	    {
 	      entry
 		= XVECTOR (menu_items)->contents[i + MENU_ITEMS_ITEM_VALUE];
-	      if (menu_item_selection == i)
+	      if (selection == i)
 		{
 		  if (keymaps != 0)
 		    {
@@ -1048,7 +826,7 @@ mac_dialog_show (f, keymaps, title, header, error_name)
      Lisp_Object title, header;
      char **error_name;
 {
-  int i, nb_buttons=0;
+  int i, selection, nb_buttons=0;
   char dialog_name[6];
 
   widget_value *wv, *first_wv = 0, *prev_wv = 0;
@@ -1169,18 +947,15 @@ mac_dialog_show (f, keymaps, title, header, error_name)
     first_wv = wv;
   }
 
-  /* No selection has been chosen yet.  */
-  menu_item_selection = 0;
-
   /* Actually create and show the dialog.  */
-  create_and_show_dialog (f, first_wv);
+  selection = create_and_show_dialog (f, first_wv);
 
   /* Free the widget_value objects we used to specify the contents.  */
   free_menubar_widget_value_tree (first_wv);
 
   /* Find the selected item, and its pane, to return
      the proper value.  */
-  if (menu_item_selection != 0)
+  if (selection != 0)
     {
       Lisp_Object prefix;
 
@@ -1206,7 +981,7 @@ mac_dialog_show (f, keymaps, title, header, error_name)
 	    {
 	      entry
 		= XVECTOR (menu_items)->contents[i + MENU_ITEMS_ITEM_VALUE];
-	      if (menu_item_selection == i)
+	      if (selection == i)
 		{
 		  if (keymaps != 0)
 		    {
@@ -1265,10 +1040,9 @@ DEFUN ("menu-or-popup-active-p", Fmenu_or_popup_active_p, Smenu_or_popup_active_
 void
 syms_of_macmenu ()
 {
-  Qdebug_on_next_call = intern ("debug-on-next-call");
+  Qdebug_on_next_call = intern_c_string ("debug-on-next-call");
   staticpro (&Qdebug_on_next_call);
 
-  defsubr (&Sx_popup_menu);
   defsubr (&Smenu_or_popup_active_p);
 #ifdef HAVE_MENUS
   defsubr (&Sx_popup_dialog);

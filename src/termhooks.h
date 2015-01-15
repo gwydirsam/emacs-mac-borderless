@@ -194,6 +194,8 @@ enum event_kind
   , DBUS_EVENT
 #endif
 
+  , CONFIG_CHANGED_EVENT
+
 #ifdef WINDOWSNT
   /* Generated when an APPCOMMAND event is received, in response to
      Multimedia or Internet buttons on some keyboards.
@@ -439,6 +441,7 @@ struct terminal
   void (*delete_glyphs_hook) P_ ((struct frame *, int));
 
   void (*ring_bell_hook) P_ ((struct frame *f));
+  void (*toggle_invisible_pointer_hook) P_ ((struct frame *f, int invisible));
 
   void (*reset_terminal_modes_hook) P_ ((struct terminal *));
   void (*set_terminal_modes_hook) P_ ((struct terminal *));

@@ -30,14 +30,14 @@
 @tex
 @ifset smallbook
 @fonttextsize 10
-\global\let\urlcolor=\Black % don't print links in grayscale
-\global\let\linkcolor=\Black
+
 @end ifset
 \global\hbadness=6666 % don't worry about not-too-underfull boxes
 @end tex
 
-@set edition-number 3.08
-@set update-date 4 October 2008
+@set edition-number 3.10
+@set update-date 28 October 2009
+
 @ignore
  ## Summary of shell commands to create various output formats:
 
@@ -17393,21 +17393,21 @@ Here is the line again; how does it work?
 
 @cindex Text Mode turned on
 @smallexample
-(setq default-major-mode 'text-mode)
+(setq major-mode 'text-mode)
 @end smallexample
 
 @noindent
 This line is a short, but complete Emacs Lisp expression.
 
 We are already familiar with @code{setq}.  It sets the following variable,
-@code{default-major-mode}, to the subsequent value, which is
-@code{text-mode}.  The single quote mark before @code{text-mode} tells
-Emacs to deal directly with the @code{text-mode} variable, not with
-whatever it might stand for.  @xref{set & setq, , Setting the Value of
-a Variable}, for a reminder of how @code{setq} works.  The main point
-is that there is no difference between the procedure you use to set
-a value in your @file{.emacs} file and the procedure you use anywhere
-else in Emacs.
+@code{major-mode}, to the subsequent value, which is @code{text-mode}.
+The single quote mark before @code{text-mode} tells Emacs to deal directly
+with the @code{text-mode} symbol, not with whatever it might stand for.
+@xref{set & setq, , Setting the Value of a Variable},
+for a reminder of how @code{setq} works.
+The main point is that there is no difference between the procedure you
+use to set a value in your @file{.emacs} file and the procedure you use
+anywhere else in Emacs.
 
 @need 800
 Here is the next line:
@@ -17929,10 +17929,10 @@ the following conditional:
 @group
 (cond
  ((= 22 emacs-major-version)
-  ;; evaluate version 21 code
+  ;; evaluate version 22 code
   ( @dots{} ))
  ((= 23 emacs-major-version)
-  ;; evaluate version 22 code
+  ;; evaluate version 23 code
   ( @dots{} )))
 @end group
 @end smallexample
@@ -17981,7 +17981,7 @@ emacs -Q - D
   (tooltip-mode nil)
   ;; If tooltips turned on, make tips appear promptly
   (setq tooltip-delay 0.1)  ; default is 0.7 second
-  )
+   )
 @end group
 @end smallexample
 
@@ -22109,16 +22109,11 @@ so that we cannot use it.
 Given that writing good English is a rare skill among programmers, we
 can ill afford to lose manuals this way.
 
-@c (texinfo)uref
-(The Free Software Foundation
-@uref{http://www.gnu.org/doc/doc.html#DescriptionsOfGNUDocumentation, ,
-sells printed copies} of free @uref{http://www.gnu.org/doc/doc.html,
-GNU manuals}, too.)
-
 Free documentation, like free software, is a matter of freedom, not
 price.  The problem with these manuals was not that O'Reilly Associates
-charged a price for printed copies---that in itself is fine.  (The Free
-Software Foundation sells printed copies of free GNU manuals, too.)
+charged a price for printed copies---that in itself is fine.  The Free
+Software Foundation @uref{http://shop.fsf.org, sells printed copies} of
+free @uref{http://www.gnu.org/doc/doc.html, GNU manuals}, too.
 But GNU manuals are available in source code form, while these manuals
 are available only on paper.  GNU manuals come with permission to copy
 and modify; the Perl manuals do not.  These restrictions are the

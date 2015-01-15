@@ -229,6 +229,27 @@ typedef struct {
 #define PBaseSize	(1L << 8) /* program specified base for incrementing */
 #define PWinGravity	(1L << 9) /* program specified window gravity */
 
+/* Constants corresponding to window state hint atoms in X11 Extended
+   Window Manager Hints (without "_NET_" prefix).  Mostly unimplemented.  */
+
+enum
+{
+  WM_STATE_MODAL		= 1 << 0,
+  WM_STATE_STICKY		= 1 << 1,
+  WM_STATE_MAXIMIZED_VERT	= 1 << 2,
+  WM_STATE_MAXIMIZED_HORZ	= 1 << 3,
+  WM_STATE_SHADED		= 1 << 4,
+  WM_STATE_SKIP_TASKBAR		= 1 << 5,
+  WM_STATE_SKIP_PAGER		= 1 << 6,
+  WM_STATE_HIDDEN		= 1 << 7,
+  WM_STATE_FULLSCREEN		= 1 << 8,
+  WM_STATE_ABOVE		= 1 << 9,
+  WM_STATE_BELOW		= 1 << 10,
+  WM_STATE_DEMANDS_ATTENTION	= 1 << 11
+};
+
+typedef uint32_t WMState;
+
 typedef struct {
     int x, y;
     unsigned width, height;

@@ -1552,8 +1552,7 @@ First, save the buffer's contents using SAVE-FUNCTION.  Then, kill buffer
 if `buffer-modified-p' returns nil.
 
 SAVE-FUNCTION takes no argument, but works on the current buffer."
-  (save-excursion
-    (set-buffer buffer)
+  (with-current-buffer buffer
     (if (buffer-modified-p)
 	(funcall save-function))
     (if (not (buffer-modified-p))
@@ -1641,7 +1640,7 @@ Replace <file-name> or <<file-name>> with filename."
 		    (let ((buffer (filesets-find-file this)))
 		      (when buffer
 			(goto-char (point-min))
-			(let ()
+			(progn
 			  (cond
 			   ((stringp fn)
 			    (let* ((args

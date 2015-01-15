@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
+#include <setjmp.h>
 #include "lisp.h"
 #include "blockinput.h"
 
@@ -324,6 +325,45 @@ NSRectToCGRect (nsrect)
 
 @end				// NSApplication (Emacs)
 
+@implementation NSScreen (Emacs)
+
++ (NSScreen *)closestScreenForRect:(NSRect)aRect
+{
+  NSArray *screens = [NSScreen screens];
+  NSEnumerator *enumerator = [screens objectEnumerator];
+  NSPoint centerPoint = NSMakePoint (NSMidX (aRect), NSMidY (aRect));
+  CGFloat maxArea = 0, minSquareDistance = CGFLOAT_MAX;
+  NSScreen *screen, *maxAreaScreen, *minDistanceScreen;
+
+  maxAreaScreen = minDistanceScreen = nil;
+  while ((screen = [enumerator nextObject]) != nil)
+    {
+      NSRect frame = [screen frame];
+      NSRect intersectionFrame = NSIntersectionRect (frame, aRect);
+      CGFloat area, diffX, diffY, squareDistance;
+
+      area = NSWidth (intersectionFrame) * NSHeight (intersectionFrame);
+      if (area > maxArea)
+	{
+	  maxAreaScreen = screen;
+	  maxArea = area;
+	}
+
+      diffX = NSMidX (frame) - centerPoint.x;
+      diffY = NSMidY (frame) - centerPoint.y;
+      squareDistance = diffX * diffX + diffY * diffY;
+      if (squareDistance < minSquareDistance)
+	{
+	  minDistanceScreen = screen;
+	  minSquareDistance = squareDistance;
+	}
+    }
+
+  return maxAreaScreen ? maxAreaScreen : minDistanceScreen;
+}
+
+@end				// NSScreen (Emacs)
+
 @implementation EmacsPosingWindow
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
@@ -588,7 +628,6 @@ mac_appkit_version ()
 			     Application
  ************************************************************************/
 
-extern int menu_item_selection;
 extern int mac_pass_command_to_system;
 extern int mac_pass_control_to_system;
 
@@ -632,6 +671,134 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
     }
 }
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+- (void)setPresentationOptions:(NSApplicationPresentationOptions)newOptions
+{
+  /* [super respondsToSelector:selector] does not check the
+     availability of the selector in the superclass.  It just uses the
+     implementation of `respondsToSelector:' in the superclass (or its
+     ancestor) against the receiver object (i.e., self).  */
+  if ([[EmacsApplication superclass]
+	instancesRespondToSelector:@selector(setPresentationOptions:)])
+    [super setPresentationOptions:newOptions];
+  else
+    {
+      SystemUIMode mode;
+      SystemUIOptions options = kNilOptions;
+      NSString *message = nil;
+
+      switch (newOptions & (NSApplicationPresentationAutoHideDock
+			    | NSApplicationPresentationHideDock
+			    | NSApplicationPresentationAutoHideMenuBar
+			    | NSApplicationPresentationHideMenuBar))
+	{
+	case NSApplicationPresentationDefault:
+	  /* 0000 */
+	  if (newOptions & (NSApplicationPresentationDisableProcessSwitching
+			    | NSApplicationPresentationDisableForceQuit
+			    | NSApplicationPresentationDisableSessionTermination))
+	    message = @"One of NSApplicationPresentationDisableForceQuit, NSApplicationPresentationDisableProcessSwitching, or NSApplicationPresentationDisableSessionTermination was specified without either NSApplicationPresentationHideDock or NSApplicationPresentationAutoHideDock";
+	  mode = kUIModeNormal;
+	  break;
+
+	case NSApplicationPresentationAutoHideDock:
+	  /* 0001 */
+	  mode = kUIModeContentSuppressed;
+	  break;
+
+	case NSApplicationPresentationHideDock:
+	  /* 0010 */
+	  mode = kUIModeContentHidden;
+	  break;
+
+	case (NSApplicationPresentationAutoHideMenuBar
+	      | NSApplicationPresentationAutoHideDock):
+	  /* 0101 */
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+	  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_2))
+#endif
+	    mode = kUIModeAllSuppressed;
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+	  else
+	    {
+	      mode = kUIModeAllHidden;
+	      options = kUIOptionAutoShowMenuBar;
+	    }
+#endif
+	  break;
+
+	case (NSApplicationPresentationAutoHideMenuBar
+	      | NSApplicationPresentationHideDock):
+	  /* 0110 */
+	  mode = kUIModeAllHidden;
+	  options = kUIOptionAutoShowMenuBar;
+	  break;
+
+	case (NSApplicationPresentationHideMenuBar
+	      | NSApplicationPresentationHideDock):
+	  /* 1010 */
+	  mode = kUIModeAllHidden;
+	  break;
+
+	default:
+	  if ((newOptions & (NSApplicationPresentationHideDock
+			     | NSApplicationPresentationAutoHideDock))
+	      == (NSApplicationPresentationHideDock
+		  | NSApplicationPresentationAutoHideDock))
+	    /* XX11: 0011 0111 1011 1111 */
+	    message = @"Both NSApplicationPresentationHideDock and NSApplicationPresentationAutoHideDock were specified; only one is allowed";
+	  else if ((newOptions & (NSApplicationPresentationHideMenuBar
+				  | NSApplicationPresentationAutoHideMenuBar))
+		   == (NSApplicationPresentationHideMenuBar
+		       | NSApplicationPresentationAutoHideMenuBar))
+	    /* 11XX: 1100 1101 1110 (1111) */
+	    message = @"Both NSApplicationPresentationHideMenuBar and NSApplicationPresentationAutoHideMenuBar were specified; only one is allowed";
+	  else if ((newOptions & (NSApplicationPresentationHideMenuBar
+				  | NSApplicationPresentationHideDock))
+		   == NSApplicationPresentationHideMenuBar)
+	    /* 1X0X: 1000 1001 (1100 1101) */
+	    message = @"NSApplicationPresentationHideMenuBar specified without NSApplicationPresentationHideDock";
+	  else
+	    /* XXXX: 0100 (...) */
+	    message = @"NSApplicationPresentationAutoHideMenuBar specified without either NSApplicationPresentationHideDock or NSApplicationPresentationAutoHideDock";
+	  break;
+	}
+
+      if (message)
+	[NSException raise:NSInvalidArgumentException format:@"%@", message];
+
+      options |= ((newOptions
+		   & (NSApplicationPresentationDisableAppleMenu
+		      | NSApplicationPresentationDisableProcessSwitching
+		      | NSApplicationPresentationDisableForceQuit
+		      | NSApplicationPresentationDisableSessionTermination
+		      | NSApplicationPresentationDisableHideApplication))
+		  >> 2);
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+      if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_2)
+	options &= ~kUIOptionDisableHide;
+#endif
+#if 0
+      if (newOptions & NSApplicationPresentationDisableAppleMenu)
+	options |= kUIOptionDisableAppleMenu;
+      if (newOptions & NSApplicationPresentationDisableProcessSwitching)
+	options |= kUIOptionDisableProcessSwitch;
+      if (newOptions & NSApplicationPresentationDisableForceQuit)
+	options |= kUIOptionDisableForceQuit;
+      if (newOptions & NSApplicationPresentationDisableSessionTermination)
+	options |= kUIOptionDisableSessionTerminate;
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
+      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_2))
+#endif
+	if (newOptions & NSApplicationPresentationDisableHideApplication)
+	  options |= kUIOptionDisableHide;
+#endif
+
+      SetSystemUIMode (mode, options);
+    }
+}
+#endif
+
 @end				// EmacsApplication
 
 
@@ -639,7 +806,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 
 /* Delegete Methods  */
 
-- (void)applicationWillFinishLaunching:(NSNotification *)aNotification
+- (void)applicationWillFinishLaunching:(NSNotification *)notification
 {
   [EmacsPosingWindow setup];
   [NSFontManager setFontPanelFactory:[EmacsFontPanel class]];
@@ -647,7 +814,7 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
   init_apple_event_handler ();
 }
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+- (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
   /* Try to suppress the warning "CFMessagePort: bootstrap_register():
      failed" displayed by the second instance of Emacs.  Strictly
@@ -668,6 +835,15 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
   [NSApp postDummyEvent];
 }
 
+- (int)getAndClearMenuItemSelection
+{
+  int selection = menuItemSelection;
+
+  menuItemSelection = 0;
+
+  return selection;
+}
+
 /* Action methods  */
 
 /* Store SENDER's inputEvent to kbd_buffer.  */
@@ -677,12 +853,12 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
   [self storeEvent:[sender inputEvent]];
 }
 
-/* Set the global variable menu_item_selection to the value of
+/* Set the instance variable menuItemSelection to the value of
    SENDER's tag.  */
 
 - (void)setMenuItemSelectionToTag:(id)sender
 {
-  menu_item_selection = [sender tag];
+  menuItemSelection = [sender tag];
 }
 
 /* Event handling  */
@@ -1104,8 +1280,6 @@ extern void mac_focus_changed P_ ((int, struct mac_display_info *,
 extern OSStatus mac_restore_keyboard_input_source P_ ((void));
 extern void mac_save_keyboard_input_source P_ ((void));
 
-static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
-
 #define DEFAULT_NUM_COLS (80)
 #define RESIZE_CONTROL_WIDTH (15)
 #define RESIZE_CONTROL_HEIGHT (15)
@@ -1238,7 +1412,7 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   needsOrderFrontOnUnhide = flag;
 }
 
-- (void)applicationDidUnhide:(NSNotification *)aNotification
+- (void)applicationDidUnhide:(NSNotification *)notification
 {
   if (needsOrderFrontOnUnhide)
     {
@@ -1247,7 +1421,79 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
     }
 }
 
+- (NSRect)constrainFrameRect:(NSRect)frameRect toScreen:(NSScreen *)screen
+{
+  id delegate = [self delegate];
+
+  frameRect = [super constrainFrameRect:frameRect toScreen:screen];
+  if ([delegate
+	respondsToSelector:@selector(window:willConstrainFrame:toScreen:)])
+    frameRect = [delegate window:self willConstrainFrame:frameRect
+			toScreen:screen];
+
+  return frameRect;
+}
+
+- (void)updateApplicationPresentationOptions
+{
+  [NSApp setPresentationOptions:NSApplicationPresentationDefault];
+}
+
+- (void)zoom:(id)sender
+{
+  id delegate = [self delegate];
+  id target = [NSApp delegate];
+
+  if ([delegate respondsToSelector:@selector(window:shouldForwardAction:to:)]
+      && [delegate window:self shouldForwardAction:_cmd to:target])
+    [NSApp sendAction:_cmd to:target from:sender];
+  else
+    [super zoom:sender];
+}
+
 @end				// EmacsWindow
+
+@implementation EmacsFullscreenWindow
+
+- (BOOL)canBecomeKeyWindow
+{
+  return YES;
+}
+
+- (BOOL)canBecomeMainWindow
+{
+  return [self isVisible];
+}
+
+- (void)setFrame:(NSRect)windowFrame display:(BOOL)displayViews
+{
+  [super setFrame:[self constrainFrameRect:windowFrame toScreen:nil]
+	  display:displayViews];
+}
+
+- (void)setFrameOrigin:(NSPoint)point
+{
+  NSRect frameRect = [self frame];
+
+  frameRect.origin = point;
+  frameRect = [self constrainFrameRect:frameRect toScreen:nil];
+
+  [super setFrameOrigin:frameRect.origin];
+}
+
+- (void)updateApplicationPresentationOptions
+{
+  NSApplicationPresentationOptions options;
+
+  if ([[self screen] isEqual:[[NSScreen screens] objectAtIndex:0]])
+    options = (NSApplicationPresentationAutoHideDock
+	       | NSApplicationPresentationAutoHideMenuBar);
+  else
+    options = NSApplicationPresentationDefault;
+  [NSApp setPresentationOptions:options];
+}
+
+@end				// EmacsFullscreenWindow
 
 @implementation EmacsFrameController
 
@@ -1259,7 +1505,126 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 
   emacsFrame = f;
 
+  [self setupEmacsView];
+  [self setupWindow];
+
   return self;
+}
+
+- (void)setupEmacsView
+{
+  struct frame *f = emacsFrame;
+  EmacsView *emacsView;
+
+  if (!FRAME_TOOLTIP_P (f))
+    {
+      NSRect frameRect = NSMakeRect (0, 0, FRAME_PIXEL_WIDTH (f),
+				     FRAME_PIXEL_HEIGHT (f));
+
+      emacsView = [[EmacsView alloc] initWithFrame:frameRect];
+      [emacsView setAction:@selector(storeInputEvent:)];
+    }
+  else
+    {
+      NSRect frameRect = NSMakeRect (0, 0, 100, 100);
+
+      emacsView = [[EmacsTipView alloc] initWithFrame:frameRect];
+    }
+  [emacsView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin
+				  | NSViewWidthSizable | NSViewHeightSizable)];
+
+  FRAME_EMACS_VIEW (f) = emacsView;
+}
+
+- (void)setupWindow
+{
+  struct frame *f = emacsFrame;
+  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsWindow *oldWindow = FRAME_MAC_WINDOW (f);
+  Class windowClass;
+  NSRect contentRect;
+  NSUInteger windowStyle;
+  BOOL deferCreation;
+  EmacsWindow *window;
+
+  if (!FRAME_TOOLTIP_P (f))
+    {
+      if (windowManagerState & WM_STATE_FULLSCREEN)
+	{
+	  windowClass = [EmacsFullscreenWindow class];
+	  windowStyle = NSBorderlessWindowMask;
+	}
+      else
+	{
+	  windowClass = [EmacsWindow class];
+	  windowStyle = (NSTitledWindowMask | NSClosableWindowMask
+			 | NSMiniaturizableWindowMask | NSResizableWindowMask);
+	}
+      deferCreation = YES;
+    }
+  else
+    {
+      windowClass = [EmacsWindow class];
+      windowStyle = NSBorderlessWindowMask;
+      deferCreation = NO;
+    }
+
+  if (oldWindow == nil)
+    contentRect = [emacsView frame];
+  else
+    {
+      NSView *contentView = [oldWindow contentView];
+
+      contentRect = [contentView frame];
+      contentRect.origin = [[contentView superview]
+			     convertPoint:contentRect.origin toView:nil];
+      contentRect.origin = [oldWindow convertBaseToScreen:contentRect.origin];
+    }
+
+  window = [[windowClass alloc] initWithContentRect:contentRect
+					  styleMask:windowStyle
+					    backing:NSBackingStoreBuffered
+					      defer:deferCreation];
+  if (oldWindow)
+    {
+      [window setTitle:[oldWindow title]];
+      [window setDocumentEdited:[oldWindow isDocumentEdited]];
+      [window setAlphaValue:[oldWindow alphaValue]];
+      [window setBackgroundColor:[oldWindow backgroundColor]];
+      [window setRepresentedFilename:[oldWindow representedFilename]];
+      if ([window respondsToSelector:@selector(setCollectionBehavior:)])
+	[window setCollectionBehavior:[oldWindow collectionBehavior]];
+
+      [oldWindow setDelegate:nil];
+      [hourglass release];
+      hourglass = nil;
+    }
+
+  FRAME_MAC_WINDOW (f) = window;
+  [window setDelegate:self];
+  [window useOptimizedDrawing:YES];
+  [[window contentView] addSubview:emacsView];
+
+  if (oldWindow)
+    {
+      [window orderWindow:NSWindowBelow relativeTo:[oldWindow windowNumber]];
+      [oldWindow close];
+    }
+
+  if (!FRAME_TOOLTIP_P (f))
+    {
+      [window setAcceptsMouseMovedEvents:YES];
+      if (!(windowManagerState & WM_STATE_FULLSCREEN))
+	[self setupToolBar];
+    }
+  else
+    {
+      [window setAutodisplay:NO];
+      [window setHasShadow:YES];
+      [window setLevel:NSScreenSaverWindowLevel];
+      if ([window respondsToSelector:@selector(setIgnoresMouseEvents:)])
+	[window setIgnoresMouseEvents:YES];
+    }
 }
 
 - (struct frame *)emacsFrame
@@ -1267,10 +1632,188 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   return emacsFrame;
 }
 
+- (void)dealloc
+{
+  struct frame *f = emacsFrame;
+  /* XXX: This should be changed to an instance variable.  */
+  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+
+  [emacsView release];
+  [hourglass release];
+  [super dealloc];
+}
+
+- (NSSize)hintedWindowFrameSize:(NSSize)frameSize allowsLarger:(BOOL)flag
+{
+  struct frame *f = emacsFrame;
+  XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
+  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+  NSRect windowFrame, emacsViewFrame;
+  NSSize emacsViewSizeInPixels, emacsViewSize;
+  CGFloat dw, dh;
+
+  windowFrame = [window frame];
+  if (size_hints == NULL)
+    return windowFrame.size;
+
+  emacsViewFrame = [emacsView frame];
+  emacsViewSizeInPixels = [emacsView convertSize:emacsViewFrame.size
+				     toView:nil];
+  dw = NSWidth (windowFrame) - emacsViewSizeInPixels.width;
+  dh = NSHeight (windowFrame) - emacsViewSizeInPixels.height;
+  emacsViewSize = [emacsView convertSize:(NSMakeSize (frameSize.width - dw,
+						      frameSize.height - dh))
+				fromView:nil];
+
+  if (emacsViewSize.width < size_hints->min_width)
+    emacsViewSize.width = size_hints->min_width;
+  else
+    emacsViewSize.width = size_hints->base_width
+      + (int) ((emacsViewSize.width - size_hints->base_width)
+	       / size_hints->width_inc + (flag ? .5 : 0))
+      * size_hints->width_inc;
+
+  if (emacsViewSize.height < size_hints->min_height)
+    emacsViewSize.height = size_hints->min_height;
+  else
+    emacsViewSize.height = size_hints->base_height
+      + (int) ((emacsViewSize.height - size_hints->base_height)
+	       / size_hints->height_inc + (flag ? .5 : 0))
+      * size_hints->height_inc;
+
+  emacsViewSizeInPixels = [emacsView convertSize:emacsViewSize toView:nil];
+
+  return NSMakeSize (emacsViewSizeInPixels.width + dw,
+		     emacsViewSizeInPixels.height + dh);
+}
+
+- (NSRect)window:(NSWindow *)sender willConstrainFrame:(NSRect)frameRect
+	toScreen:(NSScreen *)screen
+{
+  if (windowManagerState & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT
+			    | WM_STATE_FULLSCREEN))
+    {
+      if (screen == nil)
+	screen = [NSScreen closestScreenForRect:frameRect];
+
+      if (windowManagerState & WM_STATE_FULLSCREEN)
+	frameRect = [screen frame];
+      else
+	{
+	  NSRect screenVisibleFrame = [screen visibleFrame];
+
+	  if (windowManagerState & WM_STATE_MAXIMIZED_HORZ)
+	    {
+	      frameRect.origin.x = screenVisibleFrame.origin.x;
+	      frameRect.size.width = screenVisibleFrame.size.width;
+	    }
+	  if (windowManagerState & WM_STATE_MAXIMIZED_VERT)
+	    {
+	      frameRect.origin.y = screenVisibleFrame.origin.y;
+	      frameRect.size.height = screenVisibleFrame.size.height;
+	    }
+	}
+    }
+
+  return frameRect;
+}
+
+- (void)changeWindowManagerStateWithFlags:(WMState)flagsToSet
+				    clear:(WMState)flagsToClear
+{
+  struct frame *f = emacsFrame;
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+  WMState oldState, newState, diff;
+
+  oldState = windowManagerState;
+  newState = (oldState & ~flagsToClear) | flagsToSet;
+  diff = (oldState ^ newState);
+
+  if (diff == 0)
+    return;
+
+  windowManagerState = newState;
+
+  if (diff & WM_STATE_STICKY)
+    if ([window respondsToSelector:@selector(setCollectionBehavior:)])
+      {
+	NSWindowCollectionBehavior behavior =
+	  ((newState & WM_STATE_STICKY)
+	   ? NSWindowCollectionBehaviorCanJoinAllSpaces
+	   : NSWindowCollectionBehaviorDefault);
+
+	[window setCollectionBehavior:behavior];
+      }
+
+  if (diff & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT
+	      | WM_STATE_FULLSCREEN))
+    {
+      NSRect frameRect = [window frame], screenRect = [[window screen] frame];
+      BOOL showResizeIndicator;
+
+      if (diff & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_FULLSCREEN))
+	{
+	  if (!(oldState & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_FULLSCREEN)))
+	    {
+	      savedFrame.origin.x = NSMinX (frameRect) - NSMinX (screenRect);
+	      savedFrame.size.width = NSWidth (frameRect);
+	    }
+	  else
+	    {
+	      frameRect.origin.x = NSMinX (savedFrame) + NSMinX (screenRect);
+	      frameRect.size.width = NSWidth (savedFrame);
+	    }
+	}
+
+      if (diff & (WM_STATE_MAXIMIZED_VERT | WM_STATE_FULLSCREEN))
+	{
+	  if (!(oldState & (WM_STATE_MAXIMIZED_VERT | WM_STATE_FULLSCREEN)))
+	    {
+	      savedFrame.origin.y = NSMinY (frameRect) - NSMaxY (screenRect);
+	      savedFrame.size.height = NSHeight (frameRect);
+	    }
+	  else
+	    {
+	      frameRect.origin.y = NSMinY (savedFrame) + NSMaxY (screenRect);
+	      frameRect.size.height = NSHeight (savedFrame);
+	    }
+	}
+
+      if (diff & WM_STATE_FULLSCREEN)
+	{
+	  [self setupWindow];
+	  window = FRAME_MAC_WINDOW (f);
+	}
+
+      if ((newState & WM_STATE_FULLSCREEN)
+	  || ((newState & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT))
+	      == (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT)))
+	showResizeIndicator = NO;
+      else
+	showResizeIndicator = YES;
+      [window setShowsResizeIndicator:showResizeIndicator];
+
+      frameRect = [window constrainFrameRect:frameRect toScreen:nil];
+      if (!(newState & WM_STATE_FULLSCREEN))
+	{
+	  NSSize hintedFrameSize = [self hintedWindowFrameSize:frameRect.size
+						  allowsLarger:NO];
+
+	  if (!(newState & WM_STATE_MAXIMIZED_HORZ))
+	    frameRect.size.width = hintedFrameSize.width;
+	  if (!(newState & WM_STATE_MAXIMIZED_VERT))
+	    frameRect.size.height = hintedFrameSize.height;
+	}
+      [window setFrame:frameRect display:YES];
+    }
+}
+
 /* Delegete Methods.  */
 
-- (void)windowDidBecomeKey:(NSNotification *)aNotification
+- (void)windowDidBecomeKey:(NSNotification *)notification
 {
+  EmacsWindow *window = [notification object];
   struct frame *f = emacsFrame;
   struct input_event inev;
 
@@ -1281,9 +1824,11 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
     [[NSApp delegate] storeEvent:&inev];
 
   [[NSApp delegate] setConflictingKeyBindingsDisabled:YES];
+
+  [window updateApplicationPresentationOptions];
 }
 
-- (void)windowDidResignKey:(NSNotification *)aNotification
+- (void)windowDidResignKey:(NSNotification *)notification
 {
   struct frame *f = emacsFrame;
   struct input_event inev;
@@ -1297,12 +1842,12 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   [[NSApp delegate] setConflictingKeyBindingsDisabled:NO];
 }
 
-- (void)windowDidBecomeMain:(NSNotification *)aNotification
+- (void)windowDidBecomeMain:(NSNotification *)notification
 {
   mac_restore_keyboard_input_source ();
 }
 
-- (void)windowDidResignMain:(NSNotification *)aNotification
+- (void)windowDidResignMain:(NSNotification *)notification
 {
   struct frame *f = emacsFrame;
   EmacsView *emacsView = FRAME_EMACS_VIEW (f);
@@ -1312,19 +1857,28 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   mac_save_keyboard_input_source ();
 }
 
-- (void)windowDidMove:(NSNotification *)aNotification
+- (void)windowDidMove:(NSNotification *)notification
 {
   struct frame *f = emacsFrame;
 
   mac_handle_origin_change (f);
 }
 
-- (void)windowDidResize:(NSNotification *)aNotification
+- (void)windowDidResize:(NSNotification *)notification
 {
   struct frame *f = emacsFrame;
-  int x, y;
 
-  x_real_positions (f, &x, &y);
+  /* `windowDidMove:' above is not called when both size and location
+     are changed.  */
+  mac_handle_origin_change (f);
+}
+
+- (void)windowDidChangeScreen:(NSNotification *)notification
+{
+  EmacsWindow *window = [notification object];
+
+  if ([window isKeyWindow])
+    [window updateApplicationPresentationOptions];
 }
 
 - (BOOL)windowShouldClose:(id)sender
@@ -1341,15 +1895,26 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
   return NO;
 }
 
-- (void)windowWillClose:(NSNotification *)aNotification
+- (BOOL)window:(NSWindow *)sender shouldForwardAction:(SEL)action to:(id)target
 {
-  NSWindow *window = [aNotification object];
+  if (action == @selector(zoom:))
+    if ((windowManagerState
+	 & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT))
+	&& [target respondsToSelector:action])
+      return YES;
+
+  return NO;
+}
+
+- (void)windowWillClose:(NSNotification *)notification
+{
+  NSWindow *window = [notification object];
 
   [window setDelegate:nil];
   [self release];
 }
 
-- (void)windowWillMove:(NSNotification *)aNotification
+- (void)windowWillMove:(NSNotification *)notification
 {
   struct frame *f = emacsFrame;
 
@@ -1359,56 +1924,33 @@ static OSStatus mac_create_frame_tool_bar P_ ((FRAME_PTR f));
 - (NSSize)windowWillResize:(NSWindow *)sender
 		    toSize:(NSSize)proposedFrameSize
 {
-  struct frame *f = emacsFrame;
+  EmacsWindow *window = (EmacsWindow *) sender;
   NSEvent *currentEvent = [NSApp currentEvent];
   BOOL leftMouseDragged = ([currentEvent type] == NSLeftMouseDragged);
-  XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-  NSRect windowFrame, emacsViewFrame;
-  NSSize emacsViewSizeInPixels, emacsViewSize;
-  CGFloat dw, dh;
+  NSSize result;
 
   if (leftMouseDragged)
-    {
-      EmacsWindow *window = (EmacsWindow *) sender;
+    [window suspendResizeTracking:currentEvent];
 
-      [window suspendResizeTracking:currentEvent];
+  if (windowManagerState & WM_STATE_FULLSCREEN)
+    {
+      NSRect screenFrame = [[window screen] frame];
+
+      result = screenFrame.size;
+    }
+  else
+    {
+      NSRect screenVisibleFrame = [[window screen] visibleFrame];
+
+      result = [self hintedWindowFrameSize:proposedFrameSize
+			      allowsLarger:leftMouseDragged];
+      if (windowManagerState & WM_STATE_MAXIMIZED_HORZ)
+	result.width = NSWidth (screenVisibleFrame);
+      if (windowManagerState & WM_STATE_MAXIMIZED_VERT)
+	result.height = NSHeight (screenVisibleFrame);
     }
 
-  windowFrame = [sender frame];
-  if (size_hints == NULL)
-    return windowFrame.size;
-
-  emacsViewFrame = [emacsView frame];
-  emacsViewSizeInPixels = [emacsView convertSize:emacsViewFrame.size
-				     toView:nil];
-  dw = NSWidth (windowFrame) - emacsViewSizeInPixels.width;
-  dh = NSHeight (windowFrame) - emacsViewSizeInPixels.height;
-  emacsViewSize =
-    [emacsView convertSize:(NSMakeSize (proposedFrameSize.width - dw,
-					proposedFrameSize.height - dh))
-	       fromView:nil];
-
-  if (emacsViewSize.width < size_hints->min_width)
-    emacsViewSize.width = size_hints->min_width;
-  else
-    emacsViewSize.width = size_hints->base_width
-      + (int) ((emacsViewSize.width - size_hints->base_width)
-	       / size_hints->width_inc + (leftMouseDragged ? .5 : 0))
-      * size_hints->width_inc;
-
-  if (emacsViewSize.height < size_hints->min_height)
-    emacsViewSize.height = size_hints->min_height;
-  else
-    emacsViewSize.height = size_hints->base_height
-      + (int) ((emacsViewSize.height - size_hints->base_height)
-	       / size_hints->height_inc + (leftMouseDragged ? .5 : 0))
-      * size_hints->height_inc;
-
-  emacsViewSizeInPixels = [emacsView convertSize:emacsViewSize toView:nil];
-
-  return NSMakeSize (emacsViewSizeInPixels.width + dw,
-		     emacsViewSizeInPixels.height + dh);
+  return result;
 }
 
 - (NSRect)windowWillUseStandardFrame:(NSWindow *)sender
@@ -1568,7 +2110,7 @@ mac_is_frame_window_front (f)
   NSArray *orderedWindows = [NSApp orderedWindows];
 
   return ([orderedWindows count] > 0
-	  && [orderedWindows objectAtIndex:0] == window);
+	  && [[orderedWindows objectAtIndex:0] isEqual:window]);
 }
 
 void
@@ -1670,29 +2212,19 @@ mac_set_frame_window_alpha (f, alpha)
 }
 
 void
-mac_get_window_bounds (f, inner, outer)
+mac_get_window_structure_bounds (f, bounds)
      struct frame *f;
-     Rect *inner, *outer;
+     Rect *bounds;
 {
   NSWindow *window = FRAME_MAC_WINDOW (f);
-  EmacsView *emacsView = FRAME_EMACS_VIEW (f);
   NSRect baseScreenFrame = mac_get_base_screen_frame ();
-  NSRect windowFrame, emacsViewFrame;
+  NSRect windowFrame = [window frame];
 
-  windowFrame = [window frame];
-  emacsViewFrame = [emacsView convertRect:[emacsView frame] toView:nil];
-  emacsViewFrame.origin = [window convertBaseToScreen:emacsViewFrame.origin];
-
-  SetRect (outer,
+  SetRect (bounds,
 	   NSMinX (windowFrame) + NSMinX (baseScreenFrame),
 	   - NSMaxY (windowFrame) + NSMaxY (baseScreenFrame),
 	   NSMaxX (windowFrame) + NSMinX (baseScreenFrame),
 	   - NSMinY (windowFrame) + NSMaxY (baseScreenFrame));
-  SetRect (inner,
-	   NSMinX (emacsViewFrame) + NSMinX (baseScreenFrame),
-	   - NSMaxY (emacsViewFrame) + NSMaxY (baseScreenFrame),
-	   NSMaxX (emacsViewFrame) + NSMinX (baseScreenFrame),
-	   - NSMinY (emacsViewFrame) + NSMaxY (baseScreenFrame));
 }
 
 void
@@ -1882,7 +2414,8 @@ mac_frame_up_to_date (f)
     {
       EmacsWindow *window = FRAME_MAC_WINDOW (f);
 
-      [window setResizeControlNeedsDisplay:YES];
+      if ([window showsResizeIndicator])
+	[window setResizeControlNeedsDisplay:YES];
     }
 }
 
@@ -1891,49 +2424,13 @@ mac_frame_up_to_date (f)
    frame.  */
 
 void
-mac_create_frame_window (f, tooltip_p)
+mac_create_frame_window (f)
      struct frame *f;
-     int tooltip_p;
 {
-  NSRect contentRect;
-  unsigned int windowStyle;
-  BOOL deferCreation;
   NSWindow *window, *mainWindow = [NSApp mainWindow];
-  EmacsView *emacsView;
 
-  if (!tooltip_p)
-    {
-      contentRect = NSMakeRect (0, 0,
-				FRAME_PIXEL_WIDTH (f), FRAME_PIXEL_HEIGHT (f));
-      windowStyle = (NSTitledWindowMask | NSClosableWindowMask
-		     | NSMiniaturizableWindowMask | NSResizableWindowMask);
-      deferCreation = YES;
-    }
-  else
-    {
-      contentRect = NSMakeRect (0, 0, 100, 100);
-      windowStyle = NSBorderlessWindowMask;
-      deferCreation = NO;
-    }
-
-  window = [[EmacsWindow alloc] initWithContentRect:contentRect
-				styleMask:windowStyle
-				backing:NSBackingStoreBuffered
-				defer:deferCreation];
-  FRAME_MAC_WINDOW (f) = window;
-  [window setDelegate:[[EmacsFrameController alloc] initWithEmacsFrame:f]];
-
-  [window useOptimizedDrawing:YES];
-  if (!tooltip_p)
-    [window setAcceptsMouseMovedEvents:YES];
-  else
-    {
-      [window setAutodisplay:NO];
-      [window setHasShadow:YES];
-      [window setLevel:NSScreenSaverWindowLevel];
-      if ([window respondsToSelector:@selector(setIgnoresMouseEvents:)])
-	[window setIgnoresMouseEvents:YES];
-    }
+  [[EmacsFrameController alloc] initWithEmacsFrame:f];
+  window = FRAME_MAC_WINDOW (f);
 
   if (f->size_hint_flags & (USPosition | PPosition))
     mac_move_frame_window_structure (f, f->left_pos, f->top_pos);
@@ -1951,22 +2448,6 @@ mac_create_frame_window (f, tooltip_p)
 	  [window cascadeTopLeftFromPoint:topLeft];
 	}
     }
-
-  if (!tooltip_p)
-    emacsView = [[EmacsView alloc] initWithFrame:contentRect];
-  else
-    emacsView = [[EmacsTipView alloc] initWithFrame:contentRect];
-
-  FRAME_EMACS_VIEW (f) = emacsView;
-  [[window contentView] addSubview:emacsView];
-  [emacsView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin
-				  | NSViewWidthSizable | NSViewHeightSizable)];
-  if (!tooltip_p)
-    {
-      [emacsView setAction:@selector(storeInputEvent:)];
-      mac_create_frame_tool_bar (f);
-    }
-  [emacsView release];
 }
 
 /* Dispose of the Mac window of the frame F.  */
@@ -1978,6 +2459,18 @@ mac_dispose_frame_window (f)
   NSWindow *window = FRAME_MAC_WINDOW (f);
 
   [window close];
+}
+
+void
+mac_change_frame_window_wm_state (f, flags_to_set, flags_to_clear)
+     struct frame *f;
+     WMState flags_to_set, flags_to_clear;
+{
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+  id delegate = [window delegate];
+
+  [delegate changeWindowManagerStateWithFlags:flags_to_set
+					clear:flags_to_clear];
 }
 
 
@@ -2886,7 +3379,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
   mac_handle_size_change (f, NSWidth (frameRect), NSHeight (frameRect));
 }
 
-- (void)viewFrameDidChange:(NSNotification *)aNotification
+- (void)viewFrameDidChange:(NSNotification *)notification
 {
   if (![self inLiveResize])
     {
@@ -3297,7 +3790,7 @@ extern Time last_mouse_movement_time;
 
 @implementation EmacsScroller
 
-- (void)viewFrameDidChange:(NSNotification *)aNotification
+- (void)viewFrameDidChange:(NSNotification *)notification
 {
   BOOL enabled = [self isEnabled], tooSmall = NO;
   float floatValue = [self floatValue];
@@ -3580,7 +4073,8 @@ mac_create_scroll_bar (bar, bounds, visible)
      const Rect *bounds;
      Boolean visible;
 {
-  struct frame *f = XFRAME (WINDOW_FRAME (XWINDOW (bar->window)));
+  struct window *w = XWINDOW (bar->window);
+  struct frame *f = XFRAME (WINDOW_FRAME (w));
   NSRect frame = NSMakeRect (bounds->left, bounds->top,
 			     bounds->right - bounds->left,
 			     bounds->bottom - bounds->top);
@@ -3589,6 +4083,8 @@ mac_create_scroll_bar (bar, bounds, visible)
 
   [scroller setEmacsScrollBar:bar];
   [scroller setAction:@selector(convertScrollerAction:)];
+  if (WINDOW_RIGHTMOST_P (w) && WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_RIGHT (w))
+    [scroller setAutoresizingMask:NSViewMinXMargin];
   [emacsView addSubview:scroller];
   [scroller release];
   SET_SCROLL_BAR_SCROLLER (bar, scroller);
@@ -3613,6 +4109,7 @@ mac_set_scroll_bar_bounds (bar, bounds)
      struct scroll_bar *bar;
      const Rect *bounds;
 {
+  struct window *w = XWINDOW (bar->window);
   EmacsScroller *scroller = SCROLL_BAR_SCROLLER (bar);
   NSRect frame = NSMakeRect (bounds->left, bounds->top,
 			     bounds->right - bounds->left,
@@ -3620,6 +4117,10 @@ mac_set_scroll_bar_bounds (bar, bounds)
 
   [scroller setFrame:frame];
   [scroller setNeedsDisplay:YES];
+  if (WINDOW_RIGHTMOST_P (w) && WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_RIGHT (w))
+    [scroller setAutoresizingMask:NSViewMinXMargin];
+  else
+    [scroller setAutoresizingMask:NSViewNotSizable];
 }
 
 /* Draw the scroll bar BAR.  */
@@ -3692,10 +4193,10 @@ x_set_toolkit_scroll_bar_thumb (bar, portion, position, whole)
 
 #define TOOLBAR_ICON_ITEM_IDENTIFIER (@"org.gnu.Emacs.toolbar.icon")
 
-extern void mac_move_window_with_gravity P_ ((struct frame *, int,
-					      short, short));
-extern void mac_get_window_origin_with_gravity P_ ((struct frame *, int,
-						    short *, short *));
+extern void mac_move_window_to_gravity_reference_point P_ ((struct frame *,
+							    int, short, short));
+extern void mac_get_window_gravity_reference_point P_ ((struct frame *, int,
+							short *, short *));
 extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
 						  Lisp_Object));
 
@@ -3767,6 +4268,35 @@ extern CGImageRef mac_image_spec_to_cg_image P_ ((struct frame *,
   return [theItem isEnabled];
 }
 
+/* Create a tool bar for the frame.  */
+
+- (void)setupToolBar
+{
+  struct frame *f = emacsFrame;
+  NSString *identifier =
+    [NSString stringWithFormat:TOOLBAR_IDENTIFIER_FORMAT, f];
+  NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:identifier];
+  NSWindow *window = FRAME_MAC_WINDOW (f);
+  NSButton *button;
+
+  if (toolbar == nil)
+    return;
+
+  [toolbar setDisplayMode:NSToolbarDisplayModeIconOnly];
+  [toolbar setSizeMode:NSToolbarSizeModeSmall];
+  [toolbar setAllowsUserCustomization:NO];
+  [toolbar setAutosavesConfiguration:NO];
+  [toolbar setDelegate:self];
+  [toolbar setVisible:NO];
+
+  [window setToolbar:toolbar];
+  [toolbar release];
+
+  button = [window standardWindowButton:NSWindowToolbarButton];
+  [button setTarget:[NSApp delegate]];
+  [button setAction:(NSSelectorFromString (@"toolbar-pill-button-clicked:"))];
+}
+
 /* Store toolbar item click event from SENDER to kbd_buffer.  */
 
 - (void)storeToolBarEvent:(id)sender
@@ -3818,8 +4348,7 @@ update_frame_tool_bar (f)
      FRAME_PTR f;
 {
   NSWindow *window = FRAME_MAC_WINDOW (f);
-  short left, top;
-  Rect inner, outer;
+  short rx, ry;
   NSToolbar *toolbar;
   NSArray *items;
   NSUInteger count;
@@ -3828,9 +4357,7 @@ update_frame_tool_bar (f)
   BLOCK_INPUT;
 
   if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
-    mac_get_window_origin_with_gravity (f, win_gravity, &left, &top);
-
-  mac_get_window_bounds (f, &inner, &outer);
+    mac_get_window_gravity_reference_point (f, win_gravity, &rx, &ry);
 
   toolbar = [window toolbar];
   items = [toolbar items];
@@ -3948,11 +4475,10 @@ update_frame_tool_bar (f)
       /* This is a workaround for Mac OS X 10.3 or earlier.  Without
          this, the toolbar may not be shown if the height of the
          visible frame of the screen is not enough for the new window.  */
-      [window displayIfNeeded];
+      if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_3)
+	[window displayIfNeeded];
 
-      mac_get_window_bounds (f, &inner, &outer);
-
-      mac_move_window_with_gravity (f, win_gravity, left, top);
+      mac_move_window_to_gravity_reference_point (f, win_gravity, rx, ry);
     }
   f->output_data.mac->toolbar_win_gravity = 0;
 
@@ -3974,6 +4500,11 @@ free_frame_tool_bar (f)
   toolbar = [window toolbar];
   if ([toolbar isVisible])
     [toolbar setVisible:NO];
+  /* This is necessary for Mac OS X 10.3 or earlier in order to adjust
+     the height of fullheight/maximized frame.  */
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_3)
+    [window setFrame:[window constrainFrameRect:[window frame] toScreen:nil]
+	     display:YES];
 
   UNBLOCK_INPUT;
 }
@@ -4024,39 +4555,6 @@ mac_tool_bar_note_mouse_movement (f, event)
 	}
     }
 #undef PROP
-}
-
-/* Create a tool bar for frame F.  */
-
-static OSStatus
-mac_create_frame_tool_bar (f)
-     FRAME_PTR f;
-{
-  NSString *identifier =
-    [NSString stringWithFormat:TOOLBAR_IDENTIFIER_FORMAT, f];
-  NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:identifier];
-  NSWindow *window = FRAME_MAC_WINDOW (f);
-  id delegate = [window delegate];
-  NSButton *button;
-
-  if (toolbar == nil)
-    return memFullErr;
-
-  [toolbar setDisplayMode:NSToolbarDisplayModeIconOnly];
-  [toolbar setSizeMode:NSToolbarSizeModeSmall];
-  [toolbar setAllowsUserCustomization:NO];
-  [toolbar setAutosavesConfiguration:NO];
-  [toolbar setDelegate:delegate];
-  [toolbar setVisible:NO];
-
-  [window setToolbar:toolbar];
-  [toolbar release];
-
-  button = [window standardWindowButton:NSWindowToolbarButton];
-  [button setTarget:[NSApp delegate]];
-  [button setAction:(NSSelectorFromString (@"toolbar-pill-button-clicked:"))];
-
-  return noErr;
 }
 
 
@@ -4141,7 +4639,7 @@ enum {
 
 /* Called when the font panel is about to close.  */
 
-- (void)fontPanelWillClose:(NSNotification *)aNotification
+- (void)fontPanelWillClose:(NSNotification *)notification
 {
   OSStatus err;
   EventRef event;
@@ -4693,6 +5191,54 @@ XTread_socket (terminal, expected, hold_quit)
 				Busy cursor
  ***********************************************************************/
 
+@implementation EmacsFrameController (Hourglass)
+
+- (void)showHourglass:(id)sender
+{
+  struct frame *f = emacsFrame;
+
+  if (hourglass == nil)
+    {
+      NSWindow *window = FRAME_MAC_WINDOW (f);
+      NSView *view;
+      NSRect viewFrame, indicatorFrame;
+
+      if (!(windowManagerState & WM_STATE_FULLSCREEN))
+	{
+	  view = [[window contentView] superview];
+	  viewFrame = [view frame];
+	  indicatorFrame =
+	    NSMakeRect (NSWidth (viewFrame)
+			- (HOURGLASS_WIDTH + HOURGLASS_RIGHT_MARGIN),
+			NSHeight (viewFrame)
+			- (HOURGLASS_HEIGHT + HOURGLASS_TOP_MARGIN),
+			HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
+	}
+      else
+	{
+	  view = FRAME_EMACS_VIEW (f);
+	  viewFrame = [view frame];
+	  indicatorFrame =
+	    NSMakeRect (NSWidth (viewFrame) - HOURGLASS_WIDTH, 0,
+			HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
+	}
+      hourglass = [[NSProgressIndicator alloc] initWithFrame:indicatorFrame];
+      [hourglass setStyle:NSProgressIndicatorSpinningStyle];
+      [hourglass setDisplayedWhenStopped:NO];
+      [view addSubview:hourglass];
+      [hourglass setAutoresizingMask:(NSViewMinXMargin | NSViewMinYMargin)];
+    }
+
+  [hourglass startAnimation:sender];
+}
+
+- (void)hideHourglass:(id)sender
+{
+  [hourglass stopAnimation:sender];
+}
+
+@end				// EmacsFrameController (Hourglass)
+
 /* Show the spinning progress indicator for the frame F.  Create it if
    it doesn't exist yet. */
 
@@ -4700,31 +5246,10 @@ void
 mac_show_hourglass (f)
      struct frame *f;
 {
-  NSProgressIndicator *indicator =
-    (NSProgressIndicator *) f->output_data.mac->hourglass_control;
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+  EmacsFrameController *frameController = [window delegate];
 
-  if (indicator == nil)
-    {
-      NSWindow *window = FRAME_MAC_WINDOW (f);
-      NSView *frameView = [[window contentView] superview];
-      NSRect frameViewFrame, indicatorFrame;
-
-      frameViewFrame = [frameView frame];
-      indicatorFrame = NSMakeRect (NSWidth (frameViewFrame)
-				   - (HOURGLASS_WIDTH + HOURGLASS_RIGHT_MARGIN),
-				   NSHeight (frameViewFrame)
-				   - (HOURGLASS_HEIGHT + HOURGLASS_TOP_MARGIN),
-				   HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
-      indicator = [[NSProgressIndicator alloc] initWithFrame:indicatorFrame];
-      [indicator setStyle:NSProgressIndicatorSpinningStyle];
-      [indicator setDisplayedWhenStopped:NO];
-      f->output_data.mac->hourglass_control = indicator;
-      [frameView addSubview:indicator];
-      [indicator setAutoresizingMask:(NSViewMinXMargin | NSViewMinYMargin)];
-      [indicator release];
-    }
-
-  [indicator startAnimation:nil];
+  [frameController showHourglass:nil];
 }
 
 /* Hide the spinning progress indicator for the frame F.  Do nothing
@@ -4734,10 +5259,10 @@ void
 mac_hide_hourglass (f)
      struct frame *f;
 {
-  NSProgressIndicator *indicator =
-    (NSProgressIndicator *) f->output_data.mac->hourglass_control;
+  EmacsWindow *window = FRAME_MAC_WINDOW (f);
+  EmacsFrameController *frameController = [window delegate];
 
-  [indicator stopAnimation:nil];
+  [frameController hideHourglass:nil];
 }
 
 /* Reposition the spinning progress indicator for the frame F.  Do
@@ -5015,7 +5540,7 @@ mac_file_dialog (prompt, dir, default_filename, mustmatch, only_dir_p)
 
 @implementation EmacsFontDialogController
 
-- (void)windowWillClose:(NSNotification *)aNotification
+- (void)windowWillClose:(NSNotification *)notification
 {
   [NSApp abortModal];
 }
@@ -5159,9 +5684,6 @@ mac_font_dialog (f)
 
 extern int popup_activated_flag;
 extern int name_is_separator P_ ((const char *));
-extern void find_and_call_menu_selection P_ ((FRAME_PTR, int, Lisp_Object,
-					      void *));
-extern void set_frame_menubar P_ ((FRAME_PTR, int, int));
 
 static void update_services_menu_types P_ ((void));
 
@@ -5461,20 +5983,14 @@ restore_show_help_function (old_show_help_function)
 @end				// EmacsController (Menu)
 
 /* Activate the menu bar of frame F.
-   This is called from keyboard.c when it gets the
-   MENU_BAR_ACTIVATE_EVENT out of the Emacs event queue.
 
    To activate the menu bar, we use the button-press event that was
    saved in dpyinfo->saved_menu_event.
 
-   But first we recompute the menu bar contents (the whole tree).
+   Return the selection.  */
 
-   The reason for saving the button event until here, instead of
-   passing it to the toolkit right away, is that we can safely
-   execute Lisp code.  */
-
-void
-x_activate_menubar (f)
+int
+mac_activate_menubar (f)
      FRAME_PTR f;
 {
   struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
@@ -5485,20 +6001,14 @@ x_activate_menubar (f)
 
   dpyinfo->saved_menu_event = NULL;
 
-  set_frame_menubar (f, 0, 1);
-  BLOCK_INPUT;
   update_services_menu_types ();
-  menu_item_selection = 0;
   popup_activated_flag = 1;
   PostEventToQueue (GetMainEventQueue (), menu_event, kEventPriorityHigh);
   ReleaseEvent (menu_event);
   [[NSApp delegate] trackMenubar];
   popup_activated_flag = 0;
-  UNBLOCK_INPUT;
 
-  if (menu_item_selection)
-    find_and_call_menu_selection (f, f->menu_bar_items_used, f->menu_bar_vector,
-				  (void *) (intptr_t) menu_item_selection);
+  return [[NSApp delegate] getAndClearMenuItemSelection];
 }
 
 /* Set up the initial menu bar.  */
@@ -5628,10 +6138,9 @@ pop_down_menu (arg)
 }
 
 /* Pop up the menu for frame F defined by FIRST_WV at X/Y and loop until the
-   menu pops down.
-   menu_item_selection will be set to the selection.  */
+   menu pops down.  Return the selection.  */
 
-void
+int
 create_and_show_popup_menu (f, first_wv, x, y, for_click)
      FRAME_PTR f;
      widget_value *first_wv;
@@ -5668,14 +6177,14 @@ create_and_show_popup_menu (f, first_wv, x, y, for_click)
     }
   popup_activated_flag = 0;
   unbind_to (specpdl_count, Qnil);
+
+  return [[NSApp delegate] getAndClearMenuItemSelection];
 }
 
 
 /***********************************************************************
 			     Popup Dialog
  ***********************************************************************/
-
-extern EMACS_TIME timer_check P_ ((int));
 
 @implementation EmacsDialogView
 
@@ -5932,10 +6441,9 @@ pop_down_dialog (arg)
 }
 
 /* Pop up the dialog for frame F defined by FIRST_WV and loop until the
-   dialog pops down.
-   menu_item_selection will be set to the selection.  */
+   dialog pops down.  Return the selection.  */
 
-void
+int
 create_and_show_dialog (f, first_wv)
      FRAME_PTR f;
      widget_value *first_wv;
@@ -5993,13 +6501,9 @@ create_and_show_dialog (f, first_wv)
 	long secs = EMACS_SECS (next_time);
 	long usecs = EMACS_USECS (next_time);
 
-	if (secs < 0 || (secs == 0 && usecs == 0))
-	  {
-	    /* Sometimes timer_check returns -1 (no timers) even if
-	       there are timers.  So do a timeout anyway.  */
-	    secs = 1;
-	    usecs = 0;
-	  }
+	/* Values for `secs' and `usecs' might be negative.  In that
+	   case, the negative argument passed to mac_run_loop_run_once
+	   means "distant future".  */
         mac_run_loop_run_once (secs + usecs * 0.000001);
 
 	/* This is necessary on 10.5 to make the dialog visible when
@@ -6014,7 +6518,7 @@ create_and_show_dialog (f, first_wv)
     unbind_to (specpdl_count, Qnil);
   }
 
-  menu_item_selection = result;
+  return result;
 }
 
 
@@ -8250,7 +8754,8 @@ mac_font_copy_non_synthetic_table (font, table)
 	err = FSReadFork (fork_ref_num, fsFromStart, 0, sizeof_sfntDirectory,
 			  &dir, &actual_count);
 	if (err == noErr && actual_count == sizeof_sfntDirectory
-	    && dir.format == EndianU32_NtoB ('OTTO'))
+	    && (dir.format == EndianU32_NtoB ('OTTO')
+		|| dir.format == EndianU32_NtoB (0x00010000)))
 	  {
 	    int i, num_offsets = EndianU16_BtoN (dir.numOffsets);
 

@@ -1,29 +1,184 @@
-2009-07-29  Chong Yidong  <cyd@stupidchicken.com>
+2009-12-05  Chong Yidong  <cyd@stupidchicken.com>
 
-	* Version 23.1 released.
+	* misc.texi (Shell Options): ansi-color is now default.
+
+2009-12-05  Glenn Morris  <rgm@gnu.org>
+
+	* emacs.texi (Top): Update menu for cal-xtra node changes.
+	* calendar.texi (Displaying the Diary): Holidays may be in the buffer
+	or mode line.  Don't mention invisible text or the details of
+	diary-print-entries here, only in cal-xtra.
+	(Format of Diary File): Mention that the "date on first line" format
+	only really affects the simple display.
+	* cal-xtra.texi (Advanced Calendar/Diary Usage): Update menu.
+	(Diary Customizing): Holidays may be in the buffer or mode line.
+	Move diary-print-entries to the "Diary Display" section.
+	(Diary Display): New section, split out from "Fancy Diary Display".
+	Explain the limitations of simple display, and how to print it.
+
+	* calendar.texi (Displaying the Diary): Mention keys apply to calendar.
+
+	* cal-xtra.texi (Diary Display): Mention View mode.
+
+2009-11-29  Juri Linkov  <juri@jurta.org>
+
+	* display.texi (Highlight Interactively): Actually a list of
+	default faces is pre-loaded into a list of default values
+	instead of the history.
+
+2009-11-20  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments):
+	* emacs.texi (Acknowledgments): Add htmlfontify.
+
+2009-11-14  Glenn Morris  <rgm@gnu.org>
+
+	* cal-xtra.texi (Holiday Customizing): Replace obsolete alias.
+
+	* ack.texi (Acknowledgments):
+	* emacs.texi (Acknowledgments): Update for recent Org changes.
+
+2009-10-31  Chong Yidong  <cyd@stupidchicken.com>
+
+	* mule.texi (Charsets): Numerous copyedits.  Don't discuss the
+	`charset' property, which is irrelevant to the user manual (Bug#3526).
+
+2009-10-14  Juanma Barranquero  <lekktu@gmail.com>
+
+	* trouble.texi (DEL Does Not Delete): Fix typo.
+
+2009-10-05  Michael Albinus  <michael.albinus@gmx.de>
+
+	* files.texi (Misc File Ops): Mention copy-directory.
+
+2009-10-04  Eli Zaretskii  <eliz@gnu.org>
+
+	* mule.texi (Unibyte Mode): Emphasize that
+	unibyte-display-via-language-environment affects only the display.
+
+	* display.texi (Horizontal Scrolling): Document cursor behavior under
+	horizontal scrolling when point moves off the screen (Bug#4564).
+	Improve wording.
+
+2009-10-01  Michael Albinus  <michael.albinus@gmx.de>
+
+	* files.texi (Directories): delete-directory prompts for recursive
+	deletion.
+
+2009-09-30  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments):
+	* emacs.texi (Acknowledgments): CEDET updates.  Fix Hungarian accent.
+
+2009-09-25  Tassilo Horn  <tassilo@member.fsf.org>
+
+	* dired.texi (Dired Navigation): Use @code instead of @var for
+	dired-isearch-filenames, so that it's not capitalized.
+
+2009-09-19  Chong Yidong  <cyd@stupidchicken.com>
+
+	* frames.texi (Frame Commands): C-z is now bound to suspend-frame.
+
+	* entering.texi (Exiting): C-z is now bound to suspend-frame.
+
+	* custom.texi (Init Examples): Replace Rumseld with Cheny (Bug#3519).
+	(Key Bindings): Reference Init Rebinding in introductory text.  Shift
+	some of the introduction to Keymaps node.
+	(Keymaps): Simplify.
+	(Local Keymaps): Simplify.  Move binding example to Init Rebinding.
+	(Minibuffer Maps): Remove mention of Mocklisp.
+	(Init Rebinding): Move mode-local rebinding example here from Local
+	Keymaps.
+	(Modifier Keys): Clarify.
+	(Rebinding): Add cindex for "binding keys".
+
+2009-09-13  Chong Yidong  <cyd@stupidchicken.com>
+
+	* misc.texi (Invoking emacsclient): Minor clarifications (Bug#4419).
+
+2009-08-31  Nick Roberts  <nickrob@snap.net.nz>
+
+	* building.texi (Threads Buffer, Multithreaded Debugging):
+	Re-organise these two sections.
+
+2009-08-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* cmdargs.texi (Initial Options): Fix last change.
+
+2009-08-29  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* mule.texi (Enabling Multibyte):
+	* cmdargs.texi (General Variables): Remove EMACS_UNIBYTE.
+	(Initial Options): Remove --(no-)multibyte, --(no-)unibyte.
+
+2009-08-20  Glenn Morris  <rgm@gnu.org>
+
+	* cal-xtra.texi (Non-Gregorian Diary): Mention ``Adar I'' special case.
+
+2009-08-19  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments): Remove cvtmail.  Mention info-finder.
+
+2009-08-18  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments):
+	* emacs.texi (Acknowledgments): Update for js.el replacing js2-mode.el.
+
+	* ack.texi (Acknowledgments): Add ucs-normalize.el and files-x.el.
+
+2009-08-09  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments):
+	* emacs.texi (Acknowledgments): Add gdb-mi entry.
+
+2009-08-08  Dmitry Dzhus  <dima@sphinx.net.ru>
+
+	* emacs.texi (Top): Add new menu items for GDB-UI.
+
+	* building.texi (GDB Graphical Interface): Add Multithreaded debugging
+	section.  Threads buffer is in separate section now.
+
+2009-08-08  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments):
+	* emacs.texi (Acknowledgments):
+	Update for js2-mode and org changes.
+
+2009-08-02  Michael Albinus  <michael.albinus@gmx.de>
+
+	* files.texi (Reverting): Auto-Revert Tail mode works also for remote
+	files.
 
 2009-07-28  Chong Yidong  <cyd@stupidchicken.com>
 
 	* building.texi (Lisp Libraries): Clarify meaning of autoloading.
 
-2009-07-22  Richard Stallman  <rms@gnu.org>
+2009-07-23  Glenn Morris  <rgm@gnu.org>
 
-	* glossary.texi (GNU, Daemon): Update information.
+	* programs.texi (Matching): Update blink-matching-paren-distance.
 
 2009-07-21  Chong Yidong  <cyd@stupidchicken.com>
 
-	* frames.texi (Cut/Paste Other App): Remove discussion of
-	select-active-regions for 23.1, as it is not fully functional.
+	* frames.texi (Cut/Paste Other App): For select-active-regions,
+	selection is now updated on moving point.
 
-2009-07-15  Chong Yidong  <cyd@stupidchicken.com>
+2009-07-21  Richard Stallman  <rms@gnu.org>
 
-	* macos.texi (Mac OS / GNUstep): Add note about stability.
+	* glossary.texi (GNU, Daemon): Update information.
+
+2009-07-19  Juri Linkov  <juri@jurta.org>
+
+	* custom.texi (Specifying File Variables, Safe File Variables):
+	"variables/value pairs" -> "variable/value pairs".
 
 2009-07-15  Glenn Morris  <rgm@gnu.org>
 
 	* misc.texi (Gnus): Remove widow.
 
 2009-07-11  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (TEXI2PDF): New.
+	(emacs.pdf, emacs-xtra.pdf): New targets.
 
 	* arevert-xtra.texi (Autorevert): Add menu descriptions.
 
@@ -50,7 +205,7 @@
 	* maintaining.texi (Version Control, Introduction to VC):
 	End menu descriptions with a period.
 
-2009-07-10  Eli Zaretskii  <eliz@gnu.org>
+2009-07-09  Eli Zaretskii  <eliz@gnu.org>
 
 	* msdog.texi (Windows Files) <w32-get-true-file-attributes>: Don't be
 	so categorical in saying that the option is only useful on NTFS.
@@ -100,6 +255,13 @@
 
 	* vc-xtra.texi (Advanced VC Usage): End all menu items with a period.
 
+2009-07-01  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* xresources.texi (Table of Resources): Mention maximized for
+	fullscreen.
+
+	* cmdargs.texi (Window Size X): -mm/--maximized is new.
+
 2009-07-01  Chong Yidong  <cyd@stupidchicken.com>
 
 	* anti.texi (Antinews): Correct the list of removed platforms.
@@ -109,6 +271,15 @@
 	* arevert-xtra.texi: Minor language tweaks.
 
 	* dired-xtra.texi: Minor revisions.
+
+2009-06-23  Miles Bader  <miles@gnu.org>
+
+	* display.texi (Scrolling): Document `recenter-redisplay'
+	(Temporary Face Changes): Document `text-scale-set'.
+
+2009-06-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Branch for 23.1.
 
 2009-06-17  Kenichi Handa  <handa@m17n.org>
 
@@ -133,10 +304,10 @@
 	* search.texi (Isearch Scroll): Add isearch-allow-scroll to index.
 	(Isearch Scroll): Decapitalize <next> and <prior>.
 
-2009-06-09  Agustín Martín <agustin.martin@hispalinux.es>
+2009-06-09  Agustín Martín  <agustin.martin@hispalinux.es>
 
-	* fixit.texi (Spelling): Set default dictionary. Improve
-	descriptions (Bug#2554)
+	* fixit.texi (Spelling): Set default dictionary.
+	Improve descriptions (Bug#2554)
 
 2009-06-08  David Reitter  <david.reitter@gmail.com>
 
@@ -624,7 +795,6 @@
 	* anti.texi:
 	* emacs.texi:
 	* msdog.texi: Change reference to Mac OS node to Mac OS / GNUstep.
-
 
 2008-11-28  Richard M Stallman  <rms@gnu.org>
 

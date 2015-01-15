@@ -160,8 +160,8 @@
   :group 'lisp)
 
 ;;;###autoload
-(defcustom trace-buffer "*trace-output*"
-  "*Trace output will by default go to that buffer."
+(defcustom trace-buffer (purecopy "*trace-output*")
+  "Trace output will by default go to that buffer."
   :type 'string
   :group 'trace)
 

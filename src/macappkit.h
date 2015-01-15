@@ -23,6 +23,9 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #endif
 #define Z (current_buffer->text->z)
 
+#ifndef NSAppKitVersionNumber10_2
+#define NSAppKitVersionNumber10_2 663
+#endif
 #ifndef NSAppKitVersionNumber10_3
 #define NSAppKitVersionNumber10_3 743
 #endif
@@ -84,6 +87,10 @@ typedef unsigned int NSUInteger;
 #endif
 @end
 
+@interface NSScreen (Emacs)
++ (NSScreen *)closestScreenForRect:(NSRect)aRect;
+@end
+
 @interface EmacsApplication : NSApplication
 @end
 
@@ -115,6 +122,9 @@ typedef unsigned int NSUInteger;
   /* The frame on which a HELP_EVENT occurs.  */
   struct frame *emacsHelpFrame;
 
+  /* The item selected in the popup menu.  */
+  int menuItemSelection;
+
   /* Non-nil means left mouse tracking has been suspended by this
      object.  */
   id trackingObject;
@@ -130,6 +140,7 @@ typedef unsigned int NSUInteger;
      for writing direction commands on Mac OS X 10.6).  */
   NSDictionary *keyBindingsWithConflicts, *keyBindingsWithoutConflicts;
 }
+- (int)getAndClearMenuItemSelection;
 - (void)storeInputEvent:(id)sender;
 - (void)setMenuItemSelectionToTag:(id)sender;
 - (void)storeEvent:(struct input_event *)bufp;
@@ -165,6 +176,16 @@ typedef unsigned int NSUInteger;
 - (void)displayResizeControlIfNeeded;
 - (BOOL)needsOrderFrontOnUnhide;
 - (void)setNeedsOrderFrontOnUnhide:(BOOL)flag;
+- (void)updateApplicationPresentationOptions;
+@end
+
+@interface EmacsFullscreenWindow : EmacsWindow
+@end
+
+@interface NSObject (EmacsWindowDelegate)
+- (BOOL)window:(NSWindow *)sender shouldForwardAction:(SEL)action to:(id)target;
+- (NSRect)window:(NSWindow *)sender willConstrainFrame:(NSRect)frameRect
+	toScreen:(NSScreen *)screen;
 @end
 
 /* Class for delegate of NSWindow and NSToolbar (see its Toolbar
@@ -176,9 +197,24 @@ typedef unsigned int NSUInteger;
   /* The Emacs frame corresponding to the NSWindow that
      EmacsFrameController object is associated with as delegate.  */
   struct frame *emacsFrame;
+
+  /* The spinning progress indicator (corresponding to hourglass)
+     shown at the upper-right corner of the window.  */
+  NSProgressIndicator *hourglass;
+
+  /* The current window manager state.  */
+  WMState windowManagerState;
+
+  /* The last window frame before maximize/fullscreen.  The position
+     is relative to the top left corner of the screen.  */
+  NSRect savedFrame;
 }
 - (id)initWithEmacsFrame:(struct frame *)emacsFrame;
+- (void)setupEmacsView;
+- (void)setupWindow;
 - (struct frame *)emacsFrame;
+- (void)changeWindowManagerStateWithFlags:(WMState)flagsToSet
+				    clear:(WMState)flagsToClear;
 @end
 
 /* Class for Emacs view that handles drawing events only.  It is used
@@ -219,7 +255,7 @@ typedef unsigned int NSUInteger;
 - (void)setAction:(SEL)aSelector;
 - (BOOL)sendAction:(SEL)theAction to:(id)theTarget;
 - (struct input_event *)inputEvent;
-- (void)viewFrameDidChange:(NSNotification *)aNotification;
+- (void)viewFrameDidChange:(NSNotification *)notification;
 @end
 
 /* Class for scroller that doesn't do modal mouse tracking.  */
@@ -313,6 +349,7 @@ typedef unsigned int NSUInteger;
 - (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar;
 - (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar;
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
+- (void)setupToolBar;
 - (void)storeToolBarEvent:(id)sender;
 @end
 
@@ -331,13 +368,18 @@ typedef unsigned int NSUInteger;
 @end
 
 @interface EmacsController (FontPanel)
-- (void)fontPanelWillClose:(NSNotification *)aNotification;
+- (void)fontPanelWillClose:(NSNotification *)notification;
 @end
 
 @interface EmacsFrameController (FontPanel)
 - (NSFont *)fontForFace:(int)faceId character:(int)c
 	       position:(int)pos object:(Lisp_Object)object;
 - (void)changeFont:(id)sender;
+@end
+
+@interface EmacsFrameController (Hourglass)
+- (void)showHourglass:(id)sender;
+- (void)hideHourglass:(id)sender;
 @end
 
 @interface EmacsSavePanel : NSSavePanel
@@ -467,9 +509,43 @@ typedef unsigned int NSUInteger;
 @end
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+enum {
+  NSApplicationPresentationDefault			= 0,
+  NSApplicationPresentationAutoHideDock			= 1 << 0,
+  NSApplicationPresentationHideDock			= 1 << 1,
+  NSApplicationPresentationAutoHideMenuBar		= 1 << 2,
+  NSApplicationPresentationHideMenuBar			= 1 << 3,
+  NSApplicationPresentationDisableAppleMenu		= 1 << 4,
+  NSApplicationPresentationDisableProcessSwitching	= 1 << 5,
+  NSApplicationPresentationDisableForceQuit		= 1 << 6,
+  NSApplicationPresentationDisableSessionTermination	= 1 << 7,
+  NSApplicationPresentationDisableHideApplication	= 1 << 8
+};
+typedef NSUInteger NSApplicationPresentationOptions;
+
+@interface NSApplication (AvailableOn1060AndLater)
+- (void)setPresentationOptions:(NSApplicationPresentationOptions)newOptions;
+@end
+#endif
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1040
 @interface NSWindow (AvailableOn1040AndLater)
 - (CGFloat)userSpaceScaleFactor;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+enum {
+  NSWindowCollectionBehaviorDefault		= 0,
+  NSWindowCollectionBehaviorCanJoinAllSpaces	= 1 << 0,
+  NSWindowCollectionBehaviorMoveToActiveSpace	= 1 << 1
+};
+typedef NSUInteger NSWindowCollectionBehavior;
+
+@interface NSWindow (AvailableOn1050AndLater)
+- (NSWindowCollectionBehavior)collectionBehavior;
+- (void)setCollectionBehavior:(NSWindowCollectionBehavior)behavior;
 @end
 #endif
 

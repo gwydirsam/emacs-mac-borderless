@@ -156,13 +156,6 @@
     (with-selected-frame frame
       ;; Map certain keypad keys into ASCII characters
       ;; that people usually expect.
-      (define-key local-function-key-map [backspace] [?\d])
-      (define-key local-function-key-map [delete] [?\d])
-      (define-key local-function-key-map [tab] [?\t])
-      (define-key local-function-key-map [linefeed] [?\n])
-      (define-key local-function-key-map [clear] [?\C-l])
-      (define-key local-function-key-map [return] [?\C-m])
-      (define-key local-function-key-map [escape] [?\e])
       (define-key local-function-key-map [M-backspace] [?\M-\d])
       (define-key local-function-key-map [M-delete] [?\M-\d])
       (define-key local-function-key-map [M-tab] [?\M-\t])
@@ -171,16 +164,6 @@
       (define-key local-function-key-map [M-return] [?\M-\C-m])
       (define-key local-function-key-map [M-escape] [?\M-\e]))
     (set-terminal-parameter frame 'x-setup-function-keys t)))
-
-;; These tell read-char how to convert
-;; these special chars to ASCII.
-(put 'backspace 'ascii-character ?\d)
-(put 'delete 'ascii-character ?\d)
-(put 'tab 'ascii-character ?\t)
-(put 'linefeed 'ascii-character ?\n)
-(put 'clear 'ascii-character ?\C-l)
-(put 'return 'ascii-character ?\C-m)
-(put 'escape 'ascii-character ?\e)
 
 ;; Modifier name `ctrl' is an alias of `control'.
 (put 'ctrl 'modifier-value (get 'control 'modifier-value))
@@ -661,6 +644,14 @@ in `selection-converter-alist', which see."
 
 ;;;; Apple events, HICommand events, and Services menu
 
+(defvar mac-startup-options nil
+  "Alist of Mac-specific startup options.
+Each element looks like (OPTION-TYPE . OPTIONS).
+OPTION-TYPE is a symbol specifying the type of startup options:
+
+ command-line -- List of Mac-specific command line options.
+ apple-event  -- Apple event that came with the \"Open Application\" event.")
+
 ;;; Event classes
 (put 'core-event     'mac-apple-event-class "aevt") ; kCoreEventClass
 (put 'internet-event 'mac-apple-event-class "GURL") ; kAEInternetEventClass
@@ -909,6 +900,8 @@ Currently the `mailto' scheme is supported."
 (define-key mac-apple-event-map [internet-event get-url] 'mac-ae-get-url)
 
 ;;; Font panel
+(declare-function mac-set-font-panel-visible-p "macfns.c" (flag))
+
 (define-minor-mode mac-font-panel-mode
   "Toggle use of the font panel.
 With numeric ARG, display the font panel if and only if ARG is positive."
@@ -954,18 +947,18 @@ This is used when the active input area is displayed either in
 the echo area or in a buffer where the cursor is not displayed."
   :group 'mac)
 
-(defface mac-ts-raw-text		; kTSMHiliteRawText
+(defface mac-ts-raw-text
   '((t :underline t))
   "Face for raw text in Mac TSM active input area."
   :group 'mac)
 
-(defface mac-ts-converted-text		; kTSMHiliteConvertedText
+(defface mac-ts-converted-text
   '((((background dark)) :underline "gray20")
     (t :underline "gray80"))
   "Face for converted text in Mac TSM active input area."
   :group 'mac)
 
-(defface mac-ts-selected-converted-text ; kTSMHiliteSelectedConvertedText
+(defface mac-ts-selected-converted-text
   '((t :underline t))
   "Face for selected converted text in Mac TSM active input area."
   :group 'mac)
@@ -1115,8 +1108,6 @@ the echo area or in a buffer where the cursor is not displayed."
   'mac-text-input-insert-text)
 
 ;;; Converted Actions
-(declare-function tool-bar-mode "tool-bar" (&optional arg))
-
 (defun mac-handle-toolbar-pill-button-clicked (event)
   "Toggle visibility of tool-bars in response to EVENT.
 With no keyboard modifiers, it toggles the visibility of the
@@ -1133,10 +1124,20 @@ modifiers, it changes the global tool-bar visibility setting."
 			     (if (= (frame-parameter frame 'tool-bar-lines) 0)
 				 1 0))))))
 
+;; Currently, this is called only when the zoom button is clicked
+;; while the frame is in fullwidth/fullheight/maximized.
+(defun mac-handle-zoom (event)
+  (interactive "e")
+  "Cancel frame fullscreen status in response to EVENT."
+  (let ((ae (mac-event-ae event)))
+    (let ((frame (cdr (mac-ae-parameter ae 'frame))))
+      (set-frame-parameter frame 'fullscreen nil))))
+
 (define-key mac-apple-event-map [action about] 'about-emacs)
 (define-key mac-apple-event-map [action preferences] 'customize)
 (define-key mac-apple-event-map [action toolbar-pill-button-clicked]
  'mac-handle-toolbar-pill-button-clicked)
+(define-key mac-apple-event-map [action zoom] 'mac-handle-zoom)
 
 ;;; Services
 (defun mac-service-open-file ()
@@ -1310,14 +1311,6 @@ See also `mac-dnd-known-types'."
 (defvar mac-initialized nil
   "Non-nil if the Mac window system has been initialized.")
 
-(defvar mac-startup-options nil
-  "Alist of Mac-specific startup options.
-Each element looks like (OPTION-TYPE . OPTIONS).
-OPTION-TYPE is a symbol specifying the type of startup options:
-
- command-line -- List of Mac-specific command line options.
- apple-event  -- Apple event that came with the \"Open Application\" event.")
-
 (declare-function x-open-connection "macfns.c"
 		  (display &optional xrm-string must-succeed))
 (declare-function x-get-resource "frame.c"
@@ -1403,9 +1396,6 @@ symbol `command-line' and forwards the remaining ones to
   ;; Turn off window-splitting optimization; Mac is usually fast enough
   ;; that this is only annoying.
   (setq split-window-keep-point t)
-
-  ;; Turn on support for mouse wheels.
-  (mouse-wheel-mode 1)
 
   ;; Enable CLIPBOARD copy/paste through menu bar commands.
   (menu-bar-enable-clipboard)

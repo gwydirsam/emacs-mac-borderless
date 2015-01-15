@@ -907,8 +907,7 @@ scan_lisp_file (filename, mode)
 	      length--;
 
 	      /* Read in the contents.  */
-	      if (saved_string != 0)
-		free (saved_string);
+	      free (saved_string);
 	      saved_string = (char *) xmalloc (length);
 	      for (i = 0; i < length; i++)
 		saved_string[i] = getc (infile);
@@ -1008,7 +1007,9 @@ scan_lisp_file (filename, mode)
 	    }
 	}
 
-      else if (! strcmp (buffer, "custom-declare-variable"))
+      else if (! strcmp (buffer, "custom-declare-variable")
+	       || ! strcmp (buffer, "defvaralias")
+	       )
 	{
 	  char c1 = 0, c2 = 0;
 	  type = 'V';

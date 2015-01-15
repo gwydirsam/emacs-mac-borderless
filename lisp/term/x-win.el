@@ -272,13 +272,6 @@ exists."
 (defvar x-alternatives-map
   (let ((map (make-sparse-keymap)))
     ;; Map certain keypad keys into ASCII characters that people usually expect.
-    (define-key map [backspace] [127])
-    (define-key map [delete] [127])
-    (define-key map [tab] [?\t])
-    (define-key map [linefeed] [?\n])
-    (define-key map [clear] [?\C-l])
-    (define-key map [return] [?\C-m])
-    (define-key map [escape] [?\e])
     (define-key map [M-backspace] [?\M-\d])
     (define-key map [M-delete] [?\M-\d])
     (define-key map [M-tab] [?\M-\t])
@@ -302,17 +295,6 @@ exists."
         (set-keymap-parent map (keymap-parent local-function-key-map))
         (set-keymap-parent local-function-key-map map)))
     (set-terminal-parameter frame 'x-setup-function-keys t)))
-
-;; These tell read-char how to convert
-;; these special chars to ASCII.
-(put 'backspace 'ascii-character 127)
-(put 'delete 'ascii-character 127)
-(put 'tab 'ascii-character ?\t)
-(put 'linefeed 'ascii-character ?\n)
-(put 'clear 'ascii-character 12)
-(put 'return 'ascii-character 13)
-(put 'escape 'ascii-character ?\e)
-
 
 ;;;; Keysyms
 
@@ -1445,7 +1427,9 @@ The value nil is the same as this list:
 (defun x-menu-bar-open (&optional frame)
   "Open the menu bar if `menu-bar-mode' is on. otherwise call `tmm-menubar'."
   (interactive "i")
-  (if menu-bar-mode (accelerate-menu frame)
+  (if (and menu-bar-mode
+	   (fboundp 'accelerate-menu))
+      (accelerate-menu frame)
     (tmm-menubar)))
 
 
@@ -1573,9 +1557,6 @@ The value nil is the same as this list:
   ;; (if (featurep 'motif)
   ;;     (global-set-key [f10] 'ignore))
 
-  ;; Turn on support for mouse wheels.
-  (mouse-wheel-mode 1)
-
   ;; Enable CLIPBOARD copy/paste through menu bar commands.
   (menu-bar-enable-clipboard)
 
@@ -1597,6 +1578,8 @@ The value nil is the same as this list:
 (define-key special-event-map [drag-n-drop] 'x-dnd-handle-drag-n-drop-event)
 
 (defcustom x-gtk-stock-map
+  (mapcar (lambda (arg)
+	    (cons (purecopy (car arg)) (purecopy (cdr arg))))
   '(
     ("etc/images/new" . "gtk-new")
     ("etc/images/open" . "gtk-open")
@@ -1656,7 +1639,7 @@ The value nil is the same as this list:
     ;; No themed versions available:
     ;; mail/preview (combining stock_mail and stock_zoom)
     ;; mail/save    (combining stock_mail, stock_save and stock_convert)
-    )
+    ))
   "How icons for tool bars are mapped to Gtk+ stock items.
 Emacs must be compiled with the Gtk+ toolkit for this to have any effect.
 A value that begins with n: denotes a named icon instead of a stock icon."

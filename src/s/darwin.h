@@ -171,9 +171,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifdef HAVE_AVAILABILITYMACROS_H
 #include <AvailabilityMacros.h>
 #endif
-/* Tell src/Makefile.in to create files in the Mac OS X application
-   bundle mac/Emacs.app.  */
-#define OTHER_FILES macosx-app
 
 /* Whether to use the Image I/O framework for reading images.  */
 #ifndef USE_MAC_IMAGE_IO

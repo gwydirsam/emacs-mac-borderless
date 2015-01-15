@@ -43,65 +43,64 @@
 ;; beginning of vc.el. The current status is:
 ;; ("??" means: "figure out what to do about it")
 ;;
-;; FUNCTION NAME                        STATUS
+;; FUNCTION NAME                                   STATUS
 ;; BACKEND PROPERTIES
-;; * revision-granularity                      OK
+;; * revision-granularity                          OK
 ;; STATE-QUERYING FUNCTIONS
-;; * registered (file)			   OK
-;; * state (file)				   OK
-;; - state-heuristic (file)			   NOT NEEDED
-;; * working-revision (file)		   OK
-;; - latest-on-branch-p (file)		   NOT NEEDED
-;; * checkout-model (files)		   OK
-;; - workfile-unchanged-p (file)		   OK
-;; - mode-line-string (file)			   OK
+;; * registered (file)                             OK
+;; * state (file)                                  OK
+;; - state-heuristic (file)                        NOT NEEDED
+;; * working-revision (file)                       OK
+;; - latest-on-branch-p (file)                     NOT NEEDED
+;; * checkout-model (files)                        OK
+;; - workfile-unchanged-p (file)                   OK
+;; - mode-line-string (file)                       OK
 ;; STATE-CHANGING FUNCTIONS
-;; * create-repo ()			   OK
-;; * register (files &optional rev comment)    OK
-;; - init-revision (file)			   NOT NEEDED
-;; - responsible-p (file)			   OK
-;; - could-register (file)			   NOT NEEDED, DEFAULT IS GOOD
-;; - receive-file (file rev)			   NOT NEEDED
-;; - unregister (file)			   OK
-;; * checkin (files rev comment)		   OK
-;; * find-revision (file rev buffer)		   OK
-;; * checkout (file &optional editable rev)	   OK
-;; * revert (file &optional contents-done)	   OK
-;; - rollback (files)			   COULD BE SUPPORTED
+;; * create-repo ()                                OK
+;; * register (files &optional rev comment)        OK
+;; - init-revision (file)                          NOT NEEDED
+;; - responsible-p (file)                          OK
+;; - could-register (file)                         NOT NEEDED, DEFAULT IS GOOD
+;; - receive-file (file rev)                       NOT NEEDED
+;; - unregister (file)                             OK
+;; * checkin (files rev comment)                   OK
+;; * find-revision (file rev buffer)               OK
+;; * checkout (file &optional editable rev)        OK
+;; * revert (file &optional contents-done)         OK
+;; - rollback (files)                              COULD BE SUPPORTED
 ;; - merge (file rev1 rev2)                   It would be possible to merge
 ;;                                          changes into a single file, but when
 ;;                                          committing they wouldn't
 ;;                                          be identified as a merge
 ;;                                          by git, so it's probably
 ;;                                          not a good idea.
-;; - merge-news (file)			   see `merge'
-;; - steal-lock (file &optional revision)	   NOT NEEDED
+;; - merge-news (file)                     see `merge'
+;; - steal-lock (file &optional revision)          NOT NEEDED
 ;; HISTORY FUNCTIONS
-;; * print-log (files &optional buffer)		   OK
-;; - log-view-mode ()				   OK
-;; - show-log-entry (revision)			   OK
-;; - comment-history (file)			   ??
-;; - update-changelog (files)			   COULD BE SUPPORTED
-;; * diff (file &optional rev1 rev2 buffer)	           OK
-;; - revision-completion-table (files)		   OK
-;; - annotate-command (file buf &optional rev)	   OK
-;; - annotate-time ()				   OK
-;; - annotate-current-time ()			   NOT NEEDED
-;; - annotate-extract-revision-at-line ()	           OK
+;; * print-log (files buffer &optional shortlog start-revision limit)   OK
+;; - log-view-mode ()                              OK
+;; - show-log-entry (revision)                     OK
+;; - comment-history (file)                        ??
+;; - update-changelog (files)                      COULD BE SUPPORTED
+;; * diff (file &optional rev1 rev2 buffer)        OK
+;; - revision-completion-table (files)             OK
+;; - annotate-command (file buf &optional rev)     OK
+;; - annotate-time ()                              OK
+;; - annotate-current-time ()                      NOT NEEDED
+;; - annotate-extract-revision-at-line ()          OK
 ;; TAG SYSTEM
-;; - create-tag (dir name branchp)	   OK
-;; - retrieve-tag (dir name update)	   OK, needs to update buffers
+;; - create-tag (dir name branchp)                 OK
+;; - retrieve-tag (dir name update)                OK
 ;; MISCELLANEOUS
-;; - make-version-backups-p (file)	   NOT NEEDED
-;; - repository-hostname (dirname)	   NOT NEEDED
-;; - previous-revision (file rev)		   OK
-;; - next-revision (file rev)		   OK
-;; - check-headers ()			   COULD BE SUPPORTED
-;; - clear-headers ()			   NOT NEEDED
-;; - delete-file (file)			   OK
-;; - rename-file (old new)		   OK
-;; - find-file-hook ()			   NOT NEEDED
-;; - find-file-not-found-hook ()                NOT NEEDED
+;; - make-version-backups-p (file)                 NOT NEEDED
+;; - repository-hostname (dirname)                 NOT NEEDED
+;; - previous-revision (file rev)                  OK
+;; - next-revision (file rev)                      OK
+;; - check-headers ()                              COULD BE SUPPORTED
+;; - clear-headers ()                              NOT NEEDED
+;; - delete-file (file)                            OK
+;; - rename-file (old new)                         OK
+;; - find-file-hook ()                             NOT NEEDED
 
 (eval-when-compile
   (require 'cl)
@@ -118,6 +117,13 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
 		 (repeat :tag "Argument List" :value ("") string))
   :version "23.1"
   :group 'vc)
+
+(defcustom vc-git-add-signoff nil
+  "Add a Signed-off-by line when committing."
+  :type 'boolean
+  :version "23.2"
+  :group 'vc)
+
 
 (defvar git-commits-coding-system 'utf-8
   "Default coding system for git commits.")
@@ -138,21 +144,26 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
 
 (defun vc-git-registered (file)
   "Check whether FILE is registered with git."
-  (when (vc-git-root file)
-    (with-temp-buffer
-      (let* ((dir (file-name-directory file))
-             (name (file-relative-name file dir))
-             (str (ignore-errors
-                    (when dir (cd dir))
-                    (vc-git--out-ok "ls-files" "-c" "-z" "--" name)
-                    ;; if result is empty, use ls-tree to check for deleted file
-                    (when (eq (point-min) (point-max))
-                      (vc-git--out-ok "ls-tree" "--name-only" "-z" "HEAD" "--" name))
-                    (buffer-string))))
-        (and str
-             (> (length str) (length name))
-             (string= (substring str 0 (1+ (length name)))
-                      (concat name "\0")))))))
+  (let ((dir (vc-git-root file)))
+    (when dir
+      (with-temp-buffer
+	(let* (process-file-side-effects
+	       ;; Do not use the `file-name-directory' here: git-ls-files
+	       ;; sometimes fails to return the correct status for relative
+	       ;; path specs.
+	       ;; See also: http://marc.info/?l=git&m=125787684318129&w=2
+	       (name (file-relative-name file dir))
+	       (str (ignore-errors
+		     (cd dir)
+		     (vc-git--out-ok "ls-files" "-c" "-z" "--" name)
+		     ;; if result is empty, use ls-tree to check for deleted file
+		     (when (eq (point-min) (point-max))
+		       (vc-git--out-ok "ls-tree" "--name-only" "-z" "HEAD" "--" name))
+		     (buffer-string))))
+	  (and str
+	       (> (length str) (length name))
+	       (string= (substring str 0 (1+ (length name)))
+			(concat name "\0"))))))))
 
 (defun vc-git--state-code (code)
   "Convert from a string to a added/deleted/modified state."
@@ -177,9 +188,10 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
 
 (defun vc-git-working-revision (file)
   "Git-specific version of `vc-working-revision'."
-  (let ((str (with-output-to-string
-               (with-current-buffer standard-output
-                 (vc-git--out-ok "symbolic-ref" "HEAD")))))
+  (let* (process-file-side-effects
+	 (str (with-output-to-string
+		(with-current-buffer standard-output
+		  (vc-git--out-ok "symbolic-ref" "HEAD")))))
     (if (string-match "^\\(refs/heads/\\)?\\(.+\\)$" str)
         (match-string 2 str)
       str)))
@@ -254,7 +266,7 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
 
 (defun vc-git-rename-as-string (state extra)
   "Return a string describing the copy or rename associated with INFO, or an empty string if none."
-  (let ((rename-state (when extra 
+  (let ((rename-state (when extra
 			(vc-git-extra-fileinfo->rename-state extra))))
     (if rename-state
         (propertize
@@ -391,17 +403,90 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
   "Return a list of (FILE STATE EXTRA) entries for FILES in DIR."
   (vc-git-dir-status-goto-stage 'update-index files update-function))
 
+(defvar vc-git-stash-map
+  (let ((map (make-sparse-keymap)))
+    ;; Turn off vc-dir marking
+    (define-key map [mouse-2] 'ignore)
+
+    (define-key map [down-mouse-3] 'vc-git-stash-menu)
+    (define-key map "\C-k" 'vc-git-stash-delete-at-point)
+    (define-key map "=" 'vc-git-stash-show-at-point)
+    (define-key map "\C-m" 'vc-git-stash-show-at-point)
+    (define-key map "A" 'vc-git-stash-apply-at-point)
+    (define-key map "P" 'vc-git-stash-pop-at-point)
+    (define-key map "S" 'vc-git-stash-snapshot)
+    map))
+
+(defvar vc-git-stash-menu-map
+  (let ((map (make-sparse-keymap "Git Stash")))
+    (define-key map [de]
+      '(menu-item "Delete stash" vc-git-stash-delete-at-point
+		  :help "Delete the current stash"))
+    (define-key map [ap]
+      '(menu-item "Apply stash" vc-git-stash-apply-at-point
+		  :help "Apply the current stash and keep it in the stash list"))
+    (define-key map [po]
+      '(menu-item "Apply and remove stash (pop)" vc-git-stash-pop-at-point
+		  :help "Apply the current stash and remove it"))
+    (define-key map [sh]
+      '(menu-item "Show stash" vc-git-stash-show-at-point
+		  :help "Show the contents of the current stash"))
+    map))
+
 (defun vc-git-dir-extra-headers (dir)
   (let ((str (with-output-to-string
                (with-current-buffer standard-output
-                 (vc-git--out-ok "symbolic-ref" "HEAD")))))
+                 (vc-git--out-ok "symbolic-ref" "HEAD"))))
+	(stash (vc-git-stash-list))
+	(stash-help-echo "Use M-x vc-git-stash to create stashes.")
+	branch remote remote-url)
+    (if (string-match "^\\(refs/heads/\\)?\\(.+\\)$" str)
+	(progn
+	  (setq branch (match-string 2 str))
+	  (setq remote
+		(with-output-to-string
+		  (with-current-buffer standard-output
+		    (vc-git--out-ok "config" (concat "branch." branch ".remote")))))
+	  (when (string-match "\\([^\n]+\\)" remote)
+	    (setq remote (match-string 1 remote)))
+	  (when remote
+	    (setq remote-url
+		  (with-output-to-string
+		    (with-current-buffer standard-output
+		      (vc-git--out-ok "config" (concat "remote." remote ".url"))))))
+	  (when (string-match "\\([^\n]+\\)" remote-url)
+	    (setq remote-url (match-string 1 remote-url))))
+      (setq branch "not (detached HEAD)"))
+    ;; FIXME: maybe use a different face when nothing is stashed.
     (concat
      (propertize "Branch     : " 'face 'font-lock-type-face)
-     (propertize 
-      (if (string-match "^\\(refs/heads/\\)?\\(.+\\)$" str)
-	  (match-string 2 str)
-	"not (detached HEAD)")
-       'face 'font-lock-variable-name-face))))
+     (propertize branch
+		 'face 'font-lock-variable-name-face)
+     (when remote
+       (concat
+	"\n"
+	(propertize "Remote     : " 'face 'font-lock-type-face)
+	(propertize remote-url
+		    'face 'font-lock-variable-name-face)))
+     "\n"
+     (if stash
+       (concat
+	(propertize "Stash      :\n" 'face 'font-lock-type-face
+		    'help-echo stash-help-echo)
+	(mapconcat
+	 (lambda (x)
+	   (propertize x
+		       'face 'font-lock-variable-name-face
+		       'mouse-face 'highlight
+		       'help-echo "mouse-3: Show stash menu\nRET: Show stash\nA: Apply stash\nP: Apply and remove stash (pop)\nC-k: Delete stash"
+		       'keymap vc-git-stash-map))
+	 stash "\n"))
+       (concat
+	(propertize "Stash      : " 'face 'font-lock-type-face
+		    'help-echo stash-help-echo)
+	(propertize "Nothing stashed"
+		    'help-echo stash-help-echo
+		    'face 'font-lock-variable-name-face))))))
 
 ;;; STATE-CHANGING FUNCTIONS
 
@@ -410,8 +495,16 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
   (vc-git-command nil 0 nil "init"))
 
 (defun vc-git-register (files &optional rev comment)
-  "Register FILE into the git version-control system."
-  (vc-git-command nil 0 files "update-index" "--add" "--"))
+  "Register FILES into the git version-control system."
+  (let (flist dlist)
+    (dolist (crt files)
+      (if (file-directory-p crt)
+	  (push crt dlist)
+	(push crt flist)))
+    (when flist
+      (vc-git-command nil 0 flist "update-index" "--add" "--"))
+    (when dlist
+      (vc-git-command nil 0 dlist "add"))))
 
 (defalias 'vc-git-responsible-p 'vc-git-root)
 
@@ -421,15 +514,17 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
 
 (defun vc-git-checkin (files rev comment)
   (let ((coding-system-for-write git-commits-coding-system))
-    (vc-git-command nil 0 files "commit" "-m" comment "--only" "--")))
+    (vc-git-command nil 0 files "commit"
+		    (if vc-git-add-signoff "-s") "-m" comment "--only" "--")))
 
 (defun vc-git-find-revision (file rev buffer)
-  (let ((coding-system-for-read 'binary)
-        (coding-system-for-write 'binary)
-	(fullname (substring
-		   (vc-git--run-command-string
-		    file "ls-files" "-z" "--full-name" "--")
-		   0 -1)))
+  (let* (process-file-side-effects
+	 (coding-system-for-read 'binary)
+	 (coding-system-for-write 'binary)
+	 (fullname (substring
+		    (vc-git--run-command-string
+		     file "ls-files" "-z" "--full-name" "--")
+		    0 -1)))
     (vc-git-command
      buffer 0
      (concat (if rev rev "HEAD") ":" fullname) "cat-file" "blob")))
@@ -441,16 +536,14 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
   "Revert FILE to the version stored in the git repository."
   (if contents-done
       (vc-git-command nil 0 file "update-index" "--")
-    (vc-git-command nil 0 file "checkout" "HEAD")))
+    (vc-git-command nil 0 file "reset" "-q" "--")
+    (vc-git-command nil nil file "checkout" "-q" "--")))
 
 ;;; HISTORY FUNCTIONS
 
-(defun vc-git-print-log (files &optional buffer)
+(defun vc-git-print-log (files buffer &optional shortlog start-revision limit)
   "Get change log associated with FILES."
-  (let ((coding-system-for-read git-commits-coding-system)
-	;; Support both the old print-log interface that passes a
-	;; single file, and the new one that passes a file list.
-	(flist (if (listp files) files (list files))))
+  (let ((coding-system-for-read git-commits-coding-system))
     ;; `vc-do-command' creates the buffer, but we need it before running
     ;; the command.
     (vc-setup-buffer buffer)
@@ -459,13 +552,24 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
     (let ((inhibit-read-only t))
       (with-current-buffer
           buffer
-	(vc-git-command buffer 'async files
-			"rev-list" "--pretty" "HEAD" "--")))))
+	(apply 'vc-git-command buffer
+	       'async files
+	       (append
+		'("log")
+		(when shortlog
+		  '("--graph" "--decorate"
+		    "--date=short" "--pretty=format:%d%h  %ad  %s" "--abbrev-commit"))
+		(when limit (list "-n" (format "%s" limit)))
+		(when start-revision (list start-revision))
+		'("--")))))))
 
 (defvar log-view-message-re)
 (defvar log-view-file-re)
 (defvar log-view-font-lock-keywords)
 (defvar log-view-per-file-logs)
+
+;; Dynamically bound.
+(defvar vc-short-log)
 
 (define-derived-mode vc-git-log-view-mode log-view-mode "Git-Log-View"
   (require 'add-log) ;; we need the faces add-log
@@ -473,10 +577,20 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
   (set (make-local-variable 'log-view-file-re) "\\`a\\`")
   (set (make-local-variable 'log-view-per-file-logs) nil)
   (set (make-local-variable 'log-view-message-re)
-       "^commit *\\([0-9a-z]+\\)")
+       (if vc-short-log
+	   "^\\(?:[*/\\| ]+ \\)?\\(?: ([^)]+)\\)?\\([0-9a-z]+\\)  \\([-a-z0-9]+\\)  \\(.*\\)"
+	 "^commit *\\([0-9a-z]+\\)"))
   (set (make-local-variable 'log-view-font-lock-keywords)
+       (if vc-short-log
+	   '(
+	     ;; Same as log-view-message-re, except that we don't
+	     ;; want the shy group for the tag name.
+	     ("^\\(?:[*/\\| ]+ \\)?\\( ([^)]+)\\)?\\([0-9a-z]+\\)  \\([-a-z0-9]+\\)  \\(.*\\)"
+	      (1 'highlight nil lax)
+	      (2 'change-log-acknowledgement)
+	      (3 'change-log-date)))
        (append
-        `((,log-view-message-re  (1 'change-log-acknowledgement)))
+        `((,log-view-message-re (1 'change-log-acknowledgement)))
         ;; Handle the case:
         ;; user: foo@bar
         '(("^Author:[ \t]+\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)"
@@ -495,33 +609,39 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
            (1 'change-log-acknowledgement)
            (2 'change-log-acknowledgement))
           ("^Date:   \\(.+\\)" (1 'change-log-date))
-          ("^summary:[ \t]+\\(.+\\)" (1 'log-view-message))))))
+	    ("^summary:[ \t]+\\(.+\\)" (1 'log-view-message)))))))
+
 
 (defun vc-git-show-log-entry (revision)
   "Move to the log entry for REVISION.
 REVISION may have the form BRANCH, BRANCH~N,
 or BRANCH^ (where \"^\" can be repeated)."
   (goto-char (point-min))
-  (when revision
-    (search-forward (format "\ncommit %s" revision) nil t
-		    (cond ((string-match "~\\([0-9]\\)$" revision)
-			   (1+ (string-to-number (match-string 1 revision))))
-			  ((string-match "\\^+$" revision)
-			   (1+ (length (match-string 0 revision))))
-			  (t nil))))
-  (beginning-of-line))
+  (let (found)
+    (when revision
+      (setq found
+	    (search-forward (format "\ncommit %s" revision) nil t
+			    (cond ((string-match "~\\([0-9]\\)$" revision)
+				   (1+ (string-to-number (match-string 1 revision))))
+				  ((string-match "\\^+$" revision)
+				   (1+ (length (match-string 0 revision))))
+				  (t nil)))))
+    (beginning-of-line)
+    found))
 
 (defun vc-git-diff (files &optional rev1 rev2 buffer)
   "Get a difference report using Git between two revisions of FILES."
-  (apply #'vc-git-command (or buffer "*vc-diff*") 1 files
-	 (if (and rev1 rev2) "diff-tree" "diff-index")
-	 "--exit-code"
-	 (append (vc-switches 'git 'diff)
-		 (list "-p" (or rev1 "HEAD") rev2 "--"))))
+  (let (process-file-side-effects)
+    (apply #'vc-git-command (or buffer "*vc-diff*") 1 files
+	   (if (and rev1 rev2) "diff-tree" "diff-index")
+	   "--exit-code"
+	   (append (vc-switches 'git 'diff)
+		   (list "-p" (or rev1 "HEAD") rev2 "--")))))
 
 (defun vc-git-revision-table (files)
   ;; What about `files'?!?  --Stef
-  (let ((table (list "HEAD")))
+  (let (process-file-side-effects
+	(table (list "HEAD")))
     (with-temp-buffer
       (vc-git-command t nil nil "for-each-ref" "--format=%(refname)")
       (goto-char (point-min))
@@ -538,7 +658,7 @@ or BRANCH^ (where \"^\" can be repeated)."
 
 (defun vc-git-annotate-command (file buf &optional rev)
   (let ((name (file-relative-name file)))
-    (vc-git-command buf 0 name "blame" rev)))
+    (vc-git-command buf 'async name "blame" "--date=iso" "-C" "-C" rev)))
 
 (declare-function vc-annotate-convert-time "vc-annotate" (time))
 
@@ -552,8 +672,11 @@ or BRANCH^ (where \"^\" can be repeated)."
 (defun vc-git-annotate-extract-revision-at-line ()
   (save-excursion
     (move-beginning-of-line 1)
-    (and (looking-at "[0-9a-f^][0-9a-f]+")
-         (buffer-substring-no-properties (match-beginning 0) (match-end 0)))))
+    (when (looking-at "\\([0-9a-f^][0-9a-f]+\\) \\(\\([^(]+\\) \\)?")
+      (let ((revision (match-string-no-properties 1)))
+	(if (match-beginning 2)
+	  (cons revision (expand-file-name (match-string-no-properties 3)))
+	  revision)))))
 
 ;;; TAG SYSTEM
 
@@ -634,11 +757,31 @@ or BRANCH^ (where \"^\" can be repeated)."
     (define-key map [git-grep]
       '(menu-item "Git grep..." vc-git-grep
 		  :help "Run the `git grep' command"))
+    (define-key map [git-sn]
+      '(menu-item "Stash a snapshot" vc-git-stash-snapshot
+		  :help "Stash the current state of the tree and keep the current state"))
+    (define-key map [git-st]
+      '(menu-item "Create Stash..." vc-git-stash
+		  :help "Stash away changes"))
+    (define-key map [git-ss]
+      '(menu-item "Show Stash..." vc-git-stash-show
+		  :help "Show stash contents"))
+    (define-key map [git-sig]
+      '(menu-item "Add Signed-off-by on commit" vc-git-toggle-signoff
+	      :help "Add Add Signed-off-by when commiting (i.e. add the -s flag)"
+	      :button (:toggle . vc-git-add-signoff)))
     map))
 
 (defun vc-git-extra-menu () vc-git-extra-menu-map)
 
 (defun vc-git-extra-status-menu () vc-git-extra-menu-map)
+
+(defun vc-git-root (file)
+  (vc-find-root file ".git"))
+
+(defun vc-git-toggle-signoff ()
+  (interactive)
+  (setq vc-git-add-signoff (not vc-git-add-signoff)))
 
 ;; Derived from `lgrep'.
 (defun vc-git-grep (regexp &optional files dir)
@@ -693,11 +836,89 @@ This command shares argument histories with \\[rgrep] and \\[grep]."
 	  (compilation-start command 'grep-mode))
 	(if (eq next-error-last-buffer (current-buffer))
 	    (setq default-directory dir))))))
+
+(defun vc-git-stash (name)
+  "Create a stash."
+  (interactive "sStash name: ")
+  (let ((root (vc-git-root default-directory)))
+    (when root
+      (vc-git--call nil "stash" "save" name)
+      (vc-resynch-buffer root t t))))
+
+(defun vc-git-stash-show (name)
+  "Show the contents of stash NAME."
+  (interactive "sStash name: ")
+  (vc-setup-buffer "*vc-git-stash*")
+  (vc-git-command "*vc-git-stash*" 'async nil "stash" "show" "-p" name)
+  (set-buffer "*vc-git-stash*")
+  (diff-mode)
+  (setq buffer-read-only t)
+  (pop-to-buffer (current-buffer)))
+
+(defun vc-git-stash-apply (name)
+  "Apply stash NAME."
+  (interactive "sApply stash: ")
+  (vc-git-command "*vc-git-stash*" 0 nil "stash" "apply" "-q" name)
+  (vc-resynch-buffer (vc-git-root default-directory) t t))
+
+(defun vc-git-stash-pop (name)
+  "Pop stash NAME."
+  (interactive "sPop stash: ")
+  (vc-git-command "*vc-git-stash*" 0 nil "stash" "pop" "-q" name)
+  (vc-resynch-buffer (vc-git-root default-directory) t t))
+
+(defun vc-git-stash-snapshot ()
+  "Create a stash with the current tree state."
+  (interactive)
+  (vc-git--call nil "stash" "save"
+		(let ((ct (current-time)))
+		  (concat
+		   (format-time-string "Snapshot on %Y-%m-%d" ct)
+		   (format-time-string " at %H:%M" ct))))
+  (vc-git-command "*vc-git-stash*" 0 nil "stash" "apply" "-q" "stash@{0}")
+  (vc-resynch-buffer (vc-git-root default-directory) t t))
+
+(defun vc-git-stash-list ()
+  (delete
+   ""
+   (split-string
+    (replace-regexp-in-string
+     "^stash@" "             " (vc-git--run-command-string nil "stash" "list"))
+    "\n")))
+
+(defun vc-git-stash-get-at-point (point)
+  (save-excursion
+    (goto-char point)
+    (beginning-of-line)
+    (if (looking-at "^ +\\({[0-9]+}\\):")
+	(match-string 1)
+      (error "Cannot find stash at point"))))
+
+(defun vc-git-stash-delete-at-point ()
+  (interactive)
+  (let ((stash (vc-git-stash-get-at-point (point))))
+    (when (y-or-n-p (format "Remove stash %s ? " stash))
+      (vc-git--run-command-string nil "stash" "drop" (format "stash@%s" stash))
+      (vc-dir-refresh))))
+
+(defun vc-git-stash-show-at-point ()
+  (interactive)
+  (vc-git-stash-show (format "stash@%s" (vc-git-stash-get-at-point (point)))))
+
+(defun vc-git-stash-apply-at-point ()
+  (interactive)
+  (vc-git-stash-apply (format "stash@%s" (vc-git-stash-get-at-point (point)))))
+
+(defun vc-git-stash-pop-at-point ()
+  (interactive)
+  (vc-git-stash-pop (format "stash@%s" (vc-git-stash-get-at-point (point)))))
+
+(defun vc-git-stash-menu (e)
+  (interactive "e")
+  (vc-dir-at-event e (popup-menu vc-git-stash-menu-map e)))
+
 
 ;;; Internal commands
-
-(defun vc-git-root (file)
-  (vc-find-root file ".git"))
 
 (defun vc-git-command (buffer okstatus file-or-list &rest flags)
   "A wrapper around `vc-do-command' for use in vc-git.el.
@@ -706,7 +927,8 @@ The difference to vc-do-command is that this function always invokes `git'."
 
 (defun vc-git--empty-db-p ()
   "Check if the git db is empty (no commit done yet)."
-  (not (eq 0 (vc-git--call nil "rev-parse" "--verify" "HEAD"))))
+  (let (process-file-side-effects)
+    (not (eq 0 (vc-git--call nil "rev-parse" "--verify" "HEAD")))))
 
 (defun vc-git--call (buffer command &rest args)
   ;; We don't need to care the arguments.  If there is a file name, it
@@ -718,13 +940,16 @@ The difference to vc-do-command is that this function always invokes `git'."
   (zerop (apply 'vc-git--call '(t nil) command args)))
 
 (defun vc-git--run-command-string (file &rest args)
-  "Run a git command on FILE and return its output as string."
+  "Run a git command on FILE and return its output as string.
+FILE can be nil."
   (let* ((ok t)
          (str (with-output-to-string
                 (with-current-buffer standard-output
                   (unless (apply 'vc-git--out-ok
-                                 (append args (list (file-relative-name
-                                                     file))))
+				 (if file
+				     (append args (list (file-relative-name
+							 file)))
+				   args))
                     (setq ok nil))))))
     (and ok str)))
 

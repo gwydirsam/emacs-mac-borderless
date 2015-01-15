@@ -218,7 +218,7 @@
 ;;  "Make `car' an interactive function."
 ;;   (interactive "xCar of list: ")
 ;;   ad-do-it
-;;   (if (interactive-p)
+;;   (if (called-interactively-p 'interactive)
 ;;       (message "%s" ad-return-value)))
 
 
@@ -1834,7 +1834,7 @@
 
 ;;;###autoload
 (defcustom ad-redefinition-action 'warn
-  "*Defines what to do with redefinitions during Advice de/activation.
+  "Defines what to do with redefinitions during Advice de/activation.
 Redefinition occurs if a previously activated function that already has an
 original definition associated with it gets redefined and then de/activated.
 In such a case we can either accept the current definition as the new
@@ -1849,7 +1849,7 @@ interpreted as `error'."
 
 ;;;###autoload
 (defcustom ad-default-compilation-action 'maybe
-  "*Defines whether to compile advised definitions during activation.
+  "Defines whether to compile advised definitions during activation.
 A value of `always' will result in unconditional compilation, `never' will
 always avoid compilation, `maybe' will compile if the byte-compiler is already
 loaded, and `like-original' will compile if the original definition of the
@@ -2390,7 +2390,7 @@ All currently advised functions will be considered."
   (interactive
    (list (ad-read-regexp "Enable advices via regexp")))
   (let ((matched-advices (ad-enable-regexp-internal regexp 'any t)))
-    (if (interactive-p)
+    (if (called-interactively-p 'interactive)
 	(message "%d matching advices enabled" matched-advices))
     matched-advices))
 
@@ -2400,7 +2400,7 @@ All currently advised functions will be considered."
   (interactive
    (list (ad-read-regexp "Disable advices via regexp")))
   (let ((matched-advices (ad-enable-regexp-internal regexp 'any nil)))
-    (if (interactive-p)
+    (if (called-interactively-p 'interactive)
 	(message "%d matching advices disabled" matched-advices))
     matched-advices))
 
@@ -2781,7 +2781,8 @@ to be accessed, it returns a list with the index and name."
 	   (list (- index (length reqopt-args)) rest-arg)))))
 
 (defun ad-get-argument (arglist index)
-  "Return form to access ARGLIST's actual argument at position INDEX."
+  "Return form to access ARGLIST's actual argument at position INDEX.
+INDEX counts from zero."
   (let ((argument-access (ad-access-argument arglist index)))
     (cond ((consp argument-access)
 	   (ad-element-access
@@ -2789,7 +2790,8 @@ to be accessed, it returns a list with the index and name."
 	  (argument-access))))
 
 (defun ad-set-argument (arglist index value-form)
-  "Return form to set ARGLIST's actual arg at INDEX to VALUE-FORM."
+  "Return form to set ARGLIST's actual arg at INDEX to VALUE-FORM.
+INDEX counts from zero."
   (let ((argument-access (ad-access-argument arglist index)))
     (cond ((consp argument-access)
 	   ;; should this check whether there actually is something to set?
@@ -3085,7 +3087,7 @@ in any of these classes."
 			  (not advised-interactive-form))
 		     ;; Check whether we were called interactively
 		     ;; in order to do proper prompting:
-		     `(if (called-interactively-p)
+		     `(if (called-interactively-p 'any)
 			  (call-interactively ',origname)
 			,(ad-make-mapped-call advised-arglist
 					      orig-arglist

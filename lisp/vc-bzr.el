@@ -134,7 +134,8 @@ Invoke the bzr command adding `BZR_PROGRESS_BAR=none' and
   (with-temp-buffer
     (set-buffer-multibyte nil)
     (let ((prog sha1-program)
-          (args nil))
+          (args nil)
+	  process-file-side-effects)
       (when (consp prog)
 	(setq args (cdr prog))
         (setq prog (car prog)))
@@ -452,26 +453,35 @@ REV non-nil gets an error."
 (defvar log-view-font-lock-keywords)
 (defvar log-view-current-tag-function)
 (defvar log-view-per-file-logs)
+(defvar vc-short-log)
 
 (define-derived-mode vc-bzr-log-view-mode log-view-mode "Bzr-Log-View"
   (remove-hook 'log-view-mode-hook 'vc-bzr-log-view-mode) ;Deactivate the hack.
   (require 'add-log)
   (set (make-local-variable 'log-view-per-file-logs) nil)
-  (set (make-local-variable 'log-view-file-re) "^Working file:[ \t]+\\(.+\\)")
+  (set (make-local-variable 'log-view-file-re) "\\`a\\`")
   (set (make-local-variable 'log-view-message-re)
-       "^ *\\(?:revno: \\([0-9.]+\\)\\|merged: .+\\)")
+       (if vc-short-log
+	   "^ +\\([0-9]+\\) \\(.*?\\)[ \t]+\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)\\( \\[merge\\]\\)?"
+	 "^ *\\(?:revno: \\([0-9.]+\\)\\|merged: .+\\)"))
   (set (make-local-variable 'log-view-font-lock-keywords)
        ;; log-view-font-lock-keywords is careful to use the buffer-local
        ;; value of log-view-message-re only since Emacs-23.
-       (append `((,log-view-message-re . 'log-view-message-face))
-               ;; log-view-font-lock-keywords
-               '(("^ *committer: \
+       (if vc-short-log
+	 (append `((,log-view-message-re
+		    (1 'log-view-message-face)
+		    (2 'change-log-name)
+		    (3 'change-log-date)
+		    (4 'change-log-list))))
+	 (append `((,log-view-message-re . 'log-view-message-face))
+		 ;; log-view-font-lock-keywords
+		 '(("^ *committer: \
 \\([^<(]+?\\)[  ]*[(<]\\([[:alnum:]_.+-]+@[[:alnum:]_.-]+\\)[>)]"
-                  (1 'change-log-name)
-                  (2 'change-log-email))
-                 ("^ *timestamp: \\(.*\\)" (1 'change-log-date-face))))))
+		    (1 'change-log-name)
+		    (2 'change-log-email))
+		   ("^ *timestamp: \\(.*\\)" (1 'change-log-date-face)))))))
 
-(defun vc-bzr-print-log (files &optional buffer) ; get buffer arg in Emacs 22
+(defun vc-bzr-print-log (files buffer &optional shortlog start-revision limit)
   "Get bzr change log for FILES into specified BUFFER."
   ;; `vc-do-command' creates the buffer, but we need it before running
   ;; the command.
@@ -481,22 +491,22 @@ REV non-nil gets an error."
   ;; FIXME: `vc-bzr-command' runs `bzr log' with `LC_MESSAGES=C', so
   ;; the log display may not what the user wants - but I see no other
   ;; way of getting the above regexps working.
-  (dolist (file files)
-    (vc-exec-after
-     `(let ((inhibit-read-only t))
-        (with-current-buffer buffer
-          ;; Insert the file name so that log-view.el can find it.
-          (insert "Working file: " ',file "\n")) ;; Like RCS/CVS.
-        (apply 'vc-bzr-command "log" ',buffer 'async ',file
-               ',(if (stringp vc-bzr-log-switches)
-                     (list vc-bzr-log-switches)
-                   vc-bzr-log-switches))))))
+  (with-current-buffer buffer
+    (apply 'vc-bzr-command "log" buffer 'async files
+	   (append
+	    (when shortlog '("--short"))
+	    (when start-revision (list (format "-r..%s" start-revision)))
+	    (when limit (list "-l" (format "%s" limit)))
+	    (if (stringp vc-bzr-log-switches)
+		(list vc-bzr-log-switches)
+	      vc-bzr-log-switches)))))
 
 (defun vc-bzr-show-log-entry (revision)
   "Find entry for patch name REVISION in bzr change log buffer."
   (goto-char (point-min))
   (when revision
-    (let (case-fold-search)
+    (let (case-fold-search
+	  found)
       (if (re-search-forward
 	   ;; "revno:" can appear either at the beginning of a line,
 	   ;; or indented.
@@ -504,8 +514,11 @@ REV non-nil gets an error."
 		   ;; The revision can contain ".", quote it so that it
 		   ;; does not interfere with regexp matching.
 		   (regexp-quote revision) "$") nil t)
-	  (beginning-of-line 0)
-	(goto-char (point-min))))))
+	  (progn
+	    (beginning-of-line 0)
+	    (setq found t))
+	(goto-char (point-min)))
+      found)))
 
 (defun vc-bzr-diff (files &optional rev1 rev2 buffer)
   "VC bzr backend for diff."
@@ -544,32 +557,43 @@ REV non-nil gets an error."
   "Prepare BUFFER for `vc-annotate' on FILE.
 Each line is tagged with the revision number, which has a `help-echo'
 property containing author and date information."
-  (apply #'vc-bzr-command "annotate" buffer 0 file "--long" "--all"
+  (apply #'vc-bzr-command "annotate" buffer 'async file "--long" "--all"
          (if revision (list "-r" revision)))
-  (with-current-buffer buffer
-    ;; Store the tags for the annotated source lines in a hash table
-    ;; to allow saving space by sharing the text properties.
-    (setq vc-bzr-annotation-table (make-hash-table :test 'equal))
-    (goto-char (point-min))
-    (while (re-search-forward "^\\( *[0-9.]+ *\\) \\([^\n ]+\\) +\\([0-9]\\{8\\}\\) |"
-                              nil t)
-      (let* ((rev (match-string 1))
-             (author (match-string 2))
-             (date (match-string 3))
-             (key (match-string 0))
-             (tag (gethash key vc-bzr-annotation-table)))
-        (unless tag
-          (setq tag (propertize rev 'help-echo (concat "Author: " author
-                                                       ", date: " date)
-                                'mouse-face 'highlight))
-          (puthash key tag vc-bzr-annotation-table))
-        (replace-match "")
-        (insert tag " |")))))
+  (lexical-let ((table (make-hash-table :test 'equal)))
+    (set-process-filter
+     (get-buffer-process buffer)
+     (lambda (proc string)
+       (when (process-buffer proc)
+         (with-current-buffer (process-buffer proc)
+           (setq string (concat (process-get proc :vc-left-over) string))
+           (while (string-match "^\\( *[0-9.]+ *\\) \\([^\n ]+\\) +\\([0-9]\\{8\\}\\)\\( |.*\n\\)" string)
+             (let* ((rev (match-string 1 string))
+                    (author (match-string 2 string))
+                    (date (match-string 3 string))
+                    (key (substring string (match-beginning 0)
+                                    (match-beginning 4)))
+                    (line (match-string 4 string))
+                    (tag (gethash key table))
+                    (inhibit-read-only t))
+               (setq string (substring string (match-end 0)))
+	       (unless tag
+		 (setq tag
+		       (propertize
+			(format "%s %-7.7s" rev author)
+			'help-echo (format "Revision: %d, author: %s, date: %s"
+					   (string-to-number rev)
+					   author date)
+			'mouse-face 'highlight))
+                 (puthash key tag table))
+               (goto-char (process-mark proc))
+               (insert tag line)
+               (move-marker (process-mark proc) (point))))
+           (process-put proc :vc-left-over string)))))))
 
 (declare-function vc-annotate-convert-time "vc-annotate" (time))
 
 (defun vc-bzr-annotate-time ()
-  (when (re-search-forward "^ *[0-9.]+ +|" nil t)
+  (when (re-search-forward "^ *[0-9.]+ +[^\n ]* +|" nil t)
     (let ((prop (get-text-property (line-beginning-position) 'help-echo)))
       (string-match "[0-9]+\\'" prop)
       (let ((str (match-string-no-properties 0 prop)))
@@ -584,7 +608,7 @@ property containing author and date information."
 Return nil if current line isn't annotated."
   (save-excursion
     (beginning-of-line)
-    (if (looking-at " *\\([0-9.]+\\) *| ")
+    (if (looking-at "^ *\\([0-9.]+\\) +[^\n ]* +|")
         (match-string-no-properties 1))))
 
 (defun vc-bzr-command-discarding-stderr (command &rest args)
@@ -597,14 +621,6 @@ stream.  Standard error output is discarded."
     (cons
      (apply #'process-file command nil (list (current-buffer) nil) nil args)
      (buffer-substring (point-min) (point-max)))))
-
-(defun vc-bzr-prettify-state-info (file)
-  "Bzr-specific version of `vc-prettify-state-info'."
-  (if (eq 'edited (vc-state file))
-        (concat "(" (symbol-name (or (vc-file-getprop file 'vc-bzr-state)
-                                     'edited)) ")")
-    ;; else fall back to default vc.el representation
-    (vc-default-prettify-state-info 'Bzr file)))
 
 (defstruct (vc-bzr-extra-fileinfo
             (:copier nil)
@@ -697,11 +713,49 @@ stream.  Standard error output is discarded."
   (vc-exec-after
    `(vc-bzr-after-dir-status (quote ,update-function))))
 
+(defvar vc-bzr-shelve-map
+  (let ((map (make-sparse-keymap)))
+    ;; Turn off vc-dir marking
+    (define-key map [mouse-2] 'ignore)
+
+    (define-key map [down-mouse-3] 'vc-bzr-shelve-menu)
+    (define-key map "\C-k" 'vc-bzr-shelve-delete-at-point)
+    ;; (define-key map "=" 'vc-bzr-shelve-show-at-point)
+    ;; (define-key map "\C-m" 'vc-bzr-shelve-show-at-point)
+    (define-key map "A" 'vc-bzr-shelve-apply-at-point)
+    map))
+
+(defvar vc-bzr-shelve-menu-map
+  (let ((map (make-sparse-keymap "Bzr Shelve")))
+    (define-key map [de]
+      '(menu-item "Delete shelf" vc-bzr-shelve-delete-at-point
+		  :help "Delete the current shelf"))
+    (define-key map [ap]
+      '(menu-item "Apply shelf" vc-bzr-shelve-apply-at-point
+		  :help "Apply the current shelf"))
+    ;; (define-key map [sh]
+    ;;   '(menu-item "Show shelve" vc-bzr-shelve-show-at-point
+    ;; 		  :help "Show the contents of the current shelve"))
+    map))
+
+(defvar vc-bzr-extra-menu-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [bzr-sh]
+      '(menu-item "Shelve..." vc-bzr-shelve
+		  :help "Shelve changes"))
+    map))
+
+(defun vc-bzr-extra-menu () vc-bzr-extra-menu-map)
+
+(defun vc-bzr-extra-status-menu () vc-bzr-extra-menu-map)
+
 (defun vc-bzr-dir-extra-headers (dir)
   (let*
       ((str (with-temp-buffer
 	      (vc-bzr-command "info" t 0 dir)
 	      (buffer-string)))
+       (shelve (vc-bzr-shelve-list))
+       (shelve-help-echo "Use M-x vc-bzr-shelve to create shelves")
        (light-checkout
 	(when (string-match ".+light checkout root: \\(.+\\)$" str)
 	  (match-string 1 str)))
@@ -726,9 +780,93 @@ stream.  Standard error output is discarded."
 	(concat
 	 (propertize "Checkout of branch : " 'face 'font-lock-type-face)
 	 (propertize light-checkout-branch 'face 'font-lock-variable-name-face)
-	 "\n")))))
+	 "\n"))
+     (if shelve
+	 (concat
+	  (propertize "Shelves            :\n" 'face 'font-lock-type-face
+		      'help-echo shelve-help-echo)
+	  (mapconcat
+	   (lambda (x)
+	     (propertize x
+			 'face 'font-lock-variable-name-face
+			 'mouse-face 'highlight
+			 'help-echo "mouse-3: Show shelve menu\nA: Apply shelf\nC-k: Delete shelf"
+			 'keymap vc-bzr-shelve-map))
+	   shelve "\n"))
+       (concat
+	(propertize "Shelves            : " 'face 'font-lock-type-face
+		    'help-echo shelve-help-echo)
+	(propertize "No shelved changes"
+		    'help-echo shelve-help-echo
+		    'face 'font-lock-variable-name-face))))))
+
+(defun vc-bzr-shelve (name)
+  "Create a shelve."
+  (interactive "sShelf name: ")
+  (let ((root (vc-bzr-root default-directory)))
+    (when root
+      (vc-bzr-command "shelve" nil 0 nil "--all" "-m" name)
+      (vc-resynch-buffer root t t))))
+
+;; (defun vc-bzr-shelve-show (name)
+;;   "Show the contents of shelve NAME."
+;;   (interactive "sShelve name: ")
+;;   (vc-setup-buffer "*vc-bzr-shelve*")
+;;   ;; FIXME: how can you show the contents of a shelf?
+;;   (vc-bzr-command "shelve" "*vc-bzr-shelve*" 'async nil name)
+;;   (set-buffer "*vc-bzr-shelve*")
+;;   (diff-mode)
+;;   (setq buffer-read-only t)
+;;   (pop-to-buffer (current-buffer)))
+
+(defun vc-bzr-shelve-apply (name)
+  "Apply shelve NAME."
+  (interactive "sApply shelf: ")
+  (vc-bzr-command "unshelve" "*vc-bzr-shelve*" 0 nil "--apply" name)
+  (vc-resynch-buffer (vc-bzr-root default-directory) t t))
+
+(defun vc-bzr-shelve-list ()
+  (with-temp-buffer
+    (vc-bzr-command "shelve" (current-buffer) 1 nil "--list" "-q")
+    (delete
+     ""
+     (split-string
+      (buffer-substring (point-min) (point-max))
+      "\n"))))
+
+(defun vc-bzr-shelve-get-at-point (point)
+  (save-excursion
+    (goto-char point)
+    (beginning-of-line)
+    (if (looking-at "^ +\\([0-9]+\\):")
+	(match-string 1)
+      (error "Cannot find shelf at point"))))
+
+(defun vc-bzr-shelve-delete-at-point ()
+  (interactive)
+  (let ((shelve (vc-bzr-shelve-get-at-point (point))))
+    (when (y-or-n-p (format "Remove shelf %s ?" shelve))
+      (vc-bzr-command "unshelve" nil 0 nil "--delete-only" shelve)
+      (vc-dir-refresh))))
+
+;; (defun vc-bzr-shelve-show-at-point ()
+;;   (interactive)
+;;   (vc-bzr-shelve-show (vc-bzr-shelve-get-at-point (point))))
+
+(defun vc-bzr-shelve-apply-at-point ()
+  (interactive)
+  (vc-bzr-shelve-apply (vc-bzr-shelve-get-at-point (point))))
+
+(defun vc-bzr-shelve-menu (e)
+  (interactive "e")
+  (vc-dir-at-event e (popup-menu vc-bzr-shelve-menu-map e)))
 
 ;;; Revision completion
+
+(eval-and-compile
+  (defconst vc-bzr-revision-keywords
+    '("revno" "revid" "last" "before"
+      "tag" "date" "ancestor" "branch" "submit")))
 
 (defun vc-bzr-revision-completion-table (files)
   (lexical-let ((files files))
@@ -738,14 +876,10 @@ stream.  Standard error output is discarded."
        ((string-match "\\`\\(ancestor\\|branch\\|\\(revno:\\)?[-0-9]+:\\):"
                       string)
         (completion-table-with-context (substring string 0 (match-end 0))
-                                       ;; FIXME: only allow directories.
-                                       ;; FIXME: don't allow envvars.
-                                       'read-file-name-internal
+                                       'completion-file-name-table
                                        (substring string (match-end 0))
-                                       ;; Dropping `pred'.   Maybe we should
-                                       ;; just stash it in
-                                       ;; `read-file-name-predicate'?
-                                       nil
+                                       ;; Dropping `pred' for no good reason.
+                                       'file-directory-p
                                        action))
        ((string-match "\\`\\(before\\):" string)
         (completion-table-with-context (substring string 0 (match-end 0))
@@ -756,7 +890,8 @@ stream.  Standard error output is discarded."
        ((string-match "\\`\\(tag\\):" string)
         (let ((prefix (substring string 0 (match-end 0)))
               (tag (substring string (match-end 0)))
-              (table nil))
+              (table nil)
+	      process-file-side-effects)
           (with-temp-buffer
             ;; "bzr-1.2 tags" is much faster with --show-ids.
             (process-file vc-bzr-program nil '(t) nil "tags" "--show-ids")
@@ -767,20 +902,25 @@ stream.  Standard error output is discarded."
               (push (match-string-no-properties 1) table)))
           (completion-table-with-context prefix table tag pred action)))
 
-       ((string-match "\\`\\(revid\\):" string)
-        ;; FIXME: How can I get a list of revision ids?
-        )
-       ((eq (car-safe action) 'boundaries)
-        (list* 'boundaries
-               (string-match "[^:]*\\'" string)
-               (string-match ":" (cdr action))))
+       ((string-match "\\`\\([a-z]+\\):" string)
+        ;; no actual completion for the remaining keywords.
+        (completion-table-with-context (substring string 0 (match-end 0))
+                                       (if (member (match-string 1 string)
+                                                   vc-bzr-revision-keywords)
+                                           ;; If it's a valid keyword,
+                                           ;; use a non-empty table to
+                                           ;; indicate it.
+                                           '("") nil)
+                                       (substring string (match-end 0))
+                                       pred
+                                       action))
        (t
         ;; Could use completion-table-with-terminator, except that it
         ;; currently doesn't work right w.r.t pcm and doesn't give
         ;; the *Completions* output we want.
-        (complete-with-action action '("revno:" "revid:" "last:" "before:"
-                                       "tag:" "date:" "ancestor:" "branch:"
-                                       "submit:")
+        (complete-with-action action (eval-when-compile
+                                       (mapcar (lambda (s) (concat s ":"))
+                                               vc-bzr-revision-keywords))
                               string pred))))))
 
 (eval-after-load "vc"

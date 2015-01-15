@@ -22,6 +22,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <signal.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <setjmp.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -6473,14 +6474,15 @@ DEFUN ("send-string-to-terminal", Fsend_string_to_terminal,
 Control characters in STRING will have terminal-dependent effects.
 
 Optional parameter TERMINAL specifies the tty terminal device to use.
-It may be a terminal object, a frame, or nil for the terminal used by the
-currently selected frame.  */)
+It may be a terminal object, a frame, or nil for the terminal used by
+the currently selected frame.  In batch mode, STRING is sent to stdout
+when TERMINAL is nil.  */)
   (string, terminal)
      Lisp_Object string;
      Lisp_Object terminal;
 {
-  struct terminal *t = get_tty_terminal (terminal, 1);
-  struct tty_display_info *tty;
+  struct terminal *t = get_terminal (terminal, 1);
+  FILE *out;
 
   /* ??? Perhaps we should do something special for multibyte strings here.  */
   CHECK_STRING (string);
@@ -6489,18 +6491,26 @@ currently selected frame.  */)
   if (!t)
     error ("Unknown terminal device");
 
-  tty = t->display_info.tty;
-
-  if (! tty->output)
-    error ("Terminal is currently suspended");
-
-  if (tty->termscript)
+  if (t->type == output_initial)
+    out = stdout;
+  else if (t->type != output_termcap && t->type != output_msdos_raw)
+    error ("Device %d is not a termcap terminal device", t->id);
+  else
     {
-      fwrite (SDATA (string), 1, SBYTES (string), tty->termscript);
-      fflush (tty->termscript);
+      struct tty_display_info *tty = t->display_info.tty;
+
+      if (! tty->output)
+	error ("Terminal is currently suspended");
+
+      if (tty->termscript)
+	{
+	  fwrite (SDATA (string), 1, SBYTES (string), tty->termscript);
+	  fflush (tty->termscript);
+	}
+      out = tty->output;
     }
-  fwrite (SDATA (string), 1, SBYTES (string), tty->output);
-  fflush (tty->output);
+  fwrite (SDATA (string), 1, SBYTES (string), out);
+  fflush (out);
   UNBLOCK_INPUT;
   return Qnil;
 }
@@ -6886,7 +6896,7 @@ init_display ()
 #endif
      )
     {
-      Vinitial_window_system = intern ("x");
+      Vinitial_window_system = Qx;
 #ifdef HAVE_X11
       Vwindow_system_version = make_number (11);
 #endif
@@ -6904,7 +6914,7 @@ init_display ()
 #ifdef HAVE_NTGUI
   if (!inhibit_window_system)
     {
-      Vinitial_window_system = intern ("w32");
+      Vinitial_window_system = Qw32;
       Vwindow_system_version = make_number (1);
       adjust_frame_glyphs_initially ();
       return;
@@ -6914,7 +6924,7 @@ init_display ()
 #ifdef HAVE_MACGUI
   if (!inhibit_window_system)
     {
-      Vinitial_window_system = intern ("mac");
+      Vinitial_window_system = Qmac;
       Vwindow_system_version = make_number (10);
       adjust_frame_glyphs_initially ();
       return;
@@ -6928,7 +6938,7 @@ init_display ()
 #endif
       )
     {
-      Vinitial_window_system = intern("ns");
+      Vinitial_window_system = Qns;
       Vwindow_system_version = make_number(10);
       adjust_frame_glyphs_initially ();
       return;
@@ -7115,9 +7125,9 @@ syms_of_display ()
   frame_and_buffer_state = Fmake_vector (make_number (20), Qlambda);
   staticpro (&frame_and_buffer_state);
 
-  Qdisplay_table = intern ("display-table");
+  Qdisplay_table = intern_c_string ("display-table");
   staticpro (&Qdisplay_table);
-  Qredisplay_dont_pause = intern ("redisplay-dont-pause");
+  Qredisplay_dont_pause = intern_c_string ("redisplay-dont-pause");
   staticpro (&Qredisplay_dont_pause);
 
   DEFVAR_INT ("baud-rate", &baud_rate,

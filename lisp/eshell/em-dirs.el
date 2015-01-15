@@ -138,7 +138,7 @@ This is effective only if directory tracking is enabled."
   :group 'eshell-dirs)
 
 (defcustom eshell-last-dir-ring-file-name
-  (concat eshell-directory-name "lastdir")
+  (expand-file-name "lastdir" eshell-directory-name)
   "*If non-nil, name of the file to read/write the last-dir-ring.
 See also `eshell-read-last-dir-ring' and `eshell-write-last-dir-ring'.
 If it is nil, the last-dir-ring will not be written to disk."
@@ -276,6 +276,11 @@ Thus, this does not include the current directory.")
 	   (path (eshell-find-previous-directory regexp)))
       (concat (or path letter) "/"))))
 
+(defvar pcomplete-stub)
+(defvar pcomplete-last-completion-raw)
+(declare-function pcomplete-actual-arg "pcomplete")
+(declare-function pcomplete-uniqify-list "pcomplete")
+
 (defun eshell-complete-user-reference ()
   "If there is a user reference, complete it."
   (let ((arg (pcomplete-actual-arg)))
@@ -396,8 +401,8 @@ in the minibuffer:
 	       (eshell-printn result)))
 	(run-hooks 'eshell-directory-change-hook)
 	(if eshell-list-files-after-cd
-	    (throw 'eshell-replace-command
-		   (eshell-parse-command "ls" (cdr args))))
+	    ;; Let-bind eshell-last-command around this?
+	    (eshell-plain-command "ls" (cdr args)))
 	nil))))
 
 (put 'eshell/cd 'eshell-no-numeric-conversions t)

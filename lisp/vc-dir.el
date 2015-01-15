@@ -89,16 +89,16 @@ See `run-hooks'."
 (defun vc-dir-prepare-status-buffer (bname dir backend &optional create-new)
   "Find a buffer named BNAME showing DIR, or create a new one."
   (setq dir (file-name-as-directory (expand-file-name dir)))
-  (let*
-	 ;; Look for another buffer name BNAME visiting the same directory.
-	 ((buf (save-excursion
-		(unless create-new
-		  (dolist (buffer (buffer-list))
-		    (set-buffer buffer)
-		    (when (and (derived-mode-p 'vc-dir-mode)
-			       (eq vc-dir-backend backend)
-			       (string= (expand-file-name default-directory) dir))
-		      (return buffer)))))))
+  (let* ;; Look for another buffer name BNAME visiting the same directory.
+      ((buf (save-excursion
+              (unless create-new
+                (dolist (buffer vc-dir-buffers)
+                  (when (buffer-live-p buffer)
+                    (set-buffer buffer)
+                    (when (and (derived-mode-p 'vc-dir-mode)
+                               (eq vc-dir-backend backend)
+                               (string= default-directory dir))
+                      (return buffer))))))))
     (or buf
         ;; Create a new buffer named BNAME.
         (with-current-buffer (create-file-buffer bname)
@@ -321,13 +321,14 @@ If BODY uses EVENT, it should be a variable,
 
 (defun vc-dir-node-directory (node)
   ;; Compute the directory for NODE.
-  ;; If it's a directory node, get it from the the node.
+  ;; If it's a directory node, get it from the node.
   (let ((data (ewoc-data node)))
     (or (vc-dir-fileinfo->directory data)
 	;; Otherwise compute it from the file name.
 	(file-name-directory
-	 (expand-file-name
-	  (vc-dir-fileinfo->name data))))))
+	 (directory-file-name
+	  (expand-file-name
+	   (vc-dir-fileinfo->name data)))))))
 
 (defun vc-dir-update (entries buffer &optional noinsert)
   "Update BUFFER's ewoc from the list of ENTRIES.
@@ -343,8 +344,10 @@ If NOINSERT, ignore elements on ENTRIES which are not in the ewoc."
 	  ;; names too many times
 	  (sort entries
 		(lambda (entry1 entry2)
-		  (let ((dir1 (file-name-directory (expand-file-name (car entry1))))
-			(dir2 (file-name-directory (expand-file-name (car entry2)))))
+		  (let ((dir1 (file-name-directory
+			        (directory-file-name (expand-file-name (car entry1)))))
+			(dir2 (file-name-directory
+			       (directory-file-name (expand-file-name (car entry2))))))
 		    (cond
 		     ((string< dir1 dir2) t)
 		     ((not (string= dir1 dir2)) nil)
@@ -357,12 +360,13 @@ If NOINSERT, ignore elements on ENTRIES which are not in the ewoc."
       (unless node
 	(ewoc-enter-last
 	 vc-ewoc (vc-dir-create-fileinfo
-		  dotname nil nil nil (expand-file-name default-directory)))
+		  dotname nil nil nil default-directory))
 	(setq node (ewoc-nth vc-ewoc 0)))
 
       (while (and entry node)
 	(let* ((entryfile (car entry))
-	       (entrydir (file-name-directory (expand-file-name entryfile)))
+	       (entrydir (file-name-directory (directory-file-name
+					       (expand-file-name entryfile))))
 	       (nodedir (vc-dir-node-directory node)))
 	  (cond
 	   ;; First try to find the directory.
@@ -406,7 +410,8 @@ If NOINSERT, ignore elements on ENTRIES which are not in the ewoc."
       (unless (or node noinsert)
 	(let ((lastdir (vc-dir-node-directory (ewoc-nth vc-ewoc -1))))
 	  (dolist (entry entries)
-	    (let ((entrydir (file-name-directory (expand-file-name (car entry)))))
+	    (let ((entrydir (file-name-directory
+			     (directory-file-name (expand-file-name (car entry))))))
 	      ;; Insert a directory node if needed.
 	      (unless (string-equal lastdir entrydir)
 		(setq lastdir entrydir)
@@ -844,7 +849,7 @@ If it is a file, return the corresponding cons for the file itself."
   ;; Update the entries for all the child files of DIRNAME shown in
   ;; the current *vc-dir* buffer.
   (let ((files (vc-dir-find-child-files dirname))
-	(ddir (expand-file-name default-directory))
+	(ddir default-directory)
 	fileentries)
     (when files
       (dolist (crt files)
@@ -855,24 +860,25 @@ If it is a file, return the corresponding cons for the file itself."
 (defun vc-dir-resynch-file (&optional fname)
   "Update the entries for FNAME in any directory buffers that list it."
   (let ((file (or fname (expand-file-name buffer-file-name)))
-	(found-vc-dir-buf nil))
-    (save-excursion
-      (dolist (status-buf (buffer-list))
-	(set-buffer status-buf)
-	;; look for a vc-dir buffer that might show this file.
-	(when (derived-mode-p 'vc-dir-mode)
-	  (setq found-vc-dir-buf t)
-	  (let ((ddir (expand-file-name default-directory)))
-	    (when (vc-string-prefix-p ddir file)
-	      (if (file-directory-p file)
-		  (vc-dir-resync-directory-files file)
-		(vc-dir-update
-		 (list (vc-dir-recompute-file-state file ddir))
-		 status-buf)))))))
-    ;; We didn't find any vc-dir buffers, remove the hook, it is
-    ;; not needed.
-    (unless found-vc-dir-buf
-      (remove-hook 'after-save-hook 'vc-dir-resynch-file))))
+        (drop '()))
+    (save-current-buffer
+      ;; look for a vc-dir buffer that might show this file.
+      (dolist (status-buf vc-dir-buffers)
+        (if (not (buffer-live-p status-buf))
+            (push status-buf drop)
+          (set-buffer status-buf)
+          (if (not (derived-mode-p 'vc-dir-mode))
+              (push status-buf drop)
+            (let ((ddir default-directory))
+              (when (vc-string-prefix-p ddir file)
+                (if (file-directory-p file)
+                    (vc-dir-resync-directory-files file)
+                  (let ((state (vc-dir-recompute-file-state file ddir)))
+                    (vc-dir-update
+                     (list state)
+                     status-buf (eq (cadr state) 'up-to-date))))))))))
+    ;; Remove out-of-date entries from vc-dir-buffers.
+    (dolist (b drop) (setq vc-dir-buffers (delq b vc-dir-buffers)))))
 
 (defvar use-vc-backend)  ;; dynamically bound
 
@@ -922,9 +928,8 @@ the *vc-dir* buffer.
     (set (make-local-variable 'vc-ewoc) (ewoc-create #'vc-dir-printer))
     (set (make-local-variable 'revert-buffer-function)
 	 'vc-dir-revert-buffer-function)
-    (set (make-local-variable 'list-buffers-directory)
-         (expand-file-name default-directory))
-    (add-hook 'after-save-hook 'vc-dir-resynch-file)
+    (setq list-buffers-directory default-directory)
+    (add-to-list 'vc-dir-buffers (current-buffer))
     ;; Make sure that if the directory buffer is killed, the update
     ;; process running in the background is also killed.
     (add-hook 'kill-buffer-query-functions 'vc-dir-kill-query nil t)
@@ -1124,7 +1129,7 @@ Interactively, a prefix argument means to ask for the backend.
 
 These are the commands available for use in the file status buffer:
 
-\\<vc-dir-mode-map>"
+\\{vc-dir-mode-map}"
 
   (interactive
    (list

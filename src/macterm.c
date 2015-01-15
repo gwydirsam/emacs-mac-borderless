@@ -24,6 +24,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <signal.h>
 
 #include <stdio.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "blockinput.h"
@@ -35,7 +36,6 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <ctype.h>
 #include <errno.h>
-#include <setjmp.h>
 #include <sys/stat.h>
 
 #include "charset.h"
@@ -199,6 +199,7 @@ static void x_clip_to_row P_ ((struct window *, struct glyph_row *, int, GC));
 static void x_update_begin P_ ((struct frame *));
 static void x_update_window_begin P_ ((struct window *));
 static void x_after_update_window_line P_ ((struct glyph_row *));
+static void x_check_fullscreen P_ ((struct frame *));
 
 void x_delete_terminal P_ ((struct terminal *));
 static struct terminal *mac_create_terminal P_ ((struct mac_display_info *dpyinfo));
@@ -2583,15 +2584,13 @@ x_draw_glyph_string (s)
 	  s->underline_position = position;
 	  y = s->ybase + position;
 	  if (s->face->underline_defaulted_p)
-	    mac_fill_rectangle (s->f, s->gc, s->x, y,
-				s->background_width, thickness);
+	    mac_fill_rectangle (s->f, s->gc, s->x, y, s->width, thickness);
 	  else
 	    {
 	      XGCValues xgcv;
 	      XGetGCValues (s->display, s->gc, GCForeground, &xgcv);
 	      XSetForeground (s->display, s->gc, s->face->underline_color);
-	      mac_fill_rectangle (s->f, s->gc, s->x, y,
-				  s->background_width, thickness);
+	      mac_fill_rectangle (s->f, s->gc, s->x, y, s->width, thickness);
 	      XSetForeground (s->display, s->gc, xgcv.foreground);
 	    }
 	}
@@ -2602,15 +2601,13 @@ x_draw_glyph_string (s)
 	  unsigned long dy = 0, h = 1;
 
 	  if (s->face->overline_color_defaulted_p)
-	    mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy,
-				s->background_width, h);
+	    mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy, s->width, h);
 	  else
 	    {
 	      XGCValues xgcv;
 	      XGetGCValues (s->display, s->gc, GCForeground, &xgcv);
 	      XSetForeground (s->display, s->gc, s->face->overline_color);
-	      mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy,
-				  s->background_width, h);
+	      mac_fill_rectangle (s->f, s->gc, s->x, s->y + dy, s->width, h);
 	      XSetForeground (s->display, s->gc, xgcv.foreground);
 	    }
 	}
@@ -3579,33 +3576,34 @@ x_scroll_bar_clear (f)
  ***********************************************************************/
 
 void
-mac_move_window_with_gravity (f, win_gravity, left, top)
+mac_move_window_to_gravity_reference_point (f, win_gravity, x, y)
      struct frame *f;
      int win_gravity;
-     short left, top;
+     short x, y;
 {
-  Rect inner, outer;
+  Rect bounds;
+  short left, top;
 
-  mac_get_window_bounds (f, &inner, &outer);
+  mac_get_window_structure_bounds (f, &bounds);
 
   switch (win_gravity)
     {
     case NorthWestGravity:
     case WestGravity:
     case SouthWestGravity:
-      left += inner.left - outer.left;
+      left = x;
       break;
 
     case NorthGravity:
     case CenterGravity:
     case SouthGravity:
-      left += ((inner.left - outer.left) + (inner.right - outer.right)) / 2;
+      left = x - (bounds.right - bounds.left) / 2;
       break;
 
     case NorthEastGravity:
     case EastGravity:
     case SouthEastGravity:
-      left += inner.right - outer.right;
+      left = x - (bounds.right - bounds.left);
       break;
     }
 
@@ -3614,54 +3612,53 @@ mac_move_window_with_gravity (f, win_gravity, left, top)
     case NorthWestGravity:
     case NorthGravity:
     case NorthEastGravity:
-      top += inner.top - outer.top;
+      top = y;
       break;
 
     case WestGravity:
     case CenterGravity:
     case EastGravity:
-      top += ((inner.top - outer.top) + (inner.bottom - outer.bottom)) / 2;
+      top = y - (bounds.bottom - bounds.top) / 2;
       break;
 
     case SouthWestGravity:
     case SouthGravity:
     case SouthEastGravity:
-      top += inner.bottom - outer.bottom;
+      top = y - (bounds.bottom - bounds.top);
       break;
     }
 
-  mac_move_frame_window (f, left, top, false);
+  mac_move_frame_window_structure (f, left, top);
 }
 
 void
-mac_get_window_origin_with_gravity (f, win_gravity, left, top)
+mac_get_window_gravity_reference_point (f, win_gravity, x, y)
      struct frame *f;
      int win_gravity;
-     short *left, *top;
+     short *x, *y;
 {
-  Rect inner, outer;
+  Rect bounds;
 
-  mac_get_window_bounds (f, &inner, &outer);
+  mac_get_window_structure_bounds (f, &bounds);
 
   switch (win_gravity)
     {
     case NorthWestGravity:
     case WestGravity:
     case SouthWestGravity:
-      *left = outer.left;
+      *x = bounds.left;
       break;
 
     case NorthGravity:
     case CenterGravity:
     case SouthGravity:
-      *left = outer.left + ((outer.right - outer.left)
-			    - (inner.right - inner.left)) / 2;
+      *x = bounds.left + (bounds.right - bounds.left) / 2;
       break;
 
     case NorthEastGravity:
     case EastGravity:
     case SouthEastGravity:
-      *left = outer.right - (inner.right - inner.left);
+      *x = bounds.right;
       break;
     }
 
@@ -3670,20 +3667,19 @@ mac_get_window_origin_with_gravity (f, win_gravity, left, top)
     case NorthWestGravity:
     case NorthGravity:
     case NorthEastGravity:
-      *top = outer.top;
+      *y = bounds.top;
       break;
 
     case WestGravity:
     case CenterGravity:
     case EastGravity:
-      *top = outer.top + ((outer.bottom - outer.top)
-			  - (inner.bottom - inner.top)) / 2;
+      *y = bounds.top + (bounds.bottom - bounds.top) / 2;
       break;
 
     case SouthWestGravity:
     case SouthGravity:
     case SouthEastGravity:
-      *top = outer.bottom - (inner.bottom - inner.top);
+      *y = bounds.bottom;
       break;
     }
 }
@@ -4008,7 +4004,26 @@ x_new_font (f, font_object, fontset)
 	 doing it because it's done in Fx_show_tip, and it leads to
 	 problems because the tip frame has no widget.  */
       if (NILP (tip_frame) || XFRAME (tip_frame) != f)
-	x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
+	{
+	  int rows, cols;
+
+	  /* When the frame is maximized/fullscreen or running under for
+             example Xmonad, x_set_window_size will be a no-op.
+             In that case, the right thing to do is extend rows/cols to
+             the current frame size.  We do that first if x_set_window_size
+             turns out to not be a no-op (there is no way to know).
+             The size will be adjusted again if the frame gets a
+             ConfigureNotify event as a result of x_set_window_size.  */
+          rows = FRAME_PIXEL_HEIGHT_TO_TEXT_LINES (f, FRAME_PIXEL_HEIGHT (f));
+	  /* Update f->scroll_bar_actual_width because it is used in
+	     FRAME_PIXEL_WIDTH_TO_TEXT_COLS.  */
+	  f->scroll_bar_actual_width
+	    = FRAME_SCROLL_BAR_COLS (f) * FRAME_COLUMN_WIDTH (f);
+          cols = FRAME_PIXEL_WIDTH_TO_TEXT_COLS (f, FRAME_PIXEL_WIDTH (f));
+
+          change_frame_size (f, rows, cols, 0, 1, 0);
+          x_set_window_size (f, 0, FRAME_COLS (f), FRAME_LINES (f));
+        }
     }
 
   return font_object;
@@ -4066,7 +4081,7 @@ x_calc_absolute_position (f)
      struct frame *f;
 {
   int flags = f->size_hint_flags;
-  Rect inner, outer;
+  Rect bounds;
 
   /* We have nothing to do if the current position
      is already for the top-left corner.  */
@@ -4076,18 +4091,18 @@ x_calc_absolute_position (f)
   /* Find the offsets of the outside upper-left corner of
      the inner window, with respect to the outer window.  */
   BLOCK_INPUT;
-  mac_get_window_bounds (f, &inner, &outer);
+  mac_get_window_structure_bounds (f, &bounds);
   UNBLOCK_INPUT;
 
   /* Treat negative positions as relative to the leftmost bottommost
      position that fits on the screen.  */
   if (flags & XNegative)
     f->left_pos += (x_display_pixel_width (FRAME_MAC_DISPLAY_INFO (f))
-		    - (outer.right - outer.left));
+		    - (bounds.right - bounds.left));
 
   if (flags & YNegative)
     f->top_pos += (x_display_pixel_height (FRAME_MAC_DISPLAY_INFO (f))
-		   - (outer.bottom - outer.top));
+		   - (bounds.bottom - bounds.top));
 
   /* The left_pos and top_pos
      are now relative to the top and left screen edges,
@@ -4124,9 +4139,80 @@ x_set_offset (f, xoff, yoff, change_gravity)
   x_wm_set_size_hint (f, (long) 0, 0);
 
   mac_move_frame_window_structure (f, f->left_pos, f->top_pos);
-  /* If the title bar is completely outside the screen, adjust the
-     position. */
+  /* When the frame is maximized/fullscreen, the actual window will
+     not be moved and mac_handle_origin_change will not be called via
+     window system events.  */
+  mac_handle_origin_change (f);
   UNBLOCK_INPUT;
+}
+
+void
+x_set_sticky (f, new_value, old_value)
+     struct frame *f;
+     Lisp_Object new_value, old_value;
+{
+  BLOCK_INPUT;
+  mac_change_frame_window_wm_state (f, !NILP (new_value) ? WM_STATE_STICKY : 0,
+				    NILP (new_value) ? WM_STATE_STICKY : 0);
+  UNBLOCK_INPUT;
+}
+
+static void
+XTfullscreen_hook (f)
+     FRAME_PTR f;
+{
+  Lisp_Object tool_bar_lines = get_frame_param (f, Qtool_bar_lines);
+
+  if (INTEGERP (tool_bar_lines) && XINT (tool_bar_lines) > 0)
+    x_set_tool_bar_lines (f, make_number (0), tool_bar_lines);
+  FRAME_NATIVE_TOOL_BAR_P (f) = (f->want_fullscreen == FULLSCREEN_BOTH);
+  if (INTEGERP (tool_bar_lines) && XINT (tool_bar_lines) > 0)
+    x_set_tool_bar_lines (f, tool_bar_lines, make_number (0));
+
+  FRAME_CHECK_FULLSCREEN_NEEDED_P (f) = 1;
+  if (f->async_visible)
+    {
+      BLOCK_INPUT;
+      x_check_fullscreen (f);
+      x_sync (f);
+      UNBLOCK_INPUT;
+    }
+}
+
+/* Check if we need to resize the frame due to a fullscreen request.
+   If so needed, resize the frame. */
+static void
+x_check_fullscreen (f)
+     struct frame *f;
+{
+  WMState flags_to_set, flags_to_clear;
+
+  switch (f->want_fullscreen)
+    {
+    case FULLSCREEN_NONE:
+      flags_to_set = 0;
+      break;
+    case FULLSCREEN_BOTH:
+      flags_to_set = WM_STATE_FULLSCREEN;
+      break;
+    case FULLSCREEN_WIDTH:
+      flags_to_set = WM_STATE_MAXIMIZED_HORZ;
+      break;
+    case FULLSCREEN_HEIGHT:
+      flags_to_set = WM_STATE_MAXIMIZED_VERT;
+      break;
+    case FULLSCREEN_MAXIMIZED:
+      flags_to_set = (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT);
+      break;
+    }
+
+  flags_to_clear = (flags_to_set ^ (WM_STATE_MAXIMIZED_HORZ
+				    | WM_STATE_MAXIMIZED_VERT
+				    | WM_STATE_FULLSCREEN));
+  mac_change_frame_window_wm_state (f, flags_to_set, flags_to_clear);
+
+  f->want_fullscreen = FULLSCREEN_NONE;
+  FRAME_CHECK_FULLSCREEN_NEEDED_P (f) = 0;
 }
 
 /* Call this to change the size of frame F's x-window.
@@ -4157,9 +4243,6 @@ x_set_window_size (f, change_gravity, cols, rows)
   x_wm_set_size_hint (f, (long) 0, 0);
 
   mac_size_frame_window (f, pixelwidth, pixelheight, 0);
-
-  if (!NILP (tip_frame) && f == XFRAME (tip_frame))
-    mac_handle_size_change (f, pixelwidth, pixelheight);
 
   if (f->output_data.mac->internal_border_width
       != FRAME_INTERNAL_BORDER_WIDTH (f))
@@ -4291,6 +4374,9 @@ mac_handle_visibility_change (f)
 
   if (!f->async_visible && visible)
     {
+      if (FRAME_CHECK_FULLSCREEN_NEEDED_P (f))
+	x_check_fullscreen (f);
+
       if (f->iconified)
 	{
 	  /* wait_reading_process_output will notice this and update
@@ -4917,7 +5003,7 @@ mac_store_buffer_text_to_unicode_chars (buf, start, end, characters)
 	  unsigned char *ptr = BUF_BYTE_ADDRESS (BUF, BYTEIDX);	\
 	  int len;						\
 								\
-	  OUTPUT= STRING_CHAR_AND_LENGTH (ptr, 0, len);		\
+	  OUTPUT= STRING_CHAR_AND_LENGTH (ptr, len);		\
 	  BYTEIDX += len;					\
 	}							\
       else							\
@@ -4983,6 +5069,99 @@ mac_store_buffer_text_to_unicode_chars (buf, start, end, characters)
 
   return 1;
 #endif
+}
+
+/* Find the glyph matrix position of buffer position CHARPOS in window
+   *W.  HPOS, *VPOS, *X, and *Y are set to the positions found.  W's
+   current glyphs must be up to date.  If CHARPOS is above window
+   start return (0, 0, 0, 0).  If CHARPOS is after end of W, return end
+   of last line in W.  In the row containing CHARPOS, stop before glyphs
+   having STOP as object.  */
+
+int
+fast_find_position (w, charpos, hpos, vpos, x, y, stop)
+     struct window *w;
+     EMACS_INT charpos;
+     int *hpos, *vpos, *x, *y;
+     Lisp_Object stop;
+{
+  struct glyph_row *row, *first;
+  struct glyph *glyph, *end;
+  int past_end = 0;
+
+  first = MATRIX_FIRST_TEXT_ROW (w->current_matrix);
+  if (charpos < MATRIX_ROW_START_CHARPOS (first))
+    {
+      *x = first->x;
+      *y = first->y;
+      *hpos = 0;
+      *vpos = MATRIX_ROW_VPOS (first, w->current_matrix);
+      return 1;
+    }
+
+  row = row_containing_pos (w, charpos, first, NULL, 0);
+  if (row == NULL)
+    {
+      row = MATRIX_ROW (w->current_matrix, XFASTINT (w->window_end_vpos));
+      past_end = 1;
+    }
+
+  /* If whole rows or last part of a row came from a display overlay,
+     row_containing_pos will skip over such rows because their end pos
+     equals the start pos of the overlay or interval.
+
+     Move back if we have a STOP object and previous row's
+     end glyph came from STOP.  */
+  if (!NILP (stop))
+    {
+      struct glyph_row *prev;
+      while ((prev = row - 1, prev >= first)
+	     && MATRIX_ROW_END_CHARPOS (prev) == charpos
+	     && prev->used[TEXT_AREA] > 0)
+	{
+	  struct glyph *beg = prev->glyphs[TEXT_AREA];
+	  glyph = beg + prev->used[TEXT_AREA];
+	  while (--glyph >= beg
+		 && INTEGERP (glyph->object));
+	  if (glyph < beg
+	      || !EQ (stop, glyph->object))
+	    break;
+	  row = prev;
+	}
+    }
+
+  *x = row->x;
+  *y = row->y;
+  *vpos = MATRIX_ROW_VPOS (row, w->current_matrix);
+
+  glyph = row->glyphs[TEXT_AREA];
+  end = glyph + row->used[TEXT_AREA];
+
+  /* Skip over glyphs not having an object at the start of the row.
+     These are special glyphs like truncation marks on terminal
+     frames.  */
+  if (row->displays_text_p)
+    while (glyph < end
+	   && INTEGERP (glyph->object)
+	   && !EQ (stop, glyph->object)
+	   && glyph->charpos < 0)
+      {
+	*x += glyph->pixel_width;
+	++glyph;
+      }
+
+  while (glyph < end
+	 && !INTEGERP (glyph->object)
+	 && !EQ (stop, glyph->object)
+	 && (!BUFFERP (glyph->object)
+	     || glyph->charpos < charpos))
+    {
+      *x += glyph->pixel_width;
+      ++glyph;
+    }
+
+  *hpos = glyph - row->glyphs[TEXT_AREA];
+  return !past_end;
 }
 
 void
@@ -5669,7 +5848,7 @@ mac_create_terminal (struct mac_display_info *dpyinfo)
   terminal->mouse_position_hook = XTmouse_position;
   terminal->frame_rehighlight_hook = XTframe_rehighlight;
   terminal->frame_raise_lower_hook = XTframe_raise_lower;
-  /* terminal->fullscreen_hook = XTfullscreen_hook; */
+  terminal->fullscreen_hook = XTfullscreen_hook;
   terminal->set_vertical_scroll_bar_hook = XTset_vertical_scroll_bar;
   terminal->condemn_scroll_bars_hook = XTcondemn_scroll_bars;
   terminal->redeem_scroll_bar_hook = XTredeem_scroll_bar;
@@ -5694,7 +5873,7 @@ mac_create_terminal (struct mac_display_info *dpyinfo)
      terminal like X does.  */
   terminal->kboard = (KBOARD *) xmalloc (sizeof (KBOARD));
   init_kboard (terminal->kboard);
-  terminal->kboard->Vwindow_system = intern ("mac");
+  terminal->kboard->Vwindow_system = Qmac;
   terminal->kboard->next_kboard = all_kboards;
   all_kboards = terminal->kboard;
   /* Don't let the initial kboard remain current longer than necessary.
@@ -5736,12 +5915,12 @@ mac_initialize ()
 void
 syms_of_macterm ()
 {
-  Qcontrol = intern ("control");	staticpro (&Qcontrol);
-  Qmeta    = intern ("meta");		staticpro (&Qmeta);
-  Qalt     = intern ("alt");		staticpro (&Qalt);
-  Qhyper   = intern ("hyper");		staticpro (&Qhyper);
-  Qsuper   = intern ("super");		staticpro (&Qsuper);
-  Qmodifier_value = intern ("modifier-value");
+  Qcontrol = intern_c_string ("control");	staticpro (&Qcontrol);
+  Qmeta    = intern_c_string ("meta");		staticpro (&Qmeta);
+  Qalt     = intern_c_string ("alt");		staticpro (&Qalt);
+  Qhyper   = intern_c_string ("hyper");		staticpro (&Qhyper);
+  Qsuper   = intern_c_string ("super");		staticpro (&Qsuper);
+  Qmodifier_value = intern_c_string ("modifier-value");
   staticpro (&Qmodifier_value);
 
   Fput (Qcontrol, Qmodifier_value, make_number (ctrl_modifier));
@@ -5750,25 +5929,27 @@ syms_of_macterm ()
   Fput (Qhyper,   Qmodifier_value, make_number (hyper_modifier));
   Fput (Qsuper,   Qmodifier_value, make_number (super_modifier));
 
-  Qpanel_closed = intern ("panel-closed");  staticpro (&Qpanel_closed);
-  Qselection    = intern ("selection");     staticpro (&Qselection);
+  Qpanel_closed = intern_c_string ("panel-closed");  staticpro (&Qpanel_closed);
+  Qselection    = intern_c_string ("selection");     staticpro (&Qselection);
 
-  Qservice     = intern ("service");	  staticpro (&Qservice);
-  Qpaste       = intern ("paste");	  staticpro (&Qpaste);
-  Qperform     = intern ("perform");	  staticpro (&Qperform);
+  Qservice     = intern_c_string ("service");	  staticpro (&Qservice);
+  Qpaste       = intern_c_string ("paste");	  staticpro (&Qpaste);
+  Qperform     = intern_c_string ("perform");	  staticpro (&Qperform);
 
-  Qmouse_drag_overlay = intern ("mouse-drag-overlay");
+  Qmouse_drag_overlay = intern_c_string ("mouse-drag-overlay");
   staticpro (&Qmouse_drag_overlay);
-  Qtext_input = intern ("text-input");	staticpro (&Qtext_input);
-  Qinsert_text = intern ("insert-text");	staticpro (&Qinsert_text);
-  Qset_marked_text = intern ("set-marked-text"); staticpro (&Qset_marked_text);
+  Qtext_input = intern_c_string ("text-input");	staticpro (&Qtext_input);
+  Qinsert_text = intern_c_string ("insert-text");
+  staticpro (&Qinsert_text);
+  Qset_marked_text = intern_c_string ("set-marked-text");
+  staticpro (&Qset_marked_text);
 
-  Qaction = intern ("action");		staticpro (&Qaction);
-  Qmac_action_key_paths = intern ("mac-action-key-paths");
+  Qaction = intern_c_string ("action");		staticpro (&Qaction);
+  Qmac_action_key_paths = intern_c_string ("mac-action-key-paths");
   staticpro (&Qmac_action_key_paths);
 
   staticpro (&Qreverse);
-  Qreverse = intern ("reverse");
+  Qreverse = intern_c_string ("reverse");
 
   staticpro (&x_display_name_list);
   x_display_name_list = Qnil;

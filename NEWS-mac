@@ -1,3 +1,18 @@
+* emacs-23.1.90-mac-1.95 [experimental/hackers-only] (2009-12-10)
+Based on Emacs 23.1.90
+
+** Fixed bugs
+
+*** Can't get Unicode Variation Sequences subtable for Hanazono font
+(2009-12-01, TTF) on Mac OS X 10.4 and earlier.
+
+** Improvements
+
+*** Fullscreen works like with ewmh-compliant X11 window managers.
+Note: currently, `fullboth' frames, which don't have a title bar, are
+not shown in the window list in the Dock menu.
+
+
 * emacs-23.1-mac-1.94 [experimental/hackers-only] (2009-11-01)
 
 ** Fixed bugs

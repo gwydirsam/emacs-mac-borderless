@@ -35,7 +35,7 @@
   (if (memq system-type '(windows-nt ms-dos cygwin))
       (prefer-coding-system 'japanese-shift-jis)
     (prefer-coding-system 'japanese-iso-8bit))
-  (use-cjk-char-width-table))
+  (use-cjk-char-width-table 'ja_JP))
 
 (defconst japanese-kana-table
   '((?あ ?ア ?ｱ) (?い ?イ ?ｲ) (?う ?ウ ?ｳ) (?え ?エ ?ｴ) (?お ?オ ?ｵ)
@@ -106,11 +106,13 @@ HANKAKU-KATAKANA belongs to `japanese-jisx0201-kana'.")
     (?〈 ?<) (?〉 ?>) (?\「 nil ?\｢) (?\」 nil ?\｣) 
     (?＋ ?+) (?− ?-) (?＝ ?=) (?＜ ?<) (?＞ ?>)
     (?′ ?') (?″ ?\") (?￥ ?\\) (?＄ ?$) (?％ ?%) (?＃ ?#) (?＆ ?&) (?＊ ?*)
-    (?＠ ?@))
-  "Japanese JISX0208 symbol character table.
+    (?＠ ?@)
+    ;; cp932-2-byte
+    (#x2015 ?-) (#xFF5E ?~) (#xFF0D ?-))
+  "Japanese JISX0208 and CP932 symbol character table.
   Each element is of the form (SYMBOL ASCII HANKAKU), where SYMBOL
-belongs to `japanese-jisx0208', ASCII belongs to `ascii', and HANKAKU
-belongs to `japanese-jisx0201-kana'.")
+belongs to `japanese-jisx0208' or `cp932', ASCII belongs to `ascii',
+and HANKAKU belongs to `japanese-jisx0201-kana'.")
 
 ;; Put properties 'jisx0208, 'jisx0201, and 'ascii to each Japanese
 ;; symbol and ASCII characters for conversion among them.
@@ -123,11 +125,13 @@ belongs to `japanese-jisx0201-kana'.")
     (if ascii
 	(progn
 	  (put-char-code-property jisx0208 'ascii ascii)
-	  (put-char-code-property ascii 'jisx0208 jisx0208)))
+	  (if (encode-char jisx0208 'japanese-jisx0208)
+	      (put-char-code-property ascii 'jisx0208 jisx0208))))
     (if jisx0201
 	(progn
 	  (put-char-code-property jisx0208 'jisx0201 jisx0201)
-	  (put-char-code-property jisx0201 'jisx0208 jisx0208)))))
+	  (if (encode-char jisx0208 'japanese-jisx0208)
+	      (put-char-code-property jisx0201 'jisx0208 jisx0208))))))
 
 (defconst japanese-alpha-numeric-table
   '((?０ . ?0) (?１ . ?1) (?２ . ?2) (?３ . ?3) (?４ . ?4)
@@ -160,8 +164,7 @@ belongs to `japanese-jisx0208', ASCII belongs to `ascii'.")
 ;; Convert string STR by FUNC and return a resulting string.
 (defun japanese-string-conversion (str func &rest args)
   (let ((buf (get-buffer-create " *Japanese work*")))
-    (save-excursion
-      (set-buffer buf)
+    (with-current-buffer buf
       (erase-buffer)
       (insert str)
       (apply func 1 (point) args)

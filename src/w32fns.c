@@ -27,6 +27,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "w32term.h"
@@ -252,6 +253,9 @@ typedef BOOL (WINAPI * TrackMouseEvent_Proc)
 typedef LONG (WINAPI * ImmGetCompositionString_Proc)
   (IN HIMC context, IN DWORD index, OUT LPVOID buffer, IN DWORD bufLen);
 typedef HIMC (WINAPI * ImmGetContext_Proc) (IN HWND window);
+typedef HWND (WINAPI * ImmReleaseContext_Proc) (IN HWND wnd, IN HIMC context);
+typedef HWND (WINAPI * ImmSetCompositionWindow_Proc) (IN HIMC context,
+						      IN COMPOSITIONFORM *form);
 typedef HMONITOR (WINAPI * MonitorFromPoint_Proc) (IN POINT pt, IN DWORD flags);
 typedef BOOL (WINAPI * GetMonitorInfo_Proc)
   (IN HMONITOR monitor, OUT struct MONITOR_INFO* info);
@@ -260,6 +264,8 @@ TrackMouseEvent_Proc track_mouse_event_fn = NULL;
 ClipboardSequence_Proc clipboard_sequence_fn = NULL;
 ImmGetCompositionString_Proc get_composition_string_fn = NULL;
 ImmGetContext_Proc get_ime_context_fn = NULL;
+ImmReleaseContext_Proc release_ime_context_fn = NULL;
+ImmSetCompositionWindow_Proc set_ime_composition_window_fn = NULL;
 MonitorFromPoint_Proc monitor_from_point_fn = NULL;
 GetMonitorInfo_Proc get_monitor_info_fn = NULL;
 
@@ -3158,6 +3164,8 @@ w32_wnd_proc (hwnd, msg, wParam, lParam)
           buffer = alloca(size);
           size = get_composition_string_fn (context, GCS_RESULTSTR,
                                             buffer, size);
+	  release_ime_context_fn (hwnd, context);
+
           signal_user_input ();
           for (i = 0; i < size / sizeof (wchar_t); i++)
             {
@@ -3171,6 +3179,40 @@ w32_wnd_proc (hwnd, msg, wParam, lParam)
       else
 	ignore_ime_char--;
 
+      break;
+
+    case WM_IME_STARTCOMPOSITION:
+      if (!set_ime_composition_window_fn)
+	goto dflt;
+      else
+	{
+	  COMPOSITIONFORM form;
+	  HIMC context;
+	  struct window *w;
+
+	  if (!context)
+	    break;
+
+	  f = x_window_to_frame (dpyinfo, hwnd);
+	  w = XWINDOW (FRAME_SELECTED_WINDOW (f));
+
+	  form.dwStyle = CFS_RECT;
+	  form.ptCurrentPos.x = w32_system_caret_x;
+	  form.ptCurrentPos.y = w32_system_caret_y;
+
+	  form.rcArea.left = WINDOW_TEXT_TO_FRAME_PIXEL_X (w, 0);
+	  form.rcArea.top = (WINDOW_TOP_EDGE_Y (w)
+			     + WINDOW_HEADER_LINE_HEIGHT (w));
+	  form.rcArea.right = (WINDOW_BOX_RIGHT_EDGE_X (w)
+			       - WINDOW_RIGHT_MARGIN_WIDTH (w)
+			       - WINDOW_RIGHT_FRINGE_WIDTH (w));
+	  form.rcArea.bottom = (WINDOW_BOTTOM_EDGE_Y (w)
+				- WINDOW_MODE_LINE_HEIGHT (w));
+
+	  context = get_ime_context_fn (hwnd);
+	  set_ime_composition_window_fn (context, &form);
+	  release_ime_context_fn (hwnd, context);
+	}
       break;
 
     case WM_IME_ENDCOMPOSITION:
@@ -6177,7 +6219,7 @@ DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
   if (!NILP (Ffile_directory_p (filename))
       && NILP (Ffile_symlink_p (filename)))
     {
-      operation = Qdelete_directory;
+      operation = intern ("delete-directory");
       filename = Fdirectory_file_name (filename);
     }
   filename = Fexpand_file_name (filename, Qnil);
@@ -6892,7 +6934,8 @@ frame_parm_handler w32_frame_parm_handlers[] =
   0, /* x_set_wait_for_wm, */
   x_set_fullscreen,
   x_set_font_backend,
-  x_set_alpha
+  x_set_alpha,
+  0, /* x_set_sticky */
 };
 
 void
@@ -6925,9 +6968,9 @@ syms_of_w32fns ()
 
 
   Fput (Qundefined_color, Qerror_conditions,
-	Fcons (Qundefined_color, Fcons (Qerror, Qnil)));
+	pure_cons (Qundefined_color, pure_cons (Qerror, Qnil)));
   Fput (Qundefined_color, Qerror_message,
-	build_string ("Undefined color"));
+	make_pure_c_string ("Undefined color"));
 
   staticpro (&w32_grabbed_keys);
   w32_grabbed_keys = Qnil;
@@ -7012,7 +7055,7 @@ Set to nil to handle Caps Lock as the `capslock' key.  */);
 The value can be hyper, super, meta, alt, control or shift for the
 respective modifier, or nil to handle Scroll Lock as the `scroll' key.
 Any other value will cause the Scroll Lock key to be ignored.  */);
-  Vw32_scroll_lock_modifier = Qt;
+  Vw32_scroll_lock_modifier = Qnil;
 
   DEFVAR_LISP ("w32-lwindow-modifier",
 	       &Vw32_lwindow_modifier,
@@ -7277,6 +7320,10 @@ globals_of_w32fns ()
       GetProcAddress (imm32_lib, "ImmGetCompositionStringW");
     get_ime_context_fn = (ImmGetContext_Proc)
       GetProcAddress (imm32_lib, "ImmGetContext");
+    release_ime_context_fn = (ImmReleaseContext_Proc)
+      GetProcAddress (imm32_lib, "ImmReleaseContext");
+    set_ime_composition_window_fn = (ImmSetCompositionWindow_Proc)
+      GetProcAddress (imm32_lib, "ImmSetCompositionWindow");
   }
   DEFVAR_INT ("w32-ansi-code-page",
 	      &w32_ansi_code_page,

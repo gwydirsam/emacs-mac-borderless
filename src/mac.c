@@ -24,6 +24,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <stdio.h>
 #include <errno.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "process.h"
@@ -77,7 +78,7 @@ static Lisp_Object Qundecoded_file_name;
 
 static struct {
   AEKeyword keyword;
-  char *name;
+  const char *name;
   Lisp_Object symbol;
 } ae_attr_table [] =
   {{keyTransactionIDAttr,	"transaction-id"},
@@ -656,7 +657,8 @@ mac_event_parameters_to_lisp (event, num_params, names, types)
 	 Conversion between Lisp and Core Foundation objects
  ***********************************************************************/
 
-Lisp_Object Qstring, Qnumber, Qboolean, Qdate, Qdata, Qarray, Qdictionary;
+Lisp_Object Qstring, Qnumber, Qboolean, Qdate, Qarray, Qdictionary;
+extern Lisp_Object Qdata;
 static Lisp_Object Qdescription;
 
 struct cfdict_context
@@ -1115,8 +1117,11 @@ cfproperty_list_create_with_lisp_data (obj)
 	      result = CFNumberCreate (NULL, kCFNumberLongType, &value);
 	    }
 	  else if (FLOATP (data))
-	    result = CFNumberCreate (NULL, kCFNumberDoubleType,
-				     &XFLOAT_DATA (data));
+	    {
+	      double value = XFLOAT_DATA (data);
+
+	      result = CFNumberCreate (NULL, kCFNumberDoubleType, &value);
+	    }
 	  else if (STRINGP (data))
 	    {
 	      SInt64 value = strtoll (SDATA (data), NULL, 0);
@@ -2059,7 +2064,7 @@ DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
   if (!NILP (Ffile_directory_p (filename))
       && NILP (Ffile_symlink_p (filename)))
     {
-      operation = Qdelete_directory;
+      operation = intern ("delete-directory");
       filename = Fdirectory_file_name (filename);
     }
   filename = Fexpand_file_name (filename, Qnil);
@@ -3415,37 +3420,36 @@ init_mac_osx_environment ()
 void
 syms_of_mac ()
 {
-  Qundecoded_file_name = intern ("undecoded-file-name");
+  Qundecoded_file_name = intern_c_string ("undecoded-file-name");
   staticpro (&Qundecoded_file_name);
 
-  Qstring  = intern ("string");		staticpro (&Qstring);
-  Qnumber  = intern ("number");		staticpro (&Qnumber);
-  Qboolean = intern ("boolean");	staticpro (&Qboolean);
-  Qdate	   = intern ("date");		staticpro (&Qdate);
-  Qdata    = intern ("data");		staticpro (&Qdata);
-  Qarray   = intern ("array");		staticpro (&Qarray);
-  Qdictionary = intern ("dictionary");	staticpro (&Qdictionary);
-  Qdescription = intern ("description"); staticpro (&Qdescription);
+  Qstring  = intern_c_string ("string");	staticpro (&Qstring);
+  Qnumber  = intern_c_string ("number");	staticpro (&Qnumber);
+  Qboolean = intern_c_string ("boolean");	staticpro (&Qboolean);
+  Qdate	   = intern_c_string ("date");		staticpro (&Qdate);
+  Qarray   = intern_c_string ("array");		staticpro (&Qarray);
+  Qdictionary = intern_c_string ("dictionary");	staticpro (&Qdictionary);
+  Qdescription = intern_c_string ("description"); staticpro (&Qdescription);
 
-  Qxml = intern ("xml");
+  Qxml = intern_c_string ("xml");
   staticpro (&Qxml);
 
-  QCmime_charset = intern (":mime-charset");
+  QCmime_charset = intern_c_string (":mime-charset");
   staticpro (&QCmime_charset);
 
-  QNFD  = intern ("NFD");		staticpro (&QNFD);
-  QNFKD = intern ("NFKD");		staticpro (&QNFKD);
-  QNFC  = intern ("NFC");		staticpro (&QNFC);
-  QNFKC = intern ("NFKC");		staticpro (&QNFKC);
-  QHFS_plus_D = intern ("HFS+D");	staticpro (&QHFS_plus_D);
-  QHFS_plus_C = intern ("HFS+C");	staticpro (&QHFS_plus_C);
+  QNFD  = intern_c_string ("NFD");		staticpro (&QNFD);
+  QNFKD = intern_c_string ("NFKD");		staticpro (&QNFKD);
+  QNFC  = intern_c_string ("NFC");		staticpro (&QNFC);
+  QNFKC = intern_c_string ("NFKC");		staticpro (&QNFKC);
+  QHFS_plus_D = intern_c_string ("HFS+D");	staticpro (&QHFS_plus_D);
+  QHFS_plus_C = intern_c_string ("HFS+C");	staticpro (&QHFS_plus_C);
 
   {
     int i;
 
     for (i = 0; i < sizeof (ae_attr_table) / sizeof (ae_attr_table[0]); i++)
       {
-	ae_attr_table[i].symbol = intern (ae_attr_table[i].name);
+	ae_attr_table[i].symbol = intern_c_string (ae_attr_table[i].name);
 	staticpro (&ae_attr_table[i].symbol);
       }
   }

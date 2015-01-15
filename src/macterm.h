@@ -297,10 +297,6 @@ struct mac_output
 
 #endif
 
-  /* The Mac control reference for the hourglass (progress indicator)
-     shown at the upper-right corner of the window.  */
-  void *hourglass_control;
-
   /* This is the Emacs structure for the display this frame is on.  */
   /* struct w32_display_info *display_info; */
 
@@ -310,6 +306,17 @@ struct mac_output
 
   /* Nonzero means tried already to make this frame visible.  */
   char asked_for_visible;
+
+  /* Nonzero if this frame is for tooltip.  */
+  unsigned tooltip_p : 1;
+
+  /* Nonzero if x_check_fullscreen is not called yet after fullscreen
+     request for this frame.  */
+  unsigned check_fullscreen_needed_p : 1;
+
+  /* Nonzero if this frame uses a native tool bar (as opposed to a
+     toolkit one).  */
+  unsigned native_tool_bar_p : 1;
 
   /* Relief GCs, colors etc.  */
   struct relief
@@ -355,6 +362,10 @@ struct mac_output
 #define FRAME_BASELINE_OFFSET(f) ((f)->output_data.mac->baseline_offset)
 
 #define FRAME_SIZE_HINTS(f) ((f)->output_data.mac->size_hints)
+#define FRAME_TOOLTIP_P(f) ((f)->output_data.mac->tooltip_p)
+#define FRAME_CHECK_FULLSCREEN_NEEDED_P(f) \
+  ((f)->output_data.mac->check_fullscreen_needed_p)
+#define FRAME_NATIVE_TOOL_BAR_P(f) ((f)->output_data.mac->native_tool_bar_p)
 #define FRAME_EMACS_VIEW(f) ((f)->output_data.mac->emacs_view)
 
 /* This gives the mac_display_info structure for the display F is on.  */
@@ -487,6 +498,18 @@ enum {
 #define kCGBitmapByteOrder32Host 0
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030
+/* System UI mode constants */
+enum {
+  kUIModeAllSuppressed = 4
+};
+
+/* System UI options */
+enum {
+  kUIOptionDisableHide = 1 << 6
+};
+#endif
+
 struct frame;
 struct face;
 struct image;
@@ -556,6 +579,8 @@ extern int mac_quit_char_key_p P_ ((UInt32, UInt32));
 extern CGColorSpaceRef mac_cg_color_space_rgb;
 #endif
 
+extern void x_set_sticky P_ ((struct frame *, Lisp_Object, Lisp_Object));
+
 /* Defined in macselect.c */
 
 extern void x_clear_frame_selections P_ ((struct frame *));
@@ -603,11 +628,16 @@ extern XrmDatabase xrm_get_preference_database P_ ((const char *));
 EXFUN (Fmac_get_preference, 4);
 extern int mac_service_provider_registered_p P_ ((void));
 
+/* Defined in macmenu.c.  */
+
+extern void x_activate_menubar P_ ((struct frame *));
+extern void free_frame_menubar P_ ((struct frame *));
+
 /* Defined in macappkit.m.  */
 
 extern void mac_alert_sound_play P_ ((void));
 extern OSStatus install_application_handler P_ ((void));
-extern void mac_get_window_bounds P_ ((struct frame *, Rect *, Rect *));
+extern void mac_get_window_structure_bounds P_ ((struct frame *, Rect *));
 extern void mac_get_frame_mouse P_ ((struct frame *, Point *));
 extern void mac_convert_frame_point_to_global P_ ((struct frame *, int *,
 						   int *));
@@ -618,8 +648,10 @@ extern void mac_update_begin P_ ((struct frame *));
 extern void mac_update_end P_ ((struct frame *));
 extern void mac_frame_up_to_date P_ ((struct frame *));
 extern void x_flush P_ ((struct frame *));
-extern void mac_create_frame_window P_ ((struct frame *, int));
+extern void mac_create_frame_window P_ ((struct frame *));
 extern void mac_dispose_frame_window P_ ((struct frame *));
+extern void mac_change_frame_window_wm_state P_ ((struct frame *, WMState,
+						  WMState));
 extern CGContextRef mac_begin_cg_clip P_ ((struct frame *, GC));
 extern void mac_end_cg_clip P_ ((struct frame *));
 extern void mac_create_scroll_bar P_ ((struct scroll_bar *, const Rect *,
@@ -642,12 +674,11 @@ extern void mac_reposition_hourglass P_ ((struct frame *));
 extern Lisp_Object mac_file_dialog P_ ((Lisp_Object, Lisp_Object, Lisp_Object,
 					Lisp_Object, Lisp_Object));
 extern Lisp_Object mac_font_dialog P_ ((FRAME_PTR f));
-extern void x_activate_menubar P_ ((struct frame *));
-extern void free_frame_menubar P_ ((struct frame *));
+extern int mac_activate_menubar P_ ((struct frame *));
 extern void mac_fill_menubar P_ ((widget_value *, int));
-extern void create_and_show_popup_menu P_ ((FRAME_PTR, widget_value *,
-					    int, int, int));
-extern void create_and_show_dialog P_ ((FRAME_PTR, widget_value *));
+extern int create_and_show_popup_menu P_ ((FRAME_PTR, widget_value *,
+					   int, int, int));
+extern int create_and_show_dialog P_ ((FRAME_PTR, widget_value *));
 extern OSStatus mac_get_selection_from_symbol P_ ((Lisp_Object, int,
 						   Selection *));
 extern int mac_valid_selection_target_p P_ ((Lisp_Object));

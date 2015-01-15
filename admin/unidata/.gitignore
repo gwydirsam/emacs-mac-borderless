@@ -1,5 +1,4 @@
-charprop.el
-uni-*.el
+*.elc
 unidata.txt
-Makefile.unix
-Makefile
+
+# arch-tag: 1b0c916f-3060-47b4-a8c9-cff5c3598adf

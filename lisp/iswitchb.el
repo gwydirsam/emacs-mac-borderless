@@ -657,9 +657,12 @@ the selection process begins.  Used by isearchb.el."
     ;; that file now and act as though that buffer had been selected.
     (if (and iswitchb-virtual-buffers
 	     (not (iswitchb-existing-buffer-p)))
-	(let ((virt (car iswitchb-virtual-buffers)))
-	  (find-file-noselect (cdr virt))
-	  (setq iswitchb-matches (list (car virt))
+	(let ((virt (car iswitchb-virtual-buffers))
+	      (new-buf))
+	  ;; Keep the name of the buffer returned by find-file-noselect, as 
+	  ;; the buffer 'virt' could be a symlink to a file of a different name.
+	  (setq new-buf (buffer-name (find-file-noselect (cdr virt))))
+	  (setq iswitchb-matches (list new-buf)
 		iswitchb-virtual-buffers nil)))
 
     ;; Handling the require-match must be done in a better way.
@@ -1010,19 +1013,13 @@ Return the modified list with the last element prepended to it."
 
 	    ;; XEmacs extents are put on by default, doesn't seem to be
 	    ;; any way of switching them off.
-	    (display-completion-list (if iswitchb-matches
-					 iswitchb-matches
-				       iswitchb-buflist)
+	    (display-completion-list (or iswitchb-matches iswitchb-buflist)
 				     :help-string "iswitchb "
 				     :activate-callback
 				     (lambda (x y z)
 				       (message "doesn't work yet, sorry!")))
 	  ;; else running Emacs
-	  (with-current-buffer standard-output
-	    (fundamental-mode))
-	  (display-completion-list (if iswitchb-matches
-				       iswitchb-matches
-				     iswitchb-buflist))))
+	  (display-completion-list (or iswitchb-matches iswitchb-buflist))))
       (setq iswitchb-common-match-inserted nil))))
 
 ;;; KILL CURRENT BUFFER

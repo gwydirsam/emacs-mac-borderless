@@ -27,6 +27,16 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <unistd.h>
 #endif
 
+#ifdef HAVE_PNG
+#if defined HAVE_LIBPNG_PNG_H
+# include <libpng/png.h>
+#else
+# include <png.h>
+#endif
+#endif 
+
+#include <setjmp.h>
+
 /* This makes the fields of a Display accessible, in Xlib header files.  */
 
 #define XLIB_ILLEGAL_ACCESS
@@ -3260,7 +3270,7 @@ static int xbm_load_image P_ ((struct frame *f, struct image *img,
 static int xbm_image_p P_ ((Lisp_Object object));
 static int xbm_read_bitmap_data P_ ((struct frame *f,
 				     unsigned char *, unsigned char *,
-				     int *, int *, unsigned char **));
+				     int *, int *, unsigned char **, int));
 static int xbm_file_p P_ ((Lisp_Object));
 
 
@@ -3287,7 +3297,7 @@ enum xbm_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid XBM image specifications.  */
 
-static struct image_keyword xbm_format[XBM_LAST] =
+static const struct image_keyword xbm_format[XBM_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":file",		IMAGE_STRING_VALUE,			0},
@@ -3651,14 +3661,17 @@ Create_Pixmap_From_Bitmap_Data (f, img, data, fg, bg, non_default_colors)
    buffer's end.  Set *WIDTH and *HEIGHT to the width and height of
    the image.  Return in *DATA the bitmap data allocated with xmalloc.
    Value is non-zero if successful.  DATA null means just test if
-   CONTENTS looks like an in-memory XBM file.  */
+   CONTENTS looks like an in-memory XBM file.  If INHIBIT_IMAGE_ERROR
+   is non-zero, inhibit the call to image_error when the image size is
+   invalid (the bitmap remains unread).  */
 
 static int
-xbm_read_bitmap_data (f, contents, end, width, height, data)
+xbm_read_bitmap_data (f, contents, end, width, height, data, inhibit_image_error)
      struct frame *f;
      unsigned char *contents, *end;
      int *width, *height;
      unsigned char **data;
+     int inhibit_image_error;
 {
   unsigned char *s = contents;
   char buffer[BUFSIZ];
@@ -3710,7 +3723,8 @@ xbm_read_bitmap_data (f, contents, end, width, height, data)
 
   if (!check_image_size (f, *width, *height))
     {
-      image_error ("Invalid image size (see `max-image-size')", Qnil, Qnil);
+      if (!inhibit_image_error)
+	image_error ("Invalid image size (see `max-image-size')", Qnil, Qnil);
       goto failure;
     }
   else if (data == NULL)
@@ -3815,7 +3829,8 @@ xbm_load_image (f, img, contents, end)
   unsigned char *data;
   int success_p = 0;
 
-  rc = xbm_read_bitmap_data (f, contents, end, &img->width, &img->height, &data);
+  rc = xbm_read_bitmap_data (f, contents, end, &img->width, &img->height,
+			     &data, 0);
   if (rc)
     {
       unsigned long foreground = FRAME_FOREGROUND_PIXEL (f);
@@ -3870,9 +3885,8 @@ xbm_file_p (data)
   int w, h;
   return (STRINGP (data)
 	  && xbm_read_bitmap_data (NULL, SDATA (data),
-				   (SDATA (data)
-				    + SBYTES (data)),
-				   &w, &h, NULL));
+				   (SDATA (data) + SBYTES (data)),
+				   &w, &h, NULL, 1));
 }
 
 
@@ -4083,7 +4097,7 @@ enum xpm_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid XPM image specifications.  */
 
-static struct image_keyword xpm_format[XPM_LAST] =
+static const struct image_keyword xpm_format[XPM_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":file",		IMAGE_STRING_VALUE,			0},
@@ -5815,7 +5829,7 @@ x_disable_image (f, img)
       Display *dpy = FRAME_X_DISPLAY (f);
       GC gc;
 
-#ifndef HAVE_NS  //TODO: NS support, however this not needed for toolbars
+#ifndef HAVE_NS  /* TODO: NS support, however this not needed for toolbars */
 
 #ifdef HAVE_MACGUI
 #define MaskForeground(f)  PIX_MASK_DRAW
@@ -6041,7 +6055,7 @@ enum pbm_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword pbm_format[PBM_LAST] =
+static const struct image_keyword pbm_format[PBM_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":file",		IMAGE_STRING_VALUE,			0},
@@ -6463,7 +6477,7 @@ enum png_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword png_format[PNG_LAST] =
+static const struct image_keyword png_format[PNG_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":data",		IMAGE_STRING_VALUE,			0},
@@ -6508,12 +6522,6 @@ png_image_p (object)
 
 
 #ifdef HAVE_PNG
-
-#if defined HAVE_LIBPNG_PNG_H
-# include <libpng/png.h>
-#else
-# include <png.h>
-#endif
 
 #ifdef HAVE_NTGUI
 /* PNG library details.  */
@@ -7085,7 +7093,7 @@ enum jpeg_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword jpeg_format[JPEG_LAST] =
+static const struct image_keyword jpeg_format[JPEG_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":data",		IMAGE_STRING_VALUE,			0},
@@ -7146,7 +7154,6 @@ jpeg_image_p (object)
 
 #include <jpeglib.h>
 #include <jerror.h>
-#include <setjmp.h>
 
 #ifdef HAVE_STLIB_H_1
 #define HAVE_STDLIB_H 1
@@ -7673,7 +7680,7 @@ enum tiff_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword tiff_format[TIFF_LAST] =
+static const struct image_keyword tiff_format[TIFF_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":data",		IMAGE_STRING_VALUE,			0},
@@ -8139,7 +8146,7 @@ enum gif_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword gif_format[GIF_LAST] =
+static const struct image_keyword gif_format[GIF_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":data",		IMAGE_STRING_VALUE,			0},
@@ -8283,8 +8290,8 @@ gif_read_from_memory (file, buf, len)
 /* Load GIF image IMG for use on frame F.  Value is non-zero if
    successful.  */
 
-static int interlace_start[] = {0, 4, 2, 1};
-static int interlace_increment[] = {8, 8, 4, 2};
+static const int interlace_start[] = {0, 4, 2, 1};
+static const int interlace_increment[] = {8, 8, 4, 2};
 
 static int
 gif_load (f, img)
@@ -8790,7 +8797,7 @@ enum svg_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword svg_format[SVG_LAST] =
+static const struct image_keyword svg_format[SVG_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":data",		IMAGE_STRING_VALUE,			0},
@@ -9278,7 +9285,7 @@ enum gs_keyword_index
 /* Vector of image_keyword structures describing the format
    of valid user-defined image specifications.  */
 
-static struct image_keyword gs_format[GS_LAST] =
+static const struct image_keyword gs_format[GS_LAST] =
 {
   {":type",		IMAGE_SYMBOL_VALUE,			1},
   {":pt-width",		IMAGE_POSITIVE_INTEGER_VALUE,		1},
@@ -9673,7 +9680,7 @@ list; if none is loaded, the running session of Emacs won't
 support the image type.  Types 'pbm and 'xbm don't need to be
 listed; they are always supported.  */);
   Vimage_library_alist = Qnil;
-  Fput (intern ("image-library-alist"), Qrisky_local_variable, Qt);
+  Fput (intern_c_string ("image-library-alist"), Qrisky_local_variable, Qt);
 
   DEFVAR_LISP ("max-image-size", &Vmax_image_size,
     doc: /* Maximum size of images.
@@ -9690,105 +9697,105 @@ non-numeric, there is no explicit limit on the size of images.  */);
   Vimage_type_cache = Qnil;
   staticpro (&Vimage_type_cache);
 
-  Qpbm = intern ("pbm");
+  Qpbm = intern_c_string ("pbm");
   staticpro (&Qpbm);
   ADD_IMAGE_TYPE (Qpbm);
 
-  Qxbm = intern ("xbm");
+  Qxbm = intern_c_string ("xbm");
   staticpro (&Qxbm);
   ADD_IMAGE_TYPE (Qxbm);
 
   define_image_type (&xbm_type, 1);
   define_image_type (&pbm_type, 1);
 
-  Qcount = intern ("count");
+  Qcount = intern_c_string ("count");
   staticpro (&Qcount);
 
-  QCascent = intern (":ascent");
+  QCascent = intern_c_string (":ascent");
   staticpro (&QCascent);
-  QCmargin = intern (":margin");
+  QCmargin = intern_c_string (":margin");
   staticpro (&QCmargin);
-  QCrelief = intern (":relief");
+  QCrelief = intern_c_string (":relief");
   staticpro (&QCrelief);
-  QCconversion = intern (":conversion");
+  QCconversion = intern_c_string (":conversion");
   staticpro (&QCconversion);
-  QCcolor_symbols = intern (":color-symbols");
+  QCcolor_symbols = intern_c_string (":color-symbols");
   staticpro (&QCcolor_symbols);
-  QCheuristic_mask = intern (":heuristic-mask");
+  QCheuristic_mask = intern_c_string (":heuristic-mask");
   staticpro (&QCheuristic_mask);
-  QCindex = intern (":index");
+  QCindex = intern_c_string (":index");
   staticpro (&QCindex);
-  QCmatrix = intern (":matrix");
+  QCmatrix = intern_c_string (":matrix");
   staticpro (&QCmatrix);
-  QCcolor_adjustment = intern (":color-adjustment");
+  QCcolor_adjustment = intern_c_string (":color-adjustment");
   staticpro (&QCcolor_adjustment);
-  QCmask = intern (":mask");
+  QCmask = intern_c_string (":mask");
   staticpro (&QCmask);
 
-  Qlaplace = intern ("laplace");
+  Qlaplace = intern_c_string ("laplace");
   staticpro (&Qlaplace);
-  Qemboss = intern ("emboss");
+  Qemboss = intern_c_string ("emboss");
   staticpro (&Qemboss);
-  Qedge_detection = intern ("edge-detection");
+  Qedge_detection = intern_c_string ("edge-detection");
   staticpro (&Qedge_detection);
-  Qheuristic = intern ("heuristic");
+  Qheuristic = intern_c_string ("heuristic");
   staticpro (&Qheuristic);
 
-  Qpostscript = intern ("postscript");
+  Qpostscript = intern_c_string ("postscript");
   staticpro (&Qpostscript);
 #ifdef HAVE_GHOSTSCRIPT
   ADD_IMAGE_TYPE (Qpostscript);
-  QCloader = intern (":loader");
+  QCloader = intern_c_string (":loader");
   staticpro (&QCloader);
-  QCbounding_box = intern (":bounding-box");
+  QCbounding_box = intern_c_string (":bounding-box");
   staticpro (&QCbounding_box);
-  QCpt_width = intern (":pt-width");
+  QCpt_width = intern_c_string (":pt-width");
   staticpro (&QCpt_width);
-  QCpt_height = intern (":pt-height");
+  QCpt_height = intern_c_string (":pt-height");
   staticpro (&QCpt_height);
 #endif /* HAVE_GHOSTSCRIPT */
 
 #if defined (HAVE_XPM) || defined (HAVE_MACGUI) || defined (HAVE_NS)
-  Qxpm = intern ("xpm");
+  Qxpm = intern_c_string ("xpm");
   staticpro (&Qxpm);
   ADD_IMAGE_TYPE (Qxpm);
 #endif
 
 #if defined (HAVE_JPEG) || defined (HAVE_MACGUI) || defined (HAVE_NS)
-  Qjpeg = intern ("jpeg");
+  Qjpeg = intern_c_string ("jpeg");
   staticpro (&Qjpeg);
   ADD_IMAGE_TYPE (Qjpeg);
 #endif
 
 #if defined (HAVE_TIFF) || defined (HAVE_MACGUI) || defined (HAVE_NS)
-  Qtiff = intern ("tiff");
+  Qtiff = intern_c_string ("tiff");
   staticpro (&Qtiff);
   ADD_IMAGE_TYPE (Qtiff);
 #endif
 
 #if defined (HAVE_GIF) || defined (HAVE_MACGUI) || defined (HAVE_NS)
-  Qgif = intern ("gif");
+  Qgif = intern_c_string ("gif");
   staticpro (&Qgif);
   ADD_IMAGE_TYPE (Qgif);
 #endif
 
 #if defined (HAVE_PNG) || defined (HAVE_MACGUI) || defined (HAVE_NS)
-  Qpng = intern ("png");
+  Qpng = intern_c_string ("png");
   staticpro (&Qpng);
   ADD_IMAGE_TYPE (Qpng);
 #endif
 
 #if defined (HAVE_RSVG) || USE_MAC_IMAGE_IO
-  Qsvg = intern ("svg");
+  Qsvg = intern_c_string ("svg");
   staticpro (&Qsvg);
   ADD_IMAGE_TYPE (Qsvg);
 #ifdef HAVE_NTGUI
   /* Other libraries used directly by svg code.  */
-  Qgdk_pixbuf = intern ("gdk-pixbuf");
+  Qgdk_pixbuf = intern_c_string ("gdk-pixbuf");
   staticpro (&Qgdk_pixbuf);
-  Qglib = intern ("glib");
+  Qglib = intern_c_string ("glib");
   staticpro (&Qglib);
-  Qgobject = intern ("gobject");
+  Qgobject = intern_c_string ("gobject");
   staticpro (&Qgobject);
 #endif /* HAVE_NTGUI  */
 #endif /* HAVE_RSVG || USE_MAC_IMAGE_IO */

@@ -251,6 +251,18 @@ contents of the primary selection are lost.
 such as @kbd{M-w} (@code{kill-ring-save}), that text is also saved in
 the primary selection.  @xref{Killing}.
 
+@vindex select-active-regions
+@vindex yank-pop-change-selection
+  If you set the region using the keyboard, the text within the region
+is not normally saved to the primary selection.  However, if you
+change the variable @code{select-active-regions} to @code{t}, the
+region is saved to the primary selection each time you activate the
+mark.  The primary selection is updated if you subsequently change the
+region by moving point.  If you change the variable
+@code{yank-pop-change-selection} to @code{t}, rotating the kill ring
+with @kbd{M-y} (@code{yank-pop}) also saves the new yank to the
+primary selection (@pxref{Yanking}).
+
 @cindex cut buffer
 @vindex x-cut-buffer-max
   Whenever Emacs saves some text to the primary selection, it may also
@@ -579,9 +591,9 @@ appearance of all the frames Emacs creates, including the initial one.
 @table @kbd
 @item C-z
 @kindex C-z @r{(X windows)}
-@findex iconify-or-deiconify-frame
-Iconify (``minimize'') the selected Emacs frame
-(@code{iconify-or-deiconify-frame}).  @xref{Exiting}.
+@findex suspend-frame
+Minimize (or ``iconify) the selected Emacs frame
+(@code{suspend-frame}).  @xref{Exiting}.
 
 @item C-x 5 0
 @kindex C-x 5 0

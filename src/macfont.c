@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "dispextern.h"
@@ -904,7 +905,8 @@ struct font_driver macfont_driver =
     NULL,			/* end_for_frame */
     macfont_shape,
     NULL,			/* check */
-    macfont_variation_glyphs
+    macfont_variation_glyphs,
+    NULL,			/* filter_properties */
   };
 
 static Lisp_Object
@@ -1663,7 +1665,7 @@ macfont_list (frame, spec)
   val = Qnil;
 
  finish:
-  font_add_log ("macfont-list", spec, val);
+  FONT_ADD_LOG ("macfont-list", spec, val);
   if (charset) CFRelease (charset);
   if (languages) CFRelease (languages);
   if (attributes) CFRelease (attributes);
@@ -1704,7 +1706,7 @@ macfont_match (frame, spec)
     }
   UNBLOCK_INPUT;
 
-  font_add_log ("macfont-match", spec, entity);
+  FONT_ADD_LOG ("macfont-match", spec, entity);
   return entity;
 }
 
@@ -1824,20 +1826,23 @@ macfont_open (f, entity, pixel_size)
       && (XINT (AREF (entity, FONT_SPACING_INDEX))
 	  == FONT_SPACING_SYNTHETIC_MONO))
     macfont_info->synthetic_mono_p = 1;
-  val = assq_no_quit (QCantialias, AREF (entity, FONT_EXTRA_INDEX));
-  if (CONSP (val))
-    macfont_info->no_antialias_p = NILP (XCDR (val));
-  else if (!macfont_info->synthetic_italic_p && !macfont_info->synthetic_bold_p)
+  if (!macfont_info->synthetic_italic_p && !macfont_info->synthetic_bold_p)
     {
-      int threshold;
-      Boolean valid_p;
+      val = assq_no_quit (QCantialias, AREF (entity, FONT_EXTRA_INDEX));
+      if (CONSP (val))
+	macfont_info->no_antialias_p = NILP (XCDR (val));
+      else
+	{
+	  int threshold;
+	  Boolean valid_p;
 
-      threshold =
-	CFPreferencesGetAppIntegerValue (CFSTR ("AppleAntiAliasingThreshold"),
-					 kCFPreferencesCurrentApplication,
-					 &valid_p);
-      if (valid_p && size <= threshold)
-	macfont_info->no_antialias_p = 1;
+	  threshold =
+	    CFPreferencesGetAppIntegerValue (CFSTR ("AppleAntiAliasingThreshold"),
+					     kCFPreferencesCurrentApplication,
+					     &valid_p);
+	  if (valid_p && size <= threshold)
+	    macfont_info->no_antialias_p = 1;
+	}
     }
 
   glyph = macfont_get_glyph_for_character (font, ' ');
@@ -2896,7 +2901,7 @@ mac_ctfont_shape (font, string, glyph_layouts, glyph_len)
 
 /* The function below seems to cause a memory leak for the CFString
    created by CFStringCreateWithCharacters as of Mac OS X 10.5.8 and
-   10.6.1.  For now, we use the NSGlyphInfo version instead.  */
+   10.6.2.  For now, we use the NSGlyphInfo version instead.  */
 #if USE_CT_GLYPH_INFO
 CGGlyph
 mac_ctfont_get_glyph_for_cid (font, collection, cid)

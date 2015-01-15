@@ -1,6 +1,443 @@
-2009-07-29  Chong Yidong  <cyd@stupidchicken.com>
+2009-12-01  Bill Wohler  <wohler@newt.com>
 
-	* Version 23.1 released.
+	* mh-e.texi (Searching): Use mh vfolder_format and fix typo in database
+	path for mairix example. Specify -q in namazu example since namazu is
+	excessively garrulous.
+
+2009-11-29  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Remote processes): Improve eshell example with "su"
+	and "sudo" commands.
+
+2009-11-28  Chong Yidong  <cyd@stupidchicken.com>
+
+	* semantic.texi (Analyzer Internals): Rename from Analyzer.
+
+	* sem-user.texi (Semantic mode user commands): Fix key syntax.
+	Document semantic-complete-analyze-inline.
+	(Semanticdb search debugging commands): Minor clarification.
+	(Analyzer, Smart Completion, Smart Summary, Smart Jump)
+	(Analyzer Debug) New nodes, adapted from the upstream Semantic user
+	manual.
+	(Semantic mode): Link to Idle Scheduler.
+
+2009-11-28  Kevin Ryde  <user42@zip.com.au>
+
+	* cl.texi (Porting Common Lisp): Update EIEIO dead ftp link to a
+	@pxref, now eieio is in emacs.
+
+	* erc.texi (Development): Correction to git tutorial url.
+
+2009-11-26  Glenn Morris  <rgm@gnu.org>
+
+	* faq.texi (Latest version of Emacs): Mention stability of development
+	version.
+	(Problems with very large files): Max buffer size increase in 23.2.
+	(VM): VM has moved house again.
+
+2009-11-22  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Radix modes): Discuss alternate bases for two's complement
+	notations.
+
+2009-11-20  Carsten Dominik  <dominik@u016822.science.uva.nl>
+
+	* org.texi: (Column attributes): Fix documentaion of new operators.
+
+2009-11-20  Chong Yidong  <cyd@stupidchicken.com>
+
+	* sem-user.texi (Semanticdb Search Configuration): Rearrange nodes.
+	(Search Throttle, Semanticdb Roots, Include paths, Idle Scheduler)
+	(Idle Completions Mode): Numerous copyedits.
+
+2009-11-17  Juanma Barranquero  <lekktu@gmail.com>
+
+	* semantic.texi (Semantic Internals, Glossary):
+	* sem-user.texi (Semantic mode, Include paths, Idle Scheduler)
+	(Semanticdb search debugging commands): Fix typos.
+
+2009-11-16  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Radix modes): Mention twos-complement notation.
+
+2009-11-16  Juanma Barranquero  <lekktu@gmail.com>
+
+	* makefile.w32-in (INFO_TARGETS, DVI_TARGETS, clean): Add semantic.
+	($(infodir)/semantic, semantic.dvi): New targets.
+
+2009-11-16  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Makefile.in: Build the Semantic manual.
+
+	* semantic.texi, sem-user.texi: New files, adapted from the Semantic
+	repository.
+
+2009-11-16  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dbus.texi (Receiving Method Calls): New defun
+	`dbus-unregister-service'.
+
+2009-11-15  Carsten Dominik  <carsten.dominik@gmail.com>
+
+	* org.texi (Speed keys): New section.
+
+2009-11-13  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dbus.texi (Type Conversion): Fix typo.
+	(Asynchronous Methods): Rename `dbus-registered-functions-table' to
+	`dbus-registered-objects-table'.
+	(Receiving Method Calls): New defun `dbus-register-property'.  Move
+	`dbus-unregister-object' here.
+
+2009-11-13  Carsten Dominik  <carsten.dominik@gmail.com>
+
+	* org.texi: Removed @Ie, @ie, @Eg, @eg macros.
+
+2009-11-13  James TD Smith  <ahktenzero@mohorovi.cc>
+
+	* org.texi (Column attributes): Add the new age summary operators.
+	Also, mention the fact you can only use one summary operator per
+	property.
+
+2009-11-13  John Wiegley  <johnw@newartisans.com>
+
+	* org.texi (Tracking your habits): Added a new section in the
+	manual about how to track habits.
+	(Resolving idle time): Added a section on how idle and
+	dangling clocks are resolved.
+
+2009-11-13  Carsten Dominik  <carsten.dominik@gmail.com>
+
+	* org.texi (Agenda commands): Document the new `i' command.
+	(Inserting deadline/schedule): Document logging changes
+	of scheduling and deadline times stamps.
+	(In-buffer settings): Document the in-buffer keywords for logging
+	changes of scheduling and deadline times stamps.
+	(Structure editing, Plain lists): Document indentation
+	cycling in empty entries with TAB.
+	(Archiving): Document the default archiving command.
+	(Moving subtrees): Document the new keys for archiving.
+	(Internal archiving): Fix incorrect key.
+	(Agenda commands): Document the TODO set switching commands.
+	(Agenda commands): Document the new archiving keys.
+	(Clocking work time): Better description on how to save
+	and restore a clock.
+	(Resolving idle time): Mention the x11idle program to get true
+	idleness also under X11.
+	(Resolving idle time): Use @kbd instead of @key for normal
+	letters, because this is how he rest of the manual does this.
+	(Pushing to MobileOrg): Mention that `org-directory'
+	should be set.
+	(Agenda commands): Document that SPC is a filter for
+	any tag.
+	(Search view): Renamed from "Keyword search".
+	(Capure): New chapter.
+	(Markup): New chapter.
+	(Links in HTML export, Images in HTML export): Extend
+	the section titles.
+	(Images in HTML export): Document the align option.
+	(Text areas in HTML export): Extend the section title.
+	(Images in LaTeX export): Explain image placement in LaTeX.
+
+2009-11-10  Glenn Morris  <rgm@gnu.org>
+
+	* sc.texi (Hints to MUA Authors): MUA should do any decoding.
+
+2009-11-08  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Auto-save and Backup): Disable backups just for a
+	method.
+
+	* trampver.texi: Update release number.
+
+2009-11-07  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.1.17.
+
+	* trampver.texi: Update release number.
+
+2009-10-29  Glenn Morris  <rgm@gnu.org>
+
+	* texinfo.tex: Update to version 2009-08-14.15 from ftp://tug.org/tex/.
+
+2009-10-23  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (External methods): Temporary files are kept for
+	`rsync' and `rsyncc' methods.
+
+2009-10-09  Juanma Barranquero  <lekktu@gmail.com>
+
+	* eieio.texi: Fix typos.
+
+2009-10-07  Chong Yidong  <cyd@stupidchicken.com>
+
+	* cl.texi (Argument Lists): Clarify explicit keyword arguments.
+
+2009-10-07  Juanma Barranquero  <lekktu@gmail.com>
+
+	* makefile.w32-in (INFO_TARGETS, DVI_TARGETS, clean): Add eieio, ede.
+	($(infodir)/eieio, eieio.dvi, $(infodir)/ede, ede.dvi): New targets.
+
+2009-10-07  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Makefile.in: Build EIEIO and EDE manuals.
+
+2009-10-07  Eric Ludlam  <zappo@gnu.org>
+
+	* eieio.texi:
+	* ede.texi: New files.
+
+2009-10-05  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Remote processes): Association of a pty is not supported.
+
+2009-10-01  Carsten Dominik  <carsten.dominik@gmail.com>
+
+	* org.texi (Pushing to MobileOrg): Document `org-mobile-files'.
+	(Processing LaTeX fragments): Document that the size of images can be
+	changes using the variable `org-format-latex-options'.
+	(The date/time prompt, Timestamps): Be more accurate over ISO format
+	dates and times.
+	(Visibility cycling): Document showeverything keyword.
+	(In-buffer settings): Document showeverything keyword.
+	(Setting up the staging area): Fix the example.
+	(MobileOrg): New section.
+	(Agenda commands, Exporting Agenda Views): Document exporting the
+	agenda view to Org files.
+
+2009-09-28  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (History): Add IMAP support.
+	(External methods): Add `imap' and `imaps' methods.
+	(GVFS based methods): Add indices for `davs'.
+	(Password handling): Rename anchors.  Add IMAP entries for
+	~/.authinfo.gpg.
+
+	* trampver.texi: Set default value of `emacsimap'.
+
+2009-09-22  Daiki Ueno  <ueno@unixuser.org>
+
+	* gnus.texi (Security): Document mm-sign-option and mm-encrypt-option.
+
+2009-09-13  Chong Yidong  <cyd@stupidchicken.com>
+
+	* dired-x.texi (Technical Details): Delete
+	dired-up-directory (Bug#4292).
+
+2009-09-03  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Frequently Asked Questions): New item for emacsclient.
+
+2009-09-02  Carsten Dominik  <carsten.dominik@gmail.com>
+
+	* org.texi (Effort estimates): Document new effort setting commands.
+	(Agenda commands): Document the new keys fro agenda time motion.
+	Document entry text mode.  Improve documentation of the keys to include
+	inactive time stamps into the agenda view.
+	(Feedback): Document the new bug report command.
+	(Structure editing): Added an index entry for the sorting of subtrees.
+
+2009-09-02  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* auth.texi (Help for users): Corrected markup.
+
+2009-09-02  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-mime.texi (time-date): Mention float-time.
+
+2009-08-30  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Simplifying Formulas): Improve the wording.
+
+2009-08-29  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* auth.texi: Rewritten for coverage and clarity.
+
+2009-08-29  Katsumi Yamaoka  <yamaoka@jpl.org>
+
+	* gnus.texi (Expiring Mail): Mention
+	gnus-mark-copied-or-moved-articles-as-expirable.
+	(Various Various): Mention gnus-safe-html-newsgroups.
+
+	* gnus-news.texi: Mention
+	gnus-mark-copied-or-moved-articles-as-expirable.
+
+	* emacs-mime.texi (Display Customization): Add xref to
+	gnus-safe-html-newsgroups.
+
+2009-08-28  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Version Control): Remove.
+	(Obtaining Tramp): Update cvs checkout command.  Remove nightly tarballs
+	reference.
+	(External methods): Correct `scpc' concept index entries.  New method
+	`rsyncc'.
+	(External packages): New subsections "Filename completion" and "File
+	attributes cache".
+
+2009-08-27  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Rewrite Rules): Improve the example.
+	(Simplifying Formulas): Explain use of the I and H flags for
+	simplification.
+
+2009-08-25  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dbus.texi (Bus names): Add optional parameter TIMEOUT to dbus-ping.
+	Describe autostart behaviour of dbus-ping.
+	(Synchronous Methods, Asynchronous Methods): Use English numeric format
+	for timeout values.
+	(Top): Remove footnote saying D-Bus is not enabled by
+	default.  (Bug#4256)
+
+2009-08-23  Daiki Ueno  <ueno@unixuser.org>
+
+	* epa.texi (Quick start): Don't refer to nonexistent epa-mode.
+	Reported by Jari Aalto (Bug#4211).
+	(Mail-mode integration): Mention epa-mail-mode and
+	epa-global-mail-mode.
+	(Encrypting/decrypting *.gpg files): Don't refer to nonexistent
+	epa-setup.
+
+2009-08-16  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dbus.texi (Asynchronous Methods): Allow nil handler.
+
+2009-08-15  Michael Kifer  <kifer@cs.stonybrook.edu>
+
+	* ediff.texi (ediff-current-file): Add information about this new function.
+
+	* viper.texi: Add information about C-s in viper's search command.
+
+2009-08-09  Colin Williams  <lackita@gmail.com>  (tiny change)
+
+	* calc.texi (Date Forms): Fix typos.
+
+2009-08-08  Glenn Morris  <rgm@gnu.org>
+
+	* org.texi (Agenda commands): Restore clobbered change.
+
+2009-08-07  Eli Zaretskii  <eliz@gnu.org>
+
+	* calc.texi (Graphics, Devices): Update with the peculiarities of
+	operation on MS-Windows.
+
+2009-08-06  Carsten Dominik  <carsten.dominik@gmail.com>
+
+	* org.texi (Publishing action): Improve documentation of file
+	names when publishing to the source directory.
+	(Clean view): Document `org-indent-mode'.
+	(Clocking work time): Add documentation for the
+	new :timetamp option when creating a clock report.
+	(Paragraphs): Fix many typos.
+	(Plain lists): Remove duplicate explanation about the
+	`C-c *' command.
+	(Literal examples): Update to reflect the new behavior
+	of the -n -r -k switches when exporting source code examples.
+	(Structure editing): Add information about `C-c *',
+	converting a plain list into a list of Org items.
+	(Remember): Small rephrasing of the paragraph
+	describing remember.el.  Also mentioned that remember.el is part
+	of Emacs 23, not Emacs 22.
+	(Clocking work time): Add documentation about
+	displaying the current clocking time against the effort estimate.
+	Also add a footnote about using `org-clock-in-prepare-hook' to add
+	an effort estimate on the fly, just before clocking it.
+	(Footnotes): Document automatic renumbering and
+	sorting.
+	(Agenda commands): Document new bulk commands.
+	(Plain lists): Document new behavior of
+	`org-cycle-include-plain-lists'.
+	 Hyphenation only in TeX.
+	(Clocking work time): Document the key to update effort
+	estimates.
+	(Clocking work time): Document the clock time display.
+	(Structure editing, TODO basics): Document new
+	variables.
+	(Column attributes): Document new colciew operators.
+	(Publishing options): Document :xml-declaration.
+	(Tracking TODO state changes): Document the
+	LOG_INTO_DRAWER property.
+	(Literal examples): Document the new implementation for
+	editing source code.
+	(Publishing action): Mention the new publishing
+	function, to publish an Org source file.
+	(Publishing links): Mention how to link to an Org source file.
+	(Macro replacement): Document new macros.
+	(Handling links): Document type-specific completion
+	when inserting links.
+	(Structure editing, Plain lists): Improve documentation
+	on sorting.
+	(Internal links): Document custom ids for links.
+	(Handling links): Document custom ids for links.
+	(CSS support): Document new class.
+	(Refiling notes): Document the possibility to create new nodes
+	during refiling.
+	(Agenda commands): Document the "?" operator to find
+	tasks without effort setting.
+	(Exporting agenda information): Section moved.
+	(RSS Feeds): New section.
+	(Built-in table editor): Document M-e and M-a navigate
+	inside table field.
+	(Stuck projects): Docment that projects identified as
+	un-stuck will still be searchd for stuck sub-projects.
+	(Paragraphs): Document centering.
+	(Creating timestamps, Agenda commands): Document new
+	behavior when changing time stamps.
+	(Structure editing): Document the new command
+	`org-clone-subtree-with-time-shift'.
+	(Publishing): Refresh this chapter.
+	(Export options, Export options, In-buffer settings):
+	Document the new keywords.
+	(Matching tags and properties): Collect all
+	documentation about tags/property matches here.
+	(Setting tags): Document `org-tag-persistent-alist'.
+	(Weekly/daily agenda): New section.
+	(Orgstruct mode): Describe `orgstruct++-mode'.
+	(Drawers): Mention the LOGBOOK drawer.
+	(Export options, Sectioning structure): Document the
+	#+LEATEX_HEADER in-buffer setting.
+	(Bugs): Section removed.
+	(Hooks): New section.
+	(Add-on packages): Moved here from old location.
+	(Context-sensitive commands): New section.
+	(Setting tags): Document newline option.
+	(Global TODO list, Matching tags and properties):
+	Mention more variables.
+	(Checkboxes): Update to changed command behavior.
+
+2009-08-02  Eric Yu  <sucode@gmail.com>  (tiny change)
+
+	* speedbar.texi (Basic Key Bindings): Fix typo.
+
+2009-07-30  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Vector/Matrix Functions): Add index entries for both
+	"v" and "V" key bindings.  Mention that `calc-matrix-brackets' only
+	affects matrices with more than one row.
+	(Help Commands): Add index entries for "prefix ?" key bindings.
+
+2009-07-29  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Stack Manipulation Commands): Add documentation for
+	`calc-transpose-lines'
+
+2009-07-27  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dbus.texi (Receiving Method Calls): Describe special return value
+	`:ignore'.
+
+2009-07-24  Alan Mackenzie  <acm@muc.de>
+
+	* cc-mode.texi (Config Basics, File Styles): Document that at mode
+	initialization, any individual variable setting now takes precedence
+	over one done via c-file-style/c-file-offsets.
+
+2009-07-21  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi (Undoing Mistakes): Mention that the undo list will be
+	truncated when Calc is quit.
+	(Customizing Calc): Document `calc-undo-length'.
 
 2009-07-20  Chong Yidong  <cyd@stupidchicken.com>
 
@@ -15,6 +452,40 @@
 2009-07-01  Andreas Schwab  <aschwab@redhat.com>
 
 	* dbus.texi (Type Conversion): Don't use literal control character.
+
+2009-07-01  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (GVFS based methods): New section.
+	(Remote processes): Processes for GVFS based methods run locally.
+
+2009-06-30  Michael Albinus  <michael.albinus@gmx.de>
+
+	* tramp.texi (Inline methods, External methods, Gateway methods): Avoid
+	the words "kludge" and hack".
+	(External methods): Add `synce' method.
+
+	* trampver.texi: Update release number.
+
+2009-06-22  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.1.16.
+
+	* tramp.texi (History): Add GVFS support.
+	(External methods): Precise `rsync' description.  Add `dav', `davs' and
+	`obex' methods.  Add 'tramp-gvfs-methods' option.
+	(Multi-hops): Cells of `tramp-default-proxies-alist' can also be Lisp
+	forms.
+	(Remote Programs): Introduce `tramp-own-remote-path'.
+	(Remote processes): New subsection "Running remote programs that create
+	local X11 windows".
+	(Frequently Asked Questions): Improve code for disabling vc.
+
+	* trampver.texi: Update release number.  Set default value of
+	`emacsgvfs'.
+
+2009-06-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Branch for 23.1.
 
 2009-06-17  Glenn Morris  <rgm@gnu.org>
 
@@ -460,7 +931,7 @@
 
 2009-01-03  Michael Albinus  <michael.albinus@gmx.de>
 
-	* trampver.texi.in (top): Declare ipv6prefix and ipv6postfix.
+	* trampver.texi (top): Declare ipv6prefix and ipv6postfix.
 
 	* tramp.texi (Filename Syntax, Filename completion): Handle IPv6
 	addresses.
@@ -510,7 +981,7 @@
 2008-12-04  David Engster  <dengste@eml.cc>
 
 	* gnus.texi (nnmairix): Mention mairix.el.  Point out the importance
-	  of nnml-get-new-mail.  Change URL for mairix patch.
+	of nnml-get-new-mail.  Change URL for mairix patch.
 
 2008-12-02  Carsten Dominik  <carsten.dominik@gmail.com>
 
@@ -4711,7 +5182,7 @@
 
 	* url.texi: Correct typos.
 	(Retrieving URLs): @var{nil}->@code{nil}.
-	(HTTP language/coding, mailto): Replace  "GNU Emacs Manual" with
+	(HTTP language/coding, mailto): Replace "GNU Emacs Manual" with
 	the standard "The GNU Emacs Manual" in fifth argument of @xref's.
 	(Dealing with HTTP documents): @inforef->@xref.
 

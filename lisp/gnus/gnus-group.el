@@ -110,6 +110,18 @@ If nil, no groups are permanently visible."
   :group 'gnus-group-listing
   :type '(choice regexp (const nil)))
 
+(defcustom gnus-safe-html-newsgroups "\\`nnrss[+:]"
+  "Groups in which links in html articles are considered all safe.
+The value may be a regexp matching those groups, a list of group names,
+or nil.  This overrides `mm-w3m-safe-url-regexp' (which see).  This is
+effective only when emacs-w3m renders html articles, i.e., in the case
+`mm-text-html-renderer' is set to `w3m'."
+  :version "23.2"
+  :group 'gnus-group-various
+  :type '(choice regexp
+		 (repeat :tag "List of group names" (string :tag "Group"))
+		 (const nil)))
+
 (defcustom gnus-list-groups-with-ticked-articles t
   "*If non-nil, list groups that have only ticked articles.
 If nil, only list groups that have unread articles."
@@ -1360,7 +1372,8 @@ if it is a string, only list groups matching REGEXP."
 	  (setq not-in-list (delete group not-in-list)))
 	(when (gnus-group-prepare-logic
 	       group
-	       (and unread		; This group might be unchecked
+	       (and (or unread		; This group might be unchecked
+			predicate)	; Check if this group should be listed
 		    (or (not (stringp regexp))
 			(string-match regexp group))
 		    (<= (setq clevel (gnus-info-level info)) level)
@@ -1374,7 +1387,7 @@ if it is a string, only list groups matching REGEXP."
 		       (if (eq unread t) ; Unactivated?
 			   gnus-group-list-inactive-groups
 					; We list unactivated
-			 (> unread 0))
+			 (and (numberp unread) (> unread 0)))
 					; We list groups with unread articles
 		       (and gnus-list-groups-with-ticked-articles
 			    (cdr (assq 'tick (gnus-info-marks info))))

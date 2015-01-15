@@ -92,7 +92,8 @@
 		  (sexp :tag "Value")))))
 
 (defcustom file-name-shadow-properties
-  '(face file-name-shadow field shadow)
+  ;; FIXME: should we purecopy this?
+'(face file-name-shadow field shadow)
   "Properties given to the `shadowed' part of a filename in the minibuffer.
 Only used when `file-name-shadow-mode' is active.
 If Emacs is not running under a window system,
@@ -102,7 +103,7 @@ If Emacs is not running under a window system,
   :version "22.1")
 
 (defcustom file-name-shadow-tty-properties
-  '(before-string "{" after-string "} " field shadow)
+  (purecopy '(before-string "{" after-string "} " field shadow))
   "Properties given to the `shadowed' part of a filename in the minibuffer.
 Only used when `file-name-shadow-mode' is active and Emacs
 is not running under a window-system; if Emacs is running under a window
@@ -216,6 +217,11 @@ that portion dim, invisible, or otherwise less visually noticeable.
 With prefix argument ARG, turn on if positive, otherwise off.
 Returns non-nil if the new state is enabled."
   :global t
+  ;; We'd like to use custom-initialize-set here so the setup is done
+  ;; before dumping, but at the point where the defcustom is evaluated,
+  ;; the corresponding function isn't defined yet, so
+  ;; custom-initialize-set signals an error.
+  :initialize 'custom-initialize-delay
   :init-value t
   :group 'minibuffer
   :version "22.1"

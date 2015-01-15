@@ -1,7 +1,7 @@
 ;;; ffap.el --- find file (or url) at point
 
-;; Copyright (C) 1995, 1996, 1997, 2000, 2001, 2002, 2003, 2004,
-;;   2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 1996, 1997, 2000, 2001, 2002, 2003, 2004, 2005,
+;;   2006, 2007, 2008, 2009  Free Software Foundation, Inc.
 
 ;; Author: Michelangelo Grigni <mic@mathcs.emory.edu>
 ;; Maintainer: FSF
@@ -106,16 +106,12 @@
 
 ;;; Code:
 
-(provide 'ffap)
-
-;; Please do not delete this variable, it is checked in bug reports.
-(defconst ffap-version "1.9-fsf <97/06/25 13:21:41 mic>"
-  "The version of ffap: \"Major.Minor-Build <Timestamp>\"")
-
+(define-obsolete-variable-alias 'ffap-version 'emacs-version "23.2")
 
 (defgroup ffap nil
   "Find file or URL at point."
-  :link '(url-link :tag "URL" "ftp://ftp.mathcs.emory.edu/pub/mic/emacs/")
+  ;; Dead 2009/07/05.
+;;  :link '(url-link :tag "URL" "ftp://ftp.mathcs.emory.edu/pub/mic/emacs/")
   :group 'matching
   :group 'convenience)
 
@@ -364,7 +360,7 @@ Actual search is done by `ffap-next-guess'."
   "Like `ffap-next', but search with `ffap-url-regexp'."
   (interactive)
   (let ((ffap-next-regexp ffap-url-regexp))
-    (if (interactive-p)
+    (if (called-interactively-p 'interactive)
 	(call-interactively 'ffap-next)
       (ffap-next back wrap))))
 
@@ -955,15 +951,22 @@ If t, `ffap-tex-init' will initialize this when needed.")
 		      "/pub/gnu/emacs/elisp-archive/"))
     (substring name 2))))
 
+(defcustom ffap-rfc-path
+  (concat (ffap-host-to-filename "ftp.rfc-editor.org") "/in-notes/rfc%s.txt")
+  "A `format' string making a filename for RFC documents.
+This can be an ange-ftp or tramp remote filename to download, or
+a local filename if you have full set of RFCs locally.  See also
+`ffap-rfc-directories'."
+  :type 'string
+  :version "23.1"
+  :group 'ffap)
+
 (defcustom ffap-rfc-directories nil
   "A list of directories to look for RFC files.
 If a given RFC isn't in these then `ffap-rfc-path' is offered."
   :type '(repeat directory)
   :version "23.1"
   :group 'ffap)
-
-(defvar ffap-rfc-path
-  (concat (ffap-host-to-filename "ftp.rfc-editor.org") "/in-notes/rfc%s.txt"))
 
 (defun ffap-rfc (name)
   (let ((num (match-string 1 name)))
@@ -1181,6 +1184,9 @@ which may actually result in an url rather than a filename."
 	 ((and abs (ffap-file-remote-p name)))
 	 ;; Ok, not remote, try the existence test even if it is absolute:
 	 ((and abs (ffap-file-exists-string name)))
+	 ;; Try stripping off line numbers.
+	 ((and abs (string-match ":[0-9]" name)
+	       (ffap-file-exists-string (substring name 0 (match-beginning 0)))))
 	 ;; If it contains a colon, get rid of it (and return if exists)
 	 ((and (string-match path-separator name)
 	       (setq name (ffap-string-at-point 'nocolon))
@@ -1417,7 +1423,7 @@ If `ffap-require-prefix' is set, the prefix meaning is reversed.
 See also the variables `ffap-dired-wildcards', `ffap-newfile-prompt',
 and the functions `ffap-file-at-point' and `ffap-url-at-point'."
   (interactive)
-  (if (and (interactive-p)
+  (if (and (called-interactively-p 'interactive)
 	   (if ffap-require-prefix (not current-prefix-arg)
 	     current-prefix-arg))
       ;; Do exactly the ffap-file-finder command, even the prompting:
@@ -1625,7 +1631,7 @@ Return value:
 	    (find-file-at-point guess)
 	    guess)			; success: return non-nil
 	(ffap-highlight t)))
-     ((interactive-p)
+     ((called-interactively-p 'interactive)
       (if ffap-at-mouse-fallback
 	  (call-interactively ffap-at-mouse-fallback)
 	(message "No file or url found at mouse click.")
@@ -1709,6 +1715,22 @@ Only intended for interactive use."
   (let ((ffap-file-finder 'find-alternate-file))
     (call-interactively 'ffap)))
 
+(defun ffap-alternate-file-other-window ()
+  "Like `ffap' and `find-alternate-file-other-window'.
+Only intended for interactive use."
+  (interactive)
+  (let ((ffap-file-finder 'find-alternate-file-other-window))
+    (call-interactively 'ffap)))
+
+(defun ffap-literally ()
+  "Like `ffap' and `find-file-literally'.
+Only intended for interactive use."
+  (interactive)
+  (let ((ffap-file-finder 'find-file-literally))
+    (call-interactively 'ffap)))
+
+(defalias 'find-file-literally-at-point 'ffap-literally)
+
 
 ;;; Bug Reporter:
 
@@ -1781,7 +1803,7 @@ ffap most of the time."
 (defun dired-at-point (&optional filename)
   "Start Dired, defaulting to file at point.  See `ffap'."
   (interactive)
-  (if (and (interactive-p)
+  (if (and (called-interactively-p 'interactive)
 	   (if dired-at-point-require-prefix
 	       (not current-prefix-arg)
 	     current-prefix-arg))
@@ -1878,6 +1900,29 @@ Only intended for interactive use."
     (call-interactively 'dired-at-point)))
 
 
+;;; Hooks to put in `file-name-at-point-functions':
+
+;;;###autoload
+(progn (defun ffap-guess-file-name-at-point ()
+  "Try to get a file name at point.
+This hook is inteneded to be put in `file-name-at-point-functions'."
+  (when (fboundp 'ffap-guesser)
+    ;; Logic from `ffap-read-file-or-url' and `dired-at-point-prompter'.
+    (let ((guess (ffap-guesser)))
+      (setq guess
+	    (if (or (not guess)
+		    (and (fboundp 'ffap-url-p)
+			 (ffap-url-p guess))
+		    (and (fboundp 'ffap-file-remote-p)
+			 (ffap-file-remote-p guess)))
+		guess
+	      (abbreviate-file-name (expand-file-name guess))))
+      (when guess
+	(if (file-directory-p guess)
+	    (file-name-as-directory guess)
+	  guess))))))
+
+
 ;;; Offer default global bindings (`ffap-bindings'):
 
 (defvar ffap-bindings
@@ -1917,6 +1962,7 @@ Of course if you do not like these bindings, just roll your own!")
   (eval (cons 'progn ffap-bindings)))
 
 
+(provide 'ffap)
 
 ;; arch-tag: 9dd3e88a-5dec-4607-bd57-60ae9ede8ebc
 ;;; ffap.el ends here

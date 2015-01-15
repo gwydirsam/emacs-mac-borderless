@@ -276,8 +276,8 @@ message and scan line."
                              '(undecided undecided-unix undecided-dos))))
              buffer-file-coding-system
            (or (and (boundp 'sendmail-coding-system) sendmail-coding-system)
-               (and (boundp 'default-buffer-file-coding-system )
-                    default-buffer-file-coding-system)
+               (and (default-boundp 'buffer-file-coding-system)
+                    (default-value 'buffer-file-coding-system))
                'iso-latin-1))))
     ;; Older versions of spost do not support -msgid and -mime.
     (unless mh-send-uses-spost-flag
@@ -473,8 +473,7 @@ See also `mh-compose-forward-as-mime-flag',
                        (mh-read-draft "" draft-name nil)))))
     (let (orig-from
           orig-subject)
-      (save-excursion
-        (set-buffer (get-buffer-create mh-temp-buffer))
+      (with-current-buffer (get-buffer-create mh-temp-buffer)
         (erase-buffer)
         (insert-file-contents fwd-msg-file)
         (setq orig-from (mh-get-header-field "From:"))

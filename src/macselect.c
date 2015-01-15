@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License
 along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "macterm.h"
@@ -1116,38 +1117,38 @@ The types are chosen in the order they appear in the list.  */);
 
   DEFVAR_LISP ("mac-service-selection", &Vmac_service_selection,
 	       doc: /* Selection name for communication via Services menu.  */);
-  Vmac_service_selection = intern ("PRIMARY");
+  Vmac_service_selection = intern_c_string ("PRIMARY");
 
-  QPRIMARY   = intern ("PRIMARY");	staticpro (&QPRIMARY);
-  QSECONDARY = intern ("SECONDARY");	staticpro (&QSECONDARY);
-  QTIMESTAMP = intern ("TIMESTAMP");	staticpro (&QTIMESTAMP);
-  QTARGETS   = intern ("TARGETS");	staticpro (&QTARGETS);
+  QPRIMARY   = intern_c_string ("PRIMARY");	staticpro (&QPRIMARY);
+  QSECONDARY = intern_c_string ("SECONDARY");	staticpro (&QSECONDARY);
+  QTIMESTAMP = intern_c_string ("TIMESTAMP");	staticpro (&QTIMESTAMP);
+  QTARGETS   = intern_c_string ("TARGETS");	staticpro (&QTARGETS);
 
-  Qforeign_selection = intern ("foreign-selection");
+  Qforeign_selection = intern_c_string ("foreign-selection");
   staticpro (&Qforeign_selection);
 
-  Qmac_pasteboard_name = intern ("mac-pasteboard-name");
+  Qmac_pasteboard_name = intern_c_string ("mac-pasteboard-name");
   staticpro (&Qmac_pasteboard_name);
 
-  Qmac_pasteboard_data_type = intern ("mac-pasteboard-data-type");
+  Qmac_pasteboard_data_type = intern_c_string ("mac-pasteboard-data-type");
   staticpro (&Qmac_pasteboard_data_type);
 
-  Qmac_apple_event_class = intern ("mac-apple-event-class");
+  Qmac_apple_event_class = intern_c_string ("mac-apple-event-class");
   staticpro (&Qmac_apple_event_class);
 
-  Qmac_apple_event_id = intern ("mac-apple-event-id");
+  Qmac_apple_event_id = intern_c_string ("mac-apple-event-id");
   staticpro (&Qmac_apple_event_id);
 
-  Qemacs_suspension_id = intern ("emacs-suspension-id");
+  Qemacs_suspension_id = intern_c_string ("emacs-suspension-id");
   staticpro (&Qemacs_suspension_id);
 
-  QCactions = intern (":actions");	staticpro (&QCactions);
-  Qcopy	    = intern ("copy");		staticpro (&Qcopy);
-  Qlink	    = intern ("link");		staticpro (&Qlink);
-  Qgeneric  = intern ("generic");	staticpro (&Qgeneric);
-  Qprivate  = intern ("private");	staticpro (&Qprivate);
-  Qmove	    = intern ("move");		staticpro (&Qmove);
-  Qdelete   = intern ("delete");	staticpro (&Qdelete);
+  QCactions = intern_c_string (":actions");	staticpro (&QCactions);
+  Qcopy	    = intern_c_string ("copy");		staticpro (&Qcopy);
+  Qlink	    = intern_c_string ("link");		staticpro (&Qlink);
+  Qgeneric  = intern_c_string ("generic");	staticpro (&Qgeneric);
+  Qprivate  = intern_c_string ("private");	staticpro (&Qprivate);
+  Qmove	    = intern_c_string ("move");		staticpro (&Qmove);
+  Qdelete   = intern_c_string ("delete");	staticpro (&Qdelete);
 }
 
 /* arch-tag: f3c91ad8-99e0-4bd6-9eef-251b2f848732

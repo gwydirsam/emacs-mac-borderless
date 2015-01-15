@@ -1,7 +1,7 @@
 1. What's this?
 
-This is "Mac port" addition to GNU Emacs 23.1.  This provides a native
-GUI support for Mac OS X 10.2 - 10.6.  Note that Emacs 23.1 already
+This is "Mac port" addition to GNU Emacs 23.  This provides a native
+GUI support for Mac OS X 10.2 - 10.6.  Note that Emacs 23 already
 contains the official GUI support via the NS (Cocoa) port.  So if it
 is good enough for you, then you don't need to try this.
 
@@ -110,7 +110,9 @@ the above ports (under a somewhat inappropriate name), is no longer
 supported in the Mac port.  If you want to control anti-aliasing, then
 you can set it with either from the Appearance pane of the System
 Preferences, or the `AppleAntiAliasingThreshold' property that can be
-set with the `defaults' command.
+set with the `defaults' command.  Alternatively, you can specify nil
+or t for the `:antialias' property of a font-spec to control
+anti-aliasing per font.
 
 The Mac port doesn't support multi-tty with GUI.  I have no idea how I
 can detach Emacs as a GUI application from Window Server or Dock
@@ -120,15 +122,20 @@ without separating a GUI process (not thread) from the main Emacs
 
 2. Build instruction
 
-  a. Untar the official GNU Emacs 23.1 distribution tarball.  Let
-     EMACS_SOURCE_TOP be the top directory of the source tree.
+  a. Get the official GNU Emacs 23.X distribution tarball from some
+     GNU mirror site if this file is part of
+     emacs-23.X-mac-V.W.tar.gz.  Or get the GNU Emacs 23.X.9Y pretest
+     tarball from ftp://alpha.gnu.org/gnu/emacs/pretest/ if this is
+     part of emacs-23.X.9Y-mac-V.W.tar.gz.
+     Untar the tarball.  Let EMACS_SOURCE_TOP be the top directory of
+     the source tree.
 
   b. Apply the patch `patch-mac' to the source tree.
 
   c. Copy the subdirectory `mac' to `EMACS_SOURCE_TOP'.
 
   d. [Optional, Mac OS X 10.3 and later]
-     If you want to use the icon bundled with Emacs 23.1, which is not
+     If you want to use the icon bundled with Emacs 23, which is not
      compatible with Mac OS X 10.2, then copy
      `EMACS_SOURCE_TOP/nextstep/Cocoa/Emacs.base/Contents/Resources/Emacs.icns'
      to `EMACS_SOURCE_TOP/mac/Emacs.app/Contents/Resources/Emacs.icns'

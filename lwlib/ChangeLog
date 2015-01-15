@@ -1,6 +1,15 @@
-2009-07-29  Chong Yidong  <cyd@stupidchicken.com>
+2009-10-19  Dan Nicolaescu  <dann@ics.uci.edu>
 
-	* Version 23.1 released.
+	* xlwmenu.c:
+	* lwlib.c:
+	* lwlib-utils.c:
+	* lwlib-Xm.c:
+	* lwlib-Xlw.c:
+	* lwlib-Xaw.c: Include setjmp.h.
+
+2009-06-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Branch for 23.1.
 
 2008-07-23  Dan Nicolaescu  <dann@ics.uci.edu>
 

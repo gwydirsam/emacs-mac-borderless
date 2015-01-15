@@ -658,8 +658,7 @@ If SUBEXP is non-nil mark only the corresponding sub-expressions."
 	 (matches 0)
 	 (submatches 0)
 	 firstmatch)
-    (save-excursion
-      (set-buffer reb-target-buffer)
+    (with-current-buffer reb-target-buffer
       (reb-delete-overlays)
       (goto-char (point-min))
       (while (and (not (eobp))
@@ -720,7 +719,7 @@ If SUBEXP is non-nil mark only the corresponding sub-expressions."
       (remove-hook 'kill-buffer-hook 'reb-kill-buffer t)
       (when (reb-mode-buffer-p)
 	(reb-delete-overlays)
-	(funcall default-major-mode))))
+	(funcall (or (default-value 'major-mode) 'fundamental-mode)))))
   ;; continue standard unloading
   nil)
 

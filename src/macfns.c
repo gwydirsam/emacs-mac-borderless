@@ -23,6 +23,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <config.h>
 #include <stdio.h>
 #include <math.h>
+#include <setjmp.h>
 
 #include "lisp.h"
 #include "macterm.h"
@@ -207,15 +208,12 @@ x_real_positions (f, xptr, yptr)
      FRAME_PTR f;
      int *xptr, *yptr;
 {
-  Rect inner, outer;
+  Rect bounds;
 
-  mac_get_window_bounds (f, &inner, &outer);
+  mac_get_window_structure_bounds (f, &bounds);
 
-  f->x_pixels_diff = inner.left - outer.left;
-  f->y_pixels_diff = inner.top - outer.top;
-
-  *xptr = outer.left;
-  *yptr = outer.top;
+  *xptr = bounds.left;
+  *yptr = bounds.top;
 }
 
 
@@ -1579,22 +1577,71 @@ x_set_tool_bar_lines (f, value, oldval)
   /* Make sure we redisplay all windows in this frame.  */
   ++windows_or_buffers_changed;
 
-  FRAME_TOOL_BAR_LINES (f) = 0;
-  if (nlines)
+  if (!FRAME_NATIVE_TOOL_BAR_P (f))
     {
-      FRAME_EXTERNAL_TOOL_BAR (f) = 1;
-      BLOCK_INPUT;
-      if (FRAME_MAC_P (f)
-	  && !mac_is_frame_window_toolbar_visible (f))
-	/* Make sure next redisplay shows the tool bar.  */
-	XWINDOW (FRAME_SELECTED_WINDOW (f))->update_mode_line = Qt;
-      UNBLOCK_INPUT;
+      FRAME_TOOL_BAR_LINES (f) = 0;
+      if (nlines)
+	{
+	  FRAME_EXTERNAL_TOOL_BAR (f) = 1;
+	  BLOCK_INPUT;
+	  if (FRAME_MAC_P (f)
+	      && !mac_is_frame_window_toolbar_visible (f))
+	    /* Make sure next redisplay shows the tool bar.  */
+	    XWINDOW (FRAME_SELECTED_WINDOW (f))->update_mode_line = Qt;
+	  UNBLOCK_INPUT;
+	}
+      else
+	{
+	  if (FRAME_EXTERNAL_TOOL_BAR (f))
+	    free_frame_tool_bar (f);
+	  FRAME_EXTERNAL_TOOL_BAR (f) = 0;
+	}
     }
   else
     {
-      if (FRAME_EXTERNAL_TOOL_BAR (f))
-        free_frame_tool_bar (f);
-      FRAME_EXTERNAL_TOOL_BAR (f) = 0;
+      delta = nlines - FRAME_TOOL_BAR_LINES (f);
+
+      /* Don't resize the tool-bar to more than we have room for.  */
+      root_window = FRAME_ROOT_WINDOW (f);
+      root_height = WINDOW_TOTAL_LINES (XWINDOW (root_window));
+      if (root_height - delta < 1)
+	{
+	  delta = root_height - 1;
+	  nlines = FRAME_TOOL_BAR_LINES (f) + delta;
+	}
+
+      FRAME_TOOL_BAR_LINES (f) = nlines;
+      change_window_heights (root_window, delta);
+      adjust_glyphs (f);
+
+      /* We also have to make sure that the internal border at the top
+	 of the frame, below the menu bar or tool bar, is redrawn when
+	 the tool bar disappears.  This is so because the internal
+	 border is below the tool bar if one is displayed, but is
+	 below the menu bar if there isn't a tool bar.  The tool bar
+	 draws into the area below the menu bar.  */
+      if (FRAME_MAC_WINDOW (f) && FRAME_TOOL_BAR_LINES (f) == 0)
+	{
+	  clear_frame (f);
+	  clear_current_matrices (f);
+	}
+
+      /* If the tool bar gets smaller, the internal border below it
+	 has to be cleared.  It was formerly part of the display of
+	 the larger tool bar, and updating windows won't clear it.  */
+      if (delta < 0)
+	{
+	  int height = FRAME_INTERNAL_BORDER_WIDTH (f);
+	  int width = FRAME_PIXEL_WIDTH (f);
+	  int y = nlines * FRAME_LINE_HEIGHT (f);
+
+	  BLOCK_INPUT;
+	  mac_clear_area (f, 0, y, width, height);
+	  UNBLOCK_INPUT;
+
+	  if (WINDOWP (f->tool_bar_window))
+	    clear_glyph_matrix (XWINDOW (f->tool_bar_window)->current_matrix);
+	}
     }
 }
 
@@ -1801,12 +1848,18 @@ x_get_string_resource (rdb, name, class)
      XrmDatabase rdb;
      char *name, *class;
 {
-  Lisp_Object value = xrm_get_resource (rdb, name, class);
-
-  if (STRINGP (value))
-    return SDATA (value);
-  else
+  if (inhibit_x_resources)
+    /* --quick was passed, so this is a no-op.  */
     return NULL;
+  else
+    {
+      Lisp_Object value = xrm_get_resource (rdb, name, class);
+
+      if (STRINGP (value))
+	return SDATA (value);
+      else
+	return NULL;
+    }
 }
 
 
@@ -1956,7 +2009,7 @@ mac_window (f)
 {
   BLOCK_INPUT;
 
-  mac_create_frame_window (f, 0);
+  mac_create_frame_window (f);
 
   if (FRAME_MAC_WINDOW (f))
     mac_set_frame_window_background (f, FRAME_BACKGROUND_PIXEL (f));
@@ -2038,7 +2091,7 @@ x_make_gc (f)
 }
 
 
-/* Free what was was allocated in x_make_gc.  */
+/* Free what was allocated in x_make_gc.  */
 
 void
 x_free_gcs (f)
@@ -2950,7 +3003,7 @@ terminate Emacs if we can't open the connection.  */)
   if (! NILP (xrm_string))
     CHECK_STRING (xrm_string);
 
-  if (! EQ (Vinitial_window_system, intern ("mac")))
+  if (! EQ (Vinitial_window_system, Qmac))
     error ("Not using Mac native windows");
 
   if (! NILP (xrm_string))
@@ -3338,6 +3391,7 @@ x_create_tip_frame (dpyinfo, parms, text)
   f->output_data.mac =
     (struct mac_output *) xmalloc (sizeof (struct mac_output));
   bzero (f->output_data.mac, sizeof (struct mac_output));
+  FRAME_TOOLTIP_P (f) = 1;
   FRAME_FONTSET (f) = -1;
   f->icon_name = Qnil;
 /*   FRAME_X_DISPLAY_INFO (f) = dpyinfo; */
@@ -3422,7 +3476,7 @@ x_create_tip_frame (dpyinfo, parms, text)
 
   BLOCK_INPUT;
 
-  mac_create_frame_window (f, 1);
+  mac_create_frame_window (f);
 
   if (FRAME_MAC_WINDOW (f))
     mac_set_frame_window_background (f, FRAME_BACKGROUND_PIXEL (f));
@@ -3934,7 +3988,8 @@ frame_parm_handler mac_frame_parm_handlers[] =
   0, /* x_set_wait_for_wm, */
   x_set_fullscreen,
   x_set_font_backend,
-  x_set_alpha
+  x_set_alpha,
+  x_set_sticky,
 };
 
 void
@@ -3946,15 +4001,15 @@ syms_of_macfns ()
   /* The section below is built by the lisp expression at the top of the file,
      just above where these variables are declared.  */
   /*&&& init symbols here &&&*/
-  Qnone = intern ("none");
+  Qnone = intern_c_string ("none");
   staticpro (&Qnone);
-  Qsuppress_icon = intern ("suppress-icon");
+  Qsuppress_icon = intern_c_string ("suppress-icon");
   staticpro (&Qsuppress_icon);
-  Qundefined_color = intern ("undefined-color");
+  Qundefined_color = intern_c_string ("undefined-color");
   staticpro (&Qundefined_color);
-  Qcancel_timer = intern ("cancel-timer");
+  Qcancel_timer = intern_c_string ("cancel-timer");
   staticpro (&Qcancel_timer);
-  Qfont_param = intern ("font-parameter");
+  Qfont_param = intern_c_string ("font-parameter");
   staticpro (&Qfont_param);
   /* This is the end of symbol initialization.  */
 
@@ -3964,9 +4019,9 @@ syms_of_macfns ()
 
 
   Fput (Qundefined_color, Qerror_conditions,
-	Fcons (Qundefined_color, Fcons (Qerror, Qnil)));
+	pure_cons (Qundefined_color, pure_cons (Qerror, Qnil)));
   Fput (Qundefined_color, Qerror_message,
-	build_string ("Undefined color"));
+	make_pure_c_string ("Undefined color"));
 
   DEFVAR_LISP ("x-pointer-shape", &Vx_pointer_shape,
     doc: /* The shape of the pointer when over text.
@@ -4037,7 +4092,7 @@ such a font.  This is especially effective for such large fonts as
 Chinese, Japanese, and Korean.  */);
   Vx_pixel_size_width_font_regexp = Qnil;
 
-  Fprovide (intern ("mac"), Qnil);
+  Fprovide (intern_c_string ("mac"), Qnil);
 
   DEFVAR_LISP ("mac-carbon-version-string", &Vmac_carbon_version_string,
     doc: /* Version info for Carbon API.  */);
@@ -4057,7 +4112,9 @@ Chinese, Japanese, and Korean.  */);
 		sizeof (carbon_version) - strlen (carbon_version),
 		" AppKit %g", mac_appkit_version ());
     }
-    Vmac_carbon_version_string = build_string (carbon_version);
+    Vmac_carbon_version_string =
+      make_pure_string (carbon_version, strlen (carbon_version),
+			strlen (carbon_version), 0);
   }
 
   /* X window properties.  */

@@ -31,6 +31,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <epaths.h>
 
 #include <stdio.h>
+#include <setjmp.h>
 
 #if 1 /* I'd really appreciate it if this code could go away...  -JimB */
 /* This avoids lossage in the `dual-universe' headers on AT&T SysV
@@ -692,6 +693,10 @@ x_get_string_resource (rdb, name, class)
      char *name, *class;
 {
   XrmValue value;
+
+  if (inhibit_x_resources)
+    /* --quick was passed, so this is a no-op.  */
+    return NULL;
 
   if (x_get_resource (rdb, name, class, x_rm_string, &value))
     return (char *) value.addr;

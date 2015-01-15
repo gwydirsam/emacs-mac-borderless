@@ -1,6 +1,18 @@
-2009-07-29  Chong Yidong  <cyd@stupidchicken.com>
+2009-09-30  Glenn Morris  <rgm@gnu.org>
 
-	* Version 23.1 released.
+	* cedet/semantic-utest-c.el: Relicense under GPLv3+.
+
+2009-06-26  Eric Ludlam  <zappo@gnu.org>
+
+	* cedet/*: New unit tests, from CEDET repository.
+
+2009-06-26  Chong Yidong  <cyd@stupidchicken.com>
+
+	* redisplay-testsuite.el: New file.
+
+2009-06-21  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Branch for 23.1.
 
 2009-01-25  Ulf Jasper  <ulf.jasper@web.de>
 
