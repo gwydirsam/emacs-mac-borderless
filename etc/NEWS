@@ -15,6 +15,93 @@ You can narrow news to a specific version by calling `view-emacs-news'
 with a prefix argument or by typing C-u C-h C-n.
 
 
+* Installation Changes in Emacs 23.3
+
+---
+** New configure option --with-crt-dir specifies the location of your
+crt*.o files, if they are in a non-standard location.  This is only
+used on x86-64 and s390x GNU/Linux architectures.
+
+* Startup Changes in Emacs 23.3
+
+* Changes in Emacs 23.3
+
+** The nextstep port can have different modifiers for the left and right
+alt/option key by customizing the value for ns-right-alternate-modifier.
+
+
+* Editing Changes in Emacs 23.3
+
+
+* Changes in Specialized Modes and Packages in Emacs 23.3
+
+---
+** The appt-add command takes an optional argument for the warning time.
+This can be used in place of the default appt-message-warning-time.
+
+** VC and related modes
+
+*** New VC commands: vc-log-incoming, vc-log-outgoing, vc-find-conflicted-file.
+
+**** vc-log-incoming for Git runs "git fetch" so that the necessary
+data is available locally.
+
+**** vc-log-incoming and vc-log-outgoing for Git require version 1.7 (or newer).
+
+*** New key bindings: C-x v I and C-x v O bound to vc-log-incoming and
+vc-log-outgoing, respectively.
+
+*** The 'g' key in VC diff, log, log-incoming and log-outgoing buffers
+reruns the corresponding VC command to compute an up to date version
+of the buffer.
+
+*** vc-dir for Bzr supports viewing shelve contents and shelving snapshots.
+
+*** Special markup can be added to log-edit buffers.
+The log-edit buffers are expected to have a format similar to email messages
+with headers of the form:
+  Author: <author of this change>
+  Summary: <one line summary of this change>
+  Fixes: <reference to the bug fixed by this change>
+Some backends handle some of those headers specially, but any unknown header
+is just left as is in the message, so it is not lost.
+
+**** vc-git handles Author: and Date:
+**** vc-hg handles  Author: and Date:
+**** vc-bzr handles Author:, Date: and Fixes:
+**** vc-mtn handles Author: and Date:
+
+*** Pressing g in a *vc-diff* buffer reruns vc-diff, so it will
+produce an up to date diff.
+
+
+** Obsolete packages
+
++++
+*** lmenu.el and cl-compat.el are now obsolete.
+
+
+* New Modes and Packages in Emacs 23.3
+** smie.el is a generic navigation and indentation engine.
+It takes a simple BNF description of the grammar, and provides both
+sexp-style navigation (jumping over begin..end pairs) as well as
+indentation, which can be adjusted via ad-hoc indentation rules.
+
+* Incompatible Lisp Changes in Emacs 23.3
+
+
+* Lisp changes in Emacs 23.3
+
+** `e' and `pi' are now called `float-e' and `float-pi'.
+  The old names are obsolete.
+** The use of unintern without an obarray arg is declared obsolete.
+** The function `princ-list' is declared obsolete.
+** New function byte-to-string, like char-to-string but for bytes.
+
+
+* Changes in Emacs 23.3 on non-free operating systems
+
+
 * Installation Changes in Emacs 23.2
 
 ** New configure options for Emacs developers.

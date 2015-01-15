@@ -1249,7 +1249,21 @@ set_local_socket ()
       {
 	tmpdir = egetenv ("TMPDIR");
 	if (!tmpdir)
-	  tmpdir = "/tmp";
+          {
+#ifdef DARWIN_OS
+#ifndef _CS_DARWIN_USER_TEMP_DIR
+#define _CS_DARWIN_USER_TEMP_DIR 65537
+#endif
+            size_t n = confstr (_CS_DARWIN_USER_TEMP_DIR, NULL, (size_t) 0);
+            if (n > 0)
+              {
+                tmpdir = alloca (n);
+                confstr (_CS_DARWIN_USER_TEMP_DIR, tmpdir, n);
+              }
+            else
+#endif
+              tmpdir = "/tmp";
+          }
 	socket_name = alloca (strlen (tmpdir) + strlen (server_name)
 			      + EXTRA_SPACE);
 	sprintf (socket_name, "%s/emacs%d/%s",

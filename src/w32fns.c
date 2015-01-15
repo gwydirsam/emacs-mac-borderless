@@ -47,6 +47,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "systime.h"
 #include "termhooks.h"
 #include "w32heap.h"
+#include "w32.h"
 
 #include "bitmaps/gray.xbm"
 
@@ -244,7 +245,7 @@ struct MONITOR_INFO
 };
 
 /* Reportedly, VS 6 does not have this in its headers.  */
-#if defined(_MSC_VER) && _MSC_VER < 1300
+#if defined (_MSC_VER) && _MSC_VER < 1300
 DECLARE_HANDLE(HMONITOR);
 #endif
 
@@ -287,9 +288,13 @@ unsigned int msh_mousewheel = 0;
 #define MENU_FREE_DELAY 1000
 static unsigned menu_free_timer = 0;
 
-/* The below are defined in frame.c.  */
+/* In dispnew.c */
 
 extern Lisp_Object Vwindow_system_version;
+
+/* The below are defined in frame.c.  */
+
+extern Lisp_Object Qtooltip;
 
 #ifdef GLYPH_DEBUG
 int image_cache_refcount, dpyinfo_refcount;
@@ -1348,7 +1353,10 @@ x_set_foreground_color (f, arg, oldval)
   if (FRAME_W32_WINDOW (f) != 0)
     {
       if (x->cursor_pixel == old_fg)
-	x->cursor_pixel = fg;
+	{
+	  x->cursor_pixel = fg;
+	  x->cursor_gc->background = fg;
+	}
 
       update_face_from_frame_parameter (f, Qforeground_color, arg);
       if (FRAME_VISIBLE_P (f))
@@ -1932,7 +1940,6 @@ x_set_title (f, name, old_name)
       UNBLOCK_INPUT;
     }
 }
-
 
 void x_set_scroll_bar_default_width (f)
      struct frame *f;
@@ -3161,7 +3168,7 @@ w32_wnd_proc (hwnd, msg, wParam, lParam)
           wmsg.dwModifiers = w32_get_key_modifiers (wParam, lParam);
           /* Get buffer size.  */
           size = get_composition_string_fn (context, GCS_RESULTSTR, buffer, 0);
-          buffer = alloca(size);
+          buffer = alloca (size);
           size = get_composition_string_fn (context, GCS_RESULTSTR,
                                             buffer, size);
 	  release_ime_context_fn (hwnd, context);
@@ -3999,7 +4006,6 @@ w32_wnd_proc (hwnd, msg, wParam, lParam)
       return DefWindowProc (hwnd, msg, wParam, lParam);
     }
 
-
   /* The most common default return code for handled messages is 0.  */
   return 0;
 }
@@ -4451,7 +4457,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       "leftFringe", "LeftFringe", RES_TYPE_NUMBER);
   x_default_parameter (f, parameters, Qright_fringe, Qnil,
 		       "rightFringe", "RightFringe", RES_TYPE_NUMBER);
-
 
   /* Init faces before x_default_parameter is called for scroll-bar
      parameters because that function calls x_set_scroll_bar_width,
@@ -5583,9 +5588,8 @@ x_create_tip_frame (dpyinfo, parms, text)
   change_frame_size (f, height, width, 1, 0, 0);
 
   /* Add `tooltip' frame parameter's default value. */
-  if (NILP (Fframe_parameter (frame, intern ("tooltip"))))
-    Fmodify_frame_parameters (frame, Fcons (Fcons (intern ("tooltip"), Qt),
-					    Qnil));
+  if (NILP (Fframe_parameter (frame, Qtooltip)))
+    Fmodify_frame_parameters (frame, Fcons (Fcons (Qtooltip, Qt), Qnil));
 
   /* Set up faces after all frame parameters are known.  This call
      also merges in face attributes specified for new frames.
@@ -6333,6 +6337,7 @@ an integer representing a ShowWindow flag:
      Lisp_Object operation, document, parameters, show_flag;
 {
   Lisp_Object current_dir;
+  char *errstr;
 
   CHECK_STRING (document);
 
@@ -6353,7 +6358,17 @@ an integer representing a ShowWindow flag:
 			   XINT (show_flag) : SW_SHOWDEFAULT))
       > 32)
     return Qt;
-  error ("ShellExecute failed: %s", w32_strerror (0));
+  errstr = w32_strerror (0);
+  /* The error string might be encoded in the locale's encoding.  */
+  if (!NILP (Vlocale_coding_system))
+    {
+      Lisp_Object decoded =
+	code_convert_string_norecord (make_unibyte_string (errstr,
+							   strlen (errstr)),
+				      Vlocale_coding_system, 0);
+      errstr = (char *)SDATA (decoded);
+    }
+  error ("ShellExecute failed: %s", errstr);
 }
 
 /* Lookup virtual keycode from string representing the name of a
@@ -7181,7 +7196,7 @@ or when you set the mouse color.  */);
 
   DEFVAR_LISP ("x-max-tooltip-size", &Vx_max_tooltip_size,
 	       doc: /* Maximum size for tooltips.
-Value is a pair (COLUMNS . ROWS). Text larger than this is clipped.  */);
+Value is a pair (COLUMNS . ROWS).  Text larger than this is clipped.  */);
   Vx_max_tooltip_size = Fcons (make_number (80), make_number (40));
 
   DEFVAR_LISP ("x-no-window-manager", &Vx_no_window_manager,

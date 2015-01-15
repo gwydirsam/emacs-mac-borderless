@@ -1,3 +1,47 @@
+2010-11-08  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* .dir-locals.el (log-edit-mode): Set log-edit-rewrite-fixes.
+
+2010-11-04  Michael Albinus  <michael.albinus@gmx.de>
+
+	* configure.in: Don't write a warning for D-Bus anymore.
+
+2010-11-03  Glenn Morris  <rgm@gnu.org>
+
+	* configure.in (CRT_DIR): New output variable.
+	(--with-crt-dir): New option.  (Bug#5655)
+	(HAVE_LIB64_DIR): Remove.
+
+2010-10-12  Glenn Morris  <rgm@gnu.org>
+
+	* BUGS, INSTALL.BZR, README: Updates.
+
+2010-10-08  Eli Zaretskii  <eliz@gnu.org>
+
+	* make-dist: Don't distribute src/buildobj.h.  (Bug#7167)
+
+2010-06-23  Glenn Morris  <rgm@gnu.org>
+
+	* info/dir: Start descriptions in column 32, per Texinfo convention.
+
+2010-06-12  Chong Yidong  <cyd@stupidchicken.com>
+
+	* INSTALL: Update font information (Bug#6389).
+
+2010-06-10  Glenn Morris  <rgm@gnu.org>
+
+	* INSTALL: General update.
+
+2010-05-30  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* .bzrignore: Ignore new files from trunk, which appear if you use
+	colocated branches (i.e. "bzr switch").
+
+2010-05-10  Miles Bader  <miles@gnu.org>
+
+	* configure.in: Get rid of "unix" pre-defined macro when
+	preprocessing Makefile.  (Bug#5857)  [Backport from trunk]
+
 2010-05-07  Chong Yidong  <cyd@stupidchicken.com>
 
 	* Version 23.2 released.

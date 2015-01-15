@@ -374,17 +374,35 @@ create_apple_event_from_lisp (apple_event, result)
 	  name = XCAR (attr);
 	  type = XCAR (XCDR (attr));
 	  data = XCDR (XCDR (attr));
-	  if (!(STRINGP (type) && SBYTES (type) == 4
-		/* We assume there's no composite attribute value.  */
-		&& STRINGP (data)))
+	  if (!(STRINGP (type) && SBYTES (type) == 4))
 	    continue;
 	  for (i = 0; i < sizeof (ae_attr_table) / sizeof (ae_attr_table[0]);
 	       i++)
 	    if (EQ (name, ae_attr_table[i].symbol))
 	      {
-		AEPutAttributePtr (result, ae_attr_table[i].keyword,
-				   EndianU32_BtoN (*((UInt32 *) SDATA (type))),
-				   SDATA (data), SBYTES (data));
+		DescType desc_type =
+		  EndianU32_BtoN (*((UInt32 *) SDATA (type)));
+
+		switch (desc_type)
+		  {
+		  case typeNull:
+		    AEPutAttributePtr (result, ae_attr_table[i].keyword,
+				       desc_type, NULL, 0);
+		    break;
+
+		  case typeAppleEvent:
+		  case typeAEList:
+		  case typeAERecord:
+		    /* We assume there's no composite attribute value.  */
+		    break;
+
+		  default:
+		    if (STRINGP (data))
+		      AEPutAttributePtr (result, ae_attr_table[i].keyword,
+					 desc_type,
+					 SDATA (data), SBYTES (data));
+		    break;
+		  }
 		break;
 	      }
 	}

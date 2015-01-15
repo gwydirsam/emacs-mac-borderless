@@ -56,10 +56,10 @@ The Mac port is a descendant of the following ports for Mac OS X.
       don't have unsaved buffers, shell buffers, etc., you won't see
       unnecessary confirmation.
 
-    - Apple Event handling
-      One can define Apple Event handlers at the Lisp level.
+    - Apple event handling
+      One can define Apple event handlers at the Lisp level.
       Actually, graceful termination above is an instance of
-      Lisp-level Apple Event handling.  Another example is "Get URL"
+      Lisp-level Apple event handling.  Another example is "Get URL"
       handler that enables us to invoke the mailer you customized with
       `mail-user-agent', e.g.,
 
@@ -105,11 +105,11 @@ The Mac port is a descendant of the following ports for Mac OS X.
       * Update display while the resize control (or the slider in the
 	font panel) is being dragged
 
-Being a port of Emacs 23.2, the Mac port also supports the following
+Being a port of Emacs 23.3, the Mac port also supports the following
 features besides those inherited from the above ancestors:
 
   * The `fullscreen' frame parameter, with all values supported:
-    `fullboth', `fullwidth', `fullheight', and 'maximized'.  The
+    `fullboth', `fullwidth', `fullheight', and `maximized'.  The
     fullboth frames, which don't have the title bar, still allow us to
     access the menu bar, the Dock (Mac OS X 10.3 and later), and the
     tool bars.  The menu bar can also be activated via
@@ -140,6 +140,43 @@ features besides those inherited from the above ancestors:
     ideographic glyphs are accessible via IVSes (Ideographic Variation
     Sequences) even for the OS-bundled Hiragino fonts, which do not
     contain the UVS subtable in their cmap table as of Mac OS X 10.6.
+
+In addition to the standard Emacs 23.3 features, the Mac port includes
+the following Mac-specific ones:
+
+  * Pixel-based mouse wheel smooth scroll for newer mice/trackpads.
+  * Gesture event handling for newer trackpads.  By default, pinch
+    out/in are bound to text size scaling.  With the shift key, they
+    turn on/off fullscreen status of the frame.
+  * Apple event sending with (a)synchronous reply handling.  ODB
+    Editor Suite support is added as an example.  (Only tested with
+    QuickCursor.  Add "<string>org.gnu.Emacs</string>" to the elements
+    of QCEditInChoices in QuickCursor.app/Contents/Info.plist.)
+  * "Click in the scroll bar to: Jump to the spot that's clicked"
+    setting in the System Preferences is supported.
+  * Change of text smoothing threshold setting in the Appearance pane
+    of the System Preferences is reflected immediately.
+  * Several keyboard shortcuts (notably those for Keyboard Navigation)
+    listed in System Preferences just work like other applications.
+  * When the clipboard has both textual and image data, yank inserts
+    the former and push both into the kill ring so the latter can be
+    inserted with yank-pop afterwards.
+  * Use non-integral x positions for displaying antialiased
+    proportional fonts.  You can see the difference by putting the box
+    cursor over Helvetica 12pt `I', whose ideal width is 3.33398 but
+    displayed with the rounded width 3, for example.
+  * Emacs info nodes are accessible via search field in the Help menu
+    on Mac OS X 10.6.
+  * Menu item "Open Selected File in Emacs" is shown in Services or
+    context menu of other applications by default on Mac OS X 10.6
+    when absolute pathname-like text is selected.
+  * Reverse conversion in Kotoeri works even without selection.
+    Hitting Eisu/Kana key on JIS keyboard (or Control-Shift-;/J/K on
+    US keyboard) twice also works.
+  * New function `mac-file-alias-p', which is parallel to
+    `file-symlink-p'.
+  * Experimental support for accessibility with respect to the custom
+    view for Emacs frames.  Still there are several glitches.
 
 As Quickdraw-style font rendering is considered obsolete as of Mac OS
 X 10.5, the variable `mac-allow-anti-aliasing', which was supported in

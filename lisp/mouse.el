@@ -886,8 +886,7 @@ at the same position."
   (let (mp pos)
     (if (and mouse-1-click-follows-link
 	     (stringp msg)
-	     (save-match-data
-	       (string-match "^mouse-2" msg))
+	     (string-match-p "\\`mouse-2" msg)
 	     (setq mp (mouse-pixel-position))
 	     (consp (setq pos (cdr mp)))
 	     (car pos) (>= (car pos) 0)
@@ -2483,6 +2482,7 @@ choose a font."
 (declare-function font-face-attributes "font.c" (font &optional frame))
 
 (defun mouse-appearance-menu (event)
+  "Show a menu for changing the default face in the current buffer."
   (interactive "@e")
   (require 'face-remap)
   (when (display-multi-font-p)

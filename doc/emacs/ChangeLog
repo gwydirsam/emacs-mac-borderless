@@ -1,3 +1,52 @@
+2010-11-06  Eli Zaretskii  <eliz@gnu.org>
+
+	* msdog.texi (Windows HOME): Add information regarding startup
+	directory when invoking Emacs from a desktop shortcut.  (bug#7300)
+
+2010-09-14  Glenn Morris  <rgm@gnu.org>
+
+	* cal-xtra.texi (Fancy Diary Display): Emphasize that sort should be
+	the last hook item.
+
+	* calendar.texi (Appointments): Also updated when a diary include file
+	is saved.
+
+2010-09-12  Glenn Morris  <rgm@gnu.org>
+
+	* trouble.texi (Bugs): Update the section intro.
+	(Known Problems): New section.
+	(Checklist): Misc updates.  Prefer M-x report-emacs-bug.
+	(Sending Patches): Bug fixes are best as responses to existing bugs.
+	* emacs.texi (Known Problems): Add menu entry for new section.
+
+2010-09-04  Chong Yidong  <cyd@stupidchicken.com>
+
+	* dired.texi (Dired Enter): Minor doc fix (Bug#6982).
+
+2010-09-02  Glenn Morris  <rgm@gnu.org>
+
+	* misc.texi (Saving Emacs Sessions): Mention desktop-path.  (Bug#6948)
+
+2010-08-21  Glenn Morris  <rgm@gnu.org>
+
+	* misc.texi (Amusements): Mention bubbles and animate.
+
+2010-06-23  Glenn Morris  <rgm@gnu.org>
+
+	* abbrevs.texi, basic.texi, buffers.texi, building.texi, calendar.texi:
+	* custom.texi, dired.texi, display.texi, emacs.texi, emerge-xtra.texi:
+	* files.texi, fortran-xtra.texi, frames.texi, help.texi, killing.texi:
+	* maintaining.texi, mark.texi, mini.texi, misc.texi, msdog.texi:
+	* mule.texi, programs.texi, rmail.texi, screen.texi, search.texi:
+	* sending.texi, text.texi, trouble.texi, vc1-xtra.texi, xresources.texi:
+	Untabify Texinfo files.
+
+2010-06-10  Glenn Morris  <rgm@gnu.org>
+
+	* basic.texi (Inserting Text): Minor clarification.  (Bug#6374)
+
+	* basic.texi (Inserting Text): Fix typo.
+
 2010-05-07  Chong Yidong  <cyd@stupidchicken.com>
 
 	* Version 23.2 released.
@@ -103,7 +152,7 @@
 
 	* custom.texi (Init Examples): Add xref to Mail Header.
 
-	* emacs.texi (Top):  Fix xrefs.
+	* emacs.texi (Top): Fix xrefs.
 
 2010-03-25  Chong Yidong  <cyd@stupidchicken.com>
 

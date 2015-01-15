@@ -6951,7 +6951,7 @@ handle_one_xevent (dpyinfo, eventp, finish, hold_quit)
 	  f->mouse_moved = 0;
 
 #if defined (USE_X_TOOLKIT) || defined (USE_GTK)
-        f = x_menubar_window_to_frame (dpyinfo, event.xbutton.window);
+        f = x_menubar_window_to_frame (dpyinfo, &event);
         /* For a down-event in the menu bar,
            don't pass it to Xt right now.
            Instead, save it away
@@ -7882,45 +7882,44 @@ x_connection_closed (dpy, error_message)
 	delete_frame (frame, Qnoelisp);
       }
 
-  /* We have to close the display to inform Xt that it doesn't
-     exist anymore.  If we don't, Xt will continue to wait for
-     events from the display.  As a consequence, a sequence of
-
-     M-x make-frame-on-display RET :1 RET
-     ...kill the new frame, so that we get an IO error...
-     M-x make-frame-on-display RET :1 RET
-
-     will indefinitely wait in Xt for events for display `:1', opened
-     in the first call to make-frame-on-display.
-
-     Closing the display is reported to lead to a bus error on
-     OpenWindows in certain situations.  I suspect that is a bug
-     in OpenWindows.  I don't know how to circumvent it here.  */
-
+  /* If DPYINFO is null, this means we didn't open the display in the
+     first place, so don't try to close it.  */
   if (dpyinfo)
     {
 #ifdef USE_X_TOOLKIT
-      /* If DPYINFO is null, this means we didn't open the display
-	 in the first place, so don't try to close it.  */
-      {
-	extern void (*fatal_error_signal_hook) P_ ((void));
-	fatal_error_signal_hook = x_fatal_error_signal;
-	XtCloseDisplay (dpy);
-	fatal_error_signal_hook = NULL;
-      }
-#endif
+      /* We have to close the display to inform Xt that it doesn't
+	 exist anymore.  If we don't, Xt will continue to wait for
+	 events from the display.  As a consequence, a sequence of
+
+	 M-x make-frame-on-display RET :1 RET
+	 ...kill the new frame, so that we get an IO error...
+	 M-x make-frame-on-display RET :1 RET
+
+	 will indefinitely wait in Xt for events for display `:1',
+	 opened in the first call to make-frame-on-display.
+
+	 Closing the display is reported to lead to a bus error on
+	 OpenWindows in certain situations.  I suspect that is a bug
+	 in OpenWindows.  I don't know how to circumvent it here.  */
+      extern void (*fatal_error_signal_hook) P_ ((void));
+      fatal_error_signal_hook = x_fatal_error_signal;
+      XtCloseDisplay (dpy);
+      fatal_error_signal_hook = NULL;
+#endif /* USE_X_TOOLKIT */
 
 #ifdef USE_GTK
-      /* Due to bugs in some Gtk+ versions, just exit here if this
-         is the last display/terminal. */
-      if (terminal_list->next_terminal == NULL)
-        {
-          fprintf (stderr, "%s\n", error_msg);
-          shut_down_emacs (0, 0, Qnil);
-          exit (70);
-        }
-      xg_display_close (dpyinfo->display);
-#endif
+      /* A long-standing GTK bug prevents proper disconnect handling
+	 (https://bugzilla.gnome.org/show_bug.cgi?id=85715).  Once,
+	 the resulting Glib error message loop filled a user's disk.
+	 To avoid this, kill Emacs unconditionally on disconnect.  */
+      shut_down_emacs (0, 0, Qnil);
+      fprintf (stderr, "%s\n\
+When compiled with GTK, Emacs cannot recover from X disconnects.\n\
+This is a GTK bug: https://bugzilla.gnome.org/show_bug.cgi?id=85715\n\
+For details, see etc/PROBLEMS.\n",
+	       error_msg);
+      abort ();
+#endif /* USE_GTK */
 
       /* Indicate that this display is dead.  */
       dpyinfo->display = 0;
@@ -8572,6 +8571,72 @@ x_set_sticky (f, new_value, old_value)
                 "_NET_WM_STATE_STICKY", NULL);
 }
 
+/* Return the current _NET_WM_STATE.
+   SIZE_STATE is set to one of the FULLSCREEN_* values.
+   STICKY is set to 1 if the sticky state is set, 0 if not.  */
+
+static void
+get_current_vm_state (struct frame *f,
+                      Window window,
+                      int *size_state,
+                      int *sticky)
+{
+  Atom actual_type;
+  unsigned long actual_size, bytes_remaining;
+  int i, rc, actual_format;
+  struct x_display_info *dpyinfo = FRAME_X_DISPLAY_INFO (f);
+  long max_len = 65536;
+  Display *dpy = FRAME_X_DISPLAY (f);
+  unsigned char *tmp_data = NULL;
+  Atom target_type = XA_ATOM;
+
+  *sticky = 0;
+  *size_state = FULLSCREEN_NONE;
+
+  BLOCK_INPUT;
+  x_catch_errors (dpy);
+  rc = XGetWindowProperty (dpy, window, dpyinfo->Xatom_net_wm_state,
+                           0, max_len, False, target_type,
+                           &actual_type, &actual_format, &actual_size,
+                           &bytes_remaining, &tmp_data);
+
+  if (rc != Success || actual_type != target_type || x_had_errors_p (dpy))
+    {
+      if (tmp_data) XFree (tmp_data);
+      x_uncatch_errors ();
+      UNBLOCK_INPUT;
+      return;
+    }
+
+  x_uncatch_errors ();
+
+  for (i = 0; i < actual_size; ++i)
+    {
+      Atom a = ((Atom*)tmp_data)[i];
+      if (a == dpyinfo->Xatom_net_wm_state_maximized_horz) 
+        {
+          if (*size_state == FULLSCREEN_HEIGHT)
+            *size_state = FULLSCREEN_MAXIMIZED;
+          else
+            *size_state = FULLSCREEN_WIDTH;
+        }
+      else if (a == dpyinfo->Xatom_net_wm_state_maximized_vert)
+        {
+          if (*size_state == FULLSCREEN_WIDTH)
+            *size_state = FULLSCREEN_MAXIMIZED;
+          else
+            *size_state = FULLSCREEN_HEIGHT;
+        }
+      else if (a == dpyinfo->Xatom_net_wm_state_fullscreen_atom)
+        *size_state = FULLSCREEN_BOTH;
+      else if (a == dpyinfo->Xatom_net_wm_state_sticky)
+        *sticky = 1;
+    }
+
+  if (tmp_data) XFree (tmp_data);
+  UNBLOCK_INPUT;
+}
+
 /* Do fullscreen as specified in extended window manager hints */
 
 static int
@@ -8579,13 +8644,17 @@ do_ewmh_fullscreen (f)
      struct frame *f;
 {
   int have_net_atom = wm_supports (f, "_NET_WM_STATE");
+  Lisp_Object lval = get_frame_param (f, Qfullscreen);
+  int cur, dummy;
+
+  get_current_vm_state (f, FRAME_OUTER_WINDOW (f), &cur, &dummy);
 
   /* Some window managers don't say they support _NET_WM_STATE, but they do say
      they support _NET_WM_STATE_FULLSCREEN.  Try that also.  */
   if (!have_net_atom)
       have_net_atom = wm_supports (f, "_NET_WM_STATE_FULLSCREEN");
 
-  if (have_net_atom)
+  if (have_net_atom && cur != f->want_fullscreen)
     {
       Lisp_Object frame;
       const char *fs = "_NET_WM_STATE_FULLSCREEN";
@@ -8594,26 +8663,41 @@ do_ewmh_fullscreen (f)
 
       XSETFRAME (frame, f);
 
-      set_wm_state (frame, 0, fs, NULL);
-      set_wm_state (frame, 0, fh, NULL);
-      set_wm_state (frame, 0, fw, NULL);
-      
-      /* If there are _NET_ atoms we assume we have extended window manager
-         hints.  */
+      /* Keep number of calls to set_wm_state as low as possible.
+         Some window managers, or possible Gtk+, hangs when too many
+         are sent at once.  */
       switch (f->want_fullscreen)
         {
         case FULLSCREEN_BOTH:
+          if (cur == FULLSCREEN_WIDTH || cur == FULLSCREEN_MAXIMIZED
+              || cur == FULLSCREEN_HEIGHT)
+            set_wm_state (frame, 0, fw, fh);
           set_wm_state (frame, 1, fs, NULL);
           break;
         case FULLSCREEN_WIDTH:
-          set_wm_state (frame, 1, fw, NULL);
+          if (cur == FULLSCREEN_BOTH || cur == FULLSCREEN_HEIGHT
+              || cur == FULLSCREEN_MAXIMIZED)
+            set_wm_state (frame, 0, fs, fh);
+          if (cur != FULLSCREEN_MAXIMIZED)
+            set_wm_state (frame, 1, fw, NULL);
           break;
         case FULLSCREEN_HEIGHT:
-          set_wm_state (frame, 1, fh, NULL);
+          if (cur == FULLSCREEN_BOTH || cur == FULLSCREEN_WIDTH
+              || cur == FULLSCREEN_MAXIMIZED)
+            set_wm_state (frame, 0, fs, fw);
+          if (cur != FULLSCREEN_MAXIMIZED)
+            set_wm_state (frame, 1, fh, NULL);
           break;
         case FULLSCREEN_MAXIMIZED:
+          if (cur == FULLSCREEN_BOTH)
+            set_wm_state (frame, 0, fs, NULL);
           set_wm_state (frame, 1, fw, fh);
           break;
+        case FULLSCREEN_NONE:
+          if (cur == FULLSCREEN_BOTH)
+            set_wm_state (frame, 0, fs, NULL);
+          else
+            set_wm_state (frame, 0, fw, fh);
         }
 
       f->want_fullscreen = FULLSCREEN_NONE;
@@ -8642,57 +8726,11 @@ x_handle_net_wm_state (f, event)
      struct frame *f;
      XPropertyEvent *event;
 {
-  Atom actual_type;
-  unsigned long actual_size, bytes_remaining;
-  int i, rc, actual_format, value = FULLSCREEN_NONE;
-  struct x_display_info *dpyinfo = FRAME_X_DISPLAY_INFO (f);
-  long max_len = 65536;
-  Display *dpy = FRAME_X_DISPLAY (f);
-  unsigned char *tmp_data = NULL;
-  Atom target_type = XA_ATOM;
+  int value = FULLSCREEN_NONE;
   Lisp_Object lval;
   int sticky = 0;
 
-  BLOCK_INPUT;
-  x_catch_errors (dpy);
-  rc = XGetWindowProperty (dpy, event->window,
-                           event->atom, 0, max_len, False, target_type,
-                           &actual_type, &actual_format, &actual_size,
-                           &bytes_remaining, &tmp_data);
-
-  if (rc != Success || actual_type != target_type || x_had_errors_p (dpy))
-    {
-      if (tmp_data) XFree (tmp_data);
-      x_uncatch_errors ();
-      UNBLOCK_INPUT;
-      return;
-    }
-
-  x_uncatch_errors ();
-
-  for (i = 0; i < actual_size; ++i)
-    {
-      Atom a = ((Atom*)tmp_data)[i];
-      if (a == dpyinfo->Xatom_net_wm_state_maximized_horz) 
-        {
-          if (value == FULLSCREEN_HEIGHT)
-            value = FULLSCREEN_MAXIMIZED;
-          else
-            value = FULLSCREEN_WIDTH;
-        }
-      else if (a == dpyinfo->Xatom_net_wm_state_maximized_vert)
-        {
-          if (value == FULLSCREEN_WIDTH)
-            value = FULLSCREEN_MAXIMIZED;
-          else
-            value = FULLSCREEN_HEIGHT;
-        }
-      else if (a == dpyinfo->Xatom_net_wm_state_fullscreen_atom)
-        value = FULLSCREEN_BOTH;
-      else if (a == dpyinfo->Xatom_net_wm_state_sticky)
-        sticky = 1;
-    }
-
+  get_current_vm_state (f, event->window, &value, &sticky);
   lval = Qnil;
   switch (value) 
     {
@@ -8712,9 +8750,6 @@ x_handle_net_wm_state (f, event)
       
   store_frame_param (f, Qfullscreen, lval);
   store_frame_param (f, Qsticky, sticky ? Qt : Qnil);
-
-  if (tmp_data) XFree (tmp_data);
-  UNBLOCK_INPUT;
 }
 
 /* Check if we need to resize the frame due to a fullscreen request.
@@ -10487,7 +10522,8 @@ x_term_init (display_name, xrm_option, resource_name)
     = XInternAtom (dpyinfo->display, "_NET_WM_WINDOW_TYPE", False);
   dpyinfo->Xatom_net_window_type_tooltip
     = XInternAtom (dpyinfo->display, "_NET_WM_WINDOW_TYPE_TOOLTIP", False);
-  
+  dpyinfo->Xatom_net_frame_extents  
+    = XInternAtom (dpyinfo->display, "_NET_FRAME_EXTENTS", False);
   dpyinfo->cut_buffers_initialized = 0;
 
   dpyinfo->x_dnd_atoms_size = 8;

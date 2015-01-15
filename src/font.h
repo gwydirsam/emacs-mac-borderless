@@ -465,11 +465,12 @@ struct font_bitmap
   } while (0)
 
 #define XFONT_SPEC(p)	\
-  (eassert (FONT_SPEC_P(p)), (struct font_spec *) XPNTR (p))
+  (eassert (FONT_SPEC_P(p)), (struct font_spec *) XUNTAG (p, Lisp_Vectorlike))
 #define XFONT_ENTITY(p)	\
-  (eassert (FONT_ENTITY_P(p)), (struct font_entity *) XPNTR (p))
+  (eassert (FONT_ENTITY_P(p)), \
+   (struct font_entity *) XUNTAG (p, Lisp_Vectorlike))
 #define XFONT_OBJECT(p)	\
-  (eassert (FONT_OBJECT_P(p)), (struct font *) XPNTR (p))
+  (eassert (FONT_OBJECT_P(p)), (struct font *) XUNTAG (p, Lisp_Vectorlike))
 #define XSETFONT(a, b) (XSETPSEUDOVECTOR (a, b, PVEC_FONT))
 
 /* Number of pt per inch (from the TeXbook).  */
@@ -574,7 +575,7 @@ struct font_driver
      FONT-ENTITY and it must be opened to check it, return -1.  */
   int (*has_char) P_ ((Lisp_Object font, int c));
 
-  /* Return a glyph code of FONT for characer C (Unicode code point).
+  /* Return a glyph code of FONT for character C (Unicode code point).
      If FONT doesn't have such a glyph, return FONT_INVALID_CODE.  */
   unsigned (*encode_char) P_ ((struct font *font, int c));
 
@@ -813,6 +814,11 @@ extern int font_put_frame_data P_ ((FRAME_PTR f,
 				    void *data));
 extern void *font_get_frame_data P_ ((FRAME_PTR f,
 				      struct font_driver *driver));
+
+extern void font_filter_properties (Lisp_Object font,
+				    Lisp_Object alist,
+				    const char *const boolean_properties[],
+				    const char *const non_boolean_properties[]);
 
 #ifdef HAVE_FREETYPE
 extern struct font_driver ftfont_driver;

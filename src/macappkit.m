@@ -424,6 +424,15 @@ NSRectToCGRect (nsrect)
   return maxAreaScreen ? maxAreaScreen : minDistanceScreen;
 }
 
+- (BOOL)containsDock
+{
+  NSRect frame = [self frame], visibleFrame = [self visibleFrame];
+
+  return (NSMinY (frame) != NSMinY (visibleFrame)
+	  || NSMinX (frame) != NSMinX (visibleFrame)
+	  || NSMaxX (frame) != NSMaxX (visibleFrame));
+}
+
 @end				// NSScreen (Emacs)
 
 @implementation EmacsPosingWindow
@@ -1681,11 +1690,14 @@ extern void mac_save_keyboard_input_source P_ ((void));
 
 - (void)updateApplicationPresentationOptions
 {
+  NSScreen *screen = [self screen];
   NSApplicationPresentationOptions options;
 
-  if ([[self screen] isEqual:[[NSScreen screens] objectAtIndex:0]])
-    options = (NSApplicationPresentationAutoHideDock
-	       | NSApplicationPresentationAutoHideMenuBar);
+  if ([screen isEqual:[[NSScreen screens] objectAtIndex:0]])
+    options = (NSApplicationPresentationAutoHideMenuBar
+	       | NSApplicationPresentationAutoHideDock);
+  else if ([screen containsDock])
+    options = NSApplicationPresentationAutoHideDock;
   else
     options = NSApplicationPresentationDefault;
   [NSApp setPresentationOptions:options];

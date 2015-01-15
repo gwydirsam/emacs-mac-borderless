@@ -93,7 +93,7 @@
 
 (defvar python-font-lock-keywords
   `(,(rx symbol-start
-	 ;; From v 2.5 reference, § keywords.
+	 ;; From v 2.7 reference, § keywords.
 	 ;; def and class dealt with separately below
 	 (or "and" "as" "assert" "break" "continue" "del" "elif" "else"
 	     "except" "exec" "finally" "for" "from" "global" "if"
@@ -102,7 +102,7 @@
              ;; Not real keywords, but close enough to be fontified as such
              "self" "True" "False")
 	 symbol-end)
-    (,(rx symbol-start "None" symbol-end)	; see § Keywords in 2.5 manual
+    (,(rx symbol-start "None" symbol-end)	; see § Keywords in 2.7 manual
      . font-lock-constant-face)
     ;; Definitions
     (,(rx symbol-start (group "class") (1+ space) (group (1+ (or word ?_))))
@@ -117,7 +117,7 @@
 					    (0+ "." (1+ (or word ?_)))))
      (1 font-lock-type-face))
     ;; Built-ins.  (The next three blocks are from
-    ;; `__builtin__.__dict__.keys()' in Python 2.5.1.)  These patterns
+    ;; `__builtin__.__dict__.keys()' in Python 2.7)  These patterns
     ;; are debateable, but they at least help to spot possible
     ;; shadowing of builtins.
     (,(rx symbol-start (or
@@ -135,7 +135,9 @@
 	  "SystemExit" "TabError" "TypeError" "UnboundLocalError"
 	  "UnicodeDecodeError" "UnicodeEncodeError" "UnicodeError"
 	  "UnicodeTranslateError" "UnicodeWarning" "UserWarning"
-	  "ValueError" "Warning" "ZeroDivisionError") symbol-end)
+	  "ValueError" "Warning" "ZeroDivisionError"
+	  ;; Python 2.7
+	  "BufferError" "BytesWarning" "WindowsError") symbol-end)
      . font-lock-type-face)
     (,(rx (or line-start (not (any ". \t"))) (* (any " \t")) symbol-start
 	  (group (or
@@ -152,30 +154,25 @@
 	  "range" "raw_input" "reduce" "reload" "repr" "reversed"
 	  "round" "set" "setattr" "slice" "sorted" "staticmethod"
 	  "str" "sum" "super" "tuple" "type" "unichr" "unicode" "vars"
-	  "xrange" "zip")) symbol-end)
+	  "xrange" "zip"
+	  ;; Python 2.7.
+	  "bin" "bytearray" "bytes" "format" "memoryview" "next" "print"
+	  )) symbol-end)
      (1 font-lock-builtin-face))
     (,(rx symbol-start (or
 	  ;; other built-ins
 	  "True" "False" "None" "Ellipsis"
-	  "_" "__debug__" "__doc__" "__import__" "__name__") symbol-end)
+	  "_" "__debug__" "__doc__" "__import__" "__name__" "__package__")
+          symbol-end)
      . font-lock-builtin-face)))
 
 (defconst python-font-lock-syntactic-keywords
   ;; Make outer chars of matching triple-quote sequences into generic
   ;; string delimiters.  Fixme: Is there a better way?
   ;; First avoid a sequence preceded by an odd number of backslashes.
-  `((,(rx (not (any ?\\))
-	  ?\\ (* (and ?\\ ?\\))
-	  (group (syntax string-quote))
-	  (backref 1)
-	  (group (backref 1)))
-     (2 ,(string-to-syntax "\"")))	; dummy
-    (,(rx (group (optional (any "uUrR"))) ; prefix gets syntax property
-	  (optional (any "rR"))		  ; possible second prefix
-	  (group (syntax string-quote))   ; maybe gets property
-	  (backref 2)			  ; per first quote
-	  (group (backref 2)))		  ; maybe gets property
-     (1 (python-quote-syntax 1))
+  `((,(concat "\\(?:\\([RUru]\\)[Rr]?\\|^\\|[^\\]\\(?:\\\\.\\)*\\)" ;Prefix.
+              "\\(?:\\('\\)'\\('\\)\\|\\(?2:\"\\)\"\\(?3:\"\\)\\)")
+     (1 (python-quote-syntax 1) nil lax)
      (2 (python-quote-syntax 2))
      (3 (python-quote-syntax 3)))
     ;; This doesn't really help.
@@ -213,9 +210,9 @@ Used for syntactic keywords.  N is the match number (1, 2 or 3)."
 	      (eval-when-compile (string-to-syntax "|"))))))
      ;; Consider property for initial char, accounting for prefixes.
      ((or (and (= n 2)			; leading quote (not prefix)
-	       (= (match-beginning 1) (match-end 1))) ; prefix is null
+	       (not (match-end 1)))     ; prefix is null
 	  (and (= n 1)			; prefix
-	       (/= (match-beginning 1) (match-end 1)))) ; non-empty
+	       (match-end 1)))          ; non-empty
       (let ((font-lock-syntactic-keywords nil))
 	(unless (eq 'string (syntax-ppss-context (syntax-ppss)))
 	  (eval-when-compile (string-to-syntax "|")))))
@@ -749,7 +746,7 @@ Set `python-indent' locally to the value guessed."
   '(("else" "if" "elif" "while" "for" "try" "except")
     ("elif" "if" "elif")
     ("except" "try" "except")
-    ("finally" "try" "except"))
+    ("finally" "else" "try" "except"))
   "Alist of keyword matches.
 The car of an element is a keyword introducing a statement which
 can close a block opened by a keyword in the cdr.")

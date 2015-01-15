@@ -152,11 +152,11 @@ usually do not have translators to read other languages for them.\n\n")
 	    (put-text-property pos (point) 'face 'highlight))
 	    (insert ".\nOther bugs should be sent to the place you are guided with\n"
 		    "M-x report-emacs-bug on some official ports such as X11 or NS.\n\n"))
-	(insert (format "Your bug report will be posted to the %s mailing list"
+	(insert (format "Your report will be posted to the %s mailing list"
 			reporting-address))
 	;; Nowadays all bug reports end up there.
 ;;;      (if pretest-p (insert ".\n\n")
-	(insert ",\nand to the gnu.emacs.bug news group.\n\n")))
+	(insert "\nand the gnu.emacs.bug news group, and at http://debbugs.gnu.org.\n\n")))
 
     (insert "Please describe exactly what actions triggered the bug\n"
 	    "and the precise symptoms of the bug.  If you can, give\n"
@@ -355,5 +355,4 @@ and send the mail again%s."
 
 (provide 'emacsbug)
 
-;; arch-tag: 248b6523-c3b5-4fec-9a3f-0411fafa7d49
 ;;; emacsbug.el ends here

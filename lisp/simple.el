@@ -784,15 +784,16 @@ If BACKWARD-ONLY is non-nil, only delete them before point."
        (constrain-to-field nil orig-pos t)))))
 
 (defun beginning-of-buffer (&optional arg)
-  "Move point to the beginning of the buffer; leave mark at previous position.
-With \\[universal-argument] prefix, do not set mark at previous position.
+  "Move point to the beginning of the buffer.
 With numeric arg N, put point N/10 of the way from the beginning.
+If the buffer is narrowed, this command uses the beginning of the
+accessible part of the buffer.
 
-If the buffer is narrowed, this command uses the beginning and size
-of the accessible part of the buffer.
+If Transient Mark mode is disabled, leave mark at previous
+position, unless a \\[universal-argument] prefix is supplied.
 
 Don't use this command in Lisp programs!
-\(goto-char (point-min)) is faster and avoids clobbering the mark."
+\(goto-char (point-min)) is faster."
   (interactive "^P")
   (or (consp arg)
       (region-active-p)
@@ -809,15 +810,16 @@ Don't use this command in Lisp programs!
   (if (and arg (not (consp arg))) (forward-line 1)))
 
 (defun end-of-buffer (&optional arg)
-  "Move point to the end of the buffer; leave mark at previous position.
-With \\[universal-argument] prefix, do not set mark at previous position.
+  "Move point to the end of the buffer.
 With numeric arg N, put point N/10 of the way from the end.
+If the buffer is narrowed, this command uses the end of the
+accessible part of the buffer.
 
-If the buffer is narrowed, this command uses the beginning and size
-of the accessible part of the buffer.
+If Transient Mark mode is disabled, leave mark at previous
+position, unless a \\[universal-argument] prefix is supplied.
 
 Don't use this command in Lisp programs!
-\(goto-char (point-max)) is faster and avoids clobbering the mark."
+\(goto-char (point-max)) is faster."
   (interactive "^P")
   (or (consp arg) (region-active-p) (push-mark))
   (let ((size (- (point-max) (point-min))))
@@ -2959,7 +2961,8 @@ If the buffer is read-only, Emacs will beep and refrain from deleting
 the text, but put the text in the kill ring anyway.  This means that
 you can use the killing commands to copy text from a read-only buffer.
 
-This is the primitive for programs to kill text (as opposed to deleting it).
+Lisp programs should use this function for killing text.
+ (To delete text, use `delete-region'.)
 Supply two arguments, character positions indicating the stretch of text
  to be killed.
 Any command that calls this function is a \"kill command\".
@@ -3629,10 +3632,9 @@ point otherwise."
 This is used by commands that act specially on the region under
 Transient Mark mode.
 
-The return value is t provided Transient Mark mode is enabled and
-the mark is active; and, when `use-empty-active-region' is
-non-nil, provided the region is empty.  Otherwise, the return
-value is nil.
+The return value is t if Transient Mark mode is enabled and the
+mark is active; furthermore, if `use-empty-active-region' is nil,
+the region must not be empty.  Otherwise, the return value is nil.
 
 For some commands, it may be appropriate to ignore the value of
 `use-empty-active-region'; in that case, use `region-active-p'."
@@ -3688,6 +3690,8 @@ Display `Mark set' unless the optional second arg NOMSG is non-nil."
 	(push-mark nil nomsg t)
       (setq mark-active t)
       (run-hooks 'activate-mark-hook)
+      (and select-active-regions (display-selections-p)
+	   (x-set-selection 'PRIMARY (current-buffer)))
       (unless nomsg
 	(message "Mark activated")))))
 
@@ -3818,7 +3822,8 @@ Does not set point.  Does nothing if mark ring is empty."
     (setq mark-ring (cdr mark-ring)))
   (deactivate-mark))
 
-(defalias 'exchange-dot-and-mark 'exchange-point-and-mark)
+(define-obsolete-function-alias
+  'exchange-dot-and-mark 'exchange-point-and-mark "23.3")
 (defun exchange-point-and-mark (&optional arg)
   "Put the mark where point is now, and point where the mark is now.
 This command works even when the mark is not active,
@@ -4188,7 +4193,7 @@ into account variable-width characters and line continuation."
     (or (and (= (vertical-motion
 		 (cons (or goal-column
 			   (if (consp temporary-goal-column)
-			       (truncate (car temporary-goal-column))
+			       (car temporary-goal-column)
 			     temporary-goal-column))
 		       arg))
 		arg)
@@ -4255,7 +4260,7 @@ into account variable-width characters and line continuation."
 		  (goto-char (next-char-property-change (point))))
 		;; Move a line.
 		;; We don't use `end-of-line', since we want to escape
-		;; from field boundaries ocurring exactly at point.
+		;; from field boundaries occurring exactly at point.
 		(goto-char (constrain-to-field
 			    (let ((inhibit-field-text-motion t))
 			      (line-end-position))
@@ -5669,7 +5674,7 @@ Each action has the form (FUNCTION . ARGS)."
 The default mail mode is now Message mode.
 You have the following Mail mode variable%s customized:
 \n  %s\n\nTo use Mail mode, set `mail-user-agent' to sendmail-user-agent.
-To disable this warning, set `compose-mail-check-user-agent' to nil."
+To disable this warning, set `compose-mail-user-agent-warnings' to nil."
 				    (if (> (length warn-vars) 1) "s" "")
 				    (mapconcat 'symbol-name
 					       warn-vars " "))))))

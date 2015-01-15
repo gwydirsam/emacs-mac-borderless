@@ -66,9 +66,9 @@ Use this feature when you have directories which you normally refer to
 via absolute symbolic links.  Make TO the name of the link, and FROM
 the name it is linked to."
   :type '(repeat (cons :format "%v"
-		       :value ("" . "")
+		       :value ("\\`" . "")
 		       (regexp :tag "From")
-		       (regexp :tag "To")))
+		       (string :tag "To")))
   :group 'abbrev
   :group 'find-file)
 
@@ -123,6 +123,7 @@ the default for a new file created there by you.
 This variable is relevant only if `backup-by-copying' is nil."
   :type 'boolean
   :group 'backup)
+(put 'backup-by-copying-when-mismatch 'permanent-local t)
 
 (defcustom backup-by-copying-when-privileged-mismatch 200
   "Non-nil means create backups by copying to preserve a privileged owner.
@@ -2774,7 +2775,8 @@ asking you for confirmation."
 	(left-margin          . integerp)   ;; C source code
 	(no-update-autoloads  . booleanp)
 	(tab-width            . integerp)   ;; C source code
-	(truncate-lines       . booleanp))) ;; C source code
+	(truncate-lines       . booleanp)   ;; C source code
+	(word-wrap            . booleanp))) ;; C source code
 
 (put 'c-set-style 'safe-local-eval-function t)
 
@@ -4647,7 +4649,7 @@ this happens by default."
 
 (defconst directory-files-no-dot-files-regexp
   "^\\([^.]\\|\\.\\([^.]\\|\\..\\)\\).*"
-  "Regexp of file names excluging \".\" an \"..\".")
+  "Regexp matching any file name except \".\" and \"..\".")
 
 (defun delete-directory (directory &optional recursive)
   "Delete the directory named DIRECTORY.  Does not follow symlinks.

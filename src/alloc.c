@@ -3094,7 +3094,7 @@ usage: (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INT
   else
     val = Fmake_vector (len, Qnil);
 
-  if (STRINGP (args[1]) && STRING_MULTIBYTE (args[1]))
+  if (nargs > 1 && STRINGP (args[1]) && STRING_MULTIBYTE (args[1]))
     /* BYTECODE-STRING must have been produced by Emacs 20.2 or the
        earlier because they produced a raw 8-bit string for byte-code
        and now such a byte-code string is loaded as multibyte while
@@ -4109,9 +4109,14 @@ static INLINE void
 mark_maybe_object (obj)
      Lisp_Object obj;
 {
-  void *po = (void *) XPNTR (obj);
-  struct mem_node *m = mem_find (po);
+  void *po;
+  struct mem_node *m;
 
+  if (INTEGERP (obj))
+    return;
+
+  po = (void *) XPNTR (obj);
+  m = mem_find (po);
   if (m != MEM_NIL)
     {
       int mark_p = 0;
@@ -5774,13 +5779,11 @@ mark_terminals (void)
   for (t = terminal_list; t; t = t->next_terminal)
     {
       eassert (t->name != NULL);
-      if (!VECTOR_MARKED_P (t))
-	{
 #ifdef HAVE_WINDOW_SYSTEM
-	  mark_image_cache (t->image_cache);
+      mark_image_cache (t->image_cache);
 #endif /* HAVE_WINDOW_SYSTEM */
-	  mark_vectorlike ((struct Lisp_Vector *)t);
-	}
+      if (!VECTOR_MARKED_P (t))
+	mark_vectorlike ((struct Lisp_Vector *)t);
     }
 }
 

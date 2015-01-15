@@ -100,6 +100,7 @@ typedef unsigned int NSUInteger;
 @interface NSScreen (Emacs)
 + (NSScreen *)screenContainingPoint:(NSPoint)aPoint;
 + (NSScreen *)closestScreenForRect:(NSRect)aRect;
+- (BOOL)containsDock;
 @end
 
 @interface EmacsApplication : NSApplication

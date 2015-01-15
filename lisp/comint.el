@@ -340,13 +340,14 @@ This variable is buffer-local."
 ;; Some implementations of passwd use "Password (again)" as the 2nd prompt.
 ;; Something called "perforce" uses "Enter password:".
 (defcustom comint-password-prompt-regexp
-  "\\(\\(Enter \\|[Oo]ld \\|[Nn]ew \\|'s \\|login \\|\
+  "\\(\\([Ee]nter \\(?:same \\|the \\)?\\|[Oo]ld \\|[Nn]ew \\|'s \\|login \\|\
 Kerberos \\|CVS \\|UNIX \\| SMB \\|LDAP \\|\\[sudo] \\|^\\)\
 \[Pp]assword\\( (again)\\)?\\|\
 pass phrase\\|\\(Enter \\|Repeat \\|Bad \\)?[Pp]assphrase\\)\
 \\(?:, try again\\)?\\(?: for [^:]+\\)?:\\s *\\'"
   "Regexp matching prompts for passwords in the inferior process.
 This is used by `comint-watch-for-password-prompt'."
+  :version "23.3"
   :type 'regexp
   :group 'comint)
 
@@ -696,7 +697,9 @@ a running process in that buffer, it is not restarted.  Optional fourth arg
 STARTFILE is the name of a file, whose contents are sent to the
 process as its initial input.
 
-If PROGRAM is a string, any more args are arguments to PROGRAM."
+If PROGRAM is a string, any more args are arguments to PROGRAM.
+
+Returns the (possibly newly created) process buffer."
   (or (fboundp 'start-file-process)
       (error "Multi-processing is not supported for this system"))
   (setq buffer (get-buffer-create (or buffer (concat "*" name "*"))))
@@ -720,7 +723,9 @@ a running process in that buffer, it is not restarted.  Optional third arg
 STARTFILE is the name of a file, whose contents are sent to the
 process as its initial input.
 
-If PROGRAM is a string, any more args are arguments to PROGRAM."
+If PROGRAM is a string, any more args are arguments to PROGRAM.
+
+Returns the (possibly newly created) process buffer."
   (apply #'make-comint-in-buffer name nil program startfile switches))
 
 ;;;###autoload

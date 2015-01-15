@@ -1,3 +1,39 @@
+2010-10-20  Richard Stallman  <rms@gnu.org>
+
+	* DISTRIB: Update donation section.
+
+2010-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* DISTRIB: Small updates.
+
+2010-10-12  Juanma Barranquero  <lekktu@gmail.com>
+
+	* tutorials/TUTORIAL.es: Fix typos.
+
+2010-09-21  Eric Ludlam  <zappo@gnu.org>
+
+	* srecode/java.srt: Make NAME be a prompt.
+
+2010-08-22  Alex Harsanyi  <harsanyi@mac.com>  (tiny change)
+
+	* emacs3.py: Import imp module and use it (Bug#5756).
+
+2010-07-27  Ken Brown  <kbrown@cornell.edu>
+
+	* PROBLEMS: Mention problem with Cygwin 1.5.19.
+
+2010-06-19  Ken Brown  <kbrown@cornell.edu>
+
+	* PROBLEMS: Update Cygwin GCC information.  (Bug#6458)
+
+2010-06-12  Glenn Morris  <rgm@gnu.org>
+
+	* tutorials/TUTORIAL.bg, tutorials/TUTORIAL.es: Fix typos.
+
+2010-05-19  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* NEWS: Add sections for Emacs-23.3.
+
 2010-05-07  Chong Yidong  <cyd@stupidchicken.com>
 
 	* Version 23.2 released.
@@ -26,8 +62,7 @@
 
 2010-03-15  Francesc Rocher  <rocher@member.fsf.org>
 
-	* MORE.STUFF: Remove CEDET entry, now distributed as part of
-	Emacs.
+	* MORE.STUFF: Remove CEDET entry, now distributed as part of Emacs.
 
 2010-03-06  Glenn Morris  <rgm@gnu.org>
 

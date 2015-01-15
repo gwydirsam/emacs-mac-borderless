@@ -1,4 +1,17 @@
+* emacs-23.2.90-mac-1.998 [experimental/hackers-only] (2010-11-10)
+Based on Emacs 23.2.90
+
+** Fixed bugs
+
+*** Fullscreen frame does not hide the Dock that is on a different
+screen from the one containing the menu bar.
+Note: we cannot hide only the menu bar while showing the Dock.  So the
+Dock might be hidden even when the fullscreen frame is not on the
+screen containing the Dock.
+
+
 * emacs-23.2-mac-1.997 [experimental/hackers-only] (2010-09-27)
+http://lists.gnu.org/archive/html/emacs-devel/2010-09/msg01439.html
 
 ** Fixed bugs
 

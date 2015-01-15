@@ -2771,42 +2771,7 @@ macfont_filter_properties (font, alist)
      Lisp_Object font;
      Lisp_Object alist;
 {
-  Lisp_Object it;
-  int i;
-
-  /* Set boolean values to Qt or Qnil */
-  for (i = 0; macfont_booleans[i] != NULL; ++i)
-    for (it = alist; ! NILP (it); it = XCDR (it))
-      {
-        Lisp_Object key = XCAR (XCAR (it));
-        Lisp_Object val = XCDR (XCAR (it));
-        char *keystr = SDATA (SYMBOL_NAME (key));
-
-        if (strcmp (macfont_booleans[i], keystr) == 0)
-          {
-            char *str = SYMBOLP (val) ? SDATA (SYMBOL_NAME (val)) : NULL;
-            if (INTEGERP (val)) str = XINT (val) != 0 ? "true" : "false";
-            if (str == NULL) str = "true";
-
-            val = Qt;
-            if (strcmp ("false", str) == 0 || strcmp ("False", str) == 0
-                || strcmp ("FALSE", str) == 0 || strcmp ("FcFalse", str) == 0
-                || strcmp ("off", str) == 0 || strcmp ("OFF", str) == 0
-                || strcmp ("Off", str) == 0)
-              val = Qnil;
-            Ffont_put (font, key, val);
-          }
-      }
-
-  for (i = 0; macfont_non_booleans[i] != NULL; ++i)
-    for (it = alist; ! NILP (it); it = XCDR (it))
-      {
-        Lisp_Object key = XCAR (XCAR (it));
-        Lisp_Object val = XCDR (XCAR (it));
-        char *keystr = SDATA (SYMBOL_NAME (key));
-        if (strcmp (macfont_non_booleans[i], keystr) == 0)
-          Ffont_put (font, key, val);
-      }
+  font_filter_properties (font, alist, macfont_booleans, macfont_non_booleans);
 }
 
 #if USE_CORE_TEXT

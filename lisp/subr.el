@@ -219,6 +219,7 @@ Treated as a declaration when used at the right place in a
 (defmacro ignore-errors (&rest body)
   "Execute BODY; if an error occurs, return nil.
 Otherwise, return result of last form in BODY."
+  (declare (debug t) (indent 0))
   `(condition-case nil (progn ,@body) (error nil)))
 
 ;;;; Basic Lisp functions.
@@ -237,7 +238,7 @@ letter but *do not* end with a period.  Please follow this convention
 for the sake of consistency."
   (while t
     (signal 'error (list (apply 'format args)))))
-(set-advertised-calling-convention 'error '(string &rest args))
+(set-advertised-calling-convention 'error '(string &rest args) "23.1")
 
 ;; We put this here instead of in frame.el so that it's defined even on
 ;; systems where frame.el isn't loaded.
@@ -1037,9 +1038,10 @@ is converted into a string by expressing it in decimal."
 (make-obsolete 'make-variable-frame-local
 	       "explicitly check for a frame-parameter instead." "22.2")
 (make-obsolete 'interactive-p 'called-interactively-p "23.2")
-(set-advertised-calling-convention 'called-interactively-p '(kind))
+(set-advertised-calling-convention 'called-interactively-p '(kind) "23.1")
 (set-advertised-calling-convention
- 'all-completions '(string collection &optional predicate))
+ 'all-completions '(string collection &optional predicate) "23.1")
+(set-advertised-calling-convention 'unintern '(name obarray) "23.3")
 
 ;;;; Obsolescence declarations for variables, and aliases.
 
@@ -1817,6 +1819,7 @@ When there's an ambiguity because the key looks like the prefix of
 some sort of escape sequence, the ambiguity is resolved via `read-key-delay'."
   (let ((overriding-terminal-local-map read-key-empty-map)
 	(overriding-local-map nil)
+        (echo-keystrokes 0)
 	(old-global-map (current-global-map))
         (timer (run-with-idle-timer
                 ;; Wait long enough that Emacs has the time to receive and
@@ -1841,7 +1844,12 @@ some sort of escape sequence, the ambiguity is resolved via `read-key-delay'."
                       (throw 'read-key keys)))))))
     (unwind-protect
         (progn
-	  (use-global-map read-key-empty-map)
+	  (use-global-map
+           (let ((map (make-sparse-keymap)))
+             ;; Don't hide the menu-bar and tool-bar entries.
+             (define-key map [menu-bar] (lookup-key global-map [menu-bar]))
+             (define-key map [tool-bar] (lookup-key global-map [tool-bar]))
+             map))
 	  (aref	(catch 'read-key (read-key-sequence-vector prompt nil t)) 0))
       (cancel-timer timer)
       (use-global-map old-global-map))))
@@ -1871,16 +1879,13 @@ any other non-digit terminates the character code and is then used as input."))
 	(if inhibit-quit (setq quit-flag nil)))
       ;; Translate TAB key into control-I ASCII character, and so on.
       ;; Note: `read-char' does it using the `ascii-character' property.
-      ;; We could try and use read-key-sequence instead, but then C-q ESC
-      ;; or C-q C-x might not return immediately since ESC or C-x might be
-      ;; bound to some prefix in function-key-map or key-translation-map.
-      (setq translated
-	    (if (integerp char)
-		(char-resolve-modifiers char)
-	      char))
+      ;; We should try and use read-key instead.
       (let ((translation (lookup-key local-function-key-map (vector char))))
-	(if (arrayp translation)
-	    (setq translated (aref translation 0))))
+	(setq translated (if (arrayp translation)
+			     (aref translation 0)
+			   char)))
+      (if (integerp translated)
+	  (setq translated (char-resolve-modifiers translated)))
       (cond ((null translated))
 	    ((not (integerp translated))
 	     (setq unread-command-events (list char)
@@ -2057,7 +2062,7 @@ floating point support."
 		(setq read (cons t read)))
 	    (push read unread-command-events)
 	    nil))))))
-(set-advertised-calling-convention 'sit-for '(seconds &optional nodisp))
+(set-advertised-calling-convention 'sit-for '(seconds &optional nodisp) "22.1")
 
 ;;; Atomic change groups.
 
@@ -2209,22 +2214,11 @@ If MESSAGE is nil, instructions to type EXIT-CHAR are displayed there."
                 (recenter (/ (window-height) 2))))
           (message (or message "Type %s to continue editing.")
                    (single-key-description exit-char))
-          (let (char)
-            (if (integerp exit-char)
-                (condition-case nil
-                    (progn
-                      (setq char (read-char))
-                      (or (eq char exit-char)
-                          (setq unread-command-events (list char))))
-                  (error
-                   ;; `exit-char' is a character, hence it differs
-                   ;; from char, which is an event.
-                   (setq unread-command-events (list char))))
-              ;; `exit-char' can be an event, or an event description list.
-              (setq char (read-event))
-              (or (eq char exit-char)
-                  (eq char (event-convert-list exit-char))
-                  (setq unread-command-events (list char))))))
+	  (let ((event (read-event)))
+	    ;; `exit-char' can be an event, or an event description list.
+	    (or (eq event exit-char)
+		(eq event (event-convert-list exit-char))
+		(setq unread-command-events (list event)))))
       (delete-overlay ol))))
 
 
@@ -2596,7 +2590,7 @@ discouraged."
   (start-process name buffer shell-file-name shell-command-switch
 		 (mapconcat 'identity args " ")))
 (set-advertised-calling-convention 'start-process-shell-command
-                                   '(name buffer command))
+                                   '(name buffer command) "23.1")
 
 (defun start-file-process-shell-command (name buffer &rest args)
   "Start a program in a subprocess.  Return the process object for it.
@@ -2607,7 +2601,7 @@ Similar to `start-process-shell-command', but calls `start-file-process'."
    (if (file-remote-p default-directory) "-c" shell-command-switch)
    (mapconcat 'identity args " ")))
 (set-advertised-calling-convention 'start-file-process-shell-command
-                                   '(name buffer command))
+                                   '(name buffer command) "23.1")
 
 (defun call-process-shell-command (command &optional infile buffer display
 					   &rest args)

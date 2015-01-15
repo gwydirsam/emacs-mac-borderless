@@ -1181,7 +1181,7 @@ inside the overlay or outside, and likewise for the end of the overlay.
 @menu
 * Managing Overlays::   Creating and moving overlays.
 * Overlay Properties::  How to read and set properties.
-			What properties do to the screen display.
+                          What properties do to the screen display.
 * Finding Overlays::    Searching for overlays.
 @end menu
 
@@ -5877,6 +5877,14 @@ used for displaying @var{frame} (which defaults to the currently
 selected frame).  The list of possible symbols it returns is the same
 one documented for the variable @code{window-system} above.
 @end defun
+
+  Do @emph{not} use @code{window-system} and
+@code{initial-window-system} as predicates or boolean flag variables,
+if you want to write code that works differently on text terminals and
+graphic displays.  That is because @code{window-system} is not a good
+indicator of Emacs capabilities on a given display type.  Instead, use
+@code{display-graphic-p} or any of the other @code{display-*-p}
+predicates described in @ref{Display Feature Testing}.
 
 @defvar window-setup-hook
 This variable is a normal hook which Emacs runs after handling the

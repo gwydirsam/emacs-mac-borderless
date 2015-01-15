@@ -1,3 +1,93 @@
+2010-11-05  Michael Albinus  <michael.albinus@gmx.de>
+
+	* trampver.texi: Update release number.
+
+2010-11-03  Jay Belanger  <jay.p.belanger@gmail.com>
+
+	* calc.texi: Use emacsver.texi to determine Emacs version.
+
+2010-10-30  Glenn Morris  <rgm@gnu.org>
+
+	* mh-e.texi (Preface, From Bill Wohler): Change 23 to past tense.
+
+2010-10-29  Glenn Morris  <rgm@gnu.org>
+
+	* cc-mode.texi: Remove reference to defunct viewcvs URL.
+
+2010-10-22  Juanma Barranquero  <lekktu@gmail.com>
+
+	* gnus.texi (Group Parameters, Buttons): Fix typos.
+
+2010-10-08  Glenn Morris  <rgm@gnu.org>
+
+	* cl.texi (Organization, Installation, Old CL Compatibility):
+	Deprecate cl-compat for new code.
+
+2010-10-07  Glenn Morris  <rgm@gnu.org>
+
+	* eudc.texi (CCSO PH/QI, LDAP Requirements): Remove old information.
+
+2010-10-06  Glenn Morris  <rgm@gnu.org>
+
+	* cl.texi (Usage, Installation): Remove outdated information.
+
+2010-08-26  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.1.19.
+
+	* tramp.texi (Inline methods, Default Method): Mention
+	`tramp-inline-compress-start-size'.  Remove "kludgy" phrase.  Remove
+	remark about doubled "-t" argument.
+	(Auto-save and Backup): Remove reference to Emacs 21.
+	(Filename Syntax): Describe port numbers.
+	(Frequently Asked Questions): Adapt supported (X)Emacs versions.  Adapt
+	supported MS Windows versions.  Remove obsolete URL.  Recommend "sshx"
+	and "scpx" for echoing shells.  Use the $() syntax, texi2dvi reports
+	errors with the backquotes.
+	(External packages): File attributes cache flushing for asynchronous
+	processes.
+	(Traces and Profiles): Describe verbose level 9.
+
+	* trampver.texi: Update release number.
+
+2010-08-01  Juanma Barranquero  <lekktu@gmail.com>
+
+	* org.texi (Footnotes, Tables in HTML export): Fix typos.
+
+2010-07-23  Chong Yidong  <cyd@stupidchicken.com>
+
+	* nxml-mode.texi (Limitations): Remove obsolete discussion (Bug#6708).
+
+2010-06-27  Alex Schroeder  <alex@gnu.org>
+
+	* nxml-mode.texi (Commands for locating a schema): Fix typo.
+
+2010-06-24  Glenn Morris  <rgm@gnu.org>
+
+	* ada-mode.texi, auth.texi, autotype.texi, calc.texi, cc-mode.texi:
+	* dired-x.texi, ebrowse.texi, ede.texi, edt.texi, eieio.texi:
+	* emacs-mime.texi, epa.texi, erc.texi, eshell.texi, eudc.texi:
+	* flymake.texi, gnus.texi, info.texi, mairix-el.texi, message.texi:
+	* newsticker.texi, org.texi, pgg.texi, rcirc.texi, reftex.texi:
+	* remember.texi, sasl.texi, semantic.texi, ses.texi, smtpmail.texi:
+	* speedbar.texi, tramp.texi, url.texi, viper.texi, widget.texi:
+	* woman.texi: Start direntry descriptions in column 32, per Texinfo
+	convention.   Make them end with a period.
+
+2010-06-23  Glenn Morris  <rgm@gnu.org>
+
+	* autotype.texi, cl.texi, dired-x.texi, ebrowse.texi, ede.texi:
+	* eieio.texi, epa.texi, faq.texi, flymake.texi, forms.texi:
+	* gnus-faq.texi, idlwave.texi, mh-e.texi, nxml-mode.texi, org.texi:
+	* pcl-cvs.texi, pgg.texi, reftex.texi, sasl.texi, sc.texi,
+	* sem-user.texi, semantic.texi, sieve.texi, smtpmail.texi,
+	* speedbar.texi, vip.texi, viper.texi, widget.texi: Untabify.
+
+2010-06-10  Glenn Morris  <rgm@gnu.org>
+
+	* idlwave.texi (Load-Path Shadows):
+	* org.texi (Handling links): Fix typos.
+
 2010-05-07  Chong Yidong  <cyd@stupidchicken.com>
 
 	* Version 23.2 released.
@@ -6350,10 +6440,6 @@
 	* Makefile.in (../info/cc-mode, cc-mode.dvi): New targets.
 	(INFO_TARGETS): Add ../info/cc-mode.
 	(DVI_TARGETS): Add cc-mode.dvi.
-
-1996-05-25  Karl Heuer  <kwzh@gnu.ai.mit.edu>
-
-	* Version 19.31 released.
 
 1995-11-24  Richard Stallman  <rms@mole.gnu.ai.mit.edu>
 

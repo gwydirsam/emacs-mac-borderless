@@ -371,16 +371,25 @@
   (let* ((encoding
 	  (and (eq (coding-system-base coding-system) 'japanese-shift-jis)
 	       mac-text-encoding-mac-japanese-basic-variant))
-	 (str (let (bytes data1)
+	 (str (let (bytes data1 data-normalized data1-normalized)
 		(and (setq bytes (mac-code-convert-string
 				  data source-encoding
 				  (or encoding coding-system)))
-		     ;; Check if round-trip conversion gives the same
-		     ;; result.
+		     ;; Check if round-trip conversion gives an
+		     ;; equivalent result.  We use HFS+D instead of
+		     ;; NFD so OHM SIGN and GREEK CAPITAL LETTER OMEGA
+		     ;; may not be considered equivalent.
 		     (setq data1 (mac-code-convert-string
 				  bytes (or encoding coding-system)
 				  source-encoding))
-		     (string= data1 data)
+		     (or (string= data1 data)
+			 (and (setq data-normalized (mac-code-convert-string
+						     data source-encoding
+						     source-encoding 'HFS+D))
+			      (setq data1-normalized (mac-code-convert-string
+						      data1 source-encoding
+						      source-encoding 'HFS+D))
+			      (string= data1-normalized data-normalized)))
 		     (decode-coding-string bytes coding-system)))))
     (if (and str (eq encoding mac-text-encoding-mac-japanese-basic-variant))
 	;; Does it contain Apple one-byte extensions other than
@@ -920,10 +929,6 @@ scheme."
       (setq event-class (get event-class 'mac-apple-event-class)))
   (if (symbolp event-id)
       (setq event-id (get event-id 'mac-apple-event-id)))
-  (if (not (and (stringp event-class) (= (string-bytes event-class) 4)))
-      (error "Not an event class: %S" event-class))
-  (if (not (and (stringp event-id) (= (string-bytes event-id) 4)))
-      (error "Not an event ID: %S" event-id))
   (cond ((numberp target)
 	 (setq target (cons "kpid"	; typeKernelProcessID
 			    (mac-coerce-ae-data
@@ -967,9 +972,21 @@ APPLE-EVENT is a Lisp representation of an Apple event,
 preferably created with `mac-create-apple-event' and
 `mac-ae-set-parameter'.
 
-If CALLBACK is nil, then the reply is not requested.  Otherwise,
-CALLBACK is called with two arguments, the reply event and the
-original event, when the reply arrives.
+If CALLBACK is nil, then the reply is not requested.  If CALLBACK
+is t, then the function does not return until the reply arrives.
+Otherwise, the function returns without waiting for the arrival
+of the reply, and afterwards CALLBACK is called with one
+argument, the reply event, when the reply arrives.
+
+The function returns an integer if some error has occurred in
+sending, the Lisp representation of the sent Apple event if
+CALLBACK is not t, and the Lisp representation of the reply Apple
+event if CALLBACK is t.
+
+With the reply event, which is given either as the argument to
+CALLBACK or as the return value in the case that CALLBACK is t,
+one can examine the originally sent Apple event via the
+`original-apple-event' parameter.
 
 Each event parameter whose keyword is a symbol starting with `:'
 is not sent as an Apple event, but given as a parameter of the
@@ -981,9 +998,10 @@ through this without \"emulated closures\".  For example,
     (mac-ae-set-parameter apple-event :context2 SOME-LISP-VALUE2)
     (mac-send-apple-event
      apple-event
-     (lambda (reply-ae orig-ae)
-       (let ((context1-value (mac-ae-parameter orig-ae :context1))
-	     (context2-value (mac-ae-parameter orig-ae :context2)))
+     (lambda (reply-ae)
+       (let* ((orig-ae (mac-ae-parameter reply-ae 'original-apple-event))
+              (context1-value (mac-ae-parameter orig-ae :context1))
+	      (context2-value (mac-ae-parameter orig-ae :context2)))
 	 ...))))"
   (let ((ae (mac-send-apple-event-internal apple-event (and callback t))))
     (when (consp ae)
@@ -991,27 +1009,45 @@ through this without \"emulated closures\".  For example,
 	(dolist (param (cdr apple-event))
 	  (if (not (assoc (car param) params))
 	      (setcdr ae (cons param (cdr ae))))))
-      (if callback
-	  (push (mac-ae-set-parameter ae 'callback callback)
-		mac-sent-apple-events)))
+      (cond ((null callback))		; no reply
+	    ((not (eq callback t))	; asynchronous
+	     (push (mac-ae-set-parameter ae 'callback callback)
+		   mac-sent-apple-events))
+	    (t				; synchronous
+	     (push (mac-ae-set-parameter ae 'callback
+					 (lambda (reply-ae)
+					   (throw 'mac-send-apple-event
+						  reply-ae)))
+		   mac-sent-apple-events)
+	     (let ((orig-ae ae))
+	       (unwind-protect
+		   (let (reply-ae events)
+		     (while (null (setq reply-ae (catch 'mac-send-apple-event
+						   (push (read-event) events)
+						   nil))))
+		     (setq unread-command-events (nreverse events))
+		     (setq ae reply-ae))
+		 (mac-ae-set-parameter orig-ae 'callback 'ignore))))))
     ae))
 
 (defun mac-ae-answer (event)
   "Handle the reply EVENT for a previously sent Apple event."
   (interactive "e")
   (let* ((reply-ae (mac-event-ae event))
-	 (return-id (mac-ae-parameter reply-ae 'return-id))
+	 (return-id (mac-ae-parameter reply-ae 'return-id "shor"))
 	 (rest mac-sent-apple-events)
 	 prev)
     (while (and rest
-		(not (equal (mac-ae-parameter (car rest) 'return-id)
+		(not (equal (mac-ae-parameter (car rest) 'return-id "shor")
 			    return-id)))
       (setq rest (cdr (setq prev rest))))
     (when rest
-      (if prev (setcdr prev (cdr rest))
+      (if prev
+	  (setcdr prev (cdr rest))
 	(setq mac-sent-apple-events (cdr mac-sent-apple-events)))
       (funcall (mac-ae-parameter (car rest) 'callback)
-	       reply-ae (car rest)))))
+	       (mac-ae-set-parameter reply-ae 'original-apple-event
+				     (car rest))))))
 
 ;; url-generic-parse-url is autoloaded from url-parse.
 (declare-function url-type "url-parse" t t) ; defstruct
@@ -1398,7 +1434,7 @@ modifiers, it changes the global tool-bar visibility setting."
  'mac-handle-toolbar-pill-button-clicked)
 (define-key mac-apple-event-map [action zoom] 'mac-handle-zoom)
 
-;;; Spotlight for Help (Mac OS X 10.6 and later, experimental)
+;;; Spotlight for Help (Mac OS X 10.6 and later)
 
 (declare-function info-initialize "info" ())
 (declare-function Info-find-file "info" (filename &optional noerror))
@@ -1688,7 +1724,7 @@ See also `mac-dnd-known-types'."
     (tmm-menubar)))
 
 
-;;; Mouse wheel smooth scroll (experimental)
+;;; Mouse wheel smooth scroll
 
 (defcustom mac-mouse-wheel-smooth-scroll t
   "Non-nil means the mouse wheel should scroll by pixel unit if possible."
