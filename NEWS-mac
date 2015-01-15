@@ -1,4 +1,23 @@
+* emacs-23.3.90-mac-1.9998 [experimental/hackers-only] (2012-01-15)
+Based on Emacs 23.3.90
+
+** Fixed bugs
+
+*** Wrong relief display for sliced images.
+Adapt a fix for Bug#10500.
+
+** Improvements
+
+*** If Emacs.app is launched from Finder or via Resume, and there is
+no ~/.MacOSX/environment.plist file, then it inherits environment
+variable settings of user's login shell.  Note that if Emacs.app is
+launched via the `open' command on Mac OS X 10.4 and later, then it
+inherits environment variable settings of the shell where the command
+is invoked, and this behavior is unchanged.
+
+
 * emacs-23.3b-mac-1.9997 [experimental/hackers-only] (2011-11-28)
+http://lists.gnu.org/archive/html/emacs-devel/2011-11/msg00473.html
 
 ** Fixed bugs
 
@@ -40,7 +59,7 @@ Reported by Leo.
 ** Improvements
 
 *** Can compile with ARC (Automatic Reference Counting) on Xcode 4.2.
-Specify CC='clang -fobjc-arc' on configure.
+Specify CC="clang -fobjc-arc" on configure.
 
 *** When running Ediff on a fullboth frame, it no longer gets obscured
 by the menu bar or the Dock even if we focus Ediff Control Panel.

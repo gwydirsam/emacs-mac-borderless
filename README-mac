@@ -96,7 +96,7 @@ The Mac port is a descendant of the following ports for Mac OS X.
 
     - 64-bit (10.5 and later)
       You can build and run a 64-bit binary with GUI support by
-      specifying CC='gcc -arch x86_64' or CC='gcc -arch ppc64' on
+      specifying CC="gcc -arch x86_64" or CC="gcc -arch ppc64" on
       configure.
 
     - Some minor visual enhancements
@@ -108,7 +108,7 @@ The Mac port is a descendant of the following ports for Mac OS X.
       * Update display while the resize control (or the slider in the
 	font panel) is being dragged
 
-Being a port of Emacs 23.3, the Mac port also supports the following
+Being a port of Emacs 23.4, the Mac port also supports the following
 features besides those inherited from the above ancestors:
 
   * The `fullscreen' frame parameter, with all values supported:
@@ -144,7 +144,7 @@ features besides those inherited from the above ancestors:
     Sequences) even for the OS-bundled Hiragino fonts, which do not
     contain the UVS subtable in their cmap table as of Mac OS X 10.6.
 
-In addition to the standard Emacs 23.3 features, the Mac port includes
+In addition to the standard Emacs 23.4 features, the Mac port includes
 the following Mac-specific ones:
 
   * Pixel-based mouse wheel smooth scroll for newer mice/trackpads.
@@ -238,6 +238,10 @@ without separating a GUI process (not thread) from the main Emacs
      helper executables are installed into /usr/local by default.  If
      you want to change the destination, give --prefix=PREFIXDIR.  See
      also `EMACS_SOURCE_TOP/INSTALL'.
+
+     If you want to enable ARC (Automatic Reference Counting) support
+     on Mac OS X 10.7 with Xcode 4.2 or later, then specify
+     CC="clang -fobjc-arc".
 
      On Mac OS X 10.3 with a recent QuickTime update, you may also
      have to specify

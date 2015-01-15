@@ -1,7 +1,7 @@
 /* Updating of data structures for redisplay.
    Copyright (C) 1985, 1986, 1987, 1988, 1993, 1994, 1995,
                  1997, 1998, 1999, 2000, 2001, 2002, 2003,
-                 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+                 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -5039,7 +5039,7 @@ scrolling_window (w, header_line_p)
   j = last_old;
   while (i - 1 > first_new
          && j - 1 > first_old
-         && MATRIX_ROW (current_matrix, j - 1)->enabled_p
+	 && MATRIX_ROW (current_matrix, j - 1)->enabled_p
 	 && (MATRIX_ROW (current_matrix, j - 1)->y
 	     == MATRIX_ROW (desired_matrix, i - 1)->y)
 	 && !MATRIX_ROW (desired_matrix, i - 1)->redraw_fringe_bitmaps_p
@@ -6797,7 +6797,7 @@ pass nil for VARIABLE.  */)
     state = frame_and_buffer_state;
 
   vecp = XVECTOR (state)->contents;
-  end = vecp + XVECTOR (state)->size;
+  end = vecp + XVECTOR_SIZE (state);
 
   FOR_EACH_FRAME (tail, frame)
     {
@@ -6848,8 +6848,8 @@ pass nil for VARIABLE.  */)
   /* Reallocate the vector if data has grown to need it,
      or if it has shrunk a lot.  */
   if (! VECTORP (state)
-      || n > XVECTOR (state)->size
-      || n + 20 < XVECTOR (state)->size / 2)
+      || n > XVECTOR_SIZE (state)
+      || n + 20 < XVECTOR_SIZE (state) / 2)
     /* Add 20 extra so we grow it less often.  */
     {
       state = Fmake_vector (make_number (n + 20), Qlambda);
@@ -6879,11 +6879,11 @@ pass nil for VARIABLE.  */)
   /* Fill up the vector with lambdas (always at least one).  */
   *vecp++ = Qlambda;
   while (vecp - XVECTOR (state)->contents
-	 < XVECTOR (state)->size)
+	 < XVECTOR_SIZE (state))
     *vecp++ = Qlambda;
   /* Make sure we didn't overflow the vector.  */
   if (vecp - XVECTOR (state)->contents
-      > XVECTOR (state)->size)
+      > XVECTOR_SIZE (state))
     abort ();
   return Qt;
 }
