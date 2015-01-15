@@ -1919,13 +1919,13 @@ mac_alloc_lighter_color (f, color, factor, delta)
       int min_delta = delta * dimness * factor / 2;
 
       if (factor < 1)
-        new = RGB_TO_ULONG (max (0, min (0xff, (int) (RED_FROM_ULONG (*color)) - min_delta)),
-			    max (0, min (0xff, (int) (GREEN_FROM_ULONG (*color)) - min_delta)),
-			    max (0, min (0xff, (int) (BLUE_FROM_ULONG (*color)) - min_delta)));
+        new = RGB_TO_ULONG (max (0, min (0xff, (int) (RED_FROM_ULONG (new)) - min_delta)),
+			    max (0, min (0xff, (int) (GREEN_FROM_ULONG (new)) - min_delta)),
+			    max (0, min (0xff, (int) (BLUE_FROM_ULONG (new)) - min_delta)));
       else
-        new = RGB_TO_ULONG (max (0, min (0xff, (int) (min_delta + RED_FROM_ULONG (*color)))),
-			    max (0, min (0xff, (int) (min_delta + GREEN_FROM_ULONG (*color)))),
-			    max (0, min (0xff, (int) (min_delta + BLUE_FROM_ULONG (*color)))));
+        new = RGB_TO_ULONG (max (0, min (0xff, (int) (min_delta + RED_FROM_ULONG (new)))),
+			    max (0, min (0xff, (int) (min_delta + GREEN_FROM_ULONG (new)))),
+			    max (0, min (0xff, (int) (min_delta + BLUE_FROM_ULONG (new)))));
     }
 
   if (new == *color)

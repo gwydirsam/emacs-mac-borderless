@@ -8,26 +8,19 @@ to try this.
 
   *** IMPORTANT NOTE ***
 
-  This version should be regarded as experimental/hackers-only.
-  Documentations are completely missing, no extra files such as the
-  package creation convenience script `make-package', and things are
-  subject to change/removal in an incompatible way.  Please refrain
-  from distributing this in any different form, including for (binary)
-  distribution basis, until the version gets to 2.0.
-
-  Also, if you find a bug, then please try to reproduce it with some
+  If you find a bug, then please try to reproduce it with some
   official builds such as X11 or NS (Cocoa).  If it turns out to be
   specific to the Mac port, then please report it to
   "mituharu+bug-gnu-emacs-mac@math.s.chiba-u.ac.jp".  Otherwise (i.e.,
   it is also reproducible with official ones), report it using M-x
   report-emacs-bug *USING THE OFFICIAL BUILD* as such.
 
-The Mac port is a descendant of the following ports for Mac OS X.
+The Mac port is a descendant of the following ports for Mac OS X:
 
   * Carbon port for Emacs 22 (aka "Carbon Emacs", don't confuse it
     with "Carbon Emacs Package"): this is a part of the official GNU
     Emacs 22 distribution and provides native GUI support for Mac OS.
-    It has been used in almost all the Emacs distributions/packages
+    It has been used in almost all the Emacs 22 distributions/packages
     for Mac OS X with its native GUI.
 
     The Carbon port was initiated by Andrew Choi, using his Mac OS 8/9
@@ -136,7 +129,7 @@ features besides those inherited from the above ancestors:
     nonmodal counterpart has been available since Emacs 22 Carbon port
     via `mac-font-panel-mode'.
   * Unicode character display including non-BMP ones.
-  * Complex text layout (left-to-right only) and text shaping.  They
+  * Complex Text Layout (left-to-right only) and text shaping.  They
     are implemented using the Core Text or NS Text layout engine, so
     you don't need libotf.
   * Glyph selection with variation selectors.  Most of Adobe-Japan1
@@ -189,14 +182,14 @@ the preceding ports (under a somewhat inappropriate name), is no
 longer supported in the Mac port.  If you want to control
 anti-aliasing, then you can set it with either from the Appearance
 pane of the System Preferences, or the `AppleAntiAliasingThreshold'
-property that can be set with the `defaults' command.  Alternatively,
-you can specify nil or t for the `:antialias' property of a font-spec
-to control anti-aliasing per font.
+Preference that can be set with the `defaults' command.
+Alternatively, you can specify nil or t for the `:antialias' property
+of a font-spec to control anti-aliasing per font.
 
-The Mac port doesn't support multi-tty with GUI.  I have no idea how I
-can detach Emacs as a GUI application from Window Server or Dock
-without separating a GUI process (not thread) from the main Emacs
-(Lisp evaluator) process.
+The Mac port doesn't support multi-tty with GUI.  The developer has no
+idea how to detach Emacs as a GUI application from Window Server or
+Dock without separating a GUI process (not thread) from the main Emacs
+(Lisp evaluator) process.  TTY-only multi-tty is supposed to work.
 
 
 2. Build instructions

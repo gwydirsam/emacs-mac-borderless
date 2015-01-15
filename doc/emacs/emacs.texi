@@ -5,7 +5,7 @@
 
 @c The edition number appears in several places in this file
 @set EDITION   Sixteenth
-@set EMACSVER  23.3.90
+@set EMACSVER  23.4
 
 @copying
 This is the @value{EDITION} edition of the @cite{GNU Emacs Manual},@*
@@ -240,6 +240,7 @@ Appendices
 * Emacs Invocation::    Hairy startup options.
 * X Resources::         X resources for customizing Emacs.
 * Antinews::            Information about Emacs version 22.
+* Mac Port::            Using Emacs under Mac OS X with the Mac port.
 * Mac OS / GNUstep::    Using Emacs under Mac OS and GNUstep.
 * Microsoft Windows::   Using Emacs on Microsoft Windows and MS-DOS.
 * Manifesto::           What's GNU?  Gnu's Not Unix!
@@ -1523,6 +1524,7 @@ Lisp programming.
 @include xresources.texi
 
 @include anti.texi
+@include macport.texi
 @include macos.texi
 @c Includes msdog-xtra.
 @include msdog.texi
