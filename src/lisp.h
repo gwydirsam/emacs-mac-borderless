@@ -1448,9 +1448,9 @@ struct Lisp_Float
   };
 
 #ifdef HIDE_LISP_IMPLEMENTATION
-#define XFLOAT_DATA(f)	(XFLOAT (f)->u.data_ + 0)
+#define XFLOAT_DATA(f)	(0 ? XFLOAT (f)->u.data_ : XFLOAT (f)->u.data_)
 #else
-#define XFLOAT_DATA(f)	(XFLOAT (f)->u.data + 0)
+#define XFLOAT_DATA(f)	(0 ? XFLOAT (f)->u.data :  XFLOAT (f)->u.data)
 /* This should be used only in alloc.c, which always disables
    HIDE_LISP_IMPLEMENTATION.  */
 #define XFLOAT_INIT(f,n) (XFLOAT (f)->u.data = (n))

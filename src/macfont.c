@@ -86,6 +86,7 @@ struct macfont_info
   unsigned synthetic_bold_p : 1;
   unsigned spacing : 2;
   unsigned antialias : 2;
+  unsigned color_bitmap_p : 1;
 };
 
 /* Values for the `spacing' member in `struct macfont_info'.  */
@@ -2007,6 +2008,11 @@ macfont_open (f, entity, pixel_size)
 	macfont_info->antialias =
 	  NILP (XCDR (val)) ? MACFONT_ANTIALIAS_OFF : MACFONT_ANTIALIAS_ON;
     }
+  macfont_info->color_bitmap_p = 0;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+  if (sym_traits & kCTFontColorGlyphsTrait)
+    macfont_info->color_bitmap_p = 1;
+#endif
 
   glyph = macfont_get_glyph_for_character (font, ' ');
   if (glyph != kCGFontIndexInvalid)
@@ -2191,7 +2197,6 @@ macfont_draw (s, from, to, x, y, with_background)
      int from, to, x, y, with_background;
 {
   FRAME_PTR f = s->f;
-  struct face *face = s->face;
   struct macfont_info *macfont_info = (struct macfont_info *) s->font;
   FontRef macfont = macfont_info->macfont;
   CGContextRef context;
@@ -2218,9 +2223,9 @@ macfont_draw (s, from, to, x, y, with_background)
   if (with_background)
     {
       CG_SET_FILL_COLOR_WITH_GC_BACKGROUND (context, s->gc);
-      CGContextFillRect	(context,
-			 mac_rect_make (f, x, y - FONT_BASE (face->font),
-					s->width, FONT_HEIGHT (face->font)));
+      CGContextFillRect (context,
+			 mac_rect_make (f, x, y - FONT_BASE (s->font),
+					s->width, FONT_HEIGHT (s->font)));
     }
 
   if (macfont_info->cgfont)
@@ -2265,13 +2270,49 @@ macfont_draw (s, from, to, x, y, with_background)
       if (no_antialias_p)
 	CGContextSetShouldAntialias (context, false);
 
-      CGContextSetFont (context, macfont_info->cgfont);
-      CGContextSetFontSize (context, font_size);
       CGContextSetTextMatrix (context, atfm);
       CGContextSetTextPosition (context, x + advance_delta, -y);
-      /* The symbol CGContextShowGlyphsWithAdvances seems to exist
-	 even in Mac OS X 10.2.  */
-      CGContextShowGlyphsWithAdvances (context, glyphs, advances, len);
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
+      if (CTFontDrawGlyphs != NULL)
+#endif
+	{
+	  if (macfont_info->color_bitmap_p)
+	    {
+	      if (len > 0)
+		{
+		  CGPoint *positions = alloca (sizeof (CGPoint) * len);
+
+		  positions[0] = CGPointZero;
+		  for (i = 1; i < len; i++)
+		    {
+		      positions[i].x = positions[i-1].x + advances[i-1].width;
+		      positions[i].y = positions[i-1].y + advances[i-1].height;
+		    }
+		  CTFontDrawGlyphs (macfont, glyphs, positions, len, context);
+		}
+	    }
+	  else
+	    {
+	      CGContextSetFont (context, macfont_info->cgfont);
+	      CGContextSetFontSize (context, font_size);
+	      CGContextShowGlyphsWithAdvances (context, glyphs, advances, len);
+	    }
+	}
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
+      else			/* CTFontDrawGlyphs == NULL */
+#endif
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED >= 1070 */
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
+	{
+	  CGContextSetFont (context, macfont_info->cgfont);
+	  CGContextSetFontSize (context, font_size);
+	  /* The symbol CGContextShowGlyphsWithAdvances seems to exist
+	     even in Mac OS X 10.2.  */
+	  CGContextShowGlyphsWithAdvances (context, glyphs, advances, len);
+	}
+#endif
     }
 
   mac_end_cg_clip (f);

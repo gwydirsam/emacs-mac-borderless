@@ -1342,7 +1342,30 @@ macappkit.o: macappkit.m blockinput.h atimer.h systime.h macterm.h macgui.h \
   frame.h $(INTERVALS_H) charset.h character.h fontset.h termhooks.h buffer.h \
   window.h keyboard.h coding.h keymap.h macfont.h macappkit.h lisp.h $(config_h)
 
-${emacsapp}Contents/Resources/English.lproj:
+lprojdirs = ${emacsapp}Contents/Resources/English.lproj \
+  ${emacsapp}Contents/Resources/Dutch.lproj \
+  ${emacsapp}Contents/Resources/French.lproj \
+  ${emacsapp}Contents/Resources/German.lproj \
+  ${emacsapp}Contents/Resources/Italian.lproj \
+  ${emacsapp}Contents/Resources/Japanese.lproj \
+  ${emacsapp}Contents/Resources/Spanish.lproj \
+  ${emacsapp}Contents/Resources/ar.lproj \
+  ${emacsapp}Contents/Resources/cs.lproj \
+  ${emacsapp}Contents/Resources/da.lproj \
+  ${emacsapp}Contents/Resources/fi.lproj \
+  ${emacsapp}Contents/Resources/hu.lproj \
+  ${emacsapp}Contents/Resources/ko.lproj \
+  ${emacsapp}Contents/Resources/no.lproj \
+  ${emacsapp}Contents/Resources/pl.lproj \
+  ${emacsapp}Contents/Resources/pt.lproj \
+  ${emacsapp}Contents/Resources/pt_PT.lproj \
+  ${emacsapp}Contents/Resources/ru.lproj \
+  ${emacsapp}Contents/Resources/sv.lproj \
+  ${emacsapp}Contents/Resources/tr.lproj \
+  ${emacsapp}Contents/Resources/zh_CN.lproj \
+  ${emacsapp}Contents/Resources/zh_TW.lproj
+
+${lprojdirs}:
 	mkdir -p $@
 
 ifneq (${emacsapp},${emacsappsrc})
@@ -1357,7 +1380,7 @@ ${emacsapp}Contents/Resources/English.lproj/InfoPlist.strings: ${emacsappsrc}Con
 	cp $< $@
 endif
 
-macosx-bundle: ${emacsapp}Contents/Resources/English.lproj \
+macosx-bundle: ${lprojdirs} \
 	${emacsapp}Contents/Info.plist ${emacsapp}Contents/PkgInfo \
 	${emacsapp}Contents/Resources/Emacs.icns \
 	${emacsapp}Contents/Resources/English.lproj/InfoPlist.strings

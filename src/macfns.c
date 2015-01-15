@@ -3915,6 +3915,9 @@ If FRAME is omitted or nil, it defaults to the selected frame. */)
 
   check_mac ();
 
+  if (display_hourglass_p)
+    cancel_hourglass ();
+
   BLOCK_INPUT;
   font_spec = mac_font_dialog (f);
   UNBLOCK_INPUT;

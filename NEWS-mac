@@ -1,5 +1,48 @@
+* emacs-23.3-mac-1.9993 [experimental/hackers-only] (2011-07-23)
+
+** Fixed bugs
+
+*** Doesn't compile with Xcode 4.1.
+
+*** Scroll bar thumb dragging doesn't work right on Mac OS X 10.7.
+
+*** Static compositions sometimes get truncated.
+(See also http://proofgeneral.inf.ed.ac.uk/trac/ticket/409)
+Apply Kenichi Handa's fix for Bug#8703.
+
+*** Static compositions by font-lock at the end of buffer cause crash.
+(See also http://proofgeneral.inf.ed.ac.uk/trac/ticket/318)
+Apply Kenichi Handa's fix for Bug#8915.
+
+** Improvements
+
+*** Color bitmap fonts such as Apple Color Emoji can be displayed if
+compiled and run on Mac OS X 10.7.
+
+*** Drag-and-drop highlights the frame under the pointer.
+
+*** Option key temporarily inverts the "Jump to the spot that's
+clicked" setting for scroll bars as in other applications.
+
+*** Option key temporarily changes the behavior of line-up/down scroll
+bar buttons to page-up/down as in other applications.
+
+*** Holding shift key on startup is recognized as -Q option.
+
+** Notes
+
+*** This release is meant to make minimal adjustment for Mac OS X
+10.7.  Don't expect integration with new features of Lion except the
+color emoji display support mentioned above.
+
+*** SVG support by WebKit is disabled on 64-bit executables for now,
+because it may hang while initializing plugins in some cases.  If you
+do need SVG display, then build as a 32-bit executable or use librsvg.
+
+
 * emacs-23.3-mac-1.9992 [experimental/hackers-only] (2011-03-10)
 Based on Emacs 23.3
+http://lists.gnu.org/archive/html/emacs-devel/2011-03/msg00378.html
 
 ** Fixed bugs
 

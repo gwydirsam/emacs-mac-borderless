@@ -1016,6 +1016,8 @@ shift_glyph_matrix (w, matrix, start, end, dy)
 	row->visible_height -= min_y - row->y;
       if (row->y + row->height > max_y)
 	row->visible_height -= row->y + row->height - max_y;
+      if (row->fringe_bitmap_periodic_p)
+	row->redraw_fringe_bitmaps_p = 1;
     }
 }
 
@@ -1537,8 +1539,11 @@ row_equal_p (w, a, b, mouse_face_p)
 	  || a->cursor_in_fringe_p != b->cursor_in_fringe_p
 	  || a->left_fringe_bitmap != b->left_fringe_bitmap
 	  || a->left_fringe_face_id != b->left_fringe_face_id
+	  || a->left_fringe_offset != b->left_fringe_offset
 	  || a->right_fringe_bitmap != b->right_fringe_bitmap
 	  || a->right_fringe_face_id != b->right_fringe_face_id
+	  || a->right_fringe_offset != b->right_fringe_offset
+	  || a->fringe_bitmap_periodic_p != b->fringe_bitmap_periodic_p
 	  || a->overlay_arrow_bitmap != b->overlay_arrow_bitmap
 	  || a->exact_window_width_line_p != b->exact_window_width_line_p
 	  || a->overlapped_p != b->overlapped_p
@@ -4994,23 +4999,29 @@ scrolling_window (w, header_line_p)
 
   first_old = first_new = i;
 
-  /* Set last_new to the index + 1 of the last enabled row in the
-     desired matrix.  */
+  /* Set last_new to the index + 1 of the row that reaches the
+     bottom boundary in the desired matrix.  Give up if we find a
+     disabled row before we reach the bottom boundary.  */
   i = first_new + 1;
-  while (i < desired_matrix->nrows - 1
-	 && MATRIX_ROW (desired_matrix, i)->enabled_p
-	 && MATRIX_ROW_BOTTOM_Y (MATRIX_ROW (desired_matrix, i)) <= yb)
-    ++i;
+  while (i < desired_matrix->nrows - 1)
+    {
+      int bottom;
 
-  if (!MATRIX_ROW (desired_matrix, i)->enabled_p)
-    return 0;
+      if (!MATRIX_ROW (desired_matrix, i)->enabled_p)
+	return 0;
+      bottom = MATRIX_ROW_BOTTOM_Y (MATRIX_ROW (desired_matrix, i));
+      if (bottom <= yb)
+	++i;
+      if (bottom >= yb)
+	break;
+    }
 
   last_new = i;
 
-  /* Set last_old to the index + 1 of the last enabled row in the
-     current matrix.  We don't look at the enabled flag here because
-     we plan to reuse part of the display even if other parts are
-     disabled.  */
+  /* Set last_old to the index + 1 of the row that reaches the bottom
+     boundary in the current matrix.  We don't look at the enabled
+     flag here because we plan to reuse part of the display even if
+     other parts are disabled.  */
   i = first_old + 1;
   while (i < current_matrix->nrows - 1)
     {
@@ -5199,6 +5210,7 @@ scrolling_window (w, header_line_p)
 	/* Copy on the display.  */
 	if (r->current_y != r->desired_y)
 	  {
+	    rif->clear_window_mouse_face (w);
 	    rif->scroll_run_hook (w, r);
 
 	    /* Invalidate runs that copy from where we copied to.  */
@@ -5224,13 +5236,7 @@ scrolling_window (w, header_line_p)
 	    to = MATRIX_ROW (current_matrix, r->desired_vpos + j);
 	    from = MATRIX_ROW (desired_matrix, r->desired_vpos + j);
 	    to_overlapped_p = to->overlapped_p;
-	    if (!from->mode_line_p && !w->pseudo_window_p
-		&& (to->left_fringe_bitmap != from->left_fringe_bitmap
-		    || to->right_fringe_bitmap != from->right_fringe_bitmap
-		    || to->left_fringe_face_id != from->left_fringe_face_id
-		    || to->right_fringe_face_id != from->right_fringe_face_id
-		    || to->overlay_arrow_bitmap != from->overlay_arrow_bitmap))
-	      from->redraw_fringe_bitmaps_p = 1;
+	    from->redraw_fringe_bitmaps_p = from->fringe_bitmap_periodic_p;
 	    assign_row (to, from);
 	    to->enabled_p = 1, from->enabled_p = 0;
 	    to->overlapped_p = to_overlapped_p;

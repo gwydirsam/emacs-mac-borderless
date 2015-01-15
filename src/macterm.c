@@ -1139,8 +1139,6 @@ XTframe_up_to_date (f)
 	  dpyinfo->mouse_face_deferred_gc = 0;
 	  UNBLOCK_INPUT;
 	}
-
-      mac_frame_up_to_date (f);
     }
 }
 
@@ -1232,13 +1230,13 @@ x_draw_fringe_bitmap (w, row, p)
 
 	  if (sb_width > 0)
 	    {
-	      int left = WINDOW_SCROLL_BAR_AREA_X (w);
-	      int width = (WINDOW_CONFIG_SCROLL_BAR_COLS (w)
-			   * FRAME_COLUMN_WIDTH (f));
+	      int bar_area_x = WINDOW_SCROLL_BAR_AREA_X (w);
+	      int bar_area_width = (WINDOW_CONFIG_SCROLL_BAR_COLS (w)
+				    * FRAME_COLUMN_WIDTH (f));
 
 	      if (bx < 0
-		  && (left + width == p->x
-		      || p->x + p->wd == left))
+		  && (bar_area_x + bar_area_width == p->x
+		      || p->x + p->wd == bar_area_x))
 		{
 		  /* Bitmap fills the fringe and we need background
 		     extension.  */
@@ -1248,13 +1246,13 @@ x_draw_fringe_bitmap (w, row, p)
 
 	      if (bx >= 0)
 		{
-		  if (left + width == bx)
+		  if (bar_area_x + bar_area_width == bx)
 		    {
-		      bx = left + sb_width;
-		      nx += width - sb_width;
+		      bx = bar_area_x + sb_width;
+		      nx += bar_area_width - sb_width;
 		    }
-		  else if (bx + nx == left)
-		    nx += width - sb_width;
+		  else if (bx + nx == bar_area_x)
+		    nx += bar_area_width - sb_width;
 		}
 	    }
 	}
@@ -2966,6 +2964,32 @@ x_scroll_run (w, run)
      without mode lines.  Include in this box the left and right
      fringe of W.  */
   window_box (w, -1, &x, &y, &width, &height);
+
+  /* If the fringe is adjacent to the left (right) scroll bar of a
+     leftmost (rightmost, respectively) window, then extend its
+     background to the gap between the fringe and the bar.  */
+  if ((WINDOW_LEFTMOST_P (w)
+       && WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_LEFT (w))
+      || (WINDOW_RIGHTMOST_P (w)
+	  && WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_RIGHT (w)))
+    {
+      int sb_width = WINDOW_CONFIG_SCROLL_BAR_WIDTH (w);
+
+      if (sb_width > 0)
+	{
+	  int bar_area_x = WINDOW_SCROLL_BAR_AREA_X (w);
+	  int bar_area_width = (WINDOW_CONFIG_SCROLL_BAR_COLS (w)
+				* FRAME_COLUMN_WIDTH (f));
+
+	  if (bar_area_x + bar_area_width == x)
+	    {
+	      x = bar_area_x + sb_width;
+	      width += bar_area_width - sb_width;
+	    }
+	  else if (x + width == bar_area_x)
+	    width += bar_area_width - sb_width;
+	}
+    }
 
   from_y = WINDOW_TO_FRAME_PIXEL_Y (w, run->current_y);
   to_y = WINDOW_TO_FRAME_PIXEL_Y (w, run->desired_y);
@@ -4727,6 +4751,7 @@ x_check_font (f, font)
 /* Contains the string "reverse", which is a constant for mouse button emu.*/
 Lisp_Object Qreverse;
 
+Lisp_Object Qkeyboard_modifiers;
 
 /* Modifier associated with the control key, or nil to ignore. */
 Lisp_Object Vmac_control_modifier;
@@ -4755,6 +4780,9 @@ int mac_pass_command_to_system;
 /* If non-zero, the Mac "Control" key is passed on to the Mac Toolbox
    for processing before Emacs sees it.  */
 int mac_pass_control_to_system;
+
+/* Alist of Mac-specific startup options.  */
+Lisp_Object Vmac_startup_options;
 
 /* Whether or not the screen configuration has changed.  */
 int mac_screen_config_changed = 0;
@@ -5938,6 +5966,14 @@ mac_handle_user_signal (sig)
   mac_wakeup_from_run_loop_run_once ();
 }
 
+static void
+record_startup_key_modifiers ()
+{
+  Vmac_startup_options = Fcons (Fcons (Qkeyboard_modifiers,
+				       make_number (GetCurrentKeyModifiers ())),
+				Vmac_startup_options);
+}
+
 /* Set up use of X before we make the first connection.  */
 
 extern frame_parm_handler mac_frame_parm_handlers[];
@@ -6074,6 +6110,8 @@ mac_initialize ()
 
   init_cg_color ();
 
+  record_startup_key_modifiers ();
+
   UNBLOCK_INPUT;
 }
 
@@ -6119,6 +6157,9 @@ syms_of_macterm ()
 
   staticpro (&Qreverse);
   Qreverse = intern_c_string ("reverse");
+
+  staticpro (&Qkeyboard_modifiers);
+  Qkeyboard_modifiers = intern_c_string ("keyboard-modifiers");
 
   staticpro (&x_display_name_list);
   x_display_name_list = Qnil;
@@ -6210,6 +6251,17 @@ button will be mouse-3.  */);
   DEFVAR_BOOL ("mac-pass-control-to-system", &mac_pass_control_to_system,
     doc: /* *Non-nil if control key presses are passed on to the Mac Toolbox.  */);
   mac_pass_control_to_system = 1;
+
+  DEFVAR_LISP ("mac-startup-options", &Vmac_startup_options,
+    doc: /* Alist of Mac-specific startup options.
+Each element looks like (OPTION-TYPE . OPTIONS).
+OPTION-TYPE is a symbol specifying the type of startup options:
+
+  command-line -- List of Mac-specific command line options.
+  apple-event -- Apple event that came with the \"Open Application\" event.
+  keyboard-modifiers -- Number representing keyboard modifiers on startup.
+    See also `mac-keyboard-modifier-mask-alist'.  */);
+  Vmac_startup_options = Qnil;
 
   DEFVAR_LISP ("mac-ts-active-input-overlay", &Vmac_ts_active_input_overlay,
     doc: /* Overlay used to display Mac TSM active input area.  */);

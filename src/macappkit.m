@@ -720,6 +720,12 @@ mac_nsvalue_to_lisp (obj)
   return result;
 }
 
+static int
+has_resize_indicator_at_bottom_right_p ()
+{
+  return floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6;
+}
+
 /* Autorelease pool.  */
 
 void *
@@ -1281,8 +1287,7 @@ static EventRef peek_if_next_event_activates_menu_bar P_ ((void));
 }
 
 static BOOL
-emacs_windows_need_display_p (with_resize_control_p)
-     int with_resize_control_p;
+emacs_windows_need_display_p ()
 {
   Lisp_Object tail, frame;
 
@@ -1294,8 +1299,7 @@ emacs_windows_need_display_p (with_resize_control_p)
 	{
 	  EmacsWindow *window = FRAME_MAC_WINDOW (f);
 
-	  if ((with_resize_control_p && [window resizeControlNeedsDisplay])
-	      || [window viewsNeedDisplay])
+	  if ([window viewsNeedDisplay])
 	    return YES;
 	}
     }
@@ -1307,7 +1311,7 @@ emacs_windows_need_display_p (with_resize_control_p)
 {
   if (![NSApp isRunning])
     {
-      if (peek_next_event () || emacs_windows_need_display_p (1))
+      if (peek_next_event () || emacs_windows_need_display_p ())
 	[NSApp postDummyEvent];
       else
 	mac_flush (NULL);
@@ -1564,37 +1568,68 @@ extern void mac_save_keyboard_input_source P_ ((void));
   [super dealloc];
 }
 
-- (NSRect)resizeControlFrame
+- (BOOL)resizeTrackingTriggeredByEvent:(NSEvent *)event
 {
-  NSRect frame = [self frame];
-  CGFloat scaleFactor;
-
-  if ([self respondsToSelector:@selector(userSpaceScaleFactor)])
-    scaleFactor = [self userSpaceScaleFactor];
-  else
-    scaleFactor = 1.0;
-
-  if (scaleFactor == 1.0)
-    return NSMakeRect (NSWidth (frame) - RESIZE_CONTROL_WIDTH, 0,
-		       RESIZE_CONTROL_WIDTH, RESIZE_CONTROL_HEIGHT);
-  else
+  if ([event type] == NSLeftMouseDown
+      && [event eventNumber] != resizeTrackingEventNumber)
     {
+      NSPoint locationInWindow = [event locationInWindow];
+      NSRect frame = [self frame], resizeRect;
       CGFloat width, height;
 
-      width = round (RESIZE_CONTROL_WIDTH * scaleFactor);
-      height = round (RESIZE_CONTROL_HEIGHT * scaleFactor);
+      if ([self respondsToSelector:@selector(userSpaceScaleFactor)])
+	{
+	  CGFloat scaleFactor = [self userSpaceScaleFactor];
 
-      return NSMakeRect (NSWidth (frame) - width, 0, width, height);
+	  width = round (RESIZE_CONTROL_WIDTH * scaleFactor);
+	  height = round (RESIZE_CONTROL_HEIGHT * scaleFactor);
+	}
+      else
+	{
+	  width = RESIZE_CONTROL_WIDTH;
+	  height = RESIZE_CONTROL_HEIGHT;
+	}
+
+      resizeRect = NSMakeRect (NSWidth (frame) - width, 0, width, height);
+      if (NSMouseInRect (locationInWindow, resizeRect, NO))
+	return YES;
+
+      /* Resize tracking from the corner other than bottom-right is
+	 disabled for now, because it causes unpleasant effect.  Also,
+	 tracking from an edge is not simple because it might trigger
+	 window movement (e.g., vertical movement from the right edge)
+	 rather than resizing.  */
+#if 0
+      if (!has_resize_indicator_at_bottom_right_p ())
+	{
+	  resizeRect.origin.x = 0;
+	  if (NSMouseInRect (locationInWindow, resizeRect, NO))
+	    return YES;
+
+	  resizeRect.origin.y = NSHeight (frame) - height;
+	  if (NSMouseInRect (locationInWindow, resizeRect, NO))
+	    return YES;
+
+	  resizeRect.origin.x = NSWidth (frame) - width;
+	  if (NSMouseInRect (locationInWindow, resizeRect, NO))
+	    return YES;
+	}
+#endif
     }
+
+  return NO;
 }
 
 - (void)setupResizeTracking:(NSEvent *)event
 {
-  NSRect resizeControlFrame = [self resizeControlFrame];
-  NSPoint location = [event locationInWindow];
+  resizeTrackingStartWindowSize = [self frame].size;
+  resizeTrackingStartLocation = [event locationInWindow];
+  resizeTrackingEventNumber = [event eventNumber];
+}
 
-  resizeTrackingOffset = NSMakePoint (location.x - NSMinX (resizeControlFrame),
-				      location.y - NSMinY (resizeControlFrame));
+- (BOOL)resizeTrackingSuspendedByEvent:(NSEvent *)event
+{
+  return [event eventNumber] == resizeTrackingEventNumber;
 }
 
 - (void)suspendResizeTracking:(NSEvent *)event
@@ -1609,14 +1644,34 @@ extern void mac_save_keyboard_input_source P_ ((void));
 
 - (void)resumeResizeTracking
 {
-  NSRect resizeControlFrame = [self resizeControlFrame];
-  NSPoint location =
-    NSMakePoint (NSMinX (resizeControlFrame) + resizeTrackingOffset.x,
-		 NSMinY (resizeControlFrame) + resizeTrackingOffset.y);
-  NSEvent *mouseDownEvent =
-    [mouseUpEvent mouseEventByChangingType:NSLeftMouseDown
-		  andLocation:location];
+  NSPoint location;
+  NSEvent *mouseDownEvent;
+  NSRect frame = [self frame];
 
+  if (has_resize_indicator_at_bottom_right_p ())
+    {
+      location.x = (NSWidth (frame) + resizeTrackingStartLocation.x
+		    - resizeTrackingStartWindowSize.width);
+      location.y = resizeTrackingStartLocation.y;
+    }
+  else
+    {
+      if (resizeTrackingStartLocation.x * 2
+	  < resizeTrackingStartWindowSize.width)
+	location.x = resizeTrackingStartLocation.x;
+      else
+	location.x = (NSWidth (frame) + resizeTrackingStartLocation.x
+		      - resizeTrackingStartWindowSize.width);
+      if (resizeTrackingStartLocation.y * 2
+	  < resizeTrackingStartWindowSize.height)
+	location.y = resizeTrackingStartLocation.y;
+      else
+	location.y = (NSHeight (frame) + resizeTrackingStartLocation.y
+		      - resizeTrackingStartWindowSize.height);
+    }
+
+  mouseDownEvent = [mouseUpEvent mouseEventByChangingType:NSLeftMouseDown
+					      andLocation:location];
   [mouseUpEvent release];
   mouseUpEvent = nil;
   [NSApp postEvent:mouseDownEvent atStart:YES];
@@ -1624,35 +1679,10 @@ extern void mac_save_keyboard_input_source P_ ((void));
 
 - (void)sendEvent:(NSEvent *)event
 {
-  if ([event type] == NSLeftMouseDown
-      && NSMouseInRect ([event locationInWindow],
-			[self resizeControlFrame], NO))
+  if ([self resizeTrackingTriggeredByEvent:event])
     [self setupResizeTracking:event];
 
   [super sendEvent:event];
-}
-
-- (BOOL)resizeControlNeedsDisplay
-{
-  return resizeControlNeedsDisplay;
-}
-
-- (void)setResizeControlNeedsDisplay:(BOOL)flag
-{
-  resizeControlNeedsDisplay = flag;
-}
-
-- (void)setResizeControlNeedsDisplayIfNeeded
-{
-  if (resizeControlNeedsDisplay)
-    {
-      NSView *frameView = [[self contentView] superview];
-      NSRect rect = [frameView convertRect:[self resizeControlFrame]
-			       fromView:nil];
-
-      [frameView setNeedsDisplayInRect:rect];
-      resizeControlNeedsDisplay = NO;
-    }
 }
 
 - (BOOL)needsOrderFrontOnUnhide
@@ -1707,6 +1737,17 @@ extern void mac_save_keyboard_input_source P_ ((void));
     [NSApp sendAction:_cmd to:target from:sender];
   else
     [super zoom:sender];
+}
+
+- (void)setAlphaValue:(CGFloat)windowAlpha
+{
+  NSEnumerator *enumerator = [[self childWindows] objectEnumerator];
+  NSWindow *childWindow;
+
+  while ((childWindow = [enumerator nextObject]) != nil)
+    [childWindow setAlphaValue:windowAlpha];
+
+  [super setAlphaValue:windowAlpha];
 }
 
 @end				// EmacsWindow
@@ -1800,6 +1841,31 @@ extern void mac_save_keyboard_input_source P_ ((void));
 				  | NSViewWidthSizable | NSViewHeightSizable)];
 }
 
+- (void)setupOverlayWindowAndView
+{
+  NSRect contentRect = NSMakeRect (0, 0, 64, 64);
+  NSWindow *window;
+
+  if (overlayWindow)
+    return;
+
+  window = [[NSWindow alloc] initWithContentRect:contentRect
+				       styleMask:NSBorderlessWindowMask
+					 backing:NSBackingStoreBuffered
+					   defer:YES];
+  [window setBackgroundColor:[NSColor clearColor]];
+  [window setOpaque:NO];
+  [window setIgnoresMouseEvents:YES];
+
+  overlayView = [[EmacsOverlayView alloc] initWithFrame:contentRect];
+  [window setContentView:overlayView];
+
+  if (has_resize_indicator_at_bottom_right_p ())
+    [overlayView setShowsResizeIndicator:YES];
+
+  overlayWindow = window;
+}
+
 - (void)setupWindow
 {
   struct frame *f = emacsFrame;
@@ -1859,6 +1925,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
 	[window setCollectionBehavior:[oldWindow collectionBehavior]];
 
       [oldWindow setDelegate:nil];
+      [oldWindow removeChildWindow:overlayWindow];
       [hourglass release];
       hourglass = nil;
     }
@@ -1883,6 +1950,12 @@ extern void mac_save_keyboard_input_source P_ ((void));
 
 	  [self setupToolBarWithVisibility:visible];
 	}
+
+      [window setShowsResizeIndicator:NO];
+      [self setupOverlayWindowAndView];
+      [window addChildWindow:overlayWindow ordered:NSWindowAbove];
+      [self adjustOverlayWindowFrame];
+      [overlayWindow orderFront:nil];
     }
   else
     {
@@ -1903,6 +1976,8 @@ extern void mac_save_keyboard_input_source P_ ((void));
 {
   [emacsView release];
   [hourglass release];
+  [overlayView release];
+  [overlayWindow release];
   [super dealloc];
 }
 
@@ -2029,7 +2104,6 @@ extern void mac_save_keyboard_input_source P_ ((void));
 	      | WM_STATE_FULLSCREEN))
     {
       NSRect frameRect = [window frame], screenRect = [[window screen] frame];
-      BOOL showsResizeIndicator;
 
       if (diff & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_FULLSCREEN))
 	{
@@ -2065,13 +2139,19 @@ extern void mac_save_keyboard_input_source P_ ((void));
 	  window = FRAME_MAC_WINDOW (f);
 	}
 
-      if ((newState & WM_STATE_FULLSCREEN)
-	  || ((newState & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT))
-	      == (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT)))
-	showsResizeIndicator = NO;
-      else
-	showsResizeIndicator = YES;
-      [window setShowsResizeIndicator:showsResizeIndicator];
+      if (has_resize_indicator_at_bottom_right_p ())
+	{
+	  BOOL showsResizeIndicator;
+
+	  if ((newState & WM_STATE_FULLSCREEN)
+	      || ((newState
+		   & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT))
+		  == (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT)))
+	    showsResizeIndicator = NO;
+	  else
+	    showsResizeIndicator = YES;
+	  [overlayView setShowsResizeIndicator:showsResizeIndicator];
+	}
 
       frameRect = [window constrainFrameRect:frameRect toScreen:nil];
       if (!(newState & WM_STATE_FULLSCREEN))
@@ -2086,6 +2166,13 @@ extern void mac_save_keyboard_input_source P_ ((void));
 	}
       [window setFrame:frameRect display:YES];
     }
+}
+
+- (void)adjustOverlayWindowFrame
+{
+  NSWindow *parentWindow = [overlayWindow parentWindow];
+
+  [overlayWindow setFrame:[parentWindow frame] display:YES];
 }
 
 - (BOOL)emacsViewCanDraw
@@ -2226,6 +2313,8 @@ extern void mac_save_keyboard_input_source P_ ((void));
   /* `windowDidMove:' above is not called when both size and location
      are changed.  */
   mac_handle_origin_change (f);
+  if (overlayWindow)
+    [self adjustOverlayWindowFrame];
 }
 
 - (void)windowDidChangeScreen:(NSNotification *)notification
@@ -2284,7 +2373,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
   BOOL leftMouseDragged = ([currentEvent type] == NSLeftMouseDragged);
   NSSize result;
 
-  if (leftMouseDragged)
+  if (leftMouseDragged && [window resizeTrackingSuspendedByEvent:currentEvent])
     [window suspendResizeTracking:currentEvent];
 
   if (windowManagerState & WM_STATE_FULLSCREEN)
@@ -2296,9 +2385,11 @@ extern void mac_save_keyboard_input_source P_ ((void));
   else
     {
       NSRect screenVisibleFrame = [[window screen] visibleFrame];
+      BOOL allowsLarger = (leftMouseDragged
+			   && has_resize_indicator_at_bottom_right_p ());
 
       result = [self hintedWindowFrameSize:proposedFrameSize
-			      allowsLarger:leftMouseDragged];
+			      allowsLarger:allowsLarger];
       if (windowManagerState & WM_STATE_MAXIMIZED_HORZ)
 	result.width = NSWidth (screenVisibleFrame);
       if (windowManagerState & WM_STATE_MAXIMIZED_VERT)
@@ -2590,7 +2681,9 @@ mac_get_frame_mouse (f, point)
 
   mouseLocation =
     [frameController convertEmacsViewPointFromScreen:mouseLocation];
-  SetPt (point, mouseLocation.x, mouseLocation.y);
+  /* Header file for SetPt is not available on Mac OS X 10.7.  */
+  point->h = mouseLocation.x;
+  point->v = mouseLocation.y;
 }
 
 void
@@ -2600,9 +2693,9 @@ mac_get_global_mouse (point)
   NSPoint mouseLocation = [NSEvent mouseLocation];
   NSRect baseScreenFrame = mac_get_base_screen_frame ();
 
-  SetPt (point,
-	 mouseLocation.x + NSMinX (baseScreenFrame),
-	 - mouseLocation.y + NSMaxY (baseScreenFrame));
+  /* Header file for SetPt is not available on Mac OS X 10.7.  */
+  point->h = mouseLocation.x + NSMinX (baseScreenFrame);
+  point->v = - mouseLocation.y + NSMaxY (baseScreenFrame);
 }
 
 void
@@ -2747,20 +2840,6 @@ mac_update_end (f)
   unset_global_focus_view_frame ();
   [frameController unlockFocusOnEmacsView];
   [window enableFlushWindow];
-}
-
-void
-mac_frame_up_to_date (f)
-     struct frame *f;
-{
-  /* Redraw the resize control.  */
-  if (NILP (tip_frame) || XFRAME (tip_frame) != f)
-    {
-      EmacsWindow *window = FRAME_MAC_WINDOW (f);
-
-      if ([window showsResizeIndicator])
-	[window setResizeControlNeedsDisplay:YES];
-    }
 }
 
 void
@@ -2927,7 +3006,6 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
 
 @implementation EmacsView
 
-#if 0
 + (void)initialize
 {
   if (self == [EmacsView class])
@@ -2935,12 +3013,11 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
       NSDictionary *appDefaults =
 	[NSDictionary dictionaryWithObject:@"NO"
-				    forKey:@"AppleMomentumScrollSupported"];
+				    forKey:@"ApplePressAndHoldEnabled"];
 
       [defaults registerDefaults:appDefaults];
     }
 }
-#endif
 
 - (id)initWithFrame:(NSRect)frameRect
 {
@@ -3105,24 +3182,52 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
   int modifiers = mac_event_to_emacs_modifiers (theEvent);
   NSEventType type = [theEvent type];
+  BOOL isDirectionInvertedFromDevice = NO;
   CGFloat deltaX = 0, deltaY = 0, deltaZ = 0;
-  CGFloat deviceDeltaX = 0, deviceDeltaY = 0, deviceDeltaZ = 0;
-  Lisp_Object scrollPhase = Qnil;
+  CGFloat scrollingDeltaX = 0, scrollingDeltaY = 0;
+  Lisp_Object phase = Qnil, momentumPhase = Qnil;
 
   switch (type)
     {
     case NSScrollWheel:
-      if ([theEvent respondsToSelector:@selector(_continuousScroll)]
+      if ([theEvent respondsToSelector:@selector(hasPreciseScrollingDeltas)]
+	  && [theEvent hasPreciseScrollingDeltas])
+	{
+	  scrollingDeltaX = [theEvent scrollingDeltaX];
+	  scrollingDeltaY = [theEvent scrollingDeltaY];
+	}
+      else if ([theEvent respondsToSelector:@selector(_continuousScroll)]
 	  && [theEvent _continuousScroll])
 	{
-	  deviceDeltaX = [theEvent deviceDeltaX];
-	  deviceDeltaY = [theEvent deviceDeltaY];
-	  deviceDeltaZ = [theEvent deviceDeltaZ];
+	  scrollingDeltaX = [theEvent deviceDeltaX];
+	  scrollingDeltaY = [theEvent deviceDeltaY];
 	}
-      if ([theEvent respondsToSelector:@selector(_scrollPhase)])
+      if ([theEvent respondsToSelector:@selector(phase)])
 	{
-	  scrollPhase = make_number ([theEvent _scrollPhase]);
-	  if (EQ (scrollPhase, make_number (0)))
+	  phase = make_number ([theEvent phase]);
+	  momentumPhase = make_number ([theEvent momentumPhase]);
+	}
+      else if ([theEvent respondsToSelector:@selector(_scrollPhase)])
+	{
+	  switch ([theEvent _scrollPhase])
+	    {
+	    case 0:
+	      momentumPhase = make_number (NSEventPhaseNone);
+	      break;
+	    case 1:
+	      momentumPhase = make_number (NSEventPhaseBegan);
+	      break;
+	    case 2:
+	      momentumPhase = make_number (NSEventPhaseChanged);
+	      break;
+	    case 3:
+	      momentumPhase = make_number (NSEventPhaseEnded);
+	      break;
+	    }
+	}
+      if (!NILP (momentumPhase))
+	{
+	  if (EQ (momentumPhase, make_number (NSEventPhaseNone)))
 	    {
 	      savedWheelPoint = point;
 	      savedWheelModifiers = modifiers;
@@ -3139,6 +3244,8 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       deltaX = [theEvent deltaX];
       deltaY = [theEvent deltaY];
       deltaZ = [theEvent deltaZ];
+      if ([theEvent respondsToSelector:@selector(isDirectionInvertedFromDevice)])
+	isDirectionInvertedFromDevice = [theEvent isDirectionInvertedFromDevice];
       break;
 
     case NSEventTypeMagnify:
@@ -3148,6 +3255,9 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
     case NSEventTypeRotate:
       deltaX = [theEvent rotation];
       break;
+
+    case NSEventTypeGesture:
+      return;
 
     default:
       abort ();
@@ -3159,8 +3269,8 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
       f != mac_focus_frame (&one_mac_display_info) ||
 #endif
       deltaX == 0 && deltaY == 0 && deltaZ == 0
-      && deviceDeltaX == 0 && deviceDeltaY == 0 && deviceDeltaZ == 0
-      && NILP (scrollPhase))
+      && scrollingDeltaX == 0 && scrollingDeltaY == 0
+      && NILP (phase) && NILP (momentumPhase))
     return;
 
   if (point.x < 0 || point.y < 0
@@ -3169,20 +3279,26 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
     return;
 
   EVENT_INIT (inputEvent);
-  if (type == NSScrollWheel)
+  if (type == NSScrollWheel || type == NSEventTypeSwipe)
     {
-      inputEvent.arg = list3 (make_float (deltaX), make_float (deltaY),
-			      make_float (deltaZ));
-      if (deviceDeltaX != 0 || deviceDeltaY != 0 || deviceDeltaZ != 0)
-	inputEvent.arg = nconc2 (inputEvent.arg,
-				 list3 (make_float (deviceDeltaX),
-					make_float (deviceDeltaY),
-					make_float (deviceDeltaZ)));
-      else if (!NILP (scrollPhase))
-	inputEvent.arg = nconc2 (inputEvent.arg,
-				 list3 (Qnil, Qnil, Qnil));
-      if (!NILP (scrollPhase))
-	inputEvent.arg = nconc2 (inputEvent.arg, Fcons (scrollPhase, Qnil));
+      inputEvent.arg = list1 (isDirectionInvertedFromDevice ? Qt : Qnil);
+      if (type == NSScrollWheel)
+	{
+	  inputEvent.arg = nconc2 (inputEvent.arg,
+				   list1 (list3 (make_float (deltaX),
+						 make_float (deltaY),
+						 make_float (deltaZ))));
+	  if (scrollingDeltaX != 0 || scrollingDeltaY != 0)
+	    inputEvent.arg = nconc2 (inputEvent.arg,
+				     list1 (list2
+					    (make_float (scrollingDeltaX),
+					     make_float (scrollingDeltaY))));
+	  else if (!NILP (phase) || !NILP (momentumPhase))
+	    inputEvent.arg = nconc2 (inputEvent.arg, list1 (Qnil));
+	  if (!NILP (phase) || !NILP (momentumPhase))
+	    inputEvent.arg = nconc2 (inputEvent.arg,
+				     list1 (list2 (phase, momentumPhase)));
+	}
     }
   else if (type == NSEventTypeMagnify)
     inputEvent.arg = Fcons (make_float (deltaY), Qnil);
@@ -3190,14 +3306,14 @@ static int mac_event_to_emacs_modifiers P_ ((NSEvent *));
     inputEvent.arg = Fcons (make_float (deltaX), Qnil);
   else
     inputEvent.arg = Qnil;
-  inputEvent.kind = (deltaY != 0 || deviceDeltaY != 0
+  inputEvent.kind = (deltaY != 0 || scrollingDeltaY != 0
 		     ? WHEEL_EVENT : HORIZ_WHEEL_EVENT);
   inputEvent.code = 0;
   inputEvent.modifiers =
     (modifiers
-     | (deltaY < 0 || deviceDeltaY < 0 ? down_modifier
-	: (deltaY > 0 || deviceDeltaY > 0 ? up_modifier
-	   : (deltaX < 0 || deviceDeltaX < 0 ? down_modifier
+     | (deltaY < 0 || scrollingDeltaY < 0 ? down_modifier
+	: (deltaY > 0 || scrollingDeltaY > 0 ? up_modifier
+	   : (deltaX < 0 || scrollingDeltaX < 0 ? down_modifier
 	      : up_modifier)))
      | (type == NSScrollWheel ? 0
 	: (type == NSEventTypeSwipe ? drag_modifier : click_modifier)));
@@ -4090,6 +4206,87 @@ mac_scroll_area (f, gc, src_x, src_y, width, height, dest_x, dest_y)
   [frameController scrollEmacsViewRect:rect by:offset];
 }
 
+@implementation EmacsOverlayView
+
+static NSImage *
+create_resize_indicator_image ()
+{
+  NSRect contentRect = NSMakeRect (0, 0, 64, 64);
+  NSRect resizeIndicatorRect =
+    NSMakeRect (NSWidth (contentRect) - RESIZE_CONTROL_WIDTH,
+		0, RESIZE_CONTROL_WIDTH, RESIZE_CONTROL_HEIGHT);
+  NSWindow *window =
+    [[NSWindow alloc] initWithContentRect:contentRect
+				styleMask:(NSTitledWindowMask
+					   | NSResizableWindowMask)
+				  backing:NSBackingStoreBuffered
+				    defer:NO];
+  NSView *frameView = [[window contentView] superview];
+  NSBitmapImageRep *rep;
+  NSImage *image;
+
+  [window setOpaque:NO];
+  [window setBackgroundColor:[NSColor clearColor]];
+
+  [frameView display];
+  [frameView lockFocus];
+  rep = [[NSBitmapImageRep alloc] initWithFocusedViewRect:resizeIndicatorRect];
+  [frameView unlockFocus];
+  [window release];
+
+  image = [[NSImage alloc] initWithSize:resizeIndicatorRect.size];
+  [image addRepresentation:rep];
+  [rep release];
+
+  return image;
+}
+
+- (void)drawRect:(NSRect)aRect
+{
+  if (highlighted)
+    {
+      NSView *parentContentView = [[[self window] parentWindow] contentView];
+      NSRect contentRect = [parentContentView
+			     convertRect:[parentContentView bounds] toView:nil];
+
+      /* Mac OS X 10.2 doesn't have -[NSColor setFill].  */
+      [[[NSColor selectedControlColor] colorWithAlphaComponent:0.75] set];
+      NSFrameRectWithWidth ([self convertRect:contentRect fromView:nil], 3.0);
+    }
+
+  if (showsResizeIndicator)
+    {
+      static NSImage *resizeIndicatorImage;
+
+      if (resizeIndicatorImage == nil)
+	resizeIndicatorImage = create_resize_indicator_image ();
+
+      [resizeIndicatorImage
+	drawAtPoint:(NSMakePoint (NSWidth ([self bounds])
+				  - [resizeIndicatorImage size].width, 0))
+	   fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
+    }
+}
+
+- (void)setHighlighted:(BOOL)flag;
+{
+  if (flag != highlighted)
+    {
+      highlighted = flag;
+      [self setNeedsDisplay:YES];
+    }
+}
+
+- (void)setShowsResizeIndicator:(BOOL)flag;
+{
+  if (flag != showsResizeIndicator)
+    {
+      showsResizeIndicator = flag;
+      [self setNeedsDisplay:YES];
+    }
+}
+
+@end
 
 /************************************************************************
 			     Scroll bars
@@ -4207,14 +4404,38 @@ static BOOL NonmodalScrollerPagingBehavior;
 
 - (void)postMouseDraggedEvent:(NSTimer *)theTimer
 {
-  NSEvent *event = [NSEvent mouseEventWithType:NSLeftMouseDragged
-			    location:[[self window]
-				       mouseLocationOutsideOfEventStream]
-			    modifierFlags:0 timestamp:0
-			    windowNumber:[[self window] windowNumber]
-			    context:[NSGraphicsContext currentContext]
-			    eventNumber:0 clickCount:1 pressure:0];
+  NSUInteger flags;
+  NSEvent *event;
 
+  if ([NSEvent respondsToSelector:@selector(modifierFlags)])
+    flags = [NSEvent modifierFlags];
+  else
+    {
+      UInt32 modifiers = GetCurrentKeyModifiers ();
+
+      flags = 0;
+      if (modifiers & alphaLock)
+	flags |= NSAlphaShiftKeyMask;
+      if (modifiers & shiftKey)
+	flags |= NSShiftKeyMask;
+      if (modifiers & controlKey)
+	flags |= NSControlKeyMask;
+      if (modifiers & optionKey)
+	flags |= NSAlternateKeyMask;
+      if (modifiers & cmdKey)
+	flags |= NSCommandKeyMask;
+      if (modifiers & kEventKeyModifierNumLockMask)
+	flags |= NSNumericPadKeyMask;
+      if (modifiers & kEventKeyModifierFnMask)
+	flags |= NSFunctionKeyMask;
+    }
+  event = [NSEvent mouseEventWithType:NSLeftMouseDragged
+			     location:[[self window]
+					mouseLocationOutsideOfEventStream]
+			modifierFlags:flags timestamp:0
+			 windowNumber:[[self window] windowNumber]
+			      context:[NSGraphicsContext currentContext]
+			  eventNumber:0 clickCount:1 pressure:0];
   [NSApp postEvent:event atStart:NO];
   [timer release];
   timer = nil;
@@ -4245,9 +4466,14 @@ static BOOL NonmodalScrollerPagingBehavior;
   if (hitPart == NSScrollerNoPart)
     return;
 
-  jumpsToClickedSpot = ([self pagingBehavior]
-		       && (hitPart == NSScrollerIncrementPage
-			   || hitPart == NSScrollerDecrementPage));
+  if (hitPart != NSScrollerIncrementPage && hitPart != NSScrollerDecrementPage)
+    jumpsToClickedSpot = NO;
+  else
+    {
+      jumpsToClickedSpot = [self pagingBehavior];
+      if ([theEvent modifierFlags] & NSAlternateKeyMask)
+	jumpsToClickedSpot = !jumpsToClickedSpot;
+    }
 
   if (hitPart != NSScrollerKnob && !jumpsToClickedSpot)
     {
@@ -4423,7 +4649,7 @@ static BOOL NonmodalScrollerPagingBehavior;
   BOOL enabled = [self isEnabled], tooSmall = NO;
   float floatValue = [self floatValue];
   CGFloat knobProportion = [self knobProportion];
-  NSRect bounds, knobSlotRect, KnobRect;
+  NSRect bounds, KnobRect;
 
   bounds = [self bounds];
   if (NSHeight (bounds) >= NSWidth (bounds))
@@ -4452,18 +4678,15 @@ static BOOL NonmodalScrollerPagingBehavior;
   [self setFloatValue:0 knobProportion:0];
 #endif
   [self setEnabled:YES];
-  knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
   KnobRect = [self rectForPart:NSScrollerKnob];
   if (NSHeight (bounds) >= NSWidth (bounds))
-    {
-      knobSlotSpan = NSHeight (knobSlotRect);
-      minKnobSpan = NSHeight (KnobRect);
-    }
+    minKnobSpan = NSHeight (KnobRect);
   else
-    {
-      knobSlotSpan = NSWidth (knobSlotRect);
-      minKnobSpan = NSWidth (KnobRect);
-    }
+    minKnobSpan = NSWidth (KnobRect);
+  /* The value for knobSlotSpan used to be updated here.  But it seems
+     to be too early on Mac OS X 10.7.  We just invalidate it here,
+     and update it in the next -[EmacsScroller knobSlotSpan] call.  */
+  knobSlotSpan = -1;
 
   if (!tooSmall)
     {
@@ -4522,6 +4745,18 @@ static BOOL NonmodalScrollerPagingBehavior;
 
 - (CGFloat)knobSlotSpan
 {
+  if (knobSlotSpan < 0)
+    {
+      NSRect bounds, knobSlotRect;
+
+      bounds = [self bounds];
+      knobSlotRect = [self rectForPart:NSScrollerKnobSlot];
+      if (NSHeight (bounds) >= NSWidth (bounds))
+	knobSlotSpan = NSHeight (knobSlotRect);
+      else
+	knobSlotSpan = NSWidth (knobSlotRect);
+    }
+
   return knobSlotSpan;
 }
 
@@ -4619,13 +4854,18 @@ static BOOL NonmodalScrollerPagingBehavior;
 @implementation EmacsView (ScrollBar)
 
 static int
-scroller_part_to_scroll_bar_part (part)
+scroller_part_to_scroll_bar_part (part, flags)
      NSScrollerPart part;
+     NSUInteger flags;
 {
   switch (part)
     {
-    case NSScrollerDecrementLine:	return scroll_bar_up_arrow;
-    case NSScrollerIncrementLine:	return scroll_bar_down_arrow;
+    case NSScrollerDecrementLine:	return ((flags & NSAlternateKeyMask)
+						? scroll_bar_above_handle
+						: scroll_bar_up_arrow);
+    case NSScrollerIncrementLine:	return ((flags & NSAlternateKeyMask)
+						? scroll_bar_below_handle
+						: scroll_bar_down_arrow);
     case NSScrollerDecrementPage:	return scroll_bar_above_handle;
     case NSScrollerIncrementPage:	return scroll_bar_below_handle;
     case NSScrollerKnob:		return scroll_bar_handle;
@@ -4644,13 +4884,15 @@ scroller_part_to_scroll_bar_part (part)
   struct scroll_bar *bar = [sender emacsScrollBar];
   NSScrollerPart hitPart = [sender hitPart];
   int modifiers = [sender inputEventModifiers];
+  NSEvent *currentEvent = [NSApp currentEvent];
 
   EVENT_INIT (inputEvent);
   inputEvent.arg = Qnil;
   inputEvent.kind = SCROLL_BAR_CLICK_EVENT;
   inputEvent.frame_or_window = bar->window;
-  inputEvent.part = scroller_part_to_scroll_bar_part (hitPart);
-  inputEvent.timestamp = [[NSApp currentEvent] timestamp] * 1000;
+  inputEvent.part =
+    scroller_part_to_scroll_bar_part (hitPart, [currentEvent modifierFlags]);
+  inputEvent.timestamp = [currentEvent timestamp] * 1000;
   inputEvent.modifiers = modifiers;
 
   if (modifiers)
@@ -5807,18 +6049,6 @@ XTread_socket (terminal, expected, hold_quit)
 	  dpyinfo->saved_menu_event = NULL;
 	}
 
-      FOR_EACH_FRAME (tail, frame)
-	{
-	  struct frame *f = XFRAME (frame);
-
-	  if (FRAME_MAC_P (f) && !EQ (frame, tip_frame))
-	    {
-	      EmacsWindow *window = FRAME_MAC_WINDOW (f);
-
-	      [window setResizeControlNeedsDisplayIfNeeded];
-	    }
-	}
-
       count =
 	[[NSApp delegate] handleQueuedNSEventsWithHoldingQuitIn:hold_quit];
 
@@ -5887,37 +6117,22 @@ XTread_socket (terminal, expected, hold_quit)
 
 - (void)showHourglass:(id)sender
 {
-  struct frame *f = emacsFrame;
-
   if (hourglass == nil)
     {
-      NSWindow *window = FRAME_MAC_WINDOW (f);
-      NSView *view;
-      NSRect viewFrame, indicatorFrame;
+      NSRect viewFrame = [overlayView frame];
+      NSRect indicatorFrame =
+	NSMakeRect (NSWidth (viewFrame)
+		    - (HOURGLASS_WIDTH
+		       + (!(windowManagerState & WM_STATE_FULLSCREEN)
+			  ? HOURGLASS_RIGHT_MARGIN : HOURGLASS_TOP_MARGIN)),
+		    NSHeight (viewFrame)
+		    - (HOURGLASS_HEIGHT + HOURGLASS_TOP_MARGIN),
+		    HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
 
-      if (!(windowManagerState & WM_STATE_FULLSCREEN))
-	{
-	  view = [[window contentView] superview];
-	  viewFrame = [view frame];
-	  indicatorFrame =
-	    NSMakeRect (NSWidth (viewFrame)
-			- (HOURGLASS_WIDTH + HOURGLASS_RIGHT_MARGIN),
-			NSHeight (viewFrame)
-			- (HOURGLASS_HEIGHT + HOURGLASS_TOP_MARGIN),
-			HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
-	}
-      else
-	{
-	  view = emacsView;
-	  viewFrame = [view frame];
-	  indicatorFrame =
-	    NSMakeRect (NSWidth (viewFrame) - HOURGLASS_WIDTH, 0,
-			HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
-	}
       hourglass = [[NSProgressIndicator alloc] initWithFrame:indicatorFrame];
       [hourglass setStyle:NSProgressIndicatorSpinningStyle];
       [hourglass setDisplayedWhenStopped:NO];
-      [view addSubview:hourglass];
+      [overlayView addSubview:hourglass];
       [hourglass setAutoresizingMask:(NSViewMinXMargin | NSViewMinYMargin)];
     }
 
@@ -7882,9 +8097,24 @@ static NSMutableArray *registered_dragged_types;
 
 @implementation EmacsView (DragAndDrop)
 
+- (void)setDragHighlighted:(BOOL)flag
+{
+  struct frame *f = [self emacsFrame];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+
+  [frameController setOverlayViewHighlighted:flag];
+}
+
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
+  [self setDragHighlighted:YES];
+
   return NSDragOperationGeneric;
+}
+
+- (void)draggingExited:(id <NSDraggingInfo>)sender
+{
+  [self setDragHighlighted:NO];
 }
 
 /* Convert the NSDragOperation value OPERATION to a list of symbols for
@@ -7922,6 +8152,8 @@ drag_operation_to_actions (operation)
   NSDragOperation operation = [sender draggingSourceOperationMask];
   Lisp_Object arg;
 
+  [self setDragHighlighted:NO];
+
   if (type == nil)
     return NO;
 
@@ -7949,6 +8181,11 @@ drag_operation_to_actions (operation)
 - (void)registerEmacsViewForDraggedTypes:(NSArray *)pboardTypes
 {
   [emacsView registerForDraggedTypes:pboardTypes];
+}
+
+- (void)setOverlayViewHighlighted:(BOOL)flag
+{
+  [overlayView setHighlighted:flag];
 }
 
 @end				// EmacsFrameController (DragAndDrop)
@@ -8675,6 +8912,11 @@ mac_appkit_do_applescript (script, result)
 int
 mac_webkit_supports_svg_p ()
 {
+#if __LP64__
+  /* Disabled for now, because WebKit may hang during plugin loading
+     in some cases.  */
+  return 0;
+#else
   int result;
 
   BLOCK_INPUT;
@@ -8682,6 +8924,7 @@ mac_webkit_supports_svg_p ()
   UNBLOCK_INPUT;
 
   return result;
+#endif
 }
 
 int

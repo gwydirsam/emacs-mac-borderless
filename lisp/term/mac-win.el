@@ -683,13 +683,7 @@ in `selection-converter-alist', which see."
 
 ;;;; Apple events, HICommand events, and Services menu
 
-(defvar mac-startup-options nil
-  "Alist of Mac-specific startup options.
-Each element looks like (OPTION-TYPE . OPTIONS).
-OPTION-TYPE is a symbol specifying the type of startup options:
-
- command-line -- List of Mac-specific command line options.
- apple-event  -- Apple event that came with the \"Open Application\" event.")
+(defvar mac-startup-options)
 
 ;;; Event classes
 (put 'core-event     'mac-apple-event-class "aevt") ; kCoreEventClass
@@ -1737,14 +1731,21 @@ Mostly like `mwheel-scroll', but try scrolling by pixel unit if
 EVENT has no modifier keys, `mac-mouse-wheel-smooth-scroll' is
 non-nil, and the input device supports it."
   (interactive (list last-input-event))
+  ;; (nth 3 event) is a list of the following form:
+  ;; (isDirectionInvertedFromDevice	; nil (normal) or t (inverted)
+  ;;  (deltaX deltaY deltaZ)		; floats
+  ;;  (scrollingDeltaX scrollingDeltaY) ; nil or floats
+  ;;  (phase momentumPhase)		; nil, nil and an integer, or integers
+  ;;  )
+  ;; The list might end early if the remaining elements are all nil.
   ;; TODO: horizontal scrolling
   (when (memq (event-basic-type event) '(wheel-up wheel-down))
     (if (or (not mac-mouse-wheel-smooth-scroll)
 	    (delq 'click (delq 'double (delq 'triple (event-modifiers event))))
-	    (null (nth 4 (nth 3 event))))
+	    (null (nth 1 (nth 2 (nth 3 event)))))
 	(if (or (null (nth 3 event))
-		(and (/= (nth 1 (nth 3 event)) 0.0)
-		     (= (or (nth 6 (nth 3 event)) 0) 0)))
+		(and (/= (nth 1 (nth 1 (nth 3 event))) 0.0)
+		     (= (or (nth 1 (nth 3 (nth 3 event))) 0) 0)))
 	    (mwheel-scroll event))
       ;; TODO: ignore momentum scroll events after buffer switch.
       (let* ((window-to-scroll (if mouse-wheel-follow-mouse
@@ -1753,14 +1754,17 @@ non-nil, and the input device supports it."
 	     (window-inside-pixel-height (- (nth 3 edges) (nth 1 edges)))
 	     ;; Do redisplay and measure line heights before selecting
 	     ;; the window to scroll.
-	     (header-line-height
-	      (or (window-line-height 'header-line window-to-scroll)
-		  ;; Avoid recentering in redisplay.
+	     (point-height
+	      (or (progn
+		    (redisplay t)
+		    (window-line-height nil window-to-scroll))
+		  ;; The above still sometimes return nil.
 		  (progn
 		    (redisplay t)
-		    (window-line-height 'header-line window-to-scroll))))
+		    (window-line-height nil window-to-scroll))))
+	     (header-line-height
+	      (window-line-height 'header-line window-to-scroll))
 	     (first-height (window-line-height 0 window-to-scroll))
-	     (point-height (window-line-height nil window-to-scroll))
 	     (last-height (window-line-height -1 window-to-scroll))
 	     ;; Now select the window to scroll.
 	     (curwin (if window-to-scroll
@@ -1782,7 +1786,7 @@ non-nil, and the input device supports it."
 			   (- (car header-line-height) (nth 2 first-height)))
 			(nth 3 first-height)))))
 	     (scroll-amount (nth 3 event))
-	     (delta-y (- (round (nth 4 scroll-amount))))
+	     (delta-y (- (round (nth 1 (nth 2 scroll-amount)))))
 	     (scroll-conservatively 0)
 	     scroll-preserve-screen-position
 	     auto-window-vscroll
@@ -2143,6 +2147,16 @@ standard ones in `x-handle-args'."
       (push (cons 'command-line mac-specific-args) mac-startup-options))
     (nconc (nreverse args) invocation-args)))
 
+(defun mac-handle-startup-keyboard-modifiers ()
+  (let ((modifiers-value (cdr (assq 'keyboard-modifiers mac-startup-options)))
+	(shift-mask (cdr (assq 'shift mac-keyboard-modifier-mask-alist))))
+    (if (and modifiers-value (/= (logand modifiers-value shift-mask) 0))
+	;; Shift modifier at startup means "minimum customizations"
+	;; like `-Q' command-line option.
+	(setq init-file-user nil
+	      site-run-file nil
+	      inhibit-x-resources t))))
+
 (defun mac-initialize-window-system ()
   "Initialize Emacs for Mac GUI frames."
   ;; Make sure we have a valid resource name.
@@ -2160,11 +2174,19 @@ standard ones in `x-handle-args'."
 		     ;; Exit Emacs with fatal error if this fails.
 		     t)
 
+  (mac-handle-startup-keyboard-modifiers)
+
   ;; Create the default fontset.
   (create-default-fontset)
 
   (set-fontset-font t nil (font-spec :family "Apple Symbols") nil 'prepend)
+  (if (string-match "darwin[1-9][1-9]" system-configuration)
+      ;; Built on Mac OS X 10.7 or later.
+      (set-fontset-font t nil (font-spec :family "Apple Color Emoji")
+			nil 'prepend))
   (set-fontset-font t nil (font-spec :family "LastResort") nil 'append)
+  (set-fontset-font t '(#x20000 . #x2FFFF)
+		    '("HanaMinB" . "unicode-sip") nil 'append)
 
   ;; Create fontset specified in X resources "Fontset-N" (N is 0, 1, ...).
   (create-fontset-from-x-resource)

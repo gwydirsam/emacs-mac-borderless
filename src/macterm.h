@@ -649,7 +649,6 @@ extern void mac_set_frame_window_background P_ ((struct frame *,
 						 unsigned long));
 extern void mac_update_begin P_ ((struct frame *));
 extern void mac_update_end P_ ((struct frame *));
-extern void mac_frame_up_to_date P_ ((struct frame *));
 extern void mac_update_window_end P_ ((struct window *));
 extern void mac_cursor_to P_ ((int, int, int, int));
 extern void x_flush P_ ((struct frame *));

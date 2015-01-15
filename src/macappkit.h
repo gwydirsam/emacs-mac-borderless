@@ -36,6 +36,9 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifndef NSAppKitVersionNumber10_5
 #define NSAppKitVersionNumber10_5 949
 #endif
+#ifndef NSAppKitVersionNumber10_6
+#define NSAppKitVersionNumber10_6 1038
+#endif
 
 #ifndef NSINTEGER_DEFINED
 typedef int NSInteger;
@@ -192,22 +195,25 @@ typedef unsigned int NSUInteger;
      tracking.  */
   NSEvent *mouseUpEvent;
 
-  /* Offset of mouse position for the event that initiated mouse
-     tracking.  */
-  NSPoint resizeTrackingOffset;
+  /* Pointer location of the left mouse down event that initiated the
+     current resize control tracking session.  The value is in the
+     base coordinate system of the window.  */
+  NSPoint resizeTrackingStartLocation;
 
-  /* Whether window's resize control needs display.  */
-  BOOL resizeControlNeedsDisplay;
+  /* Window size when the current resize control tracking session was
+     started.  */
+  NSSize resizeTrackingStartWindowSize;
+
+  /* Event number of the current resize control tracking session.  */
+  NSInteger resizeTrackingEventNumber;
 
   /* Whether the window should be made visible when the application
      gets unhidden next time.  */
   BOOL needsOrderFrontOnUnhide;
 }
+- (BOOL)resizeTrackingSuspendedByEvent:(NSEvent *)event;
 - (void)suspendResizeTracking:(NSEvent *)event;
 - (void)resumeResizeTracking;
-- (BOOL)resizeControlNeedsDisplay;
-- (void)setResizeControlNeedsDisplay:(BOOL)flag;
-- (void)setResizeControlNeedsDisplayIfNeeded;
 - (BOOL)needsOrderFrontOnUnhide;
 - (void)setNeedsOrderFrontOnUnhide:(BOOL)flag;
 - (void)updateApplicationPresentationOptions;
@@ -224,6 +230,7 @@ typedef unsigned int NSUInteger;
 @end
 
 @class EmacsView;
+@class EmacsOverlayView;
 
 /* Class for delegate of NSWindow and NSToolbar (see its Toolbar
    category declared later).  It also becomes that target of
@@ -237,6 +244,10 @@ typedef unsigned int NSUInteger;
 
   /* The view for the Emacs frame.  */
   EmacsView *emacsView;
+
+  /* Window and view overlaid on the Emacs frame window.  */
+  NSWindow *overlayWindow;
+  EmacsOverlayView *overlayView;
 
   /* The spinning progress indicator (corresponding to hourglass)
      shown at the upper-right corner of the window.  */
@@ -255,6 +266,7 @@ typedef unsigned int NSUInteger;
 - (struct frame *)emacsFrame;
 - (void)changeWindowManagerStateWithFlags:(WMState)flagsToSet
 				    clear:(WMState)flagsToClear;
+- (void)adjustOverlayWindowFrame;
 - (BOOL)emacsViewCanDraw;
 - (void)lockFocusOnEmacsView;
 - (void)unlockFocusOnEmacsView;
@@ -313,6 +325,21 @@ typedef unsigned int NSUInteger;
 - (NSRect)firstRectForCharacterRange:(NSRange)aRange
 			 actualRange:(NSRangePointer)actualRange;
 - (void)viewFrameDidChange:(NSNotification *)notification;
+@end
+
+/* Class for view in the overlay window of an Emacs frame window.  */
+
+@interface EmacsOverlayView : NSView
+{
+  /* Whether to highlight the area corresponding to the content of the
+     Emacs frame window.  */
+  BOOL highlighted;
+
+  /* Whether to show the resize indicator.  */
+  BOOL showsResizeIndicator;
+}
+- (void)setHighlighted:(BOOL)flag;
+- (void)setShowsResizeIndicator:(BOOL)flag;
 @end
 
 /* Class for scroller that doesn't do modal mouse tracking.  */
@@ -505,6 +532,7 @@ typedef unsigned int NSUInteger;
 
 @interface EmacsFrameController (DragAndDrop)
 - (void)registerEmacsViewForDraggedTypes:(NSArray *)pboardTypes;
+- (void)setOverlayViewHighlighted:(BOOL)flag;
 @end
 
 @interface EmacsController (AppleScript)
@@ -684,6 +712,7 @@ typedef NSUInteger NSWindowCollectionBehavior;
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
 enum {
+    NSEventTypeGesture          = 29,
     NSEventTypeMagnify          = 30,
     NSEventTypeSwipe            = 31,
     NSEventTypeRotate           = 18
@@ -691,6 +720,28 @@ enum {
 
 @interface NSEvent (AvailableOn1060AndLater)
 - (CGFloat)magnification;
++ (NSUInteger)modifierFlags;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+enum {
+    NSEventPhaseNone        = 0,
+    NSEventPhaseBegan       = 0x1 << 0,
+    NSEventPhaseStationary  = 0x1 << 1,
+    NSEventPhaseChanged     = 0x1 << 2,
+    NSEventPhaseEnded       = 0x1 << 3,
+    NSEventPhaseCancelled   = 0x1 << 4,
+};
+typedef NSUInteger NSEventPhase;
+
+@interface NSEvent (AvailableOn1070AndLater)
+- (BOOL)hasPreciseScrollingDeltas;
+- (CGFloat)scrollingDeltaX;
+- (CGFloat)scrollingDeltaY;
+- (NSEventPhase)momentumPhase;
+- (BOOL)isDirectionInvertedFromDevice;
+- (NSEventPhase)phase;
 @end
 #endif
 
