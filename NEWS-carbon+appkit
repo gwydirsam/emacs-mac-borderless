@@ -1,3 +1,22 @@
+* emacs-22.3-appkit-1.3 (2009-03-27)
+
+** Fixed bugs
+
+*** Popup dialog button labels may get corrupted.
+http://lists.gnu.org/archive/html/emacs-devel/2009-03/msg00261.html
+
+*** Popup dialog does not select the default item with the return key.
+
+*** Tooltip contents are sometimes not shown on 10.4 due to the
+previous change for flyspell-small-region slowness.
+
+** Improvements
+
+*** Hourglass (progress indicator) is shown in the title bar.
+
+*** Add f20 and kp-separator to the keycode-to-xkeysym table.
+
+
 * emacs-22.3-appkit-1.2 (2009-01-24)
 
 ** Fixed bugs

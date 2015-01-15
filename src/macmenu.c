@@ -867,6 +867,14 @@ for instance using the window manager, then this produces a quit and
        but I don't want to make one now.  */
     CHECK_WINDOW (window);
 
+  /* Force a redisplay before showing the dialog.  If a frame is created
+     just before showing the dialog, its contents may not have been fully
+     drawn.
+
+     Do this before creating the widget value that points to Lisp
+     string contents, because Fredisplay may GC and relocate them.  */
+  Fredisplay (Qt);
+
 #ifndef HAVE_DIALOGS
   /* Display a menu with these alternatives
      in the middle of frame F.  */
@@ -1984,11 +1992,6 @@ mac_dialog_show (f, keymaps, title, header, error_name)
 
   /* No selection has been chosen yet.  */
   menu_item_selection = 0;
-
-  /* Force a redisplay before showing the dialog.  If a frame is created
-     just before showing the dialog, its contents may not have been fully
-     drawn.  */
-  Fredisplay (Qt);
 
   /* Actually create the dialog.  */
 #if TARGET_API_MAC_CARBON

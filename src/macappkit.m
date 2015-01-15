@@ -996,8 +996,6 @@ install_application_handler ()
 			       Windows
  ************************************************************************/
 
-/* Emacs frame containing the globally focused NSView.  */
-
 static void set_global_focus_view_frame P_ ((struct frame *));
 static void unset_global_focus_view_frame P_ ((void));
 
@@ -2726,6 +2724,7 @@ extern int mac_store_buffer_text_to_unicode_chars P_ ((struct buffer *,
 
 #define FRAME_CG_CONTEXT(f)	((f)->output_data.mac->cg_context)
 
+/* Emacs frame containing the globally focused NSView.  */
 static struct frame *global_focus_view_frame;
 /* -[EmacsTipView drawRect:] might be called during update_frame.  */
 static struct frame *saved_focus_view_frame;
@@ -4528,7 +4527,10 @@ XTread_socket (sd, expected, hold_quit)
 	  /* The tooltip has been drawn already.  Avoid the
 	     SET_FRAME_GARBAGED in mac_handle_visibility_change.  */
 	  if (EQ (frame, tip_frame))
-	    continue;
+	    {
+	      x_flush (f);
+	      continue;
+	    }
 
 	  if (FRAME_MAC_P (f))
 	    {
@@ -4578,18 +4580,22 @@ mac_show_hourglass (f)
 
   if (indicator == nil)
     {
-      EmacsView *emacsView = FRAME_EMACS_VIEW (f);
-      NSRect emacsViewFrame, indicatorFrame;
+      NSWindow *window = FRAME_MAC_WINDOW (f);
+      NSView *frameView = [[window contentView] superview];
+      NSRect frameViewFrame, indicatorFrame;
 
-      emacsViewFrame = [emacsView frame];
-      indicatorFrame = NSMakeRect (NSWidth (emacsViewFrame) - HOURGLASS_WIDTH,
-				   0, HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
+      frameViewFrame = [frameView frame];
+      indicatorFrame = NSMakeRect (NSWidth (frameViewFrame)
+				   - (HOURGLASS_WIDTH + HOURGLASS_RIGHT_MARGIN),
+				   NSHeight (frameViewFrame)
+				   - (HOURGLASS_HEIGHT + HOURGLASS_TOP_MARGIN),
+				   HOURGLASS_WIDTH, HOURGLASS_HEIGHT);
       indicator = [[NSProgressIndicator alloc] initWithFrame:indicatorFrame];
       [indicator setStyle:NSProgressIndicatorSpinningStyle];
       [indicator setDisplayedWhenStopped:NO];
       f->output_data.mac->hourglass_control = indicator;
-      [emacsView addSubview:indicator];
-      [indicator setAutoresizingMask:(NSViewMinXMargin | NSViewMaxYMargin)];
+      [frameView addSubview:indicator];
+      [indicator setAutoresizingMask:(NSViewMinXMargin | NSViewMinYMargin)];
       [indicator release];
     }
 
@@ -5532,7 +5538,7 @@ extern EMACS_TIME timer_check P_ ((int));
   return self;
 }
 
-- (void)stopModalWithTagAsCode:sender
+- (void)stopModalWithTagAsCode:(id)sender
 {
   [NSApp stopModalWithCode:[sender tag]];
 }
@@ -5569,10 +5575,10 @@ extern EMACS_TIME timer_check P_ ((int));
       return YES;
     }
 
-  return NO;
+  return [super performKeyEquivalent:theEvent];
 }
 
-@end				// EmacsDialogPanel
+@end				// EmacsDialogView
 
 static Lisp_Object
 pop_down_dialog (arg)

@@ -20,6 +20,7 @@ port including the following:
 
   * C-g handling
     You can quit (while t) and (shell-command "sleep 100").
+    No bogus menu bar activation while these evaluations.
 
   * Emulation of `select' without periodic polling
     It doesn't use CPU time while the Lisp interpreter is idle and
@@ -29,8 +30,12 @@ port including the following:
   * Graceful termination
     If you try logout/shutdown/reboot while leaving a file-visiting
     buffer modified and unsaved, a popup window appears for
-    confirmation.  If you cancel the termination of Emacs, the whole
-    logout/shutdown/reboot process is also canceled immediately.
+    confirmation.  If you cancel the termination of Emacs (including
+    C-g or ESC), the whole logout/shutdown/reboot process is also
+    canceled immediately (i.e., you will see a "canceled" dialog
+    immediately rather than a "timed out" one afterward).  If you
+    don't have unsaved buffers, shell buffers, etc., you won't see
+    unnecessary confirmation.
 
   * Apple Event handling
     One can define Apple Event handlers at the Lisp level.  Actually,
@@ -67,6 +72,20 @@ except for the following two aspects:
     is due to a bug in 64-bit ATSUI.  Apple says it won't be fixed but
     maybe you can vote for the fix of this bug
     (rdar://problem/5578675) at the Apple Bug Reporter.
+
+Although they are minor, some visual enhancements can be found in the
+Carbon+AppKit port:
+
+  * Aligned key bindings in menus
+
+  * Progress indicator (corresponding to hourglass) in the title bar
+
+  * Unusable items in the font panel are hidden
+    Try Options -> Show/Hide -> Font Panel from the menu bar or
+    M-x mac-font-panel-mode RET.
+
+  * Update display while the resize control (or the slider in the font
+    panel) is being dragged
 
 
 2. Build instruction

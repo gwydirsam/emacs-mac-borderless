@@ -583,8 +583,15 @@ struct scroll_bar {
 #define MAC_AQUA_SMALL_VERTICAL_SCROLL_BAR_WIDTH (11)
 
 /* Size of hourglass controls */
+#if USE_APPKIT
+#define HOURGLASS_WIDTH (18)
+#define HOURGLASS_HEIGHT (18)
+#define HOURGLASS_TOP_MARGIN (2)
+#define HOURGLASS_RIGHT_MARGIN (32)
+#else
 #define HOURGLASS_WIDTH (15)
 #define HOURGLASS_HEIGHT (15)
+#endif
 
 /* Some constants that are used locally.  */
 /* Creator code for Emacs on Mac OS.  */
