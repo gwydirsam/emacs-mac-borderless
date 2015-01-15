@@ -433,7 +433,13 @@ enum pvec_type
 #define XSET(var, type, ptr) \
    ((var) = ((EMACS_INT)(type) << VALBITS) + ((EMACS_INT) (ptr) & VALMASK))
 
+#ifdef DATA_SEG_BITS
+/* DATA_SEG_BITS forces extra bits to be or'd in with any pointers
+   which were stored in a Lisp_Object */
+#define XPNTR(a) ((EMACS_UINT) (((a) & VALMASK) | DATA_SEG_BITS))
+#else
 #define XPNTR(a) ((EMACS_UINT) ((a) & VALMASK))
+#endif
 
 #endif /* not USE_LSB_TAG */
 
@@ -483,6 +489,14 @@ enum pvec_type
 # define XSET(var, vartype, ptr) \
    (((var).s.val = ((EMACS_INT) (ptr))), ((var).s.type = ((char) (vartype))))
 
+#ifdef DATA_SEG_BITS
+/* DATA_SEG_BITS forces extra bits to be or'd in with any pointers
+   which were stored in a Lisp_Object */
+#define XPNTR(a) (XUINT (a) | DATA_SEG_BITS)
+#else
+#define XPNTR(a) ((EMACS_INT) XUINT (a))
+#endif
+
 #endif	/* !USE_LSB_TAG */
 
 #if __GNUC__ >= 2 && defined (__OPTIMIZE__)
@@ -504,30 +518,9 @@ extern Lisp_Object make_number P_ ((EMACS_INT));
 
 #define EQ(x, y) (XHASH (x) == XHASH (y))
 
-#ifndef XPNTR
-#ifdef HAVE_SHM
-/* In this representation, data is found in two widely separated segments.  */
-extern size_t pure_size;
-#define XPNTR(a) \
-  (XUINT (a) | (XUINT (a) > pure_size ? DATA_SEG_BITS : PURE_SEG_BITS))
-#else /* not HAVE_SHM */
-#ifdef DATA_SEG_BITS
-/* This case is used for the rt-pc.
-   In the diffs I was given, it checked for ptr = 0
-   and did not adjust it in that case.
-   But I don't think that zero should ever be found
-   in a Lisp object whose data type says it points to something.  */
-#define XPNTR(a) (XUINT (a) | DATA_SEG_BITS)
-#else
-/* Some versions of gcc seem to consider the bitfield width when
-   issuing the "cast to pointer from integer of different size"
-   warning, so the cast is here to widen the value back to its natural
-   size.  */
-#define XPNTR(a) ((EMACS_INT) XUINT (a))
-#endif
-#endif /* not HAVE_SHM */
+#ifndef XUNTAG
 #define XUNTAG(a, type) XPNTR (a)
-#endif /* no XPNTR */
+#endif
 
 /* Largest and smallest representable fixnum values.  These are the C
    values.  */
@@ -772,14 +765,14 @@ extern int string_bytes P_ ((struct Lisp_String *));
 
 /* Mark STR as a unibyte string.  */
 #define STRING_SET_UNIBYTE(STR)  \
-  do { if (EQ (STR, empty_multibyte_string))  \
+  do { if (XSTRING (STR)->size == 0)  \
       (STR) = empty_unibyte_string;  \
     else XSTRING (STR)->size_byte = -1; } while (0)
 
 /* Mark STR as a multibyte string.  Assure that STR contains only
    ASCII characters in advance.  */
 #define STRING_SET_MULTIBYTE(STR)  \
-  do { if (EQ (STR, empty_unibyte_string))  \
+  do { if (XSTRING (STR)->size == 0)  \
       (STR) = empty_multibyte_string;  \
     else XSTRING (STR)->size_byte = XSTRING (STR)->size; } while (0)
 

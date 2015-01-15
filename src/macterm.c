@@ -5954,7 +5954,7 @@ static struct redisplay_interface x_redisplay_interface =
   x_update_window_begin,
   x_update_window_end,
   mac_cursor_to,
-  x_flush,
+  mac_flush,
   0, /* flush_display_optional */
   x_clear_window_mouse_face,
   x_get_glyph_overhangs,

@@ -162,6 +162,15 @@ typedef unsigned int NSUInteger;
   /* Search string for which the user selected "Show All Help
      Topics".  */
   NSString *searchStringForAllHelpTopics;
+
+  /* Date of last flushWindow call.  */
+  NSDate *lastFlushDate;
+
+  /* Timer for deferring flushWindow call.  */
+  NSTimer *flushTimer;
+
+  /* Set of windows whose flush is deferred.  */
+  NSMutableSet *deferredFlushWindows;
 }
 - (int)getAndClearMenuItemSelection;
 - (void)storeInputEvent:(id)sender;
@@ -172,6 +181,7 @@ typedef unsigned int NSUInteger;
 - (void)cancelHelpEchoForEmacsFrame:(struct frame *)f;
 - (BOOL)conflictingKeyBindingsDisabled;
 - (void)setConflictingKeyBindingsDisabled:(BOOL)flag;
+- (void)flushWindow:(NSWindow *)window force:(BOOL)flag;
 @end
 
 /* Like NSWindow, but allows suspend/resume resize control tracking.  */
@@ -197,7 +207,7 @@ typedef unsigned int NSUInteger;
 - (void)resumeResizeTracking;
 - (BOOL)resizeControlNeedsDisplay;
 - (void)setResizeControlNeedsDisplay:(BOOL)flag;
-- (void)displayResizeControlIfNeeded;
+- (void)setResizeControlNeedsDisplayIfNeeded;
 - (BOOL)needsOrderFrontOnUnhide;
 - (void)setNeedsOrderFrontOnUnhide:(BOOL)flag;
 - (void)updateApplicationPresentationOptions;

@@ -42,7 +42,7 @@ NOTE-END */
 /* Define NO_ARG_ARRAY if you cannot take the address of the first of a
  * group of arguments and treat it as an array of the arguments.  */
 
-/* #define NO_ARG_ARRAY */
+#define NO_ARG_ARRAY
 
 /* crt0.c, if it is used, should use the i386-bsd style of entry.
    with no extra dummy args.  On USG and XENIX,
@@ -101,12 +101,6 @@ NOTE-END */
 #define ULIMIT_BREAK_VALUE (32*1024*1024)
 
 #define SEGMENT_MASK ((SEGMENT_SIZE)-1)
-#endif
-
-#ifdef DARWIN_OS
-#ifdef __llvm__
-#define NO_ARG_ARRAY
-#endif
 #endif
 
 /* arch-tag: 746338f0-cb7b-4f49-a98c-cb50817cf2ec

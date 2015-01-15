@@ -1,5 +1,23 @@
+* emacs-23.2.93-mac-1.9991 [experimental/hackers-only] (2011-02-01)
+
+** Fixed bugs
+
+*** flyspell-buffer for a large buffer doesn't get faster with a
+faster machine.
+
+** Improvements
+
+*** flyspell-buffer for a large buffer gets even faster.
+Apply Brandon Craig Rhodes's patch in Bug#7343.
+
+*** You can optionally place the pure space to a read-only section by
+uncommenting the line beginning with "//#define PURE_SECTION" in
+src/s/darwin.h.
+
+
 * emacs-23.2.92-mac-1.9990 [experimental/hackers-only] (2011-01-15)
 Based on Emacs 23.2.92
+http://lists.gnu.org/archive/html/emacs-devel/2011-01/msg00472.html
 
 ** Fixed bugs
 

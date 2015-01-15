@@ -4756,22 +4756,35 @@ this happens by default."
       ;; Compute target name.
       (setq directory (directory-file-name (expand-file-name directory))
 	    newname   (directory-file-name (expand-file-name newname)))
-      (if (not (file-directory-p newname)) (make-directory newname parents))
+
+      (if (not (file-directory-p newname))
+	  ;; If NEWNAME is not an existing directory, create it; that
+	  ;; is where we will copy the files of DIRECTORY.
+	  (make-directory newname parents)
+	;; If NEWNAME is an existing directory, we will copy into
+	;; NEWNAME/[DIRECTORY-BASENAME].
+	(setq newname (expand-file-name
+		       (file-name-nondirectory
+			(directory-file-name directory))
+		       newname))
+	(and (file-exists-p newname)
+	     (not (file-directory-p newname))
+	     (error "Cannot overwrite non-directory %s with a directory"
+		    newname))
+	(make-directory newname t))
 
       ;; Copy recursively.
-      (mapc
-       (lambda (file)
-	 (let ((target (expand-file-name
-			(file-name-nondirectory file) newname))
-	       (attrs (file-attributes file)))
-	   (cond ((file-directory-p file)
-		  (copy-directory file target keep-time parents))
-		 ((stringp (car attrs)) ; Symbolic link
-		  (make-symbolic-link (car attrs) target t))
-		 (t
-		  (copy-file file target t keep-time)))))
-       ;; We do not want to copy "." and "..".
-       (directory-files	directory 'full directory-files-no-dot-files-regexp))
+      (dolist (file
+	       ;; We do not want to copy "." and "..".
+	       (directory-files directory 'full
+				directory-files-no-dot-files-regexp))
+	(if (file-directory-p file)
+	    (copy-directory file newname keep-time parents)
+	  (let ((target (expand-file-name (file-name-nondirectory file) newname))
+		(attrs (file-attributes file)))
+	    (if (stringp (car attrs)) ; Symbolic link
+		(make-symbolic-link (car attrs) target t)
+	      (copy-file file target t keep-time)))))
 
       ;; Set directory attributes.
       (set-file-modes newname (file-modes directory))
@@ -6041,8 +6054,7 @@ only these files will be asked to be saved."
 			  (substitute-in-file-name identity)
 			  ;; `add' means add "/:" to the result.
 			  (file-truename add 0)
-			  ;; `quote' means add "/:" to buffer-file-name.
-			  (insert-file-contents quote 0)
+			  (insert-file-contents insert-file-contents 0)
 			  ;; `unquote-then-quote' means set buffer-file-name
 			  ;; temporarily to unquoted filename.
 			  (verify-visited-file-modtime unquote-then-quote)
@@ -6073,20 +6085,18 @@ only these files will be asked to be saved."
 			   "/"
 			 (substring (car pair) 2)))))
 	(setq file-arg-indices (cdr file-arg-indices))))
-    (cond ((eq method 'identity)
-	   (car arguments))
-	  ((eq method 'add)
-	   (concat "/:" (apply operation arguments)))
-	  ((eq method 'quote)
-	   (unwind-protect
+    (case method
+      (identity (car arguments))
+      (add (concat "/:" (apply operation arguments)))
+      (insert-file-contents
+       (let ((visit (nth 1 arguments)))
+         (prog1
 	       (apply operation arguments)
-	     (setq buffer-file-name (concat "/:" buffer-file-name))))
-	  ((eq method 'unquote-then-quote)
-	   (let (res)
-	     (setq buffer-file-name (substring buffer-file-name 2))
-	     (setq res (apply operation arguments))
-	     (setq buffer-file-name (concat "/:" buffer-file-name))
-	     res))
+           (when (and visit buffer-file-name)
+             (setq buffer-file-name (concat "/:" buffer-file-name))))))
+      (unquote-then-quote
+       (let ((buffer-file-name (substring buffer-file-name 2)))
+         (apply operation arguments)))
 	  (t
 	   (apply operation arguments)))))
 

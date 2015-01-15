@@ -952,6 +952,9 @@ extern UInt32 mac_mapped_modifiers P_ ((UInt32, UInt32));
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [lastFlushDate release];
+  [flushTimer release];
+  [deferredFlushWindows release];
   [super dealloc];
 }
 
@@ -1307,7 +1310,7 @@ emacs_windows_need_display_p (with_resize_control_p)
       if (peek_next_event () || emacs_windows_need_display_p (1))
 	[NSApp postDummyEvent];
       else
-	x_flush (NULL);
+	mac_flush (NULL);
     }
 }
 
@@ -1400,6 +1403,54 @@ emacs_windows_need_display_p (with_resize_control_p)
     }
 
   conflictingKeyBindingsDisabled = flag;
+}
+
+#define FLUSH_WINDOW_MIN_INTERVAL (1/60.0)
+
+- (void)flushWindow:(NSWindow *)window force:(BOOL)flag
+{
+  NSTimeInterval timeInterval;
+
+  if (deferredFlushWindows == NULL)
+    deferredFlushWindows = [[NSMutableSet alloc] initWithCapacity:0];
+  if (window)
+    [deferredFlushWindows addObject:window];
+
+  if (!flag && lastFlushDate
+      && (timeInterval = - [lastFlushDate timeIntervalSinceNow],
+	  timeInterval < FLUSH_WINDOW_MIN_INTERVAL))
+    {
+      if (![flushTimer isValid])
+	{
+	  [flushTimer release];
+	  timeInterval = FLUSH_WINDOW_MIN_INTERVAL - timeInterval;
+	  flushTimer =
+	    [[NSTimer scheduledTimerWithTimeInterval:timeInterval
+					      target:self
+					    selector:@selector(processDeferredFlushWindow:)
+					    userInfo:nil repeats:NO] retain];
+	}
+    }
+  else
+    {
+      NSEnumerator *enumerator = [deferredFlushWindows objectEnumerator];
+
+      [lastFlushDate release];
+      lastFlushDate = [[NSDate alloc] init];
+      [flushTimer invalidate];
+      [flushTimer release];
+      flushTimer = nil;
+
+      while ((window = [enumerator nextObject]) != nil)
+	[window flushWindow];
+      [deferredFlushWindows removeAllObjects];
+    }
+}
+
+- (void)processDeferredFlushWindow:(NSTimer *)theTimer
+{
+  if (![NSApp isRunning])
+    [self flushWindow:nil force:YES];
 }
 
 /* Some key bindings in mac_apple_event_map are regarded as methods in
@@ -1591,7 +1642,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
   resizeControlNeedsDisplay = flag;
 }
 
-- (void)displayResizeControlIfNeeded
+- (void)setResizeControlNeedsDisplayIfNeeded
 {
   if (resizeControlNeedsDisplay)
     {
@@ -1599,7 +1650,7 @@ extern void mac_save_keyboard_input_source P_ ((void));
       NSRect rect = [frameView convertRect:[self resizeControlFrame]
 			       fromView:nil];
 
-      [frameView displayRect:rect];
+      [frameView setNeedsDisplayInRect:rect];
       resizeControlNeedsDisplay = NO;
     }
 }
@@ -2641,10 +2692,34 @@ x_flush (f)
     }
   else
     {
-      NSWindow *window = FRAME_MAC_WINDOW (f);
+      EmacsWindow *window = FRAME_MAC_WINDOW (f);
 
       if ([window isVisible] && ![window isFlushWindowDisabled])
-	[window flushWindow];
+	[[NSApp delegate] flushWindow:window force:YES];
+    }
+
+  UNBLOCK_INPUT;
+}
+
+void
+mac_flush (f)
+     struct frame *f;
+{
+  BLOCK_INPUT;
+
+  if (f == NULL)
+    {
+      Lisp_Object rest, frame;
+      FOR_EACH_FRAME (rest, frame)
+	if (FRAME_MAC_P (XFRAME (frame)))
+	  mac_flush (XFRAME (frame));
+    }
+  else
+    {
+      EmacsWindow *window = FRAME_MAC_WINDOW (f);
+
+      if ([window isVisible] && ![window isFlushWindowDisabled])
+	[[NSApp delegate] flushWindow:window force:NO];
     }
 
   UNBLOCK_INPUT;
@@ -5401,7 +5476,7 @@ static void update_dragged_types P_ ((void));
 	 frame.  */
       clear_mouse_face (dpyinfo);
       dpyinfo->mouse_face_mouse_frame = 0;
-      x_flush (f);
+      mac_flush (f);
     }
 
   [[NSApp delegate] cancelHelpEchoForEmacsFrame:f];
@@ -5697,8 +5772,7 @@ XTread_socket (terminal, expected, hold_quit)
 
   if (lastCallDate
       && (timeInterval = - [lastCallDate timeIntervalSinceNow],
-	  timeInterval < READ_SOCKET_MIN_INTERVAL)
-      && !emacs_windows_need_display_p (0))
+	  timeInterval < READ_SOCKET_MIN_INTERVAL))
     {
       if (![timer isValid])
 	{
@@ -5731,6 +5805,18 @@ XTread_socket (terminal, expected, hold_quit)
 	{
 	  ReleaseEvent (dpyinfo->saved_menu_event);
 	  dpyinfo->saved_menu_event = NULL;
+	}
+
+      FOR_EACH_FRAME (tail, frame)
+	{
+	  struct frame *f = XFRAME (frame);
+
+	  if (FRAME_MAC_P (f) && !EQ (frame, tip_frame))
+	    {
+	      EmacsWindow *window = FRAME_MAC_WINDOW (f);
+
+	      [window setResizeControlNeedsDisplayIfNeeded];
+	    }
 	}
 
       count =
@@ -5767,7 +5853,6 @@ XTread_socket (terminal, expected, hold_quit)
 	    {
 	      EmacsWindow *window = FRAME_MAC_WINDOW (f);
 
-	      [window displayResizeControlIfNeeded];
 	      x_flush (f);
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
 	      /* Mac OS X 10.4 seems not to reset the flag
