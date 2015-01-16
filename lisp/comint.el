@@ -699,16 +699,21 @@ BUFFER can be either a buffer or the name of one."
 (defun make-comint-in-buffer (name buffer program &optional startfile &rest switches)
   "Make a Comint process NAME in BUFFER, running PROGRAM.
 If BUFFER is nil, it defaults to NAME surrounded by `*'s.
-PROGRAM should be either a string denoting an executable program to create
-via `start-file-process', or a cons pair of the form (HOST . SERVICE) denoting
-a TCP connection to be opened via `open-network-stream'.  If there is already
-a running process in that buffer, it is not restarted.  Optional fourth arg
-STARTFILE is the name of a file, whose contents are sent to the
-process as its initial input.
+If there is a running process in BUFFER, it is not restarted.
+
+PROGRAM should be one of the following:
+- a string, denoting an executable program to create via
+  `start-file-process'
+- a cons pair of the form (HOST . SERVICE), denoting a TCP
+  connection to be opened via `open-network-stream'
+- nil, denoting a newly-allocated pty.
+
+Optional fourth arg STARTFILE is the name of a file, whose
+contents are sent to the process as its initial input.
 
 If PROGRAM is a string, any more args are arguments to PROGRAM.
 
-Returns the (possibly newly created) process buffer."
+Return the (possibly newly created) process buffer."
   (or (fboundp 'start-file-process)
       (error "Multi-processing is not supported for this system"))
   (setq buffer (get-buffer-create (or buffer (concat "*" name "*"))))
@@ -752,9 +757,18 @@ See `make-comint' and `comint-exec'."
 (defun comint-exec (buffer name command startfile switches)
   "Start up a process named NAME in buffer BUFFER for Comint modes.
 Runs the given COMMAND with SWITCHES, and initial input from STARTFILE.
-Blasts any old process running in the buffer.  Doesn't set the buffer mode.
-You can use this to cheaply run a series of processes in the same Comint
-buffer.  The hook `comint-exec-hook' is run after each exec."
+
+COMMAND should be one of the following:
+- a string, denoting an executable program to create via
+  `start-file-process'
+- a cons pair of the form (HOST . SERVICE), denoting a TCP
+  connection to be opened via `open-network-stream'
+- nil, denoting a newly-allocated pty.
+
+This function blasts any old process running in the buffer, and
+does not set the buffer mode.  You can use this to cheaply run a
+series of processes in the same Comint buffer.  The hook
+`comint-exec-hook' is run after each exec."
   (with-current-buffer buffer
     (let ((proc (get-buffer-process buffer)))	; Blast any old process.
       (if proc (delete-process proc)))
@@ -3069,24 +3083,25 @@ Returns t if successful."
 (defun comint--common-quoted-suffix (s1 s2)
   ;; FIXME: Copied in pcomplete.el.
   "Find the common suffix between S1 and S2 where S1 is the expanded S2.
-S1 is expected to be the unquoted and expanded version of S1.
+S1 is expected to be the unquoted and expanded version of S2.
 Returns (PS1 . PS2), i.e. the shortest prefixes of S1 and S2, such that
 S1 = (concat PS1 SS1) and S2 = (concat PS2 SS2) and
 SS1 = (unquote SS2)."
   (let* ((cs (comint--common-suffix s1 s2))
          (ss1 (substring s1 (- (length s1) cs)))
          (qss1 (comint-quote-filename ss1))
-         qc)
+         qc s2b)
     (if (and (not (equal ss1 qss1))
              (setq qc (comint-quote-filename (substring ss1 0 1)))
-             (eq t (compare-strings s2 (- (length s2) cs (length qc) -1)
-                                    (- (length s2) cs -1)
+	     (setq s2b (- (length s2) cs (length qc) -1))
+	     (>= s2b 0)			;bug#11158.
+             (eq t (compare-strings s2 s2b (- (length s2) cs -1)
                                     qc nil nil)))
         ;; The difference found is just that one char is quoted in S2
         ;; but not in S1, keep looking before this difference.
         (comint--common-quoted-suffix
          (substring s1 0 (- (length s1) cs))
-         (substring s2 0 (- (length s2) cs (length qc) -1)))
+         (substring s2 0 s2b))
       (cons (substring s1 0 (- (length s1) cs))
             (substring s2 0 (- (length s2) cs))))))
 

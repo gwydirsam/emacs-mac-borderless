@@ -6338,20 +6338,25 @@ enum {
 
 - (void)changeFont:(id)sender
 {
-  NSEvent *currentEvent = [NSApp currentEvent];
-  NSFont *oldFont = [self fontForFace:DEFAULT_FACE_ID character:0
-			  position:-1 object:Qnil];
-  NSFont *newFont = [sender convertFont:oldFont];
+  EmacsFontPanel *fontPanel = (EmacsFontPanel *) [sender fontPanel:NO];
+  NSEvent *currentEvent;
+  NSFont *oldFont, *newFont;
   Lisp_Object arg = Qnil;
   struct input_event inev;
 
+  /* This might look strange, but can happen on Mac OS X 10.5 and
+     later inside [fontPanel makeFirstResponder:accessoryView] (in
+     mac_font_dialog) if the panel is shown for the first time.  */
+  if ([[fontPanel delegate] isMemberOfClass:[EmacsFontDialogController class]])
+    return;
+
+  currentEvent = [NSApp currentEvent];
   if ([currentEvent type] == NSLeftMouseDragged)
-    {
-      EmacsFontPanel *fontPanel = (EmacsFontPanel *) [sender fontPanel:NO];
+    [fontPanel suspendSliderTracking:currentEvent];
 
-      [fontPanel suspendSliderTracking:currentEvent];
-    }
-
+  oldFont = [self fontForFace:DEFAULT_FACE_ID character:0 position:-1
+		       object:Qnil];
+  newFont = [sender convertFont:oldFont];
   if (newFont)
     arg = Fcons (Fcons (Qfont_spec,
 			Fcons (build_string ("Lisp"),
@@ -10310,7 +10315,7 @@ mac_update_accessibility_status (struct frame *f)
 ***********************************************************************/
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
-extern Lisp_Object QCdirection, QCduration;
+extern Lisp_Object QCdirection, QCduration, Qnone, Qfade_in, Qmove_in;
 
 @implementation EmacsFrameController (Animation)
 
@@ -10363,7 +10368,8 @@ extern Lisp_Object QCdirection, QCduration;
 {
   id action = nil;
 
-  if ([event isEqualToString:@"opacity"]
+  if ([event isEqualToString:@"bounds"]
+      || [event isEqualToString:@"opacity"]
       || [event isEqualToString:@"position"])
     {
       CABasicAnimation *animation =
@@ -10381,6 +10387,8 @@ extern Lisp_Object QCdirection, QCduration;
 {
   CALayer *layer = [anim valueForKey:@"layerToBeRemoved"];
 
+  [CA_TRANSACTION setValue:((id) kCFBooleanTrue)
+		    forKey:kCATransactionDisableActions];
   [layer removeFromSuperlayer];
 }
 #endif
@@ -10394,9 +10402,15 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
   EmacsFrameController *frameController;
   CGRect rect;
   CALayer *layer, *contentLayer;
-  Lisp_Object direction, duration;
+  Lisp_Object direction, duration, type;
   CGFloat h_ratio, v_ratio;
-  int fade_p;
+  enum {
+    ANIM_TYPE_MOVE_OUT,
+    ANIM_TYPE_MOVE_IN,
+    ANIM_TYPE_FADE_OUT,
+    ANIM_TYPE_FADE_IN,
+    ANIM_TYPE_NONE
+  } anim_type = ANIM_TYPE_MOVE_OUT;
 
   if (FRAMEP (frame_or_window))
     {
@@ -10416,11 +10430,10 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
     }
   frameController = FRAME_CONTROLLER (f);
   layer = [frameController layerForRect:(NSRectFromCGRect (rect))];
-  [frameController addLayer:layer];
+  contentLayer = [[layer sublayers] objectAtIndex:0];
 
-  h_ratio = v_ratio = 0;
-  fade_p = 0;
   direction = Fplist_get (properties, QCdirection);
+  h_ratio = v_ratio = 0;
   if (EQ (direction, Qleft))
     h_ratio = -1;
   else if (EQ (direction, Qright))
@@ -10430,30 +10443,79 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
   else if (EQ (direction, Qup))
     v_ratio = 1;
   else
-    fade_p = 1;
+    anim_type = ANIM_TYPE_FADE_OUT;
+
+  type = Fplist_get (properties, QCtype);
+  if (EQ (type, Qnone))
+    anim_type = ANIM_TYPE_NONE;
+  else if (EQ (type, Qfade_in))
+    anim_type = ANIM_TYPE_FADE_IN;
+  else if (EQ (type, Qmove_in))
+    anim_type = ANIM_TYPE_MOVE_IN;
+
+  if (anim_type == ANIM_TYPE_FADE_IN)
+    contentLayer.opacity = 0;
+  else if (anim_type == ANIM_TYPE_MOVE_IN)
+    {
+      CGPoint position = contentLayer.position;
+
+      position.x -= CGRectGetWidth (layer.bounds) * h_ratio;
+      position.y -= CGRectGetHeight (layer.bounds) * v_ratio;
+      contentLayer.position = position;
+    }
+
+  if (anim_type == ANIM_TYPE_MOVE_OUT || anim_type == ANIM_TYPE_MOVE_IN)
+    contentLayer.shadowOpacity = 1;
+
+  [frameController addLayer:layer];
 
   duration = Fplist_get (properties, QCduration);
   if (NUMBERP (duration))
     [CA_TRANSACTION setValue:[NSNumber numberWithDouble:(XFLOATINT (duration))]
 		      forKey:kCATransactionAnimationDuration];
 
-  contentLayer = [[layer sublayers] objectAtIndex:0];
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
   [CATransaction setCompletionBlock:^{
+      [CATransaction setDisableActions:YES];
       [layer removeFromSuperlayer];
     }];
 #else
   contentLayer.delegate = frameController;
 #endif
-  if (fade_p)
-    contentLayer.opacity = 0;
-  else
+  switch (anim_type)
     {
-      CGPoint point = contentLayer.position;
+    case ANIM_TYPE_NONE:
+      {
+	CGRect bounds = contentLayer.bounds;
 
-      point.x += CGRectGetWidth (layer.bounds) * h_ratio;
-      point.y += CGRectGetHeight (layer.bounds) * v_ratio;
-      contentLayer.position = point;
+	/* Dummy change of property that does not affect the
+	   appearance.  */
+	bounds.origin.x += 1;
+	contentLayer.bounds = bounds;
+      }
+      break;
+
+    case ANIM_TYPE_FADE_OUT:
+      contentLayer.opacity = 0;
+      break;
+
+    case ANIM_TYPE_FADE_IN:
+      contentLayer.opacity = 1;
+      break;
+
+    case ANIM_TYPE_MOVE_OUT:
+    case ANIM_TYPE_MOVE_IN:
+      {
+	CGPoint position = contentLayer.position;
+
+	position.x += CGRectGetWidth (layer.bounds) * h_ratio;
+	position.y += CGRectGetHeight (layer.bounds) * v_ratio;
+	contentLayer.position = position;
+      }
+      break;
+
+    default:
+      abort ();
     }
 }
 
@@ -11800,24 +11862,86 @@ mac_font_shape_1 (NSFont *font, NSString *string,
 	  used--;
     }
 
-  if (used <= glyph_len)
+  if (0 < used && used <= glyph_len)
     {
-      NSUInteger glyphIndex = 0, prevGlyphIndex = 0;
-      CGFloat totalAdvance = 0;
-      unsigned char bidiLevel = 0;
+      NSUInteger glyphIndex, prevGlyphIndex;
+      unsigned char bidiLevel;
+      NSUInteger *permutation;
       NSRange compRange, range;
+      CGFloat totalAdvance;
 
+      glyphIndex = 0;
       while ([layoutManager notShownAttributeForGlyphAtIndex:glyphIndex])
 	glyphIndex++;
 
       /* For now we assume the direction is not changed within the
 	 string.  */
-      if (used > 0)
-	[layoutManager getGlyphsInRange:(NSMakeRange (glyphIndex, 1))
-				 glyphs:NULL characterIndexes:NULL
-		      glyphInscriptions:NULL elasticBits:NULL
-			     bidiLevels:&bidiLevel];
+      [layoutManager getGlyphsInRange:(NSMakeRange (glyphIndex, 1))
+			       glyphs:NULL characterIndexes:NULL
+		    glyphInscriptions:NULL elasticBits:NULL
+			   bidiLevels:&bidiLevel];
       if (bidiLevel & 1)
+	permutation = xmalloc (sizeof (NSUInteger) * used);
+      else
+	permutation = NULL;
+
+#define RIGHT_TO_LEFT_P permutation
+
+      /* Fill the `comp_range' member of struct mac_glyph_layout, and
+	 setup a permutation for right-to-left text.  */
+      compRange = NSMakeRange (0, 0);
+      for (range = NSMakeRange (0, 0); NSMaxRange (range) < used;
+	   range.length++)
+	{
+	  struct mac_glyph_layout *gl = glyph_layouts + NSMaxRange (range);
+	  NSUInteger characterIndex =
+	    [layoutManager characterIndexForGlyphAtIndex:glyphIndex];
+
+	  gl->string_index = characterIndex;
+
+	  if (characterIndex >= NSMaxRange (compRange))
+	    {
+	      compRange.location = NSMaxRange (compRange);
+	      do
+		{
+		  NSRange characterRange =
+		    [string
+		      rangeOfComposedCharacterSequenceAtIndex:characterIndex];
+
+		  compRange.length =
+		    NSMaxRange (characterRange) - compRange.location;
+		  [layoutManager glyphRangeForCharacterRange:compRange
+					actualCharacterRange:&characterRange];
+		  characterIndex = NSMaxRange (characterRange) - 1;
+		}
+	      while (characterIndex >= NSMaxRange (compRange));
+
+	      if (RIGHT_TO_LEFT_P)
+		for (i = 0; i < range.length; i++)
+		  permutation[range.location + i] = NSMaxRange (range) - i - 1;
+
+	      range = NSMakeRange (NSMaxRange (range), 0);
+	    }
+
+	  gl->comp_range.location = compRange.location;
+	  gl->comp_range.length = compRange.length;
+
+	  while (++glyphIndex < numberOfGlyphs)
+	    if (![layoutManager notShownAttributeForGlyphAtIndex:glyphIndex])
+	      break;
+	}
+      if (RIGHT_TO_LEFT_P)
+	for (i = 0; i < range.length; i++)
+	  permutation[range.location + i] = NSMaxRange (range) - i - 1;
+
+      /* Then fill the remaining members.  */
+      glyphIndex = prevGlyphIndex = 0;
+      while ([layoutManager notShownAttributeForGlyphAtIndex:glyphIndex])
+	glyphIndex++;
+
+      if (!RIGHT_TO_LEFT_P)
+	totalAdvance = 0;
+      else
 	{
 	  NSUInteger nrects;
 	  NSRect *glyphRects =
@@ -11831,16 +11955,29 @@ mac_font_shape_1 (NSFont *font, NSString *string,
 
       for (i = 0; i < used; i++)
 	{
-	  struct mac_glyph_layout *gl = glyph_layouts + i;
+	  struct mac_glyph_layout *gl;
 	  NSPoint location;
 	  NSUInteger nextGlyphIndex;
 	  NSRange glyphRange;
 	  NSRect *glyphRects;
 	  NSUInteger nrects;
 
+	  if (!RIGHT_TO_LEFT_P)
+	    gl = glyph_layouts + i;
+	  else
+	    {
+	      NSUInteger dest = permutation[i];
+
+	      gl = glyph_layouts + dest;
+	      if (i < dest)
+		{
+		  CFIndex tmp = gl->string_index;
+
+		  gl->string_index = glyph_layouts[i].string_index;
+		  glyph_layouts[i].string_index = tmp;
+		}
+	    }
 	  gl->glyph_id = [layoutManager glyphAtIndex:glyphIndex];
-	  gl->string_index = [layoutManager
-			       characterIndexForGlyphAtIndex:glyphIndex];
 
 	  location = [layoutManager locationForGlyphAtIndex:glyphIndex];
 	  gl->baseline_delta = spaceLocation.y - location.y;
@@ -11851,7 +11988,7 @@ mac_font_shape_1 (NSFont *font, NSString *string,
 		   notShownAttributeForGlyphAtIndex:nextGlyphIndex])
 	      break;
 
-	  if ((bidiLevel & 1) == 0)
+	  if (!RIGHT_TO_LEFT_P)
 	    {
 	      CGFloat maxX;
 
@@ -11895,50 +12032,10 @@ mac_font_shape_1 (NSFont *font, NSString *string,
 	  glyphIndex = nextGlyphIndex;
 	}
 
-      compRange = NSMakeRange (0, 0);
-      for (range = NSMakeRange (0, 0); NSMaxRange (range) < used;
-	   range.length++)
-	{
-	  struct mac_glyph_layout *gl = glyph_layouts + NSMaxRange (range);
-	  NSUInteger characterIndex = gl->string_index;
+      if (RIGHT_TO_LEFT_P)
+	xfree (permutation);
 
-	  if (characterIndex >= NSMaxRange (compRange))
-	    {
-	      if (bidiLevel & 1)
-		{
-		  for (i = 0; i < range.length / 2; i++)
-		    {
-		      struct mac_glyph_layout glbuf;
-
-		      glbuf = glyph_layouts[range.location + i];
-		      glyph_layouts[range.location + i] =
-			glyph_layouts[NSMaxRange (range) - i - 1];
-		      glyph_layouts[NSMaxRange (range) - i - 1] = glbuf;
-		    }
-		  range = NSMakeRange (NSMaxRange (range), 0);
-		}
-	      compRange.location = NSMaxRange (compRange);
-	      compRange.length =
-		(NSMaxRange
-		 ([string
-		    rangeOfComposedCharacterSequenceAtIndex:characterIndex])
-		 - compRange.location);
-	    }
-	  gl->comp_range.location = compRange.location;
-	  gl->comp_range.length = compRange.length;
-	}
-      if (bidiLevel & 1)
-	{
-	  for (i = 0; i < range.length / 2; i++)
-	    {
-	      struct mac_glyph_layout glbuf;
-
-	      glbuf = glyph_layouts[range.location + i];
-	      glyph_layouts[range.location + i] =
-		glyph_layouts[NSMaxRange (range) - i - 1];
-	      glyph_layouts[NSMaxRange (range) - i - 1] = glbuf;
-	    }
-	}
+#undef RIGHT_TO_LEFT_P
 
       result = used;
     }

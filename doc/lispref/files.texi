@@ -72,8 +72,8 @@ back into the file.
 
   In spite of the distinction between files and buffers, people often
 refer to a file when they mean a buffer and vice-versa.  Indeed, we say,
-``I am editing a file,'' rather than, ``I am editing a buffer that I
-will soon save as a file of the same name.''  Humans do not usually need
+``I am editing a file'', rather than, ``I am editing a buffer that I
+will soon save as a file of the same name''.  Humans do not usually need
 to make the distinction explicit.  When dealing with a computer program,
 however, it is good to keep the distinction in mind.
 
@@ -490,11 +490,13 @@ in particular buffers.
 @defopt require-final-newline
 This variable determines whether files may be written out that do
 @emph{not} end with a newline.  If the value of the variable is
-@code{t}, then @code{save-buffer} silently adds a newline at the end of
-the file whenever the buffer being saved does not already end in one.
-If the value of the variable is non-@code{nil}, but not @code{t}, then
-@code{save-buffer} asks the user whether to add a newline each time the
-case arises.
+@code{t}, then @code{save-buffer} silently adds a newline at the end
+of the buffer whenever it does not already end in one.  If the value
+is @code{visit}, Emacs adds a missing newline just after it visits the
+file.  If the value is @code{visit-save}, Emacs adds a missing newline
+both on visiting and on saving.  For any other non-@code{nil} value,
+@code{save-buffer} asks the user whether to add a newline each time
+the case arises.
 
 If the value of the variable is @code{nil}, then @code{save-buffer}
 doesn't add newlines at all.  @code{nil} is the default value, but a few
@@ -687,7 +689,7 @@ The file lock is really a file, a symbolic link with a special name,
 stored in the same directory as the file you are editing.
 
   When you access files using NFS, there may be a small probability that
-you and another user will both lock the same file ``simultaneously.''
+you and another user will both lock the same file ``simultaneously''.
 If this happens, it is possible for the two users to make changes
 simultaneously, but Emacs will still warn the user who saves second.
 Also, the detection of modification of a buffer visiting a file changed
@@ -1805,7 +1807,7 @@ return value, but backup version numbers are kept.
 @end defun
 
 @defun file-name-extension filename &optional period
-This function returns @var{filename}'s final ``extension,'' if any,
+This function returns @var{filename}'s final ``extension'', if any,
 after applying @code{file-name-sans-versions} to remove any
 version/backup part.  The extension, in a file name, is the part that
 follows the last @samp{.} in the last name component (minus any
@@ -2154,7 +2156,7 @@ double all @samp{$} characters to prevent subsequent incorrect
 results.
 
 @c Wordy to avoid overfull hbox.  --rjc 15mar92
-Here we assume that the environment variable @code{HOME}, which holds
+Here we assume that the environment variable @env{HOME}, which holds
 the user's home directory name, has value @samp{/xcssun/users/rms}.
 
 @example
@@ -2239,9 +2241,9 @@ non-@code{nil}.  To use it, you should expand the prefix against
 the proper directory before calling @code{make-temp-file}.
 
 @defopt temporary-file-directory
-@cindex @code{TMPDIR} environment variable
-@cindex @code{TMP} environment variable
-@cindex @code{TEMP} environment variable
+@cindex @env{TMPDIR} environment variable
+@cindex @env{TMP} environment variable
+@cindex @env{TEMP} environment variable
 This variable specifies the directory name for creating temporary files.
 Its value should be a directory name (@pxref{Directory Names}), but it
 is good for Lisp programs to cope if the value is a directory's file
@@ -2249,7 +2251,7 @@ name instead.  Using the value as the second argument to
 @code{expand-file-name} is a good way to achieve that.
 
 The default value is determined in a reasonable way for your operating
-system; it is based on the @code{TMPDIR}, @code{TMP} and @code{TEMP}
+system; it is based on the @env{TMPDIR}, @env{TMP} and @env{TEMP}
 environment variables, with a fall-back to a system-dependent name if
 none of these variables is defined.
 
@@ -2797,7 +2799,7 @@ unlocking the buffer if it is locked.
 possibly others to be added in the future.  It need not implement all
 these operations itself---when it has nothing special to do for a
 certain operation, it can reinvoke the primitive, to handle the
-operation ``in the usual way.''  It should always reinvoke the primitive
+operation ``in the usual way''.  It should always reinvoke the primitive
 for an operation it does not recognize.  Here's one way to do this:
 
 @smallexample

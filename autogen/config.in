@@ -1116,9 +1116,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 /* Define if use the Image I/O framework for reading images. */
 #undef USE_MAC_IMAGE_IO
 
-/* Define if use the Quartz Core framework. */
-#undef USE_MAC_QUARTZ_CORE
-
 /* Define to use mmap to allocate buffer text. */
 #undef USE_MMAP_FOR_BUFFERS
 

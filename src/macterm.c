@@ -1340,6 +1340,7 @@ x_set_cursor_gc (struct glyph_string *s)
 	  xgcv.foreground = s->face->background;
 	}
 
+      IF_DEBUG (x_check_font (s->f, s->font));
       mask = GCForeground | GCBackground;
 
       if (FRAME_MAC_DISPLAY_INFO (s->f)->scratch_cursor_gc)

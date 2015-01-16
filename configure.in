@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.0.95)
+AC_INIT(emacs, 24.0.96)
 AC_CONFIG_HEADER(src/config.h:src/config.in)
 AC_CONFIG_SRCDIR(src/lisp.h)
 AC_CONFIG_AUX_DIR(build-aux)
@@ -3527,7 +3527,6 @@ fail;
 ]])], emacs_cv_mac_os_x_max_allowed_10_5=no, emacs_cv_mac_os_x_max_allowed_10_5=yes)])
      if test $emacs_cv_mac_os_x_max_allowed_10_5 = yes; then
        AC_MSG_RESULT(10.5 or later)
-       AC_DEFINE(USE_MAC_QUARTZ_CORE, 1, [Define if use the Quartz Core framework.])
        libs_quartz_core="-framework QuartzCore"
      else
        AC_MSG_RESULT(before 10.5)
@@ -3566,7 +3565,7 @@ fail;
   ## had not yet been defined and was expanded to null.  Hence LD_SWITCH_SYSTEM
   ## had different values in configure (in ac_link) and src/Makefile.in.
   ## It seems clearer therefore to put this piece in LD_SWITCH_SYSTEM_TEMACS.
-  gnu-linux) LD_SWITCH_SYSTEM_TEMACS="\$(LD_SWITCH_X_SITE_AUX)" ;;
+  gnu*) LD_SWITCH_SYSTEM_TEMACS="\$(LD_SWITCH_X_SITE_AUX_RPATH)" ;;
 
   *) LD_SWITCH_SYSTEM_TEMACS= ;;
 esac

@@ -1,5 +1,18 @@
+* emacs-24.0.96-mac-2.92 [experimental/hackers-only] (2012-04-28)
+Based on Emacs 24.0.96
+
+** Fixed bugs
+
+*** Arabic Text U+0644 U+0627 is displayed wrong.
+Reported by Joost Kremers.
+
+*** "Options" (in the menu bar) -> "Set Default Font..." just after
+launch fails to change the font on Mac OS X 10.5 and later.
+
+
 * emacs-24.0.95-mac-2.91 [experimental/hackers-only] (2012-04-02)
 Based on Emacs 24.0.95
+http://lists.gnu.org/archive/html/emacs-devel/2012-04/msg00018.html
 
 ** Fixed bugs
 

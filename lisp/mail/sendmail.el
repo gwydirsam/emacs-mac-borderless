@@ -304,7 +304,7 @@ The default value matches citations like `foo-bar>' plus whitespace."
     (define-key map "\C-c\C-w" 'mail-signature)
     (define-key map "\C-c\C-c" 'mail-send-and-exit)
     (define-key map "\C-c\C-s" 'mail-send)
-    (define-key map "\C-c\C-i" 'mail-attach-file)
+    (define-key map "\C-c\C-i" 'mail-insert-file)
     ;; FIXME add this? "b" = bury buffer.  It's in the menu-bar.
 ;;;    (define-key map "\C-c\C-b" 'mail-dont-send)
 
@@ -863,8 +863,11 @@ Prefix arg means don't delete this window."
     ;; even if this message was not started by an Rmail command.
     (unless return-action
       (dolist (buffer (buffer-list))
-	(if (eq (buffer-local-value 'major-mode buffer) 'rmail-mode)
-	    (setq return-action `(rmail-mail-return ,newbuf)))))
+	(if (and (eq (buffer-local-value 'major-mode buffer) 'rmail-mode)
+		 (null return-action)
+		 ;; Don't match message-viewer buffer.
+		 (not (string-match "\\` " (buffer-name buffer))))
+	    (setq return-action `(rmail-mail-return ,buffer)))))
     (if (and (null arg) return-action)
 	(apply (car return-action) (cdr return-action))
       (switch-to-buffer newbuf))))

@@ -247,7 +247,7 @@ begins at the top of the character cell.
 
 @cindex frames on MS-DOS
   The MS-DOS terminal can only display a single frame at a time.  The
-Emacs frame facilities work on MS-DOS much as they do on text-only
+Emacs frame facilities work on MS-DOS much as they do on text
 terminals
 @iftex
 (@pxref{Frames,,,emacs, the Emacs Manual}).
@@ -548,7 +548,7 @@ when invoked with the @samp{-nw} option.
 @cindex inferior processes under MS-DOS
 @findex compile @r{(MS-DOS)}
 @findex grep @r{(MS-DOS)}
-  Because MS-DOS is a single-process ``operating system,''
+  Because MS-DOS is a single-process ``operating system'',
 asynchronous subprocesses are not available.  In particular, Shell
 mode and its variants do not work.  Most Emacs features that use
 asynchronous subprocesses also don't work on MS-DOS, including

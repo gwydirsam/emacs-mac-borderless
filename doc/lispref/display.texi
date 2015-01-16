@@ -156,7 +156,7 @@ boundary.  @xref{Filling}.
 indicate truncated and continued lines (@pxref{Fringes}).  On a text
 terminal, a @samp{$} in the rightmost column of the window indicates
 truncation; a @samp{\} on the rightmost column indicates a line that
-``wraps.''  (The display table can specify alternate characters to use
+``wraps''.  (The display table can specify alternate characters to use
 for this; @pxref{Display Tables}).
 
 @defopt truncate-lines
@@ -268,7 +268,7 @@ objects for its format specifications, like in the @code{format}
 function (@pxref{Formatting Strings}).  The resulting formatted string
 is displayed in the echo area; if it contains @code{face} text
 properties, it is displayed with the specified faces (@pxref{Faces}).
-The string is also added to the @samp{*Messages*} buffer, but without
+The string is also added to the @file{*Messages*} buffer, but without
 text properties (@pxref{Logging Messages}).
 
 In batch mode, the message is printed to the standard error stream,
@@ -341,7 +341,7 @@ buffer is used, the window used to display it.
 
 If @var{message} is a string, then the optional argument
 @var{buffer-name} is the name of the buffer used to display it when a
-pop-up buffer is used, defaulting to @samp{*Message*}.  In the case
+pop-up buffer is used, defaulting to @file{*Message*}.  In the case
 where @var{message} is a string and displayed in the echo area, it is
 not specified whether the contents are inserted into the buffer anyway.
 
@@ -452,7 +452,7 @@ prints the message of @var{reporter} followed by word ``done'' in the
 echo area.
 
 You should always call this function and not hope for
-@code{progress-reporter-update} to print ``100%.''  Firstly, it may
+@code{progress-reporter-update} to print ``100%''.  Firstly, it may
 never print it, there are many good reasons for this not to happen.
 Secondly, ``done'' is more explicit.
 @end defun
@@ -474,16 +474,16 @@ this macro this way:
 @end defmac
 
 @node Logging Messages
-@subsection Logging Messages in @samp{*Messages*}
+@subsection Logging Messages in @file{*Messages*}
 @cindex logging echo-area messages
 
   Almost all the messages displayed in the echo area are also recorded
-in the @samp{*Messages*} buffer so that the user can refer back to
+in the @file{*Messages*} buffer so that the user can refer back to
 them.  This includes all the messages that are output with
 @code{message}.
 
 @defopt message-log-max
-This variable specifies how many lines to keep in the @samp{*Messages*}
+This variable specifies how many lines to keep in the @file{*Messages*}
 buffer.  The value @code{t} means there is no limit on how many lines to
 keep.  The value @code{nil} disables message logging entirely.  Here's
 how to display a message and prevent it from being logged:
@@ -494,7 +494,7 @@ how to display a message and prevent it from being logged:
 @end example
 @end defopt
 
-  To make @samp{*Messages*} more convenient for the user, the logging
+  To make @file{*Messages*} more convenient for the user, the logging
 facility combines successive identical messages.  It also combines
 successive related messages for the sake of two cases: question
 followed by answer, and a series of progress messages.
@@ -572,6 +572,7 @@ possible problem, but continue running.
 * Warning Basics::      Warnings concepts and functions to report them.
 * Warning Variables::   Variables programs bind to customize their warnings.
 * Warning Options::     Variables users set to control display of warnings.
+* Delayed Warnings::    Deferring a warning until the end of a command.
 @end menu
 
 @node Warning Basics
@@ -623,7 +624,7 @@ and @var{type} as the warning type.  @var{level} should be the
 severity level, with @code{:warning} being the default.
 
 @var{buffer-name}, if non-@code{nil}, specifies the name of the buffer
-for logging the warning.  By default, it is @samp{*Warnings*}.
+for logging the warning.  By default, it is @file{*Warnings*}.
 @end defun
 
 @defun lwarn type level message &rest args
@@ -749,6 +750,53 @@ warnings buffer.  Each element of the list should be a list of
 symbols.  If it matches the first few elements in a warning type, then
 that warning is not logged.
 @end defopt
+
+@node Delayed Warnings
+@subsection Delayed Warnings
+
+Sometimes, you may wish to avoid showing a warning while a command is
+running, and only show it only after the end of the command.  You can
+use the variable @code{delayed-warnings-list} for this.
+
+@defvar delayed-warnings-list
+The value of this variable is a list of warnings to be displayed after
+the current command has finished.  Each element must be a list
+
+@smallexample
+(@var{type} @var{message} [@var{level} [@var{buffer-name}]])
+@end smallexample
+
+@noindent
+with the same form, and the same meanings, as the argument list of
+@code{display-warning} (@pxref{Warning Basics}).  Immediately after
+running @code{post-command-hook} (@pxref{Command Overview}), the Emacs
+command loop displays all the warnings specified by this variable,
+then resets it to @code{nil}.
+@end defvar
+
+  Programs which need to further customize the delayed warnings
+mechanism can change the variable @code{delayed-warnings-hook}:
+
+@defvar delayed-warnings-hook
+This is a normal hook which is run by the Emacs command loop, after
+@code{post-command-hook}, in order to to process and display delayed
+warnings.
+
+Its default value is a list of two functions:
+
+@smallexample
+(collapse-delayed-warnings display-delayed-warnings)
+@end smallexample
+
+@findex collapse-delayed-warnings
+@findex display-delayed-warnings
+@noindent
+The function @code{collapse-delayed-warnings} iterates through
+@code{delayed-warnings-list}, removing repeated entries.  The function
+@code{display-delayed-warnings} calls @code{display-warning} on each
+of the entries in @code{delayed-warnings-list}, in turn, and then sets
+@code{delayed-warnings-list} to @code{nil}.
+@end defvar
 
 @node Invisible Text
 @section Invisible Text
@@ -1261,7 +1309,7 @@ The return value is @var{overlay}.
 This is the only valid way to change the endpoints of an overlay.  Do
 not try modifying the markers in the overlay by hand, as that fails to
 update other vital data structures and can cause some overlays to be
-``lost.''
+``lost''.
 @end defun
 
 @defun remove-overlays &optional start end name value
@@ -1338,7 +1386,7 @@ foo
 @end example
 
   Emacs stores the overlays of each buffer in two lists, divided
-around an arbitrary ``center position.''  One list extends backwards
+around an arbitrary ``center position''.  One list extends backwards
 through the buffer from that center position, and the other extends
 forwards from that center position.  The center position can be anywhere
 in the buffer.
@@ -1837,7 +1885,7 @@ in all frames.  But you can also assign a face name a special set of
 attributes in one frame (@pxref{Attribute Functions}).
 
 @menu
-* Defining Faces::      How to define a face with @code{defface}.
+* Defining Faces::      How to define a face.
 * Face Attributes::     What is in a face?
 * Attribute Functions::  Functions to examine and set face attributes.
 * Displaying Faces::     How Emacs combines the faces specified for a character.
@@ -1856,22 +1904,17 @@ attributes in one frame (@pxref{Attribute Functions}).
 @node Defining Faces
 @subsection Defining Faces
 
-  The way to define a new face is with @code{defface}.  This creates a
-kind of customization item which the user can customize using the
-Customization buffer (@pxref{Customization}).
-
-  People are sometimes tempted to create variables whose values specify
-which faces to use (for example, Font-Lock does this).  In the vast
-majority of cases, this is not necessary, and simply using faces
-directly is preferable.
+  The @code{defface} macro defines a face and specifies its default
+appearance.  The user can subsequently customize the face using the
+Customize interface (@pxref{Customization}).
 
 @defmac defface face spec doc [keyword value]@dots{}
-This declares @var{face} as a customizable face whose default
+This macro declares @var{face} as a customizable face whose default
 attributes are given by @var{spec}.  You should not quote the symbol
 @var{face}, and it should not end in @samp{-face} (that would be
-redundant).  The argument @var{doc} specifies the face documentation.
-The keywords you can use in @code{defface} are the same as in
-@code{defgroup} and @code{defcustom} (@pxref{Common Keywords}).
+redundant).  The argument @var{doc} is a documentation string for the
+face.  The additional @var{keyword} arguments have the same meanings
+as in @code{defgroup} and @code{defcustom} (@pxref{Common Keywords}).
 
 When @code{defface} executes, it defines the face according to
 @var{spec}, then uses any customizations that were read from the
@@ -1882,12 +1925,14 @@ Lisp mode (@code{eval-defun}), a special feature of @code{eval-defun}
 overrides any customizations of the face.  This way, the face reflects
 exactly what the @code{defface} says.
 
-The purpose of @var{spec} is to specify how the face should appear on
-different kinds of terminals.  It should be an alist whose elements
-have the form @code{(@var{display} @var{atts})}.  @var{display}
-specifies a class of terminals (see below), while @var{atts} is a
-property list of face attributes and their values, specifying the
-appearance of the face on matching terminals
+@cindex face specification
+The @var{spec} argument is a @dfn{face specification}, which states
+how the face should appear on different kinds of terminals.  It should
+be an alist whose elements each have the form @code{(@var{display}
+@var{atts})}.  @var{display} specifies a class of terminals (see
+below), while @var{atts} is a property list of face attributes and
+their values, specifying the appearance of the face on matching
+terminals
 @iftex
 (see the next section for details about face attributes).
 @end iftex
@@ -1974,14 +2019,22 @@ frame must match one of the @var{value}s specified for it in
   :group 'basic-faces)
 @end example
 
-  Internally, @code{defface} uses the symbol property
-@code{face-defface-spec} to record the specified face attributes.  The
-attributes saved by the user with the customization buffer are
-recorded in the symbol property @code{saved-face}; the attributes
-customized by the user for the current session, but not saved, are
-recorded in the symbol property @code{customized-face}.  The
-documentation string is recorded in the symbol property
-@code{face-documentation}.
+  Internally, Emacs stores the face's default specification in its
+@code{face-defface-spec} symbol property (@pxref{Property Lists}).
+The @code{saved-face} property stores the face specification saved by
+the user, using the customization buffer; the @code{customized-face}
+property stores the face specification customized for the current
+session, but not saved; and the @code{theme-face} property stores an
+alist associating the active customization settings and Custom themes
+with their specifications for that face.  The face's documentation
+string is stored in the @code{face-documentation} property.  But
+normally you should not try to set any of these properties directly.
+@xref{Applying Customizations}, for the @code{custom-set-faces}
+function, which is used to apply customized face settings.
+
+  People are sometimes tempted to create variables whose values
+specify a face to use.  In the vast majority of cases, this is not
+necessary; it is preferable to simply use faces directly.
 
 @defopt frame-background-mode
 This option, if non-@code{nil}, specifies the background type to use for
@@ -2704,7 +2757,7 @@ For text matching a search command.
 @itemx warning
 @itemx success
 For text concerning errors, warnings, or successes.  For example,
-these are used for messages in @samp{*Compilation*} buffers.
+these are used for messages in @file{*Compilation*} buffers.
 @end table
 
 @node Font Selection
@@ -4307,7 +4360,7 @@ $$\pmatrix{ 2 & -1 &  0 \cr
 @end ifnottex
 
 @item disabled
-Specifies transforming the image so that it looks ``disabled.''
+Specifies transforming the image so that it looks ``disabled''.
 @end table
 
 @item :mask @var{mask}
@@ -5479,7 +5532,7 @@ Any @var{args} are passed to @var{map-function}.
 @subsection Abstract Display Example
 
   Here is a simple example using functions of the ewoc package to
-implement a ``color components display,'' an area in a buffer that
+implement a ``color components display'', an area in a buffer that
 represents a vector of three integers (itself representing a 24-bit RGB
 value) in various ways.
 
@@ -5790,7 +5843,7 @@ display the character @var{c} as those glyphs; @pxref{Glyphs}).
 
   @strong{Warning:} if you use the display table to change the display
 of newline characters, the whole buffer will be displayed as one long
-``line.''
+``line''.
 
   The display table also has six ``extra slots'' which serve special
 purposes.  Here is a table of their meanings; @code{nil} in any slot
@@ -6101,7 +6154,7 @@ capability (@samp{vb}).
 
 @defvar ring-bell-function
 If this is non-@code{nil}, it specifies how Emacs should ``ring the
-bell.''  Its value should be a function of no arguments.  If this is
+bell''.  Its value should be a function of no arguments.  If this is
 non-@code{nil}, it takes precedence over the @code{visible-bell}
 variable.
 @end defvar
@@ -6110,7 +6163,7 @@ variable.
 @section Window Systems
 
   Emacs works with several window systems, most notably the X Window
-System.  Both Emacs and X use the term ``window,'' but use it
+System.  Both Emacs and X use the term ``window'', but use it
 differently.  An Emacs frame is a single window as far as X is
 concerned; the individual Emacs windows are not known to X at all.
 

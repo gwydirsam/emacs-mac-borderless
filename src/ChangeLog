@@ -1,3 +1,94 @@
+2012-04-24  Chong Yidong  <cyd@gnu.org>
+
+	* xselect.c (x_convert_selection): Initialize a pointer (Bug#11315).
+
+2012-04-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (pos_visible_p): If the window start position is beyond
+	ZV, start the display from buffer beginning.  Prevents assertion
+	violation in init_iterator when the minibuffer window is scrolled
+	via the scroll bar.
+
+	* window.c (window_scroll_pixel_based): Likewise.
+
+2012-04-23  Chong Yidong  <cyd@gnu.org>
+
+	* keymap.c (where_is_internal): Doc fix (Bug#10872).
+
+2012-04-20  Glenn Morris  <rgm@gnu.org>
+
+	* fileio.c (Fcopy_file, Fset_file_selinux_context):
+	Ignore ENOTSUP failures from setfilecon functions.  (Bug#11245)
+
+2012-04-20  Eli Zaretskii  <eliz@gnu.org>
+
+	* dispnew.c (swap_glyph_pointers, copy_row_except_pointers): Don't
+	overrun array limits of glyph row's used[] array.  (Bug#11288)
+
+2012-04-20  Chong Yidong  <cyd@gnu.org>
+
+	* process.c (wait_reading_process_output): If EIO occurs on a pty,
+	set the status to "failed" and ensure that sentinel is run.
+
+2012-04-18  Glenn Morris  <rgm@gnu.org>
+
+	* process.c (Fset_process_inherit_coding_system_flag)
+	(Fset_process_query_on_exit_flag): Doc fix (mention return value).
+	(Fmake_network_process, Fmake_serial_process): Doc fix.
+
+2012-04-17  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (string_buffer_position_lim): Limit starting position to
+	BEGV.
+	(set_cursor_from_row): If called for a mode-line or header-line
+	row, return zero immediately.
+	(try_cursor_movement): If inside continuation line, don't back up
+	farther than the first row after the header line, if any.  Don't
+	consider the header-line row as "partially visible", even if
+	MATRIX_ROW_PARTIALLY_VISIBLE_P returns non-zero.  (Bug#11261)
+
+2012-04-13  Atsuo Ohki  <ohki@gssm.otsuka.tsukuba.ac.jp>  (tiny change)
+
+	* lread.c (lisp_file_lexically_bound_p): Fix hang at ";-*-\n" (bug#11238).
+
+2012-04-10  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* process.c (make_process):
+	* process.h: Add integer `gnutls_handshakes_tried' member to
+	process struct.
+
+	* gnutls.h: Add `GNUTLS_EMACS_HANDSHAKES_LIMIT' upper limit.
+	Add convenience `GNUTLS_LOG2i' macro.
+
+	* gnutls.c (gnutls_log_function2i): Convenience log function.
+	(emacs_gnutls_read): Use new log functions,
+	`gnutls_handshakes_tried' process member, and
+	`GNUTLS_EMACS_HANDSHAKES_LIMIT' to limit the number of handshake
+	attempts per process (connection).
+
+2012-04-09  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (find_last_unchanged_at_beg_row): Don't consider a row
+	"unchanged" if its end.pos is beyond ZV.  (Bug#11199)
+
+2012-04-09  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (constrainFrameRect): Always constrain when there is only
+	one screen (Bug#10962).
+
+2012-04-06  Eli Zaretskii  <eliz@gnu.org>
+
+	* buffer.h (FETCH_CHAR, FETCH_MULTIBYTE_CHAR):
+	* character.h (STRING_CHAR, STRING_CHAR_AND_LENGTH): Add comments
+	about subtle differences between FETCH_CHAR* and STRING_CHAR*
+	macros related to unification of CJK characters.  For the details,
+	see the discussion following the message here:
+	http://debbugs.gnu.org/cgi/bugreport.cgi?bug=11073#14.
+
+2012-04-04  Chong Yidong  <cyd@gnu.org>
+
+	* keyboard.c (Vdelayed_warnings_list): Doc fix.
+
 2012-04-01  Eli Zaretskii  <eliz@gnu.org>
 
 	* w32menu.c (simple_dialog_show, add_menu_item): Use SAFE_ALLOCA

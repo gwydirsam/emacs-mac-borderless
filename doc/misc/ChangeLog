@@ -1,3 +1,82 @@
+2012-04-26  Ippei Furuhashi  <top.tuna+orgmode@gmail.com>  (tiny change)
+
+	* org.texi (Agenda commands): Fix two typos: give corresponding
+	function names, according to `org-agenda-view-mode-dispatch'.
+
+2012-04-21  Glenn Morris  <rgm@gnu.org>
+
+	* faq.texi (Major packages and programs): Remove section.
+	There is no point listing 6 packages (cf etc/MORE.STUFF).
+	(Finding Emacs and related packages): Move "Spell-checkers" here.
+
+2012-04-20  Glenn Morris  <rgm@gnu.org>
+
+	* faq.texi (New in Emacs 24): New section.
+	(Packages that do not come with Emacs): Mention M-x list-packages.
+
+2012-04-13  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in: Replace non-portable use of $< in emacs-gnutls rules.
+
+2012-04-12  Eli Zaretskii  <eliz@gnu.org>
+
+	* makefile.w32-in (INFO_TARGETS, DVI_TARGETS, clean): Add emacs-gnutls.
+	($(infodir)/emacs-gnutls, emacs-gnutls.dvi): New targets.
+
+2012-04-12  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* emacs-gnutls.texi: Add documentation for the GnuTLS integration.
+	* Makefile.in: Add emacs-gnutls.texi to build.
+
+2012-04-11  Alan Mackenzie  <acm@muc.de>
+
+	* cc-mode.texi (c-offsets-alist): Correct a typo.
+
+2012-04-11  Jérémie Courrèges-Anglas  <jca@wxcvbn.org>  (tiny change)
+
+	* org.texi (Deadlines and scheduling): Fix the example: the
+	DEADLINE item should come right after the headline.  We enforce
+	this convention, so it is a bug not to illustrate it correctly in
+	the manual.
+
+2012-04-11  Ippei FURUHASHI  <top.tuna+orgmode@gmail.com>  (tiny change)
+
+	* org.texi (Agenda commands): Fix documentation bug by swapping
+	the equivalent keybindings to `org-agenda-next-line' with the ones
+	to `org-agenda-previous-line'.
+
+2012-04-07  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in: Replace non-portable use of $< in ordinary rules.
+
+2012-04-05  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* auth.texi (Secret Service API): Edit further and give examples.
+	(Secret Service API): Adjust @samp to @code for collection names.
+
+2012-04-04  Glenn Morris  <rgm@gnu.org>
+
+	* auth.texi (Secret Service API): Copyedits.
+	(Help for developers): Fill in some missing function doc-strings.
+	(Help for users, Help for developers)
+	(GnuPG and EasyPG Assistant Configuration): Markup fixes.
+
+2012-04-04  Michael Albinus  <michael.albinus@gmx.de>
+
+	* auth.texi (Secret Service API): Add the missing text.
+
+2012-04-04  Chong Yidong  <cyd@gnu.org>
+
+	* message.texi (Using PGP/MIME): Note that epg is now the default.
+
+	* gnus.texi: Reduce references to obsolete pgg library.
+	(Security): Note that epg is now the default.
+
+	* gnus-faq.texi (FAQ 8-2): Mention EasyPG.
+
+	* nxml-mode.texi (Completion): C-RET is no longer bound to
+	nxml-complete.
+
 2012-04-01  Jambunathan K  <kjambunathan@gmail.com>
 
 	* org.texi (Customizing tables in ODT export): Correct few errors.

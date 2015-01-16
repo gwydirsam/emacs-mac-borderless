@@ -37,8 +37,11 @@ typedef Lisp_Object XrmDatabase;
 #undef max
 #undef min
 #undef init_process
+#define __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES 0
 #include <Carbon/Carbon.h>
-#ifdef verify
+#ifdef check /* __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES is
+		not in effect.  */
+#undef check
 #undef verify
 #undef _GL_VERIFY_H
 #include <verify.h>

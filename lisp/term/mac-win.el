@@ -582,24 +582,23 @@ Request data types in the order specified by `x-select-request-type'."
        "NSFilenamesPboardType"))
 
 (defun mac-select-convert-to-string (selection type value)
-  (let ((str (cdr (xselect-convert-to-string selection nil value)))
+  (let ((str (xselect-convert-to-string selection nil value))
 	(coding (or next-selection-coding-system selection-coding-system)))
     (when str
-      ;; If TYPE is nil, this is a local request, thus return STR as
-      ;; is.  Otherwise, encode STR.
-      (if (not type)
+      ;; If TYPE is nil, this is a local request; return STR as-is.
+      (if (null type)
 	  str
+	;; Otherwise, encode STR.
 	(let ((inhibit-read-only t))
 	  (remove-text-properties 0 (length str) '(composition nil) str)
 	  (cond
 	   ((eq type 'NSStringPboardType)
 	    (setq str (mac-string-to-pasteboard-string str coding)))
 	   (t
-	    (error "Unknown selection type: %S" type))
-	   )))
+	    (error "Unknown selection type: %S" type))))
 
-      (setq next-selection-coding-system nil)
-      (cons type str))))
+	(setq next-selection-coding-system nil)
+	(cons type str)))))
 
 (defun mac-select-convert-to-pasteboard-filenames (selection type value)
   (let ((filename (xselect-convert-to-filename selection type value)))
@@ -2034,16 +2033,19 @@ Return non-nil if the new state is enabled."
 (defun mac-previous-buffer (event)
   "Like `previous-buffer', but operate on the window where EVENT occurred."
   (interactive "e")
-  (with-selected-window (posn-window (event-start event))
-    (mac-start-animation (selected-window) :direction 'right)
-    (previous-buffer)))
+  (let ((window (posn-window (event-start event))))
+    (mac-start-animation window :type 'move-out :direction 'right)
+    (with-selected-window window
+      (previous-buffer))))
 
 (defun mac-next-buffer (event)
   "Like `next-buffer', but operate on the window where EVENT occurred."
   (interactive "e")
-  (with-selected-window (posn-window (event-start event))
-    (mac-start-animation (selected-window) :direction 'left)
-    (next-buffer)))
+  (let ((window (posn-window (event-start event))))
+    (mac-start-animation window :type 'none)
+    (with-selected-window window
+      (next-buffer))
+    (mac-start-animation window :type 'move-in :direction 'left)))
 
 (global-set-key [swipe-left] 'mac-previous-buffer)
 (global-set-key [swipe-right] 'mac-next-buffer)
@@ -2204,7 +2206,7 @@ standard ones in `x-handle-args'."
 (defun mac-exit-splash-screen ()
   "Stop displaying the splash screen buffer with possibly an animation."
   (interactive)
-  (mac-start-animation (selected-window))
+  (mac-start-animation (selected-window) :type 'fade-out)
   (exit-splash-screen))
 
 (defun mac-initialize-window-system ()

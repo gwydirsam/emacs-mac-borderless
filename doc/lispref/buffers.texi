@@ -24,7 +24,7 @@ not be displayed in any windows.
 * Buffer File Name::    The buffer file name indicates which file is visited.
 * Buffer Modification:: A buffer is @dfn{modified} if it needs to be saved.
 * Modification Time::   Determining whether the visited file was changed
-                         ``behind Emacs's back''.
+                         "behind Emacs's back".
 * Read Only Buffers::   Modifying text is not allowed in a read-only buffer.
 * The Buffer List::     How to look at all the existing buffers.
 * Creating Buffers::    Functions that create buffers.
@@ -482,7 +482,7 @@ correspond to the new file name, unless the new name is already in
 use.
 
 If @var{filename} is @code{nil} or the empty string, that stands for
-``no visited file.''  In this case, @code{set-visited-file-name} marks
+``no visited file''.  In this case, @code{set-visited-file-name} marks
 the buffer as having no visited file, without changing the buffer's
 modified flag.
 
@@ -863,7 +863,7 @@ a buffer visible in any window on any visible frame, except as a last
 resort.  If @var{visible-ok} is non-@code{nil}, then it does not matter
 whether a buffer is displayed somewhere or not.
 
-If no suitable buffer exists, the buffer @samp{*scratch*} is returned
+If no suitable buffer exists, the buffer @file{*scratch*} is returned
 (and created, if necessary).
 @end defun
 
@@ -874,7 +874,7 @@ selected frame's buffer list.
 
 The argument @var{visible-ok} is handled as with @code{other-buffer},
 see above.  If no suitable buffer can be found, the buffer
-@samp{*scratch*} is returned.
+@file{*scratch*} is returned.
 @end defun
 
 @deffn Command bury-buffer &optional buffer-or-name

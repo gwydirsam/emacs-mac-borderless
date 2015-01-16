@@ -51,7 +51,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 static int mac_in_use;
 
-static Lisp_Object Qnone;
+Lisp_Object Qnone;
 static Lisp_Object Qsuppress_icon;
 static Lisp_Object Qundefined_color;
 static Lisp_Object Qcancel_timer;
@@ -3957,7 +3957,7 @@ This is for internal use only.  Use `mac-font-panel-mode' instead.  */)
 			      Animation
  ***********************************************************************/
 
-Lisp_Object QCdirection, QCduration;
+Lisp_Object QCdirection, QCduration, Qfade_in, Qmove_in;
 
 DEFUN ("mac-start-animation", Fmac_start_animation, Smac_start_animation, 1, MANY, 0,
        doc: /* Start animation effect for FRAME-OR-WINDOW.
@@ -3967,26 +3967,31 @@ event is read from the window system next time.  The animation is
 processed asynchronously.
 
 PROPERTIES is a property list consisting of the followings:
-
-  Name	        Value           Meaning
-  ------------------------------------------------------------
-  :duration     number          animation duration in seconds
-  :direction    symbol (`left', `right', `up', or `down')
-                                direction for move-out
-
-Currently, the type of the animation is move-out if the :direction
-property is specified, and fade-out otherwise.
 Note: This function is experimental and the meaning of PROPERTIES is
 subject to change.  Use at your own risk.
 
-This function has no effect if compiled or run on Mac OS X 10.4 or
-earlier.
+  Name	        Value           Meaning
+  -------------------------------------------------------------------
+  :type         symbol (`face-out', 'fade-in', `move-out', `move-in',
+                        or `none')
+                                animation type
+  :duration     number          animation duration in seconds
+  :direction    symbol (`left', `right', `up', or `down')
+                                direction for move-out or move-in
+
+If the :type property is unspecified, then the type of the animation
+defaults to move-out if the :direction property is specified, and
+fade-out otherwise.
+
+This function has no effect and returns nil if compiled or run on Mac
+OS X 10.4 or earlier.
 usage: (mac-start-animation FRAME-OR-WINDOW &rest PROPERTIES)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
   extern void mac_start_animation (Lisp_Object, Lisp_Object);
   Lisp_Object frame_or_window, properties;
+  int count;
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
   SInt32 response;
   OSErr err;
@@ -3997,6 +4002,7 @@ usage: (mac-start-animation FRAME-OR-WINDOW &rest PROPERTIES)  */)
   if (err != noErr || response < 0x1050)
     return Qnil;
 #endif
+  check_mac ();
 
   frame_or_window = args[0];
   if (NILP (frame_or_window))
@@ -4007,13 +4013,16 @@ usage: (mac-start-animation FRAME-OR-WINDOW &rest PROPERTIES)  */)
     CHECK_LIVE_FRAME (frame_or_window);
   properties = Flist (nargs - 1, args + 1);
 
-  /* Call `redisplay' here?  */
+  count = SPECPDL_INDEX ();
+  specbind (Qredisplay_dont_pause, Qt);
+  redisplay_preserve_echo_area (30);
+  unbind_to (count, Qnil);
 
   BLOCK_INPUT;
   mac_start_animation (frame_or_window, properties);
   UNBLOCK_INPUT;
 
-  return Qnil;
+  return Qt;
 #else  /* MAC_OS_X_VERSION_MAX_ALLOWED < 1050 */
   return Qnil;
 #endif	/* MAC_OS_X_VERSION_MAX_ALLOWED < 1050 */
@@ -4080,6 +4089,8 @@ syms_of_macfns (void)
   DEFSYM (Qfont_param, "font-parameter");
   DEFSYM (QCdirection, ":direction");
   DEFSYM (QCduration, ":duration");
+  DEFSYM (Qfade_in, "fade-in");
+  DEFSYM (Qmove_in, "move-in");
   /* This is the end of symbol initialization.  */
 
   Fput (Qundefined_color, Qerror_conditions,

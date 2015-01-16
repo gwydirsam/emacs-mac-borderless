@@ -3049,25 +3049,108 @@ mac_ctfont_shape (CTFontRef font, CFStringRef string,
       for (k = 0; k < ctrun_count; k++)
 	{
 	  CTRunRef ctrun = CFArrayGetValueAtIndex (ctruns, k);
-	  CFIndex i, glyph_count = CTRunGetGlyphCount (ctrun);
-	  CTRunStatus status = CTRunGetStatus (ctrun);
-	  struct mac_glyph_layout *glbuf;
-	  CFRange comp_range;
+	  CFIndex i, min_location, glyph_count = CTRunGetGlyphCount (ctrun);
+	  struct mac_glyph_layout *glbuf = glyph_layouts + total_glyph_count;
+	  CFRange string_range, comp_range, range;
+	  CFIndex *permutation;
 
-	  if (!(status & kCTRunStatusRightToLeft))
-	    glbuf = glyph_layouts + total_glyph_count;
+	  if (CTRunGetStatus (ctrun) & kCTRunStatusRightToLeft)
+	    permutation = xmalloc (sizeof (CFIndex) * glyph_count);
 	  else
-	    glbuf = xmalloc (sizeof (struct mac_glyph_layout) * glyph_count);
+	    permutation = NULL;
 
+#define RIGHT_TO_LEFT_P permutation
+
+	  /* Now the `comp_range' member of struct mac_glyph_layout is
+	     temporarily used as a work area such that:
+	      glbuf[i].comp_range.location =
+		min {compRange[i + 1].location, ...,
+		     compRange[glyph_count - 1].location,
+		     maxRange (stringRangeForCTRun)}
+	      glbuf[i].comp_range.length = maxRange (compRange[i])
+	     where compRange[i] is the range of composed characters
+	     containing i-th glyph.  */
+	  string_range = CTRunGetStringRange (ctrun);
+	  min_location = string_range.location + string_range.length;
 	  for (i = 0; i < glyph_count; i++)
 	    {
-	      struct mac_glyph_layout *gl = glbuf + i;
-	      CFRange range = CFRangeMake (i, 1);
-	      CFIndex index;
+	      struct mac_glyph_layout *gl = glbuf + glyph_count - i - 1;
+	      CFIndex glyph_index;
+	      CFRange rng;
+
+	      if (!RIGHT_TO_LEFT_P)
+		glyph_index = glyph_count - i - 1;
+	      else
+		glyph_index = i;
+	      CTRunGetStringIndices (ctrun, CFRangeMake (glyph_index, 1),
+				     &gl->string_index);
+	      rng =
+		CFStringGetRangeOfComposedCharactersAtIndex (string,
+							     gl->string_index);
+	      gl->comp_range.location = min_location;
+	      gl->comp_range.length = rng.location + rng.length;
+	      if (rng.location < min_location)
+		min_location = rng.location;
+	    }
+
+	  /* Fill the `comp_range' member of struct mac_glyph_layout,
+	     and setup a permutation for right-to-left text.  */
+	  comp_range = CFRangeMake (string_range.location, 0);
+	  range = CFRangeMake (0, 0);
+	  while (1)
+	    {
+	      struct mac_glyph_layout *gl =
+		glbuf + range.location + range.length;
+
+	      if (gl->comp_range.length
+		  > comp_range.location + comp_range.length)
+		comp_range.length = gl->comp_range.length - comp_range.location;
+	      min_location = gl->comp_range.location;
+	      range.length++;
+
+	      if (min_location >= comp_range.location + comp_range.length)
+		{
+		  comp_range.length = min_location - comp_range.location;
+		  for (i = 0; i < range.length; i++)
+		    {
+		      glbuf[range.location + i].comp_range = comp_range;
+		      if (RIGHT_TO_LEFT_P)
+			permutation[range.location + i] =
+			  range.location + range.length - i - 1;
+		    }
+
+		  comp_range = CFRangeMake (min_location, 0);
+		  range.location += range.length;
+		  range.length = 0;
+		  if (range.location == glyph_count)
+		    break;
+		}
+	    }
+
+	  /* Then fill the remaining members.  */
+	  for (range = CFRangeMake (0, 1); range.location < glyph_count;
+	       range.location++)
+	    {
+	      struct mac_glyph_layout *gl;
 	      CGPoint position;
 
-	      CTRunGetStringIndices (ctrun, range, &index);
-	      gl->string_index = index;
+	      if (!RIGHT_TO_LEFT_P)
+		gl = glbuf + range.location;
+	      else
+		{
+		  CFIndex src, dest;
+
+		  src = glyph_count - 1 - range.location;
+		  dest = permutation[src];
+		  gl = glbuf + dest;
+		  if (src < dest)
+		    {
+		      CFIndex tmp = gl->string_index;
+
+		      gl->string_index = glbuf[src].string_index;
+		      glbuf[src].string_index = tmp;
+		    }
+		}
 	      CTRunGetGlyphs (ctrun, range, &gl->glyph_id);
 
 	      CTRunGetPositions (ctrun, range, &position);
@@ -3078,60 +3161,10 @@ mac_ctfont_shape (CTFontRef font, CFStringRef string,
 	      total_advance += gl->advance;
 	    }
 
-	  comp_range = CTRunGetStringRange (ctrun);
-	  comp_range.length = 0;
-	  if (!(status & kCTRunStatusRightToLeft))
-	    {
-	      for (i = 0; i < glyph_count; i++)
-		{
-		  struct mac_glyph_layout *gl = glbuf + i;
-		  CFIndex index = gl->string_index;
+	  if (RIGHT_TO_LEFT_P)
+	    xfree (permutation);
 
-		  if (index >= comp_range.location + comp_range.length)
-		    {
-		      CFRange new_range =
-			CFStringGetRangeOfComposedCharactersAtIndex (string,
-								     index);
-
-		      comp_range.location += comp_range.length;
-		      comp_range.length = (new_range.location + new_range.length
-					   - comp_range.location);
-		    }
-		  gl->comp_range = comp_range;
-		}
-	    }
-	  else
-	    {
-	      CFRange range;
-
-	      i = 0;
-	      for (range = CFRangeMake (glyph_count, 0);
-		   range.location > 0; range.location--, range.length++)
-		{
-		  struct mac_glyph_layout *gl = glbuf + (range.location - 1);
-		  CFIndex index = gl->string_index;
-
-		  if (index >= comp_range.location + comp_range.length)
-		    {
-		      CFRange new_range =
-			CFStringGetRangeOfComposedCharactersAtIndex (string,
-								     index);
-
-		      comp_range.location += comp_range.length;
-		      comp_range.length = (new_range.location + new_range.length
-					   - comp_range.location);
-		      memcpy (glyph_layouts + total_glyph_count + i,
-			      glbuf + range.location,
-			      sizeof (struct mac_glyph_layout) * range.length);
-		      i += range.length;
-		      range.length = 0;
-		    }
-		  gl->comp_range = comp_range;
-		}
-	      memcpy (glyph_layouts + total_glyph_count + i, glbuf,
-		      sizeof (struct mac_glyph_layout) * range.length);
-	      xfree (glbuf);
-	    }
+#undef RIGHT_TO_LEFT_P
 
 	  total_glyph_count += glyph_count;
 	}

@@ -1,3 +1,228 @@
+2012-04-26  Glenn Morris  <rgm@gnu.org>
+
+	* elisp.texi, vol1.texi, vol2.texi: Some fixes for detailed menu.
+	* modes.texi (Major Modes, Auto-Indentation):
+	* buffers.texi (Buffers): Some fixes for menu descriptions.
+
+2012-04-26  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* functions.texi (Simple Lambda, Argument List):
+	* eval.texi (Function Indirection): Avoid deprecated form.
+
+2012-04-26  Glenn Morris  <rgm@gnu.org>
+
+	* book-spine.texi, elisp.texi, vol1.texi, vol2.texi:
+	Add "et al." to authors.
+
+	* buffers.texi, commands.texi, compile.texi, control.texi:
+	* customize.texi, display.texi, eval.texi, files.texi, frames.texi:
+	* hash.texi, help.texi, intro.texi, keymaps.texi, lists.texi:
+	* modes.texi, numbers.texi, objects.texi, streams.texi:
+	* symbols.texi, syntax.texi, text.texi, tips.texi, variables.texi:
+	Use Texinfo recommended convention for quotes+punctuation.
+
+2012-04-23  Chong Yidong  <cyd@gnu.org>
+
+	* keymaps.texi (Scanning Keymaps): Fix description of NO-REMAP arg
+	to where-is-internal (Bug#10872).
+
+2012-04-21  Glenn Morris  <rgm@gnu.org>
+
+	* macros.texi (Indenting Macros): Fix typo.
+
+	* windows.texi (Basic Windows, Windows and Frames, Window Sizes)
+	(Resizing Windows, Deleting Windows, Selecting Windows)
+	(Choosing Window Options, Horizontal Scrolling)
+	(Cyclic Window Ordering, Window History, Dedicated Windows)
+	(Quitting Windows, Window Configurations, Textual Scrolling):
+	(Coordinates and Windows, Window Configurations)
+	(Window Parameters, Window Hooks): Copyedits.
+	(Splitting Windows, Deleting Windows):
+	Fix ignore-window-parameters logic.
+	(Selecting Windows, Choosing Window Options): Markup fixes.
+	(Window Start and End): Remove pointless example.
+	Remove cross-reference to deleted count-lines content.
+	(Textual Scrolling): Mention recenter-redisplay, recenter-top-bottom,
+	and recenter-positions.  Remove recenter example.
+
+	* elisp.texi, vol1.texi, vol2.texi: Bump VERSION and DATE.
+
+	* minibuf.texi (Intro to Minibuffers):
+	Tweak discussion of resizing minibuffer window.
+
+2012-04-20  Chong Yidong  <cyd@gnu.org>
+
+	* processes.texi (Asynchronous Processes): Mention nil argument to
+	start-process.
+
+2012-04-20  Glenn Morris  <rgm@gnu.org>
+
+	* minibuf.texi (Basic Completion): No need to describe obarrays here.
+	Don't mention obsolete `nospace' argument of all-completions.
+	(Minibuffer Completion, Completion Commands, Reading File Names)
+	(Completion Variables): Copyedits.
+	(Completion Commands): Mention parent keymaps.
+	Remove obsolete minibuffer-local-filename-must-match-map.
+	(High-Level Completion): Remove read-variable's almost
+	word-for-word duplication of read-command.
+	* elisp.texi, vol1.texi, vol2.texi, minibuf.texi (Completion):
+	Update "High-Level Completion" description.
+
+2012-04-19  Glenn Morris  <rgm@gnu.org>
+
+	* minibuf.texi (Minibuffers):
+	* elisp.texi, vol1.texi, vol2.texi: Fix minibuffer subsection order.
+
+	* minibuf.texi: Standardize metasyntactic variables ("history", etc).
+	Use Texinfo-recommended form of quote+punctuation.
+	(Intro to Minibuffers): First minibuffer is #1, not #0.
+	Mention minibuffer-inactive-mode.
+	(Text from Minibuffer): Copyedits.
+	(Minibuffer History, Programmed Completion): Fix @var usage.
+	(Object from Minibuffer): Remove overly pedantic para.
+	(Minibuffer History): Copyedits.  Add face-name-history.
+	(Initial Input, Yes-or-No Queries, Multiple Queries)
+	(Minibuffer Windows, Minibuffer Misc): Copyedits.
+	(Yes-or-No Queries): Tweak example.
+	(Minibuffer Commands): Add next-complete-history-element.
+	(Minibuffer Misc): Mention minibuffer-message-timeout, and
+	minibuffer-inactive-mode.
+
+2012-04-18  Glenn Morris  <rgm@gnu.org>
+
+	* processes.texi (Serial Ports, Byte Packing, Bindat Spec)
+	(Bindat Functions): Copyedits.
+
+2012-04-18  Christopher Schmidt  <christopher@ch.ristopher.com>
+
+	* files.texi (Saving Buffers): Document `visit and `visit-save'
+	values of require-final-newline.
+
+2012-04-18  Glenn Morris  <rgm@gnu.org>
+
+	* processes.texi (Output from Processes, Filter Functions):
+	Mention waiting-for-user-input-p.
+	(Sentinels, Query Before Exit, System Processes, Transaction Queues):
+	(Network Servers, Datagrams, Network Processes, Network Options)
+	(Network Feature Testing, Serial Ports): Copyedits.
+	(Network): Add encrypted network overview paragraph.
+	Cross-reference the Emacs-GnuTLS manual.  Use @acronym.
+
+2012-04-17  Chong Yidong  <cyd@gnu.org>
+
+	* help.texi (Keys in Documentation): Mention :advertised-binding.
+
+	* keymaps.texi (Menu Bar): Move most of the :advertised-binding
+	description to help.texi.
+
+2012-04-16  Glenn Morris  <rgm@gnu.org>
+
+	* processes.texi (Process Information, Input to Processes)
+	(Signals to Processes, Output from Processes, Process Buffers)
+	(Filter Functions, Decoding Output): Copyedits.
+	(Accepting Output): Discourage use of `millisec' argument.
+
+2012-04-15  Glenn Morris  <rgm@gnu.org>
+
+	* processes.texi (Processes, Subprocess Creation, Shell Arguments):
+	(Synchronous Processes, Asynchronous Processes, Deleting Processes):
+	Copyedits.
+	(Subprocess Creation): Discourage modifying exec-path directly.
+	(Synchronous Processes, Asynchronous Processes):
+	Update some example output.
+	(Process Information): Fix typo.
+	(Bindat Spec): Use Texinfo-recommended form of quote+punctuation.
+
+2012-04-14  Glenn Morris  <rgm@gnu.org>
+
+	* anti.texi (Antinews): Copyedits.  Don't @dfn anything here.
+	open-network-stream does exist in Emacs 23, but is simpler.
+
+2012-04-13  Chong Yidong  <cyd@gnu.org>
+
+	* customize.texi (Custom Themes): Also document load-theme etc.
+
+2012-04-12  Chong Yidong  <cyd@gnu.org>
+
+	* customize.texi (Applying Customizations):
+	(Custom Themes): New nodes.
+
+	* display.texi (Defining Faces): Reference custom-set-faces.
+
+	* modes.texi (Defining Minor Modes, Defining Minor Modes):
+	* os.texi (Startup Summary): Copyedits.
+
+2012-04-12  Glenn Morris  <rgm@gnu.org>
+
+	* loading.texi (Loading Non-ASCII): "unibyte:" can also be at the end.
+
+2012-04-10  Glenn Morris  <rgm@gnu.org>
+
+	* strings.texi (Case Tables):
+	* objects.texi (General Escape Syntax):
+	* keymaps.texi (Key Sequences): Use @acronym with "ASCII".
+
+	* buffers.texi, compile.texi, customize.texi, debugging.texi:
+	* display.texi, edebug.texi, eval.texi, help.texi, intro.texi:
+	* keymaps.texi, minibuf.texi, modes.texi, os.texi, processes.texi:
+	* text.texi: Use @file for buffers, per the Texinfo manual.
+
+	* compile.texi (Compiler Errors): Add missing space in buffer name.
+
+2012-04-08  Chong Yidong  <cyd@gnu.org>
+
+	* processes.texi (Query Before Exit): Remove obsolete function
+	process-kill-without-query (Bug#11190).
+
+2012-04-08  Glenn Morris  <rgm@gnu.org>
+
+	* files.texi, frames.texi, loading.texi, os.texi, processes.texi:
+	Use @env for environment variables.
+
+2012-04-07  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in: Replace non-portable use of $< in ordinary rules.
+
+2012-04-06  Chong Yidong  <cyd@gnu.org>
+
+	* minibuf.texi (Programmed Completion): Document metadata method.
+	(Completion Variables): Document completion-category-overrides.
+
+2012-04-05  Chong Yidong  <cyd@gnu.org>
+
+	* anti.texi (Antinews): Rewrite for Emacs 23.
+
+2012-04-04  Chong Yidong  <cyd@gnu.org>
+
+	* minibuf.texi (Programmed Completion): Remove obsolete variable
+	completion-annotate-function.
+	(Completion Variables): Rename from Completion Styles.  Document
+	completion-extra-properties.  Document completion-styles-alist
+	change.
+	(Reading File Names): minibuffer-local-filename-must-match-map is
+	not used anymore.
+	(Minibuffer Completion): Document completing-read-function.
+	(Completion in Buffers): completion-at-point-functions can return
+	properties recognized in completion-extra-properties.
+
+	* display.texi (Delayed Warnings): New node.
+
+	* os.texi (Notifications): Copyedits.
+
+2012-04-04  Glenn Morris  <rgm@gnu.org>
+
+	* os.texi (Notifications): Copyedits.
+
+2012-04-03  Michael Albinus  <michael.albinus@gmx.de>
+
+	* os.texi (Terminal-Specific): Fix typo.
+	(Notifications): New section.
+
+	* elisp.texi (Top):
+	* vol1.texi (Top):
+	* vol2.texi (Top): Add "Notifications" and "Dynamic Libraries"
+	menu entries.
+
 2012-04-01  Chong Yidong  <cyd@gnu.org>
 
 	* files.texi (Kinds of Files): file-subdir-of-p renamed to
