@@ -94,9 +94,9 @@ which means to start Emacs with minimum customizations.
 the @samp{fullscreen} frame parameter have different meanings: the
 former means a new system-wide full screen mode with a dedicated
 desktop (or Space), while the latter means making the frame fullscreen
-in a desktop (or Space) shared with the other applications.  As a
-result, @samp{-fs} or @samp{--fullscreen} command line option means
-the former on Mac OS X 10.7.
+in a desktop (or Space) shared with the other applications.  Because
+the command line option @samp{-fs} or @samp{--fullscreen} corresponds
+to @samp{fullboth}, it means the latter on all versions of Mac OS X.
 
 @cindex Preferences (Mac port)
   Although the Mac port does not support X resources (@pxref{X

@@ -1,5 +1,4 @@
-Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-  2010, 2011, 2012  Free Software Foundation, Inc.
+Copyright (C) 2001-2012  Free Software Foundation, Inc.
 See the end of the file for license conditions.
 
 
@@ -19,7 +18,7 @@ Living list of activities that must be completed before the next release.
 
 ** make-tarball.txt
 
-Instructions to create pretest or release tarballs, annoucements, etc.
+Instructions to create pretest or release tarballs, announcements, etc.
 
 ** admin.el
 
@@ -89,5 +88,3 @@ Local variables:
 mode: outline
 paragraph-separate: "[ 	]*$"
 end:
-
-# arch-tag: 812b9461-bc0a-46a7-925e-24bd41118463

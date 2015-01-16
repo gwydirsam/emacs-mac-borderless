@@ -11,7 +11,7 @@
 @c ---------
 @c <<<< For hard copy printing, this file is now
 @c      set for smallbook, which works for all sizes
-@c      of paper, and with Postscript figures >>>>
+@c      of paper, and with PostScript figures >>>>
 @set smallbook
 @ifset smallbook
 @smallbook
@@ -228,9 +228,7 @@ people who are not programmers.
 @sp 1
 Edition @value{edition-number}, @value{update-date}
 @sp 1
-Copyright @copyright{} 1990, 1991, 1992, 1993, 1994, 1995, 1997, 2001,
-   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+Copyright @copyright{} 1990-1995, 1997, 2001-2012 Free Software Foundation, Inc.
 @sp 1
 
 @iftex
@@ -336,6 +334,9 @@ every node in every chapter.
 @c global@pageno = -11
 @c end iftex
 
+@set COUNT-WORDS count-words-example
+@c Length of variable name chosen so that things still line up when expanded.
+
 @menu
 * Preface::                     What to look for.
 * List Processing::             What is Lisp?
@@ -359,7 +360,7 @@ every node in every chapter.
 * Conclusion::                  Now you have the basics.
 * the-the::                     An appendix: how to find reduplicated words.
 * Kill Ring::                   An appendix: how the kill ring works.
-* Full Graph::                  How to create a graph with labelled axes.
+* Full Graph::                  How to create a graph with labeled axes.
 * Free Software and Free Manuals::
 * GNU Free Documentation License::
 * Index::
@@ -706,21 +707,21 @@ Regular Expression Searches
 Counting: Repetition and Regexps
 
 * Why Count Words::
-* count-words-region::          Use a regexp, but find a problem.
+* @value{COUNT-WORDS}::         Use a regexp, but find a problem.
 * recursive-count-words::       Start with case of no words in region.
 * Counting Exercise::
 
-The @code{count-words-region} Function
+The @code{@value{COUNT-WORDS}} Function
 
-* Design count-words-region::   The definition using a @code{while} loop.
-* Whitespace Bug::              The Whitespace Bug in @code{count-words-region}.
+* Design @value{COUNT-WORDS}::  The definition using a @code{while} loop.
+* Whitespace Bug::              The Whitespace Bug in @code{@value{COUNT-WORDS}}.
 
 Counting Words in a @code{defun}
 
 * Divide and Conquer::
 * Words and Symbols::           What to count?
 * Syntax::                      What constitutes a word or symbol?
-* count-words-in-defun::        Very like @code{count-words}.
+* count-words-in-defun::        Very like @code{@value{COUNT-WORDS}}.
 * Several defuns::              Counting several defuns in a file.
 * Find a File::                 Do you want to look at a file?
 * lengths-list-file::           A list of the lengths of many definitions.
@@ -793,9 +794,9 @@ The @code{current-kill} Function
 * Digression concerning error::  How to mislead humans, but not computers.
 * Determining the Element::
 
-A Graph with Labelled Axes
+A Graph with Labeled Axes
 
-* Labelled Example::
+* Labeled Example::
 * print-graph Varlist::         @code{let} expression in @code{print-graph}.
 * print-Y-axis::                Print a label for the vertical axis.
 * print-X-axis::                Print a horizontal label.
@@ -887,7 +888,7 @@ but in this case, it is best to treat it as a novel or as a travel guide
 to a country not yet visited: interesting, but not the same as being
 there.
 
-Much of this introduction is dedicated to walk-throughs or guided tours
+Much of this introduction is dedicated to walkthroughs or guided tours
 of code used in GNU Emacs.  These tours are designed for two purposes:
 first, to give you familiarity with real, working code (code you use
 every day); and, second, to give you familiarity with the way Emacs
@@ -1023,7 +1024,7 @@ the command in parentheses, like this: @kbd{M-C-\}
 invoke the command; this is called @dfn{rebinding}.  @xref{Keymaps, ,
 Keymaps}.)  The abbreviation @kbd{M-C-\} means that you type your
 @key{META} key, @key{CTRL} key and @key{\} key all at the same time.
-(On many modern keyboards the @key{META} key is labelled
+(On many modern keyboards the @key{META} key is labeled
 @key{ALT}.)
 Sometimes a combination like this is called a keychord, since it is
 similar to the way you play a chord on a piano.  If your keyboard does
@@ -1031,7 +1032,7 @@ not have a @key{META} key, the @key{ESC} key prefix is used in place
 of it.  In this case, @kbd{M-C-\} means that you press and release your
 @key{ESC} key and then type the @key{CTRL} key and the @key{\} key at
 the same time.  But usually @kbd{M-C-\} means press the @key{CTRL} key
-along with the key that is labelled @key{ALT} and, at the same time,
+along with the key that is labeled @key{ALT} and, at the same time,
 press the @key{\} key.
 
 In addition to typing a lone keychord, you can prefix what you type
@@ -1401,7 +1402,7 @@ This is a harmless activity; and indeed, we will often try to generate
 error messages intentionally.  Once you understand the jargon, error
 messages can be informative.  Instead of being called ``error''
 messages, they should be called ``help'' messages.  They are like
-signposts to a traveller in a strange country; deciphering them can be
+signposts to a traveler in a strange country; deciphering them can be
 hard, but once understood, they can point the way.
 
 The error message is generated by a built-in GNU Emacs debugger.  We
@@ -2040,7 +2041,7 @@ the first argument.  This function takes three arguments.  Its first
 argument is the string of characters, the second and third arguments are
 numbers that indicate the beginning and end of the substring.  The
 numbers are a count of the number of characters (including spaces and
-punctuations) from the beginning of the string.
+punctuation) from the beginning of the string.
 
 @need 800
 For example, if you evaluate the following:
@@ -4749,7 +4750,7 @@ type in the name of the function whose source code you want to see,
 such as @code{mark-whole-buffer}, and then type @key{RET}.  Emacs will
 switch buffers and display the source code for the function on your
 screen.  To switch back to your current buffer, type @kbd{C-x b
-@key{RET}}.  (On some keyboards, the @key{META} key is labelled
+@key{RET}}.  (On some keyboards, the @key{META} key is labeled
 @key{ALT}.)
 
 @c !!! 22.1.1 tags table location in this paragraph
@@ -8200,7 +8201,7 @@ The command \\[yank] can retrieve it from there. @dots{} "
      ;;    it will be set in an error
      (setq this-command 'kill-region)
      ;;    Finally, in the then-part, send a message if you may copy
-     ;;    the text to the kill ring without signally an error, but
+     ;;    the text to the kill ring without signaling an error, but
      ;;    don't if you may not.
 @end group
 @group
@@ -12607,7 +12608,7 @@ four arguments:
 @enumerate
 @item
 The first argument is the regular expression that the function searches
-for.  The regular expression will be a string between quotations marks.
+for.  The regular expression will be a string between quotation marks.
 
 @item
 The optional second argument limits how far the function will search; it is a
@@ -13656,7 +13657,7 @@ list of supported languages.
 
 The @code{etags} program handles more than 20 languages, including
 Emacs Lisp, Common Lisp, Scheme, C, C++, Ada, Fortran, HTML, Java,
-LaTeX, Pascal, Perl, Postscript, Python, TeX, Texinfo, makefiles, and
+LaTeX, Pascal, Perl, PostScript, Python, TeX, Texinfo, makefiles, and
 most assemblers.  The program has no switches for specifying the
 language; it recognizes the language in an input file according to its
 file name and contents.
@@ -13829,35 +13830,37 @@ word count commands using @code{while} loops and recursion.
 
 @menu
 * Why Count Words::
-* count-words-region::          Use a regexp, but find a problem.
+* @value{COUNT-WORDS}::          Use a regexp, but find a problem.
 * recursive-count-words::       Start with case of no words in region.
 * Counting Exercise::
 @end menu
 
-@node Why Count Words, count-words-region, Counting Words, Counting Words
+@node Why Count Words, @value{COUNT-WORDS}, Counting Words, Counting Words
 @ifnottex
 @unnumberedsec Counting words
 @end ifnottex
 
-The standard Emacs distribution contains a function for counting the
-number of lines within a region.  However, there is no corresponding
-function for counting words.
+The standard Emacs distribution contains functions for counting the
+number of lines and words within a region.
 
 Certain types of writing ask you to count words.  Thus, if you write
 an essay, you may be limited to 800 words; if you write a novel, you
-may discipline yourself to write 1000 words a day.  It seems odd to me
-that Emacs lacks a word count command.  Perhaps people use Emacs
-mostly for code or types of documentation that do not require word
-counts; or perhaps they restrict themselves to the operating system
-word count command, @code{wc}.  Alternatively, people may follow
-the publishers' convention and compute a word count by dividing the
-number of characters in a document by five.  In any event, here are
-commands to count words.
+may discipline yourself to write 1000 words a day.  It seems odd, but
+for a long time, Emacs lacked a word count command.  Perhaps people used
+Emacs mostly for code or types of documentation that did not require
+word counts; or perhaps they restricted themselves to the operating
+system word count command, @code{wc}.  Alternatively, people may have
+followed the publishers' convention and computed a word count by
+dividing the number of characters in a document by five.
 
-@node count-words-region, recursive-count-words, Why Count Words, Counting Words
+There are many ways to implement a command to count words.  Here are
+some examples, which you may wish to compare with the standard Emacs
+command, @code{count-words-region}.
+
+@node @value{COUNT-WORDS}, recursive-count-words, Why Count Words, Counting Words
 @comment  node-name,  next,  previous,  up
-@section The @code{count-words-region} Function
-@findex count-words-region
+@section The @code{@value{COUNT-WORDS}} Function
+@findex @value{COUNT-WORDS}
 
 A word count command could count words in a line, paragraph, region,
 or buffer.  What should the command cover?  You could design the
@@ -13865,7 +13868,7 @@ command to count the number of words in a complete buffer.  However,
 the Emacs tradition encourages flexibility---you may want to count
 words in just a section, rather than all of a buffer.  So it makes
 more sense to design the command to count the number of words in a
-region.  Once you have a @code{count-words-region} command, you can,
+region.  Once you have a command to count words in a region, you can,
 if you wish, count words in a whole buffer by marking it with
 @w{@kbd{C-x h}} (@code{mark-whole-buffer}).
 
@@ -13876,13 +13879,13 @@ region.  This means that word counting is ideally suited to recursion
 or to a @code{while} loop.
 
 @menu
-* Design count-words-region::   The definition using a @code{while} loop.
-* Whitespace Bug::              The Whitespace Bug in @code{count-words-region}.
+* Design @value{COUNT-WORDS}::  The definition using a @code{while} loop.
+* Whitespace Bug::              The Whitespace Bug in @code{@value{COUNT-WORDS}}.
 @end menu
 
-@node Design count-words-region, Whitespace Bug, count-words-region, count-words-region
+@node Design @value{COUNT-WORDS}, Whitespace Bug, @value{COUNT-WORDS}, @value{COUNT-WORDS}
 @ifnottex
-@unnumberedsubsec Designing @code{count-words-region}
+@unnumberedsubsec Designing @code{@value{COUNT-WORDS}}
 @end ifnottex
 
 First, we will implement the word count command with a @code{while}
@@ -13905,7 +13908,9 @@ What we need to do is fill in the slots.
 
 The name of the function should be self-explanatory and similar to the
 existing @code{count-lines-region} name.  This makes the name easier
-to remember.  @code{count-words-region} is a good choice.
+to remember.  @code{count-words-region} is the obvious choice.  Since
+that name is now used for the standard Emacs command to count words, we
+will name our implementation @code{@value{COUNT-WORDS}}.
 
 The function counts words within a region.  This means that the
 argument list must contain symbols that are bound to the two
@@ -13923,7 +13928,7 @@ first, to set up conditions under which the @code{while} loop can
 count words, second, to run the @code{while} loop, and third, to send
 a message to the user.
 
-When a user calls @code{count-words-region}, point may be at the
+When a user calls @code{@value{COUNT-WORDS}}, point may be at the
 beginning or the end of the region.  However, the counting process
 must start at the beginning of the region.  This means we will want
 to put point there if it is not already there.  Executing
@@ -13967,10 +13972,9 @@ this is:
 
 @noindent
 The buffer's syntax table determines which characters are and are not
-word constituents.  (@xref{Syntax, , What Constitutes a Word or
-Symbol?}, for more about syntax.  Also, see @ref{Syntax, Syntax, The
-Syntax Table, emacs, The GNU Emacs Manual}, and @ref{Syntax Tables, ,
-Syntax Tables, elisp, The GNU Emacs Lisp Reference Manual}.)
+word constituents.  For more information about syntax,
+@pxref{Syntax Tables, , Syntax Tables, elisp, The GNU Emacs Lisp
+Reference Manual}.
 
 @need 800
 The search expression looks like this:
@@ -14015,7 +14019,7 @@ All this leads to the following function definition:
 @smallexample
 @group
 ;;; @r{First version; has bugs!}
-(defun count-words-region (beginning end)
+(defun @value{COUNT-WORDS} (beginning end)
   "Print number of words in the region.
 Words are defined as at least one word-constituent
 character followed by at least one character that
@@ -14056,14 +14060,14 @@ table determines which characters these are."
 @noindent
 As written, the function works, but not in all circumstances.
 
-@node Whitespace Bug,  , Design count-words-region, count-words-region
+@node Whitespace Bug,  , Design @value{COUNT-WORDS}, @value{COUNT-WORDS}
 @comment  node-name,  next,  previous,  up
-@subsection The Whitespace Bug in @code{count-words-region}
+@subsection The Whitespace Bug in @code{@value{COUNT-WORDS}}
 
-The @code{count-words-region} command described in the preceding
+The @code{@value{COUNT-WORDS}} command described in the preceding
 section has two bugs, or rather, one bug with two manifestations.
 First, if you mark a region containing only whitespace in the middle
-of some text, the @code{count-words-region} command tells you that the
+of some text, the @code{@value{COUNT-WORDS}} command tells you that the
 region contains one word!  Second, if you mark a region containing
 only whitespace at the end of the buffer or the accessible portion of
 a narrowed buffer, the command displays an error message that looks
@@ -14084,7 +14088,7 @@ parenthesis and type @kbd{C-x C-e} to install it.
 @smallexample
 @group
 ;; @r{First version; has bugs!}
-(defun count-words-region (beginning end)
+(defun @value{COUNT-WORDS} (beginning end)
   "Print number of words in the region.
 Words are defined as at least one word-constituent character followed
 by at least one character that is not a word-constituent.  The buffer's
@@ -14123,12 +14127,12 @@ syntax table determines which characters these are."
 If you wish, you can also install this keybinding by evaluating it:
 
 @smallexample
-(global-set-key "\C-c=" 'count-words-region)
+(global-set-key "\C-c=" '@value{COUNT-WORDS})
 @end smallexample
 
 To conduct the first test, set mark and point to the beginning and end
 of the following line and then type @kbd{C-c =} (or @kbd{M-x
-count-words-region} if you have not bound @kbd{C-c =}):
+@value{COUNT-WORDS}} if you have not bound @kbd{C-c =}):
 
 @smallexample
     one   two  three
@@ -14139,7 +14143,7 @@ Emacs will tell you, correctly, that the region has three words.
 
 Repeat the test, but place mark at the beginning of the line and place
 point just @emph{before} the word @samp{one}.  Again type the command
-@kbd{C-c =} (or @kbd{M-x count-words-region}).  Emacs should tell you
+@kbd{C-c =} (or @kbd{M-x @value{COUNT-WORDS}}).  Emacs should tell you
 that the region has no words, since it is composed only of the
 whitespace at the beginning of the line.  But instead Emacs tells you
 that the region has one word!
@@ -14148,7 +14152,7 @@ For the third test, copy the sample line to the end of the
 @file{*scratch*} buffer and then type several spaces at the end of the
 line.  Place mark right after the word @samp{three} and point at the
 end of line.  (The end of the line will be the end of the buffer.)
-Type @kbd{C-c =} (or @kbd{M-x count-words-region}) as you did before.
+Type @kbd{C-c =} (or @kbd{M-x @value{COUNT-WORDS}}) as you did before.
 Again, Emacs should tell you that the region has no words, since it is
 composed only of the whitespace at the end of the line.  Instead,
 Emacs displays an error message saying @samp{Search failed}.
@@ -14157,7 +14161,7 @@ The two bugs stem from the same problem.
 
 Consider the first manifestation of the bug, in which the command
 tells you that the whitespace at the beginning of the line contains
-one word.  What happens is this: The @code{M-x count-words-region}
+one word.  What happens is this: The @code{M-x @value{COUNT-WORDS}}
 command moves point to the beginning of the region.  The @code{while}
 tests whether the value of point is smaller than the value of
 @code{end}, which it is.  Consequently, the regular expression search
@@ -14191,7 +14195,7 @@ an error if the search fails.  The optional fourth argument is a
 repeat count.  (In Emacs, you can see a function's documentation by
 typing @kbd{C-h f}, the name of the function, and then @key{RET}.)
 
-In the @code{count-words-region} definition, the value of the end of
+In the @code{@value{COUNT-WORDS}} definition, the value of the end of
 the region is held by the variable @code{end} which is passed as an
 argument to the function.  Thus, we can add @code{end} as an argument
 to the regular expression search expression:
@@ -14200,7 +14204,7 @@ to the regular expression search expression:
 (re-search-forward "\\w+\\W*" end)
 @end smallexample
 
-However, if you make only this change to the @code{count-words-region}
+However, if you make only this change to the @code{@value{COUNT-WORDS}}
 definition and then test the new version of the definition on a
 stretch of whitespace, you will receive an error message saying
 @samp{Search failed}.
@@ -14231,7 +14235,7 @@ true-or-false-test tests true because the value of point is still less
 than the value of end, since the @code{re-search-forward} expression
 did not move point. @dots{} and the cycle repeats @dots{}
 
-The @code{count-words-region} definition requires yet another
+The @code{@value{COUNT-WORDS}} definition requires yet another
 modification, to cause the true-or-false-test of the @code{while} loop
 to test false if the search fails.  Put another way, there are two
 conditions that must be satisfied in the true-or-false-test before the
@@ -14265,17 +14269,17 @@ succeeds and as a side effect moves point.  Consequently, as words are
 found, point is moved through the region.  When the search expression
 fails to find another word, or when point reaches the end of the
 region, the true-or-false-test tests false, the @code{while} loop
-exits, and the @code{count-words-region} function displays one or
+exits, and the @code{@value{COUNT-WORDS}} function displays one or
 other of its messages.
 
-After incorporating these final changes, the @code{count-words-region}
+After incorporating these final changes, the @code{@value{COUNT-WORDS}}
 works without bugs (or at least, without bugs that I have found!).
 Here is what it looks like:
 
 @smallexample
 @group
 ;;; @r{Final version:} @code{while}
-(defun count-words-region (beginning end)
+(defun @value{COUNT-WORDS} (beginning end)
   "Print number of words in the region."
   (interactive "r")
   (message "Counting words in region ... ")
@@ -14309,7 +14313,7 @@ Here is what it looks like:
 @end group
 @end smallexample
 
-@node recursive-count-words, Counting Exercise, count-words-region, Counting Words
+@node recursive-count-words, Counting Exercise, @value{COUNT-WORDS}, Counting Words
 @comment  node-name,  next,  previous,  up
 @section Count Words Recursively
 @cindex Count words recursively
@@ -14319,7 +14323,7 @@ Here is what it looks like:
 You can write the function for counting words recursively as well as
 with a @code{while} loop.  Let's see how this is done.
 
-First, we need to recognize that the @code{count-words-region}
+First, we need to recognize that the @code{@value{COUNT-WORDS}}
 function has three jobs: it sets up the appropriate conditions for
 counting to occur; it counts the words in the region; and it sends a
 message to the user telling how many words there are.
@@ -14333,7 +14337,7 @@ other.  One function will set up the conditions and display the
 message; the other will return the word count.
 
 Let us start with the function that causes the message to be displayed.
-We can continue to call this @code{count-words-region}.
+We can continue to call this @code{@value{COUNT-WORDS}}.
 
 This is the function that the user will call.  It will be interactive.
 Indeed, it will be similar to our previous versions of this
@@ -14347,7 +14351,7 @@ previous versions:
 @smallexample
 @group
 ;; @r{Recursive version; uses regular expression search}
-(defun count-words-region (beginning end)
+(defun @value{COUNT-WORDS} (beginning end)
   "@var{documentation}@dots{}"
   (@var{interactive-expression}@dots{})
 @end group
@@ -14388,7 +14392,7 @@ Using @code{let}, the function definition looks like this:
 
 @smallexample
 @group
-(defun count-words-region (beginning end)
+(defun @value{COUNT-WORDS} (beginning end)
   "Print number of words in the region."
   (interactive "r")
 @end group
@@ -14484,7 +14488,7 @@ Thus, the do-again-test should look like this:
 Note that the search expression is part of the do-again-test---the
 function returns @code{t} if its search succeeds and @code{nil} if it
 fails.  (@xref{Whitespace Bug, , The Whitespace Bug in
-@code{count-words-region}}, for an explanation of how
+@code{@value{COUNT-WORDS}}}, for an explanation of how
 @code{re-search-forward} works.)
 
 The do-again-test is the true-or-false test of an @code{if} clause.
@@ -14657,7 +14661,7 @@ The wrapper:
 @smallexample
 @group
 ;;; @r{Recursive version}
-(defun count-words-region (beginning end)
+(defun @value{COUNT-WORDS} (beginning end)
   "Print number of words in the region.
 @end group
 
@@ -14702,11 +14706,11 @@ exclamation mark, and question mark.  Do the same using recursion.
 
 Our next project is to count the number of words in a function
 definition.  Clearly, this can be done using some variant of
-@code{count-word-region}.  @xref{Counting Words, , Counting Words:
+@code{@value{COUNT-WORDS}}.  @xref{Counting Words, , Counting Words:
 Repetition and Regexps}.  If we are just going to count the words in
 one definition, it is easy enough to mark the definition with the
 @kbd{C-M-h} (@code{mark-defun}) command, and then call
-@code{count-word-region}.
+@code{@value{COUNT-WORDS}}.
 
 However, I am more ambitious: I want to count the words and symbols in
 every definition in the Emacs sources and then print a graph that
@@ -14719,7 +14723,7 @@ and this will tell.
 * Divide and Conquer::
 * Words and Symbols::           What to count?
 * Syntax::                      What constitutes a word or symbol?
-* count-words-in-defun::        Very like @code{count-words}.
+* count-words-in-defun::        Very like @code{@value{COUNT-WORDS}}.
 * Several defuns::              Counting several defuns in a file.
 * Find a File::                 Do you want to look at a file?
 * lengths-list-file::           A list of the lengths of many definitions.
@@ -14793,11 +14797,11 @@ of ten words and symbols.
 @noindent
 However, if we mark the @code{multiply-by-seven} definition with
 @kbd{C-M-h} (@code{mark-defun}), and then call
-@code{count-words-region} on it, we will find that
-@code{count-words-region} claims the definition has eleven words, not
+@code{@value{COUNT-WORDS}} on it, we will find that
+@code{@value{COUNT-WORDS}} claims the definition has eleven words, not
 ten!  Something is wrong!
 
-The problem is twofold: @code{count-words-region} does not count the
+The problem is twofold: @code{@value{COUNT-WORDS}} does not count the
 @samp{*} as a word, and it counts the single symbol,
 @code{multiply-by-seven}, as containing three words.  The hyphens are
 treated as if they were interword spaces rather than intraword
@@ -14805,8 +14809,8 @@ connectors: @samp{multiply-by-seven} is counted as if it were written
 @samp{multiply by seven}.
 
 The cause of this confusion is the regular expression search within
-the @code{count-words-region} definition that moves point forward word
-by word.  In the canonical version of @code{count-words-region}, the
+the @code{@value{COUNT-WORDS}} definition that moves point forward word
+by word.  In the canonical version of @code{@value{COUNT-WORDS}}, the
 regexp is:
 
 @smallexample
@@ -14831,16 +14835,15 @@ constituent} characters.  Word constituent characters are members of
 one syntax category.  Other syntax categories include the class of
 punctuation characters, such as the period and the comma, and the
 class of whitespace characters, such as the blank space and the tab
-character.  (For more information, see @ref{Syntax, Syntax, The Syntax
-Table, emacs, The GNU Emacs Manual}, and @ref{Syntax Tables, , Syntax
+character.  (For more information, @pxref{Syntax Tables, , Syntax
 Tables, elisp, The GNU Emacs Lisp Reference Manual}.)
 
 Syntax tables specify which characters belong to which categories.
 Usually, a hyphen is not specified as a `word constituent character'.
 Instead, it is specified as being in the `class of characters that are
 part of symbol names but not words.'  This means that the
-@code{count-words-region} function treats it in the same way it treats
-an interword white space, which is why @code{count-words-region}
+@code{@value{COUNT-WORDS}} function treats it in the same way it treats
+an interword white space, which is why @code{@value{COUNT-WORDS}}
 counts @samp{multiply-by-seven} as three words.
 
 There are two ways to cause Emacs to count @samp{multiply-by-seven} as
@@ -14853,7 +14856,7 @@ most common character within symbols that is not typically a word
 constituent character; there are others, too.
 
 Alternatively, we can redefine the regular expression used in the
-@code{count-words} definition so as to include symbols.  This
+@code{@value{COUNT-WORDS}} definition so as to include symbols.  This
 procedure has the merit of clarity, but the task is a little tricky.
 
 @need 1200
@@ -14910,7 +14913,7 @@ Here is the full regular expression:
 @cindex Counting words in a @code{defun}
 
 We have seen that there are several ways to write a
-@code{count-word-region} function.  To write a
+@code{count-words-region} function.  To write a
 @code{count-words-in-defun}, we need merely adapt one of these
 versions.
 
@@ -15002,13 +15005,13 @@ word and symbol by symbol, and another expression that counts the
 jumps.  The true-or-false-test for the @code{while} loop should test
 true so long as point should jump forward, and false when point is at
 the end of the definition.  We have already redefined the regular
-expression for this (@pxref{Syntax}), so the loop is straightforward:
+expression for this, so the loop is straightforward:
 
 @smallexample
 @group
 (while (and (< (point) end)
             (re-search-forward
-             "\\(\\w\\|\\s_\\)+[^ \t\n]*[ \t\n]*" end t)
+             "\\(\\w\\|\\s_\\)+[^ \t\n]*[ \t\n]*" end t))
   (setq count (1+ count)))
 @end group
 @end smallexample
@@ -15044,7 +15047,7 @@ Put together, the @code{count-words-in-defun} definition looks like this:
 How to test this?  The function is not interactive, but it is easy to
 put a wrapper around the function to make it interactive; we can use
 almost the same code as for the recursive version of
-@code{count-words-region}:
+@code{@value{COUNT-WORDS}}:
 
 @smallexample
 @group
@@ -16958,7 +16961,7 @@ For this reason, I have written enhancements to the basic
 @code{print-graph-body} function that automatically print labels for
 the horizontal and vertical axes.  Since the label printing functions
 do not contain much new material, I have placed their description in
-an appendix.  @xref{Full Graph, , A Graph with Labelled Axes}.
+an appendix.  @xref{Full Graph, , A Graph with Labeled Axes}.
 
 @node Line Graph Exercise,  , Printed Axes, Readying a Graph
 @section Exercise
@@ -18885,7 +18888,7 @@ Lisp Reference Manual}.
 
 @itemize @bullet
 @item
-Install the @code{count-words-region} function and then cause it to
+Install the @code{@value{COUNT-WORDS}} function and then cause it to
 enter the built-in debugger when you call it.  Run the command on a
 region containing two words.  You will need to press @kbd{d} a
 remarkable number of times.  On your system, is a `hook' called after
@@ -18894,7 +18897,7 @@ Overview, , Command Loop Overview, elisp, The GNU Emacs Lisp Reference
 Manual}.)
 
 @item
-Copy @code{count-words-region} into the @file{*scratch*} buffer,
+Copy @code{@value{COUNT-WORDS}} into the @file{*scratch*} buffer,
 instrument the function for Edebug, and walk through its execution.
 The function does not need to have a bug, although you can introduce
 one if you wish.  If the function lacks a bug, the walk-through
@@ -18909,7 +18912,7 @@ for commands made outside of the Edebug debugging buffer.)
 @item
 In the Edebug debugging buffer, use the @kbd{p}
 (@code{edebug-bounce-point}) command to see where in the region the
-@code{count-words-region} is working.
+@code{@value{COUNT-WORDS}} is working.
 
 @item
 Move point to some spot further down the function and then type the
@@ -19443,7 +19446,7 @@ whether the kill ring is full or empty.  This is an act of
 exploration.
 
 From the human point of view, the act of exploration and discovery is
-not necessarily an error, and therefore should not be labelled as one,
+not necessarily an error, and therefore should not be labeled as one,
 even in the bowels of a computer.  As it is, the code in Emacs implies
 that a human who is acting virtuously, by exploring his or her
 environment, is making an error.  This is bad.  Even though the computer
@@ -19756,25 +19759,25 @@ as @code{kill-ring-yank-pointer} do not use this library, possibly
 because they were written earlier.
 
 @node Full Graph, Free Software and Free Manuals, Kill Ring, Top
-@appendix A Graph with Labelled Axes
+@appendix A Graph with Labeled Axes
 
 Printed axes help you understand a graph.  They convey scale.  In an
 earlier chapter (@pxref{Readying a Graph, ,  Readying a Graph}), we
 wrote the code to print the body of a graph.  Here we write the code
-for printing and labelling vertical and horizontal axes, along with the
+for printing and labeling vertical and horizontal axes, along with the
 body itself.
 
 @menu
-* Labelled Example::
+* Labeled Example::
 * print-graph Varlist::         @code{let} expression in @code{print-graph}.
 * print-Y-axis::                Print a label for the vertical axis.
 * print-X-axis::                Print a horizontal label.
 * Print Whole Graph::           The function to print a complete graph.
 @end menu
 
-@node Labelled Example, print-graph Varlist, Full Graph, Full Graph
+@node Labeled Example, print-graph Varlist, Full Graph, Full Graph
 @ifnottex
-@unnumberedsec Labelled Example Graph
+@unnumberedsec Labeled Example Graph
 @end ifnottex
 
 Since insertions fill a buffer to the right and below point, the new
@@ -19817,9 +19820,9 @@ Here is an example of how a finished graph should look:
 @end smallexample
 
 @noindent
-In this graph, both the vertical and the horizontal axes are labelled
+In this graph, both the vertical and the horizontal axes are labeled
 with numbers.  However, in some graphs, the horizontal axis is time
-and would be better labelled with months, like this:
+and would be better labeled with months, like this:
 
 @smallexample
 @group
@@ -19834,9 +19837,9 @@ and would be better labelled with months, like this:
 @end smallexample
 
 Indeed, with a little thought, we can easily come up with a variety of
-vertical and horizontal labelling schemes.  Our task could become
+vertical and horizontal labeling schemes.  Our task could become
 complicated.  But complications breed confusion.  Rather than permit
-this, it is better choose a simple labelling scheme for our first
+this, it is better choose a simple labeling scheme for our first
 effort, and to modify or replace it later.
 
 @need 1200
@@ -19860,7 +19863,7 @@ These considerations suggest the following outline for the
 We can work on each part of the @code{print-graph} function definition
 in turn.
 
-@node print-graph Varlist, print-Y-axis, Labelled Example, Full Graph
+@node print-graph Varlist, print-Y-axis, Labeled Example, Full Graph
 @comment  node-name,  next,  previous,  up
 @appendixsec The @code{print-graph} Varlist
 @cindex @code{print-graph} varlist
@@ -20387,7 +20390,7 @@ blank spaces and also separated according to the value of the variable
 The value of the variable @code{X-axis-label-spacing} should itself be
 measured in units of @code{symbol-width}, since you may want to change
 the width of the symbols that you are using to print the body of the
-graph without changing the ways the graph is labelled.
+graph without changing the ways the graph is labeled.
 
 @menu
 * Similarities differences::    Much like @code{print-Y-axis}, but not exactly.
@@ -20718,7 +20721,7 @@ Emacs will print the horizontal axis like this:
 Now we are nearly ready to print the whole graph.
 
 The function to print the graph with the proper labels follows the
-outline we created earlier (@pxref{Full Graph, , A Graph with Labelled
+outline we created earlier (@pxref{Full Graph, , A Graph with Labeled
 Axes}), but with additions.
 
 @need 1250
@@ -20853,7 +20856,7 @@ Finally, the code for the @code{print-graph} function:
 ;;; @r{Final version.}
 (defun print-graph
   (numbers-list &optional vertical-step)
-  "Print labelled bar graph of the NUMBERS-LIST.
+  "Print labeled bar graph of the NUMBERS-LIST.
 The numbers-list consists of the Y-axis values.
 @end group
 
@@ -21474,7 +21477,7 @@ each column."
 @group
 (defun print-graph
   (numbers-list &optional vertical-step horizontal-step)
-  "Print labelled bar graph of the NUMBERS-LIST.
+  "Print labeled bar graph of the NUMBERS-LIST.
 The numbers-list consists of the Y-axis values.
 @end group
 
@@ -21975,7 +21978,7 @@ each column."
 @group
 (defun print-graph
   (numbers-list &optional vertical-step horizontal-step)
-  "Print labelled bar graph of the NUMBERS-LIST.
+  "Print labeled bar graph of the NUMBERS-LIST.
 The numbers-list consists of the Y-axis values.
 @end group
 
@@ -22271,7 +22274,3 @@ airplane.
 @c @end iftex
 
 @bye
-
-@ignore
-   arch-tag: da1a2154-531f-43a8-8e33-fc7faad10acf
-@end ignore

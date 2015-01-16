@@ -1,6 +1,5 @@
 /* Heap management routines for GNU Emacs on the Microsoft W32 API.
-   Copyright (C) 1994, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
-                 2008, 2009, 2010, 2011, 2012  Free Software Foundation, Inc.
+   Copyright (C) 1994, 2001-2012  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -21,11 +20,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
    Geoff Voelker (voelker@cs.washington.edu)			     7-29-94
 */
 
-#ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
-#include <stdlib.h>
 #include <stdio.h>
 #include <setjmp.h>
 
@@ -245,7 +240,7 @@ sbrk (unsigned long increment)
    was allocated by something else; GNU malloc detects when there is a
    jump in the sbrk values, and starts a new heap block.  */
 void
-init_heap ()
+init_heap (void)
 {
   PIMAGE_DOS_HEADER dos_header;
   PIMAGE_NT_HEADERS nt_header;
@@ -325,5 +320,3 @@ _heap_term (void)
 
 #endif
 
-/* arch-tag: 9a6a9860-040d-422d-8905-450dd535cd9c
-   (do not change this comment) */

@@ -1,9 +1,9 @@
 ;;; face-remap.el --- Functions for managing `face-remapping-alist'
 ;;
-;; Copyright (C) 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2012 Free Software Foundation, Inc.
 ;;
 ;; Author: Miles Bader <miles@gnu.org>
-;; Keywords: faces face remapping display user commands
+;; Keywords: faces, face remapping, display, user commands
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -204,7 +204,10 @@ Each positive or negative step scales the default face height by this amount."
 (make-variable-buffer-local 'text-scale-mode-amount)
 
 (define-minor-mode text-scale-mode
-  "Minor mode for displaying buffer text in a larger/smaller font than usual.
+  "Minor mode for displaying buffer text in a larger/smaller font.
+With a prefix argument ARG, enable the mode if ARG is positive,
+and disable it otherwise.  If called from Lisp, enable the mode
+if ARG is omitted or nil.
 
 The amount of scaling is determined by the variable
 `text-scale-mode-amount': one step scales the global default
@@ -334,8 +337,10 @@ plist, etc."
 ;;;###autoload
 (define-minor-mode buffer-face-mode
   "Minor mode for a buffer-specific default face.
-When enabled, the face specified by the variable
-`buffer-face-mode-face' is used to display the buffer text."
+With a prefix argument ARG, enable the mode if ARG is positive,
+and disable it otherwise.  If called from Lisp, enable the mode
+if ARG is omitted or nil.  When enabled, the face specified by the
+variable `buffer-face-mode-face' is used to display the buffer text."
   :lighter " BufFace"
   (when buffer-face-mode-remapping
     (face-remap-remove-relative buffer-face-mode-remapping))
@@ -423,5 +428,4 @@ Besides the choice of face, it is the same as `buffer-face-mode'."
 
 (provide 'face-remap)
 
-;; arch-tag: 5c5f034b-8d58-4967-82bd-d61fd364e686
 ;;; face-remap.el ends here

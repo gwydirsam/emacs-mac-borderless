@@ -1,6 +1,6 @@
 ;;; cedet-utests.el --- Run all unit tests in the CEDET suite.
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2012 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -96,7 +96,7 @@
   "Non-nil when CEDET-utest is running all the tests.")
 
 (defun cedet-utest (&optional exit-on-error)
-  "Run the CEDET unittests.
+  "Run the CEDET unit tests.
 EXIT-ON-ERROR causes the test suite to exit on an error, instead
 of just logging the error."
   (interactive)
@@ -512,5 +512,4 @@ When optional NO-ERROR don't throw an error if we can't run tests."
 
 (provide 'cedet-utests)
 
-;; arch-tag: ace16290-4119-4df0-b33c-8c6b809f420d
 ;;; cedet-utests.el ends here

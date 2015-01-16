@@ -14,8 +14,7 @@
 This document describes Supercite, an Emacs package for citing and
 attributing replies to mail and news messages.
 
-Copyright @copyright{} 1993, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
-2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+Copyright @copyright{} 1993, 2001-2012 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -54,9 +53,10 @@ developing GNU and promoting software freedom.''
 
 @ifnottex
 @node Top, Introduction, (dir), (dir)
+@top Supercite
 @comment  node-name,  next,  previous,  up
 
-@insertcopying 
+@insertcopying
 
 The manual is divided
 into the following chapters.
@@ -1877,7 +1877,7 @@ been continuously added through the comments and suggestions of the
 Supercite mailing list participants.
 
 With version 3, Supercite underwent an almost complete rewrite,
-benefitting in a number of ways, including vast improvements in the
+benefiting in a number of ways, including vast improvements in the
 speed of performance, a big reduction in size of the code and in the use
 of Emacs resources, and a much cleaner and flexible internal
 architecture.  Most of this work was internal and not of very great
@@ -1939,7 +1939,3 @@ its @var{variable} name.
 @end iftex
 @printindex vr
 @bye
-
-@ignore
-   arch-tag: 0521847a-4680-44b6-ae6e-13ce20e18436
-@end ignore

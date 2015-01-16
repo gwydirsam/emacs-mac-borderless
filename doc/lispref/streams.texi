@@ -1,7 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990, 1991, 1992, 1993, 1994, 1998, 1999, 2001, 2002,
-@c   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012  Free Software Foundation, Inc.
+@c Copyright (C) 1990-1994, 1998-1999, 2001-2012  Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @setfilename ../../info/streams
 @node Read and Print, Minibuffers, Debugging, Top
@@ -266,12 +265,6 @@ Note that the open and close parentheses remain in the list.  The Lisp
 reader encountered the open parenthesis, decided that it ended the
 input, and unread it.  Another attempt to read from the stream at this
 point would read @samp{()} and return @code{nil}.
-
-@defun get-file-char
-This function is used internally as an input stream to read from the
-input file opened by the function @code{load}.  Don't use this function
-yourself.
-@end defun
 
 @node Input Functions
 @section Input Functions
@@ -685,6 +678,12 @@ For example, if the current buffer name is @samp{foo},
 returns @code{"The buffer is foo"}.
 @end defmac
 
+@defun pp object &optional stream
+This function outputs @var{object} to @var{stream}, just like
+@code{prin1}, but does it in a more ``pretty'' way.  That is, it'll
+indent and fill the object to make it more readable for humans.
+@end defun
+
 @node Output Variables
 @section Variables Affecting Output
 @cindex output-controlling variables
@@ -697,9 +696,8 @@ The default is @code{t}, meaning display in the echo area.
 
 @defvar print-quoted
 If this is non-@code{nil}, that means to print quoted forms using
-abbreviated reader syntax.  @code{(quote foo)} prints as @code{'foo},
-@code{(function foo)} as @code{#'foo}, and backquoted forms print
-using modern backquote syntax.
+abbreviated reader syntax, e.g.@: @code{(quote foo)} prints as
+@code{'foo}, and @code{(function foo)} as @code{#'foo}.
 @end defvar
 
 @defvar print-escape-newlines
@@ -837,7 +835,3 @@ variable.  The string should hold a @samp{%}-specification to be used
 in the C function @code{sprintf}.  For further restrictions on what
 you can use, see the variable's documentation string.
 @end defvar
-
-@ignore
-   arch-tag: 07636b8c-c4e3-4735-9e06-2e864320b434
-@end ignore

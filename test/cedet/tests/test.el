@@ -1,7 +1,6 @@
 ;;; test.el --- Unit test file for Semantic Emacs Lisp support.
 
-;; Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 2005-2012  Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -145,7 +144,7 @@
   this
   that)
 
-(define-mode-local-override a-overriden-function
+(define-mode-local-override a-overridden-function
   emacs-lisp-mode (tag)
   "A function that is overloaded."
   nil)
@@ -157,5 +156,3 @@
 ;;; Provide
 ;;
 (provide 'test)
-
-;; arch-tag: ecda6dd6-db71-4b28-aa47-6adc585dce06

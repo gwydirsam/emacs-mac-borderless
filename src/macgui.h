@@ -1,6 +1,5 @@
 /* Definitions and headers for communication on the Mac OS.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004,
-                 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2000-2008 Free Software Foundation, Inc.
    Copyright (C) 2009-2012  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
@@ -27,13 +26,8 @@ typedef struct _XDisplay Display; /* opaque */
 
 typedef Lisp_Object XrmDatabase;
 
-typedef unsigned long Time;
-
 #ifdef HAVE_MACGUI
 #undef Z
-#if ! HAVE_MKTIME || BROKEN_MKTIME
-#undef mktime
-#endif
 #undef DEBUG
 #undef free
 #undef malloc
@@ -44,9 +38,10 @@ typedef unsigned long Time;
 #undef min
 #undef init_process
 #include <Carbon/Carbon.h>
-#if ! HAVE_MKTIME || BROKEN_MKTIME
-#undef mktime
-#define mktime emacs_mktime
+#ifdef verify
+#undef verify
+#undef _GL_VERIFY_H
+#include <verify.h>
 #endif
 #undef free
 #define free unexec_free
@@ -80,28 +75,28 @@ typedef float CGFloat;
 
 typedef void *Window;
 typedef void *Selection;
-extern void mac_set_frame_window_title P_ ((struct frame *, CFStringRef));
-extern void mac_set_frame_window_modified P_ ((struct frame *, Boolean));
-extern Boolean mac_is_frame_window_visible P_ ((struct frame *));
-extern Boolean mac_is_frame_window_collapsed P_ ((struct frame *));
-extern void mac_bring_frame_window_to_front P_ ((struct frame *));
-extern void mac_send_frame_window_behind P_ ((struct frame *));
-extern void mac_hide_frame_window P_ ((struct frame *));
-extern void mac_show_frame_window P_ ((struct frame *));
-extern OSStatus mac_collapse_frame_window P_ ((struct frame *, Boolean));
-extern Boolean mac_is_frame_window_front P_ ((struct frame *));
-extern void mac_activate_frame_window P_ ((struct frame *));
-extern OSStatus mac_move_frame_window_structure P_ ((struct frame *,
-						     short, short));
-extern void mac_move_frame_window P_ ((struct frame *, short, short, Boolean));
-extern void mac_size_frame_window P_ ((struct frame *, short, short, Boolean));
-extern OSStatus mac_set_frame_window_alpha P_ ((struct frame *, CGFloat));
-extern void mac_get_global_mouse P_ ((Point *));
-extern Boolean mac_is_frame_window_toolbar_visible P_ ((struct frame *));
-extern CGRect mac_rect_make P_ ((struct frame *, CGFloat, CGFloat,
-				 CGFloat, CGFloat));
+extern void mac_set_frame_window_title (struct frame *, CFStringRef);
+extern void mac_set_frame_window_modified (struct frame *, Boolean);
+extern Boolean mac_is_frame_window_visible (struct frame *);
+extern Boolean mac_is_frame_window_collapsed (struct frame *);
+extern void mac_bring_frame_window_to_front (struct frame *);
+extern void mac_send_frame_window_behind (struct frame *);
+extern void mac_hide_frame_window (struct frame *);
+extern void mac_show_frame_window (struct frame *);
+extern OSStatus mac_collapse_frame_window (struct frame *, Boolean);
+extern Boolean mac_is_frame_window_front (struct frame *);
+extern void mac_activate_frame_window (struct frame *);
+extern OSStatus mac_move_frame_window_structure (struct frame *,
+						 short, short);
+extern void mac_move_frame_window (struct frame *, short, short, Boolean);
+extern void mac_size_frame_window (struct frame *, short, short, Boolean);
+extern OSStatus mac_set_frame_window_alpha (struct frame *, CGFloat);
+extern void mac_get_global_mouse (Point *);
+extern Boolean mac_is_frame_window_toolbar_visible (struct frame *);
+extern CGRect mac_rect_make (struct frame *, CGFloat, CGFloat,
+			     CGFloat, CGFloat);
 
-#if USE_MAC_IMAGE_IO
+#ifdef USE_MAC_IMAGE_IO
 typedef struct _XImage
 {
   int width, height;		/* size of image */
@@ -362,6 +357,3 @@ typedef struct _widget_value
 #define DIALOG_ICON_TOP_MARGIN (15)
 
 #endif /* EMACS_MACGUI_H */
-
-/* arch-tag: 5a0da49a-35e2-418b-a58c-8a55778ae849
-   (do not change this comment) */

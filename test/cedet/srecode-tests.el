@@ -1,6 +1,6 @@
 ;;; srecode-tests.el --- Some tests for CEDET's srecode
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2012  Free Software Foundation, Inc.
+;; Copyright (C) 2008-2012  Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -177,7 +177,7 @@ It is filled with some text."
 
       (mapc (lambda (T)
 	      (when (slot-boundp T 'overlay)
-		(error "Overlay did not clear off of of field %s"
+		(error "Overlay did not clear off of field %s"
 		       (object-name T))))
 	    fields)
 
@@ -293,5 +293,4 @@ Dump out the extracted dictionary."
 	  (princ "\n--------------------------------------------\n")
 	  (srecode-dump extract))))))
 
-;; arch-tag: 7a467849-b415-4bdc-ba2a-284ace156a65
 ;;; srecode-tests.el ends here

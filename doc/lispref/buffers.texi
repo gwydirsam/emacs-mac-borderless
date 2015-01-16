@@ -1,7 +1,7 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990, 1991, 1992, 1993, 1994, 1995, 1998, 1999, 2001, 2002,
-@c   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012  Free Software Foundation, Inc.
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2012
+@c   Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @setfilename ../../info/buffers
 @node Buffers, Windows, Backups and Auto-Saving, Top
@@ -124,7 +124,7 @@ selected window.  This is to prevent confusion: it ensures that the
 buffer that the cursor is in, when Emacs reads a command, is the
 buffer to which that command applies (@pxref{Command Loop}).  Thus,
 you should not use @code{set-buffer} to switch visibly to a different
-buffer; for that, use the functions described in @ref{Displaying
+buffer; for that, use the functions described in @ref{Switching
 Buffers}.
 
   When writing a Lisp function, do @emph{not} rely on this behavior of
@@ -603,12 +603,12 @@ therefore checks the file's modification time using the functions
 described below before saving the file.  (@xref{File Attributes},
 for how to examine a file's modification time.)
 
-@defun verify-visited-file-modtime buffer
-This function compares what @var{buffer} has recorded for the
-modification time of its visited file against the actual modification
-time of the file as recorded by the operating system.  The two should be
-the same unless some other process has written the file since Emacs
-visited or saved it.
+@defun verify-visited-file-modtime &optional buffer
+This function compares what @var{buffer} (by default, the
+current-buffer) has recorded for the modification time of its visited
+file against the actual modification time of the file as recorded by the
+operating system.  The two should be the same unless some other process
+has written the file since Emacs visited or saved it.
 
 The function returns @code{t} if the last actual modification time and
 Emacs's recorded modification time are the same, @code{nil} otherwise.
@@ -748,10 +748,11 @@ of the list (comparison is done with @code{eq}).
 
 @deffn Command toggle-read-only &optional arg
 This command toggles whether the current buffer is read-only.  It is
-intended for interactive use; do not use it in programs.  At any given
-point in a program, you should know whether you want the read-only flag
-on or off; so you can set @code{buffer-read-only} explicitly to the
-proper value, @code{t} or @code{nil}.
+intended for interactive use; do not use it in programs (it may have
+side-effects, such as enabling View mode, and does not affect
+read-only text properties).  To change the read-only state of a buffer in
+a program, explicitly set @code{buffer-read-only} to the proper value.
+To temporarily ignore a read-only state, bind @code{inhibit-read-only}.
 
 If @var{arg} is non-@code{nil}, it should be a raw prefix argument.
 @code{toggle-read-only} sets @code{buffer-read-only} to @code{t} if
@@ -775,13 +776,14 @@ been displayed in a window.  Several functions, notably
 @code{other-buffer}, use this ordering.  A buffer list displayed for the
 user also follows this order.
 
-  Creating a buffer adds it to the end of the buffer list, and killing a
-buffer removes it from that list.  A buffer moves to the front of this
-list whenever it is chosen for display in a window (@pxref{Displaying
-Buffers}) or a window displaying it is selected (@pxref{Selecting
-Windows}).  A buffer moves to the end of the list when it is buried (see
-@code{bury-buffer}, below).  There are no functions available to the
-Lisp programmer which directly manipulate the buffer list.
+  Creating a buffer adds it to the end of the buffer list, and killing
+a buffer removes it from that list.  A buffer moves to the front of
+this list whenever it is chosen for display in a window
+(@pxref{Switching Buffers}) or a window displaying it is selected
+(@pxref{Selecting Windows}).  A buffer moves to the end of the list
+when it is buried (see @code{bury-buffer}, below).  There are no
+functions available to the Lisp programmer which directly manipulate
+the buffer list.
 
   In addition to the fundamental buffer list just described, Emacs
 maintains a local buffer list for each frame, in which the buffers that
@@ -883,29 +885,34 @@ This buffer therefore becomes the least desirable candidate for
 @code{other-buffer} to return.  The argument can be either a buffer
 itself or the name of one.
 
-@code{bury-buffer} operates on each frame's @code{buffer-list} parameter
-as well as the fundamental buffer list; therefore, the buffer that you
-bury will come last in the value of @code{(buffer-list @var{frame})} and
-in the value of @code{(buffer-list)}.
+This functions operates on each frame's @code{buffer-list} parameter as
+well as the fundamental buffer list; therefore, the buffer that you bury
+will come last in the value of @code{(buffer-list @var{frame})} and in
+the value of @code{(buffer-list)}.  In addition, it also puts the buffer
+at the end of the list of buffer of the selected window (@pxref{Window
+History}) provided it is shown in that window.
 
 If @var{buffer-or-name} is @code{nil} or omitted, this means to bury the
-current buffer.  In addition, if the buffer is displayed in the selected
-window, this switches to some other buffer (obtained using
-@code{other-buffer}) in the selected window.  @xref{Displaying Buffers}.
-But if the selected window is dedicated to its buffer, it deletes that
-window if there are other windows left on its frame.  Otherwise, if the
-selected window is the only window on its frame, it iconifies that
-frame.  If @var{buffer-or-name} is displayed in some other window, it
-remains displayed there.
+current buffer.  In addition, if the current buffer is displayed in the
+selected window, this makes sure that the window is either deleted or
+another buffer is shown in it.  More precisely, if the window is
+dedicated (@pxref{Dedicated Windows}) and there are other windows on its
+frame, the window is deleted.  If the window is both dedicated and the
+only window on its frame's terminal, the function specified by
+@code{frame-auto-hide-function} (@pxref{Quitting Windows}) will deal
+with the window.  If the window is not dedicated to its buffer, it calls
+@code{switch-to-prev-buffer} (@pxref{Window History}) to show another
+buffer in that window.  If @var{buffer-or-name} is displayed in some
+other window, it remains displayed there.
 
 To replace a buffer in all the windows that display it, use
-@code{replace-buffer-in-windows}.  @xref{Buffers and Windows}.
+@code{replace-buffer-in-windows}, @xref{Buffers and Windows}.
 @end deffn
 
 @deffn Command unbury-buffer
-This command switches to the last buffer in the local buffer list of the
-selected frame.  More precisely, it calls the function
-@code{switch-to-buffer} (@pxref{Displaying Buffers}), to display the
+This command switches to the last buffer in the local buffer list of
+the selected frame.  More precisely, it calls the function
+@code{switch-to-buffer} (@pxref{Switching Buffers}), to display the
 buffer returned by @code{last-buffer}, see above, in the selected
 window.
 @end deffn
@@ -1232,6 +1239,3 @@ This function returns the current gap position in the current buffer.
 This function returns the current gap size of the current buffer.
 @end defun
 
-@ignore
-   arch-tag: 2e53cfab-5691-41f6-b5a8-9c6a3462399c
-@end ignore

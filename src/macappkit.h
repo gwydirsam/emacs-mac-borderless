@@ -19,7 +19,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #undef Z
 #import <Cocoa/Cocoa.h>
 #import <AppKit/NSAccessibility.h> /* Mac OS X 10.2 needs this.  */
-#if USE_MAC_IMAGE_IO
+#ifdef USE_MAC_IMAGE_IO
 #import <WebKit/WebKit.h>
 #endif
 #define Z (current_buffer->text->z)
@@ -164,6 +164,10 @@ typedef unsigned int NSUInteger;
   /* Whether a service provider for Emacs is registered as of
      applicationWillFinishLaunching: or not.  */
   BOOL serviceProviderRegistered;
+
+  /* Whether the application should update its presentation options
+     when it becomes active next time.  */
+  BOOL needsUpdatePresentationOptionsOnBecomingActive;
 
   /* Whether conflicting Cocoa's text system key bindings (e.g., C-q)
      are disabled or not.  */
@@ -475,6 +479,7 @@ typedef unsigned int NSUInteger;
 - (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar;
 - (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
 - (void)setupToolBarWithVisibility:(BOOL)visible;
+- (void)updateToolbarDisplayMode;
 - (void)storeToolBarEvent:(id)sender;
 - (void)noteToolBarMouseMovement:(NSEvent *)event;
 @end
@@ -574,7 +579,7 @@ typedef unsigned int NSUInteger;
 - (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
 @end
 
-#if USE_MAC_IMAGE_IO
+#ifdef USE_MAC_IMAGE_IO
 @interface NSView (Emacs)
 - (XImagePtr)createXImageFromRect:(NSRect)rect backgroundColor:(NSColor *)color;
 @end
@@ -591,14 +596,14 @@ typedef unsigned int NSUInteger;
   int (*checkImageSizeFunc) (struct frame *, int, int);
 
   /* Function called when reporting image load errors.  */
-  void (*imageErrorFunc) (char *, Lisp_Object, Lisp_Object);
+  void (*imageErrorFunc) (const char *, Lisp_Object, Lisp_Object);
 
   /* Whether a page load has completed.  */
   BOOL isLoaded;
 }
 - (id)initWithEmacsFrame:(struct frame *)f emacsImage:(struct image *)img
       checkImageSizeFunc:(int (*)(struct frame *, int, int))checkImageSize
-	  imageErrorFunc:(void (*)(char *, Lisp_Object, Lisp_Object))imageError;
+	  imageErrorFunc:(void (*)(const char *, Lisp_Object, Lisp_Object))imageError;
 - (int)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor;
 @end
 #endif

@@ -1,10 +1,10 @@
 ;;; button.el --- clickable buttons
 ;;
-;; Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-;;   2010, 2011, 2012  Free Software Foundation, Inc.
+;; Copyright (C) 2001-2012  Free Software Foundation, Inc.
 ;;
 ;; Author: Miles Bader <miles@gnu.org>
 ;; Keywords: extensions
+;; Package: emacs
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -42,7 +42,7 @@
 ;; button face may not be visible.  Using overlays avoids this.
 ;;
 ;; Using `define-button-type' to define default properties for buttons
-;; is not necessary, but it is is encouraged, since doing so makes the
+;; is not necessary, but it is encouraged, since doing so makes the
 ;; resulting code clearer and more efficient.
 ;;
 
@@ -54,10 +54,7 @@
 ;; Use color for the MS-DOS port because it doesn't support underline.
 ;; FIXME if MS-DOS correctly answers the (supports) question, it need
 ;; no longer be a special case.
-(defface button '((((type pc) (class color))
-		   (:foreground "lightblue"))
-		  (((supports :underline t)) :underline t)
-		  (t (:foreground "lightblue")))
+(defface button '((t :inherit link))
   "Default face used for buttons."
   :group 'basic-faces)
 

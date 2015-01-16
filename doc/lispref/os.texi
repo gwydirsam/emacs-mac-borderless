@@ -1,11 +1,10 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990, 1991, 1992, 1993, 1994, 1995, 1998, 1999, 2001,
-@c   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2012
 @c   Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @setfilename ../../info/os
-@node System Interface, Antinews, Display, Top
+@node System Interface, Packaging, Display, Top
 @chapter Operating System Interface
 
   This chapter is about starting and getting out of Emacs, access to
@@ -22,7 +21,7 @@ terminal and the screen.
 * System Environment::  Distinguish the name and kind of system.
 * User Identification:: Finding the name and user id of the user.
 * Time of Day::         Getting the current time.
-* Time Conversion::     Converting a time from numeric form to 
+* Time Conversion::     Converting a time from numeric form to
                           calendrical data and vice versa.
 * Time Parsing::        Converting a time from numeric form to text
                           and vice versa.
@@ -37,6 +36,7 @@ terminal and the screen.
 * X11 Keysyms::         Operating on key symbols for X Windows.
 * Batch Mode::          Running Emacs without terminal interaction.
 * Session Management::  Saving and restoring state with X Session Management.
+* Dynamic Libraries::   On-demand loading of support libraries.
 @end menu
 
 @node Starting Up
@@ -544,10 +544,11 @@ parent process normally resumes control.  The low-level primitive for
 killing Emacs is @code{kill-emacs}.
 
 @deffn Command kill-emacs &optional exit-data
-This command exits the Emacs process and kills it.
+This command calls the hook @code{kill-emacs-hook}, then exits the
+Emacs process and kills it.
 
-If @var{exit-data} is an integer, then it is used as the exit status
-of the Emacs process.  (This is useful primarily in batch operation; see
+If @var{exit-data} is an integer, that is used as the exit status of
+the Emacs process.  (This is useful primarily in batch operation; see
 @ref{Batch Mode}.)
 
 If @var{exit-data} is a string, its contents are stuffed into the
@@ -555,36 +556,44 @@ terminal input buffer so that the shell (or whatever program next reads
 input) can read them.
 @end deffn
 
-  All the information in the Emacs process, aside from files that have
-been saved, is lost when the Emacs process is killed.  Because killing
-Emacs inadvertently can lose a lot of work, Emacs queries for
-confirmation before actually terminating if you have buffers that need
-saving or subprocesses that are running.  This is done in the function
-@code{save-buffers-kill-emacs}, the higher level function from which
-@code{kill-emacs} is usually called.
-
-@defvar kill-emacs-query-functions
-After asking the standard questions, @code{save-buffers-kill-emacs}
-calls the functions in the list @code{kill-emacs-query-functions}, in
-order of appearance, with no arguments.  These functions can ask for
-additional confirmation from the user.  If any of them returns
-@code{nil}, @code{save-buffers-kill-emacs} does not kill Emacs, and
-does not run the remaining functions in this hook.  Calling
-@code{kill-emacs} directly does not run this hook.
-@end defvar
+@cindex SIGTERM
+@cindex SIGHUP
+@cindex SIGINT
+@cindex operating system signal
+  The @code{kill-emacs} function is normally called via the
+higher-level command @kbd{C-x C-c}
+(@code{save-buffers-kill-terminal}).  @xref{Exiting,,, emacs, The GNU
+Emacs Manual}.  It is also called automatically if Emacs receives a
+@code{SIGTERM} or @code{SIGHUP} operating system signal (e.g. when the
+controlling terminal is disconnected), or if it receives a
+@code{SIGINT} signal while running in batch mode (@pxref{Batch Mode}).
 
 @defvar kill-emacs-hook
-This variable is a normal hook; once @code{save-buffers-kill-emacs} is
-finished with all file saving and confirmation, it calls
-@code{kill-emacs} which runs the functions in this hook.
-@code{kill-emacs} does not run this hook in batch mode.
+This normal hook is run by @code{kill-emacs}, before it kills Emacs.
 
-@code{kill-emacs} may be invoked directly (that is not via
-@code{save-buffers-kill-emacs}) if the terminal is disconnected, or in
-similar situations where interaction with the user is not possible.
-Thus, if your hook needs to interact with the user, put it on
-@code{kill-emacs-query-functions}; if it needs to run regardless of
-how Emacs is killed, put it on @code{kill-emacs-hook}.
+Because @code{kill-emacs} can be called in situations where user
+interaction is impossible (e.g. when the terminal is disconnected),
+functions on this hook should not attempt to interact with the user.
+If you want to interact with the user when Emacs is shutting down, use
+@code{kill-emacs-query-functions}, described below.
+@end defvar
+
+  When Emacs is killed, all the information in the Emacs process,
+aside from files that have been saved, is lost.  Because killing Emacs
+inadvertently can lose a lot of work, the
+@code{save-buffers-kill-terminal} command queries for confirmation if
+you have buffers that need saving or subprocesses that are running.
+It also runs the abnormal hook @code{kill-emacs-query-functions}:
+
+@defvar kill-emacs-query-functions
+When @code{save-buffers-kill-terminal} is killing Emacs, it calls the
+functions in this hook, after asking the standard questions and before
+calling @code{kill-emacs}.  The functions are called in order of
+appearance, with no arguments.  Each function can ask for additional
+confirmation from the user.  If any of them returns @code{nil},
+@code{save-buffers-kill-emacs} does not kill Emacs, and does not run
+the remaining functions in this hook.  Calling @code{kill-emacs}
+directly does not run this hook.
 @end defvar
 
 @node Suspending Emacs
@@ -786,9 +795,6 @@ Hewlett-Packard HPUX operating system.
 
 @item irix
 Silicon Graphics Irix system.
-
-@item lynxos 3.0.1
-LynxOS-3.0.1.
 
 @item ms-dos
 Microsoft MS-DOS ``operating system.''  Emacs compiled with DJGPP for
@@ -1147,6 +1153,18 @@ get with the function @code{file-attributes}.
 @xref{Definition of file-attributes}.
 @end defun
 
+@defun float-time &optional time-value
+This function returns the current time as a floating-point number of
+seconds since the epoch.  The argument @var{time-value}, if given,
+specifies a time to convert instead of the current time.  The argument
+should have the same form as for @code{current-time-string} (see
+above).  Thus, it accepts the output of @code{current-time} and
+@code{file-attributes} (@pxref{Definition of file-attributes}).
+
+@emph{Warning}: Since the result is floating point, it may not be
+exact.  Do not use this function if precise time stamps are required.
+@end defun
+
 @defun current-time-zone &optional time-value
 This function returns a list describing the time zone that the user is
 in.
@@ -1169,25 +1187,11 @@ times obtained from @code{current-time} (see above) and from
 @code{file-attributes}.  @xref{Definition of file-attributes}.
 @end defun
 
-@defun set-time-zone-rule tz
-This function specifies the local time zone according to @var{tz}.  If
-@var{tz} is @code{nil}, that means to use an implementation-defined
-default time zone.  If @var{tz} is @code{t}, that means to use
-Universal Time.  Otherwise, @var{tz} should be a string specifying a
-time zone rule.
-@end defun
-
-@defun float-time &optional time-value
-This function returns the current time as a floating-point number of
-seconds since the epoch.  The argument @var{time-value}, if given,
-specifies a time to convert instead of the current time.  The argument
-should have the same form as for @code{current-time-string} (see
-above).  Thus, it accepts the output of @code{current-time} and
-@code{file-attributes} (@pxref{Definition of file-attributes}).
-
-@emph{Warning}: Since the result is floating point, it may not be
-exact.  Do not use this function if precise time stamps are required.
-@end defun
+The current time zone is determined by the @samp{TZ} environment
+variable.  @xref{System Environment}.  For example, you can tell Emacs
+to use universal time with @code{(setenv "TZ" "UTC0")}.  If @samp{TZ}
+is not in the environment, Emacs uses a platform-dependent default
+time zone.
 
 @node Time Conversion
 @section Time Conversion
@@ -1197,11 +1201,11 @@ to calendrical information and vice versa.  You can get time values
 from the functions @code{current-time} (@pxref{Time of Day}) and
 @code{file-attributes} (@pxref{Definition of file-attributes}).
 
-  Many operating systems are limited to time values that contain 32 bits
+  Many 32-bit operating systems are limited to time values that contain 32 bits
 of information; these systems typically handle only the times from
-1901-12-13 20:45:52 UTC through 2038-01-19 03:14:07 UTC.  However, some
-operating systems have larger time values, and can represent times far
-in the past or future.
+1901-12-13 20:45:52 UTC through 2038-01-19 03:14:07 UTC.  However, 64-bit
+and some 32-bit operating systems have larger time values, and can
+represent times far in the past or future.
 
   Time conversion functions always use the Gregorian calendar, even
 for dates before the Gregorian calendar was introduced.  Year numbers
@@ -1340,6 +1344,12 @@ This stands for the month (01-12).
 This stands for the minute (00-59).
 @item %n
 This stands for a newline.
+@item %N
+This stands for the nanoseconds (000000000-999999999).  To ask for
+fewer digits, use @samp{%3N} for milliseconds, @samp{%6N} for
+microseconds, etc.  Any excess digits are discarded, without rounding.
+Currently Emacs time stamps are at best microsecond resolution so the
+last three digits generated by plain @samp{%N} are always zero.
 @item %p
 This stands for @samp{AM} or @samp{PM}, as appropriate.
 @item %r
@@ -2190,6 +2200,53 @@ Emacs is restarted by the session manager.
 @end group
 @end example
 
-@ignore
-   arch-tag: 8378814a-30d7-467c-9615-74a80b9988a7
-@end ignore
+@node Dynamic Libraries
+@section Dynamically Loaded Libraries
+@cindex dynamic libraries
+
+  A @dfn{dynamically loaded library} is a library that is loaded on
+demand, when its facilities are first needed.  Emacs supports such
+on-demand loading of support libraries for some of its features.
+
+@defvar dynamic-library-alist
+This is an alist of dynamic libraries and external library files
+implementing them.
+
+Each element is a list of the form
+@w{@code{(@var{library} @var{files}@dots{})}}, where the @code{car} is
+a symbol representing a supported external library, and the rest are
+strings giving alternate filenames for that library.
+
+Emacs tries to load the library from the files in the order they
+appear in the list; if none is found, the running session of Emacs
+won't have access to that library, and the features that depend on the
+library will be unavailable.
+
+Image support on some platforms uses this facility.  Here's an example
+of setting this variable for supporting images on MS-Windows:
+
+@lisp
+(setq dynamic-library-alist
+      '((xpm "libxpm.dll" "xpm4.dll" "libXpm-nox4.dll")
+        (png "libpng12d.dll" "libpng12.dll" "libpng.dll"
+	 "libpng13d.dll" "libpng13.dll")
+        (jpeg "jpeg62.dll" "libjpeg.dll" "jpeg-62.dll" "jpeg.dll")
+        (tiff "libtiff3.dll" "libtiff.dll")
+        (gif "giflib4.dll" "libungif4.dll" "libungif.dll")
+        (svg "librsvg-2-2.dll")
+        (gdk-pixbuf "libgdk_pixbuf-2.0-0.dll")
+        (glib "libglib-2.0-0.dll")
+	(gobject "libgobject-2.0-0.dll")))
+@end lisp
+
+Note that image types @code{pbm} and @code{xbm} do not need entries in
+this variable because they do not depend on external libraries and are
+always available in Emacs.
+
+Also note that this variable is not meant to be a generic facility for
+accessing external libraries; only those already known by Emacs can
+be loaded through it.
+
+This variable is ignored if the given @var{library} is statically
+linked into Emacs.
+@end defvar

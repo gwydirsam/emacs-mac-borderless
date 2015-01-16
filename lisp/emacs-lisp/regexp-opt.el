@@ -1,7 +1,6 @@
 ;;; regexp-opt.el --- generate efficient regexps to match strings
 
-;; Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
-;;   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2012 Free Software Foundation, Inc.
 
 ;; Author: Simon Marshall <simon@gnu.org>
 ;; Maintainer: FSF
@@ -96,19 +95,24 @@ The returned regexp is typically more efficient than the equivalent regexp:
    (concat open (mapconcat 'regexp-quote STRINGS \"\\\\|\") close))
 
 If PAREN is `words', then the resulting regexp is additionally surrounded
-by \\=\\< and \\>."
+by \\=\\< and \\>.
+If PAREN is `symbols', then the resulting regexp is additionally surrounded
+by \\=\\_< and \\_>."
   (save-match-data
     ;; Recurse on the sorted list.
     (let* ((max-lisp-eval-depth 10000)
 	   (max-specpdl-size 10000)
 	   (completion-ignore-case nil)
 	   (completion-regexp-list nil)
-	   (words (eq paren 'words))
 	   (open (cond ((stringp paren) paren) (paren "\\(")))
 	   (sorted-strings (delete-dups
 			    (sort (copy-sequence strings) 'string-lessp)))
 	   (re (regexp-opt-group sorted-strings (or open t) (not open))))
-      (if words (concat "\\<" re "\\>") re))))
+      (cond ((eq paren 'words)
+	     (concat "\\<" re "\\>"))
+	    ((eq paren 'symbols)
+	     (concat "\\_<" re "\\_>"))
+	    (t re)))))
 
 ;;;###autoload
 (defun regexp-opt-depth (regexp)
@@ -120,7 +124,7 @@ This means the number of non-shy regexp grouping constructs
     (string-match regexp "")
     ;; Count the number of open parentheses in REGEXP.
     (let ((count 0) start last)
-      (while (string-match "\\\\(\\(\\?:\\)?" regexp start)
+      (while (string-match "\\\\(\\(\\?[0-9]*:\\)?" regexp start)
 	(setq start (match-end 0))	      ; Start of next search.
 	(when (and (not (match-beginning 1))
 		   (subregexp-context-p regexp (match-beginning 0) last))
@@ -288,5 +292,4 @@ Merges keywords to avoid backtracking in Emacs' regexp matcher."
 
 (provide 'regexp-opt)
 
-;; arch-tag: 6c5a66f4-29af-4fd6-8c3b-4b554d5b4370
 ;;; regexp-opt.el ends here

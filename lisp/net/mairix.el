@@ -1,6 +1,6 @@
 ;;; mairix.el --- Mairix interface for Emacs
 
-;; Copyright (C) 2008, 2009, 2010, 2011, 2012  Free Software Foundation, Inc.
+;; Copyright (C) 2008-2012  Free Software Foundation, Inc.
 
 ;; Author: David Engster <dengste@eml.cc>
 ;; Keywords: mail searching
@@ -51,7 +51,7 @@
 ;; Currently, RMail, Gnus (with mbox files), and VM are supported as
 ;; mail programs, but it is pretty easy to interface it with other
 ;; ones as well.  Please see the docs and the source for details.
-;; In a nutshell: include your favourite mail program in
+;; In a nutshell: include your favorite mail program in
 ;; `mairix-mail-program' and write functions for
 ;; `mairix-display-functions' and `mairix-get-mail-header-functions'.
 ;; If you have written such functions for your Emacs mail program of
@@ -735,23 +735,21 @@ VALUES may contain values for editable fields from current article."
 
 ;;;; Major mode for editing/deleting/saving searches
 
-(defvar mairix-searches-mode-map nil "'mairix-searches-mode' keymap.")
-
-;; Keymap
-(if (not mairix-searches-mode-map)
-    (let ((map (make-keymap)))
-      (define-key map [(return)] 'mairix-select-search)
-      (define-key map [(down)] 'mairix-next-search)
-      (define-key map [(up)] 'mairix-previous-search)
-      (define-key map [(right)] 'mairix-next-search)
-      (define-key map [(left)] 'mairix-previous-search)
-      (define-key map "\C-p" 'mairix-previous-search)
-      (define-key map "\C-n" 'mairix-next-search)
-      (define-key map [(q)] 'mairix-select-quit)
-      (define-key map [(e)] 'mairix-select-edit)
-      (define-key map [(d)] 'mairix-select-delete)
-      (define-key map [(s)] 'mairix-select-save)
-      (setq mairix-searches-mode-map map)))
+(defvar mairix-searches-mode-map
+  (let ((map (make-keymap)))
+    (define-key map [(return)] 'mairix-select-search)
+    (define-key map [(down)] 'mairix-next-search)
+    (define-key map [(up)] 'mairix-previous-search)
+    (define-key map [(right)] 'mairix-next-search)
+    (define-key map [(left)] 'mairix-previous-search)
+    (define-key map "\C-p" 'mairix-previous-search)
+    (define-key map "\C-n" 'mairix-next-search)
+    (define-key map [(q)] 'mairix-select-quit)
+    (define-key map [(e)] 'mairix-select-edit)
+    (define-key map [(d)] 'mairix-select-delete)
+    (define-key map [(s)] 'mairix-select-save)
+    map)
+  "'mairix-searches-mode' keymap.")
 
 (defvar mairix-searches-mode-font-lock-keywords)
 
@@ -947,5 +945,3 @@ Use cursor keys or C-n,C-p to select next/previous search.\n\n")
 (provide 'mairix)
 
 ;;; mairix.el ends here
-
-;; arch-tag: 787ab678-fcd5-4c50-9295-01c2ee5124a6

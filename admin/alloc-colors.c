@@ -1,6 +1,6 @@
 /* Allocate X colors.  Used for testing with dense colormaps.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-     Free Software Foundation, Inc.
+
+Copyright (C) 2001-2012  Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -40,7 +40,7 @@ void
 usage (const char *progname)
 {
   fprintf (stderr, "Usage %s options\n", progname);
-  fprintf (stderr, "-n NCOLORS  allcoate NCOLORS colors\n");
+  fprintf (stderr, "-n NCOLORS  allocate NCOLORS colors\n");
   exit (1);
 }
 
@@ -111,6 +111,3 @@ main (int argc, char **argv)
   XCloseDisplay (dpy);
   return 0;
 }
-
-/* arch-tag: f1be90ac-5b70-43c2-835e-5a6432a25145
-   (do not change this comment) */

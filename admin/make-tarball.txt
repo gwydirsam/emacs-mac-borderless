@@ -4,7 +4,8 @@ Instructions to create pretest or release tarballs.
 
 For each step, check for possible errors.
 
-1.   cvs -q update -Pd
+1.  `bzr update' (for a bound branch), or `bzr pull'.
+     bzr status # check for locally modified files
 
 2.  Bootstrap to make 100% sure all elc files are up-to-date, and to
     make sure that the later tagged version will bootstrap, should it be
@@ -27,24 +28,29 @@ For each step, check for possible errors.
     refer to a newer release of Emacs.  (This is probably needed only
     when preparing a major Emacs release, or branching for it.)
 
-5.   rm configure; autoconf
+5.  Edit configure.in so that maintainer-mode is off by default.
+    (FIXME - need to find a better way of dealing with this.
+     Or maybe it's fine and indeed correct to leave it on?
+     See http://lists.gnu.org/archive/html/emacs-devel/2011-03/msg00859.html
+     and subsequent.)
+
+     autoreconf -i -I m4 --force
      make bootstrap
 
-6.  Commit configure, README, doc/emacs/emacs.texi,
-    doc/lispref/elisp.texi, etc/AUTHORS, lisp/version.el, nt/emacs.rc,
-    and lisp/cus-edit.el (if modified).  Copy lisp/loaddefs.el to
-    lisp/ldefs-boot.el and commit lisp/ldefs-boot.el.  For a release,
-    also commit the ChangeLog files in all directories.
+6.  Commit etc/AUTHORS, all the files changed by M-x set-version, and
+    lisp/cus-edit.el (if modified).
+    Copy lisp/loaddefs.el to lisp/ldefs-boot.el and commit lisp/ldefs-boot.el.
+    For a release, also commit the ChangeLog files in all directories.
 
 7.   make-dist --snapshot.  Check the contents of the new tar with
     admin/diff-tar-files against an older tar file.  Some old pretest
-    tarballs are kept under fencepost.gnu.org:~pot/emacs-pretest/, while
-    old emacs tarballs are at <ftp://ftp.gnu.org/pub/gnu/emacs/>.
+    tarballs may be found at <ftp://alpha.gnu.org/gnu/emacs/pretest>;
+    old release tarballs are at <ftp://ftp.gnu.org/pub/gnu/emacs/>.
 
     If this is the first pretest of a major release, just comparing
     with the previous release may overlook many new files.  You can try
-    something like `find -f | grep -v CVS...etc' in a clean CVS tree,
-    and compare the results against the new tar contents.
+    something like `find . | sort' in a clean bzr tree, and compare the
+    results against the new tar contents.
 
 8.   xdelta delta emacs-OLD.tar.gz emacs-NEW.tar.gz emacs-OLD-NEW.xdelta
 
@@ -56,37 +62,26 @@ For each step, check for possible errors.
     number of the old Emacs to __, do the same with the new log and do
     M-x ediff.  Especially check that Info files aren't built.
 
-10.  cd EMACS_ROOT_DIR; cvs tag TAG
+10.  cd EMACS_ROOT_DIR; bzr tag TAG
     TAG is EMACS_PRETEST_XX_YY_ZZZ for a pretest, EMACS_XX_YY for a
     release.
 
-    Shortly before the release, cut the branch with the following commands:
-
-    cvs rtag EMACS_`NUMBER'_BASE
-    cvs rtag -b EMACS_`NUMBER'_RC -r EMACS_`NUMBER'_BASE
-
-    where `NUMBER' is the major version number of the release.  This
-    makes it easier to see what changes have been applied to the
-    branch with:
-
-    cvs diff -r EMACS_`NUMBER'_BASE -r EMACS_`NUMBER'_RC
-
-    or merge changes back to the trunk with "cvs update -j", if
-    necessary.
-
-    After doing this, increase the version number on the trunk as per
-    step 4.
-
-    Also, open a Savannah support request asking for commits to the
-    new branch to be sent to the emacs-diffs mailing list (by default,
-    the list normally only gets commits to the trunk).
+    Shortly before the release, cut the version branch also, and open
+    a Savannah support request asking for commits to the new branch to
+    be sent to the emacs-diffs mailing list (by default, the list
+    normally only gets commits to the trunk).
 
 11. Now you should upload the files to the GNU ftp server.  In order to
     do that, you must be registered as an Emacs maintainer and have your
     GPG key acknowledged by the ftp people.  Mail <ftp-upload@gnu.org>
-    for instructions.  Once you are there, for each file FILE to be
-    released, create a detached GPG binary signature and a clearsigned
-    directive file like this:
+    for instructions.
+
+    You can use the gnupload script to upload each FILE, like this:
+     gnupload --to alpha.gnu.org:emacs/pretest FILE (for a pretest)
+     gnupload --to ftp.gnu.org:emacs FILE           (for a release)
+
+    Instead of using gnupload, for each FILE, create a detached GPG
+    binary signature and a clearsigned directive file like this:
      gpg -b FILE
      echo directory: emacs/pretest > FILE.directive      (for a pretest)
      echo directory: emacs > FILE.directive              (for a release)
@@ -108,5 +103,5 @@ For each step, check for possible errors.
     For a release, announce it on info-gnu@gnu.org,
     info-gnu-emacs@gnu.org, and emacs-devel.
 
-
-# arch-tag: c23c771f-ca26-4584-8a04-50ecf0989390
+14. For a release, update the Emacs homepage in the web repository.
+    Also add the new NEWS file as NEWS.xx.y.

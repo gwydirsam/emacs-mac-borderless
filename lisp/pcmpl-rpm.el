@@ -1,7 +1,8 @@
 ;;; pcmpl-rpm.el --- functions for dealing with rpm completions
 
-;; Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
-;;   2008, 2009, 2010, 2011, 2012  Free Software Foundation, Inc.
+;; Copyright (C) 1999-2012  Free Software Foundation, Inc.
+
+;; Package: pcomplete
 
 ;; This file is part of GNU Emacs.
 
@@ -312,13 +313,12 @@
 	  (if (pcomplete-match "^-" 0)
 	      (pcomplete-opt "v")
 	    (pcomplete-here
-	     (if (eq mode 'test)
-		 (pcomplete-dirs-or-entries "\\.tar\\'")
-	       (pcomplete-dirs-or-entries "\\.spec\\'"))))))
+	     (pcomplete-dirs-or-entries (if (eq mode 'test)
+                                            "\\.tar\\'"
+                                          "\\.spec\\'"))))))
        (t
 	(error "You must select a mode: -q, -i, -U, --verify, etc"))))))
 
 (provide 'pcmpl-rpm)
 
-;; arch-tag: 4e64b490-fecf-430e-b2b9-70a8ad64b8c1
 ;;; pcmpl-rpm.el ends here

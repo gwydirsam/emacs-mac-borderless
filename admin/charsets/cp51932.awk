@@ -20,7 +20,7 @@
 
 # Commentary:
 
-# Genereate a translation table for CP51932 (EUC-JP of MicroSoft Version).
+# Generate a translation table for CP51932 (EUC-JP of MicroSoft Version).
 # It maps invalid JISX0208 code points used by CP51932 to Unicode.
 # 4th field of the input has these meanings:
 #   0: JISX0208 characters.
@@ -32,7 +32,7 @@
 
 BEGIN {
   print ";;; cp51932.el -- translation table for CP51932. -*- no-byte-compile: t -*-";
-  print ";;; Automatically genrated from CP932-2BYTE.map";
+  print ";;; Automatically generated from CP932-2BYTE.map";
   print "(let ((map";
   printf "       '(;JISEXT<->UNICODE";
 }
@@ -52,8 +52,4 @@ END {
   print "	      (setcar x (cdr x)) (setcdr x tmp)))";
   print "	map)";
   print "  (define-translation-table 'cp51932-encode map))";
-  print "";
-  print ";; arch-tag: d21c06e5-a548-4dda-8802-c2922ff19da3";
 }
-
-# arch-tag: bbae996b-2d1c-4e85-bb55-ac30146d7504

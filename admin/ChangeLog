@@ -1,27 +1,394 @@
-2012-01-19  Chong Yidong  <cyd@gnu.org>
+2012-02-16  Kenichi Handa  <handa@m17n.org>
 
-	* Version 23.4 released.
+	* unidata/unidata-gen.el (unidata-prop-alist): Change the default
+	values of name and old-name to nil.
+	(unidata-get-name): Return nil for the default value.
+
+2012-02-11  Glenn Morris  <rgm@gnu.org>
+
+	* admin.el (cusver-find-files, cusver-scan, cusver-goto-xref)
+	(cusver-check): New functions.
+
+2012-01-19  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el (bzrmerge-missing): Allow a definitive "no" answer to the
+	"skip?" question, since there can be multiple such for any revision.
+
+2012-01-14  Eli Zaretskii  <eliz@gnu.org>
+
+	* FOR-RELEASE (Check the Emacs Tutorial): Mark TUTORIAL.he as
+	updated and checked.
+
+2011-11-26  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* grammars/bovine-grammar.el (bovine--grammar-newstyle-unquote):
+	Avoid warning about old-style backquote.
+
+	* grammars/wisent-grammar.el (auto-mode-alist): Change `$' to `\''
+	in regexp.
+	(wisent-make-parsers): Likewise.  Quote `.'.
+
+	* grammars/bovine-grammar.el (auto-mode-alist): Change `$' to `\''
+	in regexp.
+	(bovine-make-parsers): Likewise.  Quote `.'.
+
+2011-11-20  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* CPP-DEFINES (VIRT_ADDR_VARIES): Remove.
+
+2011-11-16  Juanma Barranquero  <lekktu@gmail.com>
+
+	* admin.el (manual-dvi): Fix typo.
+
+2011-11-15  Eli Zaretskii  <eliz@gnu.org>
+
+	* nt/README-ftp-server: Update the information about PNG libraries.
+
+2011-11-15  Juanma Barranquero  <lekktu@gmail.com>
+
+	* make-emacs: Fix typo.
+
+2011-11-07  Juanma Barranquero  <lekktu@gmail.com>
+
+	* unidata/makefile.w32-in (clean): Remove bidimirror.h and biditype.h.
+
+2011-10-31  David Engster  <deng@randomsample.de>
+
+	* grammars/bovine-grammar.el: Avoid using old-style backquotes.
+
+2011-10-28  Eli Zaretskii  <eliz@gnu.org>
+
+	* nt/README-ftp-server: Mention UNICOWS.DLL as prerequisite for
+	running Emacs on Windows 9X.
+
+2011-09-26  Chong Yidong  <cyd@stupidchicken.com>
+
+	* admin.el (set-version): Fix regexps for config.nt and
+	sed2v2.inp.
+
+2011-09-06  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Merge from gnulib (Bug#9169).
+	* notes/copyright: The files compile, config.guess, config.sub,
+	depcomp, install-sh, missing, and move-if-change are now in the
+	new build-aux subdirectory.  The files arg-nonnull.h, c++defs.h,
+	and warn-on-use.h are now in build-aux/snippets.  New file
+	build-aux/snippets/_Noreturn.h.
+
+2011-08-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* unidata/unidata-gen.el (unidata-prop-alist): Update the default
+	values of bidi-class according to DerivedBidiClass.txt from the
+	latest UCD.
+
+2011-08-23  Kenichi Handa  <handa@m17n.org>
+
+	* unidata/unidata-gen.el (unidata-prop-alist): Provide default
+	values for name, general-category, canonical-combining-class,
+	mirrored, and bidi-class.  Describe the meaning of value nil for
+	decimal-digit-value, digit-value, numeric-value, uppercase,
+	lowercase, titlecase, and mirroring.
+	(unidata-gen-table): Handle the case that default-value is a
+	list.  Set default values of characters not listed in a table.
+	(unidata-get-name): Return an empty string if a value in a
+	char-table is nil.
+	(unidata-get-decomposition): Return a list of character itself if
+	a value in a char-table is nil.
+
+2011-08-15  Eli Zaretskii  <eliz@gnu.org>
+
+	* unidata/bidimirror.awk: File removed.
+
+	* unidata/biditype.awk: File removed.
+
+	* unidata/makefile.w32-in (all): Remove src/biditype.h and
+	src/bidimirror.h.
+	(../../src/biditype.h, ../../src/bidimirror.h): Deleted.
+
+	* unidata/Makefile.in (all): Remove src/biditype.h and
+	src/bidimirror.h.
+	(../../src/biditype.h, ../../src/bidimirror.h): Deleted.
+
+2011-07-07  Juanma Barranquero  <lekktu@gmail.com>
+
+	* unidata/makefile.w32-in (charprop-SH, charprop-CMD):
+	Duplicate change in Makefile.in (2011-07-06T22:43:48Z!handa@m17n.org).
+
+2011-07-06  Kenichi Handa  <handa@m17n.org>
+
+	* unidata/unidata-gen.el (unidata-dir): New variable.
+	(unidata-setup-list): Expand unidata-text-file in unidata-dir.
+	(unidata-prop-alist): INDEX element may be a function.  New
+	optional element VAL-LIST (for general-category and bidi-class).
+	New entry `mirroring'.
+	(unidata-prop-default, unidata-prop-val-list): New subst.
+	(unidata-get-character, unidata-put-character): Delete them.
+	(unidata-gen-table-character): New arg IGNORE.  Adjusted for the
+	above changes.
+	(unidata-get-symbol, unidata-get-integer, unidata-get-numeric)
+	(unidata-put-symbol, unidata-put-integer, unidata-put-numeric):
+	Delete them.
+	(unidata-encode-val): Assume that the first element of VAL-LIST is
+	a cons (nil . 0).
+	(unidata-gen-table): Change argument DEFAULT-VALUE to VAL-LIST.
+	Always store the encoded value.
+	(unidata-gen-table-symbol): New args DEFAULT-VALUE and VAL-LIST.
+	Set the 1st and the 2nd extra slots to index numbers for C
+	functions.
+	(unidata-gen-table-integer): Likewise.
+	(unidata-gen-table-numeric): Likewise.
+	(unidata-gen-table-name): New arg IGNORE.
+	(unidata-gen-table-decomposition): Likewise.
+	(unidata-describe-general-category): Add the case nil to the
+	description alist.
+	(unidata-gen-mirroring-list): New function.
+	(unidata-gen-files): New arg DATA-DIR.  Adjusted for the change of
+	unidata-prop-alist.  Handle the case of storing multiple
+	char-tables in a file.
+
+	* unidata/Makefile.in (${DSTDIR}/charprop.el): New arg to
+	unidata-gen-files.
+
+2011-05-21  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el (bzrmerge-resolve): Suppress prompts about file-locals.
 
 2011-03-07  Chong Yidong  <cyd@stupidchicken.com>
 
 	* Version 23.3 released.
 
-2011-02-22  Juanma Barranquero  <lekktu@gmail.com>
+2011-02-23  Juanma Barranquero  <lekktu@gmail.com>
 
 	* notes/bugtracker (bugtracker_debbugs_url): Fix typo.
 
-2011-01-03  Glenn Morris  <rgm@gnu.org>
+2011-02-19  Eli Zaretskii  <eliz@gnu.org>
+
+	* admin.el (set-version): Add msdos/sed2v2.inp.
+
+2011-02-16  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Remove no-longer needed getloadavg symbols.
+	* CPP-DEFINES (LOAD_AVE_CVT, LOAD_AVE_TYPE, FSCALE, KERNEL_FILE):
+	(LDAV_SYMBOL): Remove.
+
+2011-02-12  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el (bzrmerge-resolve): Fix bzr revert call.
+
+2011-02-05  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el (bzrmerge-warning-buffer): New constant.
+	(bzrmerge-apply): Use it.
+	(bzrmerge): Kill any old warning buffer first.
+
+2011-02-03  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el (bzrmerge-buffer): New constant.
+	(bzrmerge-merges, bzrmerge-missing, bzrmerge-apply): Use it.
+	(bzrmerge-missing): If nothing to do, return nil not (nil).
+	(bzrmerge-apply): Remove odd character from message.
+	(bzrmerge): Give status messages.
+
+2011-01-31  Eli Zaretskii  <eliz@gnu.org>
+
+	* admin.el (set-version): Remove lib-src/makefile.w32-in.
+	Add nt/config.nt.
+
+2011-01-31  Paul Eggert  <eggert@cs.ucla.edu>
+
+	src/emacs.c now gets version number from configure.in
+	* admin.el (set-version): Don't update src/emacs.c.
+	* quick-install-emacs (VERSION): Get it from configure.in, not from
+	src/emacs.c.
+
+2011-01-30  Paul Eggert  <eggert@cs.ucla.edu>
+
+	strftime: import from gnulib
+	* notes/copyright: strftime.c moved from src to lib.
+
+2011-01-25  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el (bzrmerge-skip-regexp): New variable.
+	(bzrmerge-missing): Use it.
+
+2011-01-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* make-tarball.txt: Suggest 'autoreconf -I m4 --force'
+	rather than doing rm and autoconf by hand.  See
+	<http://lists.gnu.org/archive/html/emacs-devel/2011-01/msg00673.html>.
+
+2011-01-17  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* notes/bzr (Installing changes from gnulib): New section.
+	Need for this suggested by Stefan Monnier.
+
+2011-01-17  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* bzrmerge.el (bzrmerge-apply): Warn the user when the tree might be in
+	an inconsistent state.
+
+2011-01-17  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Update copyright notes to match recent gnulib-related changes.
+	* notes/copyright: Add aclocal.m4, m4/*.m4, lib/Makefile.in,
+	arg-nonnull.h, c++defs.h, compile, depcomp, missing,
+	warn-on-use.h, lib/*.[ch], lib/gnulib.mk.  Remove src/mktime.c,
+	lib-src/getopt1.c, lib-src/getopt_int.h (files are now in lib and
+	are subsumed by the lib/*.[ch] rule).  Remove m4/getopt.m4 (now
+	subsumed by m4/*.m4 rule).  config.guess, config.sub, and
+	doc/man/texinfo.tex are now copied in from gnulib.
+
+2011-01-15  Glenn Morris  <rgm@gnu.org>
+
+	* charsets/cp51932.awk, charsets/eucjp-ms.awk: No longer print arch-tag.
+
+	* bzrmerge.el (bzrmerge-missing): Add another skip indicator.
+	(bzrmerge-resolve): Also ignore cl-loaddefs.el.
+
+2011-01-14  Glenn Morris  <rgm@gnu.org>
 
 	* admin.el (set-copyright): Also handle \year in refcards/*.tex.
 
-2010-12-31  Eli Zaretskii  <eliz@gnu.org>
+2011-01-14  Glenn Morris  <rgm@gnu.org>
+
+	* bzrmerge.el: Require cl when compiling.
+	(bzrmerge-merges): Doc fix.
+
+2011-01-07  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* notes/copyright: There's only one install-sh, not two, so fix a
+	typo claiming that there's two.  Add move-if-change to the list of
+	GPL files imported from gnulib.
+
+2011-01-07  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* notes/copyright: Report status more accurately for non-GPL files.
+	Report copyright status more accurately for mkinstalldirs,
+	configure, m4/getopt.m4, and msdos/sed*.inp.
+
+2011-01-02  Eli Zaretskii  <eliz@gnu.org>
 
 	* nt/README.W32: Update the information about PNG support libraries.
 	(Bug#7716)
 
+2010-12-27  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* bzrmerge.el: New file to help merge branches while skipping
+	some revisions (e.g. from emacs-23 to trunk).
+
+2010-12-03  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* CPP-DEFINES (EXPLICIT_SIGN_EXTEND): Remove.
+
+2010-10-12  Glenn Morris  <rgm@gnu.org>
+
+	* notes/nextstep: Move here from ../nextstep/DEV-NOTES.
+
+2010-10-09  Glenn Morris  <rgm@gnu.org>
+
+	* admin.el (set-version): Add doc/emacs/emacsver.texi.
+
+2010-10-09  Glenn Morris  <rgm@gnu.org>
+
+	* admin.el (set-version): No need to act on doc/ files any more.
+
+	* quick-install-emacs (PUBLIC_LIBSRC_BINARIES): Remove b2m.
+
+2010-09-05  Juanma Barranquero  <lekktu@gmail.com>
+
+	* unidata/BidiMirroring.txt: Update from
+	http://www.unicode.org/Public/6.0.0/ucd/BidiMirroring-6.0.0d2.txt
+
+	* unidata/UnicodeData.txt: Update from
+	http://www.unicode.org/Public/6.0.0/ucd/UnicodeData-6.0.0d7.txt
+
+2010-08-09  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* CPP-DEFINES (WORDS_BIG_ENDIAN): Remove.
+
+2010-08-05  Eli Zaretskii  <eliz@gnu.org>
+
+	* MAINTAINERS: Rename src/unexec.c => src/unexcoff.c.
+
+2010-07-24  Christoph Scholtes  <cschol2112@gmail.com>
+
+	* admin.el: Write version number to nt/makefile.w32-in.
+	* nt/makedist.bat: Remove; replaced with `zipdist.bat'
+	in the nt/ directory.
+	* nt/README.W32: Relocate to nt/ directory.
+
+2010-07-11  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* CPP-DEFINES (HAVE_INDEX, HAVE_RINDEX): Remove.
+
+2010-07-08  Eli Zaretskii  <eliz@gnu.org>
+
+	* MAINTAINERS: Update my responsibilities.
+
+2010-07-07  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* CPP-DEFINES (BCOPY_DOWNWARD_SAFE, BCOPY_UPWARD_SAFE)
+	(GAP_USE_BCOPY, HAVE_BCMP, HAVE_BCOPY, bcmp, bcopy, bzero):
+	Remove.
+
+2010-06-12  Eli Zaretskii  <eliz@gnu.org>
+
+	* unidata/bidimirror.awk: New file.
+
+	* unidata/BidiMirroring.txt: New file from
+	http://www.unicode.org/Public/6.0.0/ucd/BidiMirroring-6.0.0d1.txt.
+
+	* unidata/Makefile.in (../../src/bidimirror.h): New target.
+	(all): Depend on ../../src/biditype.h and ../../src/bidimirror.h.
+
+	* unidata/makefile.w32-in (../../src/bidimirror.h): New target.
+	(all): Depend on ../../src/biditype.h and ../../src/bidimirror.h.
+
+	* unidata/biditype.awk: New file.
+
+	* unidata/Makefile.in (../../src/biditype.h): New target.
+
+	* unidata/makefile.w32-in (../../src/biditype.h): New target.
+
+2010-06-09  Juanma Barranquero  <lekktu@gmail.com>
+
+	* unidata/UnicodeData.txt: Update from
+	http://www.unicode.org/Public/6.0.0/ucd/UnicodeData-6.0.0d5.txt
+
+2010-05-27  Glenn Morris  <rgm@gnu.org>
+
+	* quick-install-emacs (AVOID): No more Makefile.c files.
+
+	* notes/cpp: Remove file.
+
+2010-05-15  Ken Raeburn  <raeburn@raeburn.org>
+
+	* admin.el (set-version, set-copyright): Update emacs.c instead of
+	version.el.
+
+	* make-tarball.txt: Update filename list in step 6.
+
+	* quick-install-emacs: Scan emacs.c instead of version.el for
+	version string.
+
 2010-05-07  Chong Yidong  <cyd@stupidchicken.com>
 
 	* Version 23.2 released.
+
+2010-04-01  Eli Zaretskii  <eliz@gnu.org>
+
+	* CPP-DEFINES (__DJGPP__, __GO32__): Remove, no longer used.
+
+2010-03-10  Chong Yidong  <cyd@stupidchicken.com>
+
+	* Branch for 23.2.
+
+2010-03-10  Miles Bader  <miles@gnu.org>
+
+	* quick-install-emacs: Use more portable shell syntax.
+
+	* quick-install-emacs (AVOID): Be more picky about files we avoid
+	installing.
 
 2010-02-14  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -69,7 +436,7 @@
 
 2009-06-24  Kenichi Handa  <handa@m17n.org>
 
-	* charsets/mapconv: For the UNICODE format files, do reverse sort
+	* charsets/mapconv: For the Unicode format files, do reverse sort
 	and don't compact the map.  This is to prefer the first one in the
 	duplicated mappings (e.g. 0x20->U+0020, 0x20->U+00A0).
 
@@ -384,7 +751,7 @@
 
 	* charsets/mapconv: Handle UNICODE2.
 
-	* charsets/Makefile (CJK): Include CP932-2BYTE.map
+	* charsets/Makefile (CJK): Include CP932-2BYTE.map.
 	(CP932-2BYTE.map): New target.
 
 2008-02-01  Kenichi Handa  <handa@m17n.org>
@@ -564,11 +931,11 @@
 
 	* FOR-RELEASE (NEW FEATURES): Completed work on this item:
 	Rework how fringe bitmaps are defined and used.
-	Currently, bitmap usage and bitmap appearence are "mixed-up" in a
+	Currently, bitmap usage and bitmap appearance are "mixed-up" in a
 	one-level representation.  It would be cleaner to split the
 	representation into a two-level model where first level maps
 	bitmap usage to a bitmap name, and second level maps bitmap name to
-	a bitmap appearence.
+	a bitmap appearance.
 
 2006-01-27  Chong Yidong  <cyd@stupidchicken.com>
 
@@ -704,7 +1071,7 @@
 
 2004-08-28  Jan Djärv  <jan.h.d@swipnet.se>
 
-	* FOR-RELEASE (Indications): Remove entry about GTK and geometry,
+	* FOR-RELEASE (Indications): Remove entry about GTK and geometry
 	(now behaves as well as other ports).
 
 2004-06-28  Jan Djärv  <jan.h.d@swipnet.se>
@@ -880,8 +1247,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-    2010, 2011, 2012  Free Software Foundation, Inc.
+  Copyright (C) 2001-2012  Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 
@@ -897,4 +1263,3 @@
 
   You should have received a copy of the GNU General Public License
   along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
-

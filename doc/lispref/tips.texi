@@ -1,7 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990, 1991, 1992, 1993, 1995, 1998, 1999, 2001, 2002,
-@c   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
+@c Copyright (C) 1990-1993, 1995, 1998-1999, 2001-2012
 @c   Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @setfilename ../../info/tips
@@ -205,12 +204,6 @@ definition automatically.  Avoid constructing the names in the macro
 itself, since that would confuse these tools.
 
 @item
-Please keep the names of your Emacs Lisp source files to 13 characters
-or less.  This way, if the files are compiled, the compiled files' names
-will be 14 characters or less, which is short enough to fit on all kinds
-of Unix systems.
-
-@item
 In some other systems there is a convention of choosing variable names
 that begin and end with @samp{*}.  We don't use that convention in Emacs
 Lisp, so please don't use it in your programs.  (Emacs uses such names
@@ -325,6 +318,10 @@ Don't bind a key sequence ending in @key{ESC} except following another
 The reason for this rule is that a non-prefix binding for @key{ESC} in
 any context prevents recognition of escape sequences as function keys in
 that context.
+
+@item
+Similarly, don't bind a key sequence ending in @key{C-g}, since that
+is commonly used to cancel a key sequence.
 
 @item
 Anything which acts like a temporary mode or state which the user can
@@ -829,9 +826,7 @@ In Dired, visit the file or directory named on this line.
 
 @item
 When you define a variable that users ought to set interactively, you
-normally should use @code{defcustom}.  However, if for some reason you
-use @code{defvar} instead, start the doc string with a @samp{*}.
-@xref{Defining Variables}.
+should use @code{defcustom}.  @xref{Defining Variables}.
 
 @item
 The documentation string for a variable that is a yes-or-no flag should
@@ -1053,6 +1048,31 @@ Please use that command to see a list of the meaningful keywords.
 This field is important; it's how people will find your package when
 they're looking for things by topic area.  To separate the keywords, you
 can use spaces, commas, or both.
+
+@item Package-Version
+If @samp{Version} is not suitable for use by the package manager, then
+a package can define @samp{Package-Version}; it will be used instead.
+This is handy if @samp{Version} is an RCS id or something else that
+cannot be parsed by @code{version-to-list}.  @xref{Packaging Basics}.
+
+@item Package-Requires
+If this exists, it names packages on which the current package depends
+for proper operation.  @xref{Packaging Basics}.  This is used by the
+package manager both at download time (to ensure that a complete set
+of packages is downloaded) and at activation time (to ensure that a
+package is activated if and only if all its dependencies have been).
+
+Its format is a list of lists.  The @code{car} of each sub-list is the
+name of a package, as a symbol.  The @code{cadr} of each sub-list is
+the minimum acceptable version number, as a string.  For instance:
+
+@smallexample
+;; Package-Requires: ((gnus "1.0") (bubbles "2.7.2"))
+@end smallexample
+
+The package code automatically defines a package named @samp{emacs}
+with the version number of the currently running Emacs.  This can be
+used to require a minimal version of Emacs for a package.
 @end table
 
   Just about every Lisp library ought to have the @samp{Author} and
@@ -1091,7 +1111,3 @@ This is the @dfn{footer line}; it appears at the very end of the file.
 Its purpose is to enable people to detect truncated versions of the file
 from the lack of a footer line.
 @end table
-
-@ignore
-   arch-tag: 9ea911c2-6b1d-47dd-88b7-0a94e8b27c2e
-@end ignore

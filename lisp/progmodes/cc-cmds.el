@@ -1,8 +1,6 @@
 ;;; cc-cmds.el --- user level commands for CC Mode
 
-;; Copyright (C) 1985, 1987, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-;;   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2012  Free Software Foundation, Inc.
 
 ;; Authors:    2003- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -12,8 +10,8 @@
 ;;             1985 Richard M. Stallman
 ;; Maintainer: bug-cc-mode@gnu.org
 ;; Created:    22-Apr-1997 (split from cc-mode.el)
-;; Version:    See cc-mode.el
-;; Keywords:   c languages oop
+;; Keywords:   c languages
+;; Package:    cc-mode
 
 ;; This file is part of GNU Emacs.
 
@@ -266,8 +264,10 @@ With universal argument, inserts the analysis as a comment on that line."
 			  (symbol-value 'subword-mode))
 			 "w"
 		       "")))
+        ;; FIXME: Derived modes might want to use something else
+        ;; than a string for `mode-name'.
 	(bare-mode-name (if (string-match "\\(^[^/]*\\)/" mode-name)
-			    (substring mode-name (match-beginning 1) (match-end 1))
+			    (match-string 1 mode-name)
 			  mode-name)))
 ;;     (setq c-submode-indicators
 ;; 	  (if (> (length fmt) 1)
@@ -1042,7 +1042,7 @@ reindented unless `c-syntactic-indentation' is nil.
 		  (setcar (car elem) 'label))
 	      (setq elem (cdr elem)))
 	    ;; some language elements can only be determined by checking
-	    ;; the following line.  Lets first look for ones that can be
+	    ;; the following line.  Let's first look for ones that can be
 	    ;; found when looking on the line with the colon
 	    (setq newlines
 		  (and c-auto-newline
@@ -1086,104 +1086,76 @@ numeric argument is supplied, or the point is inside a literal."
 
   (interactive "*P")
   (let ((c-echo-syntactic-information-p nil)
-	final-pos close-paren-inserted)
+	final-pos close-paren-inserted found-delim)
 
     (self-insert-command (prefix-numeric-value arg))
     (setq final-pos (point))
 
-    (c-save-buffer-state (c-parse-and-markup-<>-arglists
-			  c-restricted-<>-arglists
-			  <-pos)
-
-      (when c-recognize-<>-arglists
-	(if (eq last-command-event ?<)
-	    (when (and (progn
-			 (backward-char)
-			 (= (point)
-			    (progn
-			      (c-beginning-of-current-token)
-			      (point))))
-		       (progn
-			 (c-backward-token-2)
-			 (looking-at c-opt-<>-sexp-key)))
-	      (c-mark-<-as-paren (1- final-pos)))
-
-	  ;; It's a ">".  Check if there's an earlier "<" which either has
-	  ;; open paren syntax already or that can be recognized as an arglist
-	  ;; together with this ">".  Note that this won't work in cases like
-	  ;; "template <x, a < b, y>" but they ought to be rare.
-
-	  (save-restriction
-	    ;; Narrow to avoid that `c-forward-<>-arglist' below searches past
-	    ;; our position.
-	    (narrow-to-region (point-min) final-pos)
-
-	    (while (and
-		    (progn
-		      (goto-char final-pos)
-		      (c-syntactic-skip-backward "^<;}" nil t)
-		      (eq (char-before) ?<))
-		    (progn
-		      (backward-char)
-		      ;; If the "<" already got open paren syntax we know we
-		      ;; have the matching closer.  Handle it and exit the
-		      ;; loop.
-		      (if (looking-at "\\s\(")
-			  (progn
-			    (c-mark->-as-paren (1- final-pos))
-			    (setq close-paren-inserted t)
-			    nil)
-			t))
-
-		    (progn
-		      (setq <-pos (point))
-		      (c-backward-syntactic-ws)
-		      (c-simple-skip-symbol-backward))
-		    (or (looking-at c-opt-<>-sexp-key)
-			(not (looking-at c-keywords-regexp)))
-
-		    (let ((c-parse-and-markup-<>-arglists t)
-			  c-restricted-<>-arglists
-			  (containing-sexp
-			   (c-most-enclosing-brace (c-parse-state))))
-		      (when (and containing-sexp
-				 (progn (goto-char containing-sexp)
-					(eq (char-after) ?\())
-				 (not (eq (get-text-property (point) 'c-type)
-					  'c-decl-arg-start)))
-			(setq c-restricted-<>-arglists t))
-		      (goto-char <-pos)
-		      (c-forward-<>-arglist nil))
-
-		    ;; Loop here if the "<" we found above belongs to a nested
-		    ;; angle bracket sexp.  When we start over we'll find the
-		    ;; previous or surrounding sexp.
-		    (if (< (point) final-pos)
-			t
-		      (setq close-paren-inserted t)
-		      nil)))))))
-    (goto-char final-pos)
+;;;; 2010-01-31: There used to be code here to put a syntax-table text
+;;;; property on the new < or > and its mate (if any) when they are template
+;;;; parens.  This is now done in an after-change function.
 
     ;; Indent the line if appropriate.
-    (when (and c-electric-flag c-syntactic-indentation)
-      (backward-char)
-      (when (prog1 (or (looking-at "\\s\(\\|\\s\)")
-		       (and (c-major-mode-is 'c++-mode)
-			    (progn
-			      (c-beginning-of-current-token)
-			      (looking-at "<<\\|>>"))
-			    (= (match-end 0) final-pos)))
-	      (goto-char final-pos))
-	(indent-according-to-mode)))
+    (when (and c-electric-flag c-syntactic-indentation c-recognize-<>-arglists)
+      (setq found-delim
+	    (if (eq last-command-event ?<)
+		;; If a <, basically see if it's got "template" before it .....
+		(or (and (progn
+			   (backward-char)
+			   (= (point)
+			      (progn (c-beginning-of-current-token) (point))))
+			 (progn
+			   (c-backward-token-2)
+			   (looking-at c-opt-<>-sexp-key)))
+		    ;; ..... or is a C++ << operator.
+		    (and (c-major-mode-is 'c++-mode)
+			 (progn
+			   (goto-char (1- final-pos))
+			   (c-beginning-of-current-token)
+			   (looking-at "<<"))
+			 (>= (match-end 0) final-pos)))
 
-    (when (and close-paren-inserted
-	       (not executing-kbd-macro)
-	       blink-paren-function)
-      ;; Note: Most paren blink functions, such as the standard
-      ;; `blink-matching-open', currently doesn't handle paren chars
-      ;; marked with text properties very well.  Maybe we should avoid
-      ;; this call for the time being?
-      (funcall blink-paren-function))))
+	      ;; It's a >.  Either a C++ >> operator. ......
+	      (or (and (c-major-mode-is 'c++-mode)
+		       (progn
+			 (goto-char (1- final-pos))
+			 (c-beginning-of-current-token)
+			 (looking-at ">>"))
+		       (>= (match-end 0) final-pos))
+		  ;; ...., or search back for a < which isn't already marked as an
+		  ;; opening template delimiter.
+		  (save-restriction
+		    (widen)
+		    ;; Narrow to avoid `c-forward-<>-arglist' below searching past
+		    ;; our position.
+		    (narrow-to-region (point-min) final-pos)
+		    (goto-char final-pos)
+		    (while
+			(and
+			 (progn
+			   (c-syntactic-skip-backward "^<;}" nil t)
+			   (eq (char-before) ?<))
+			 (progn
+			   (backward-char)
+			   (looking-at "\\s\("))))
+		    (and (eq (char-after) ?<)
+			 (not (looking-at "\\s\("))
+			 (progn (c-backward-syntactic-ws)
+				(c-simple-skip-symbol-backward))
+			 (or (looking-at c-opt-<>-sexp-key)
+			     (not (looking-at c-keywords-regexp)))))))))
+
+    (goto-char final-pos)
+    (when found-delim
+      (indent-according-to-mode)
+      (when (and (eq (char-before) ?>)
+		 (not executing-kbd-macro)
+		 blink-paren-function)
+	    ;; Note: Most paren blink functions, such as the standard
+	    ;; `blink-matching-open', currently doesn't handle paren chars
+	    ;; marked with text properties very well.  Maybe we should avoid
+	    ;; this call for the time being?
+	    (funcall blink-paren-function)))))
 
 (defun c-electric-paren (arg)
   "Insert a parenthesis.
@@ -1388,7 +1360,7 @@ No indentation or other \"electric\" behavior is performed."
   ;; Determine where we are with respect to functions (or other brace
   ;; constructs, included in the term "function" in the rest of this comment).
   ;; Point is assumed to be outside any macro or literal.
-  ;; This is used by c-\(begining\|end\)-of-defun.
+  ;; This is used by c-\(beginning\|end\)-of-defun.
   ;;
   ;; Return one of these symbols:
   ;; at-header       : we're at the start of a function's header.
@@ -1513,6 +1485,78 @@ No indentation or other \"electric\" behavior is performed."
       (setq n (1- n))))
    n)
 
+(defun c-narrow-to-most-enclosing-decl-block (&optional inclusive)
+  ;; If we are inside a decl-block (in the sense of c-looking-at-decl-block),
+  ;; i.e. something like namespace{} or extern{}, narrow to the insides of
+  ;; that block (NOT including the enclosing braces) if INCLUSIVE is nil,
+  ;; otherwise include the braces.  If the closing brace is missing,
+  ;; (point-max) is used instead.
+  (let ((paren-state (c-parse-state))
+	encl-decl)
+    (setq encl-decl (and paren-state (c-most-enclosing-decl-block paren-state)))
+    (if encl-decl
+	(save-excursion
+	  (narrow-to-region
+	   (if inclusive
+	       (progn (goto-char encl-decl)
+		      (c-beginning-of-decl-1)
+		      (point))
+	     (1+ encl-decl))
+	   (progn
+	     (goto-char encl-decl)
+	     (or (c-safe (forward-list)
+			 (if inclusive
+			     (point)
+			   (1- (point))))
+		 (point-max))))))))
+
+(defun c-widen-to-enclosing-decl-scope (paren-state orig-point-min orig-point-max)
+  ;; Narrow the buffer to the innermost declaration scope (e.g. a class, a
+  ;; namespace or the "whole buffer") recorded in PAREN-STATE, the bounding
+  ;; braces NOT being included in the resulting region.  On no account may the
+  ;; final region exceed that bounded by ORIG-POINT-MIN, ORIG-POINT-MAX.
+  ;; PAREN-STATE is a list of buffer positions in the style of
+  ;; (c-parse-state), one of which will be that of the desired opening brace,
+  ;; if there is one.
+  ;;
+  ;; Return the position of the enclosing opening brace, or nil
+  (let (encl-decl)	    ; putative position of decl-scope's opening brace.
+    (save-restriction
+      (narrow-to-region orig-point-min orig-point-max)
+      (setq encl-decl (and paren-state
+			   (c-most-enclosing-decl-block paren-state))))
+    (if encl-decl
+	(progn
+	  (widen)
+	  (narrow-to-region (1+ encl-decl)
+			    (save-excursion
+			      (goto-char encl-decl)
+			      (or (c-safe (forward-list)
+					  (1- (point)))
+				  orig-point-max)))
+	  encl-decl)
+      (narrow-to-region orig-point-min orig-point-max)
+      nil)))
+
+(eval-and-compile
+  (defmacro c-while-widening-to-decl-block (condition)
+    ;; Repeatedly evaluate CONDITION until it returns nil.  After each
+    ;; evaluation, if `c-defun-tactic' is set appropriately, widen to innards
+    ;; of the next enclosing declaration block (e.g. namespace, class), or the
+    ;; buffer's original restriction.
+    ;;
+    ;; This is a very special purpose macro, which assumes the existence of
+    ;; several variables.  It is for use only in c-beginning-of-defun and
+    ;; c-end-of-defun.
+    `(while
+	 (and ,condition
+	      (eq c-defun-tactic 'go-outward)
+	      lim)
+       (setq paren-state (c-whack-state-after lim paren-state))
+       (setq lim (c-widen-to-enclosing-decl-scope
+		  paren-state orig-point-min orig-point-max))
+       (setq where 'in-block))))
+
 (defun c-beginning-of-defun (&optional arg)
   "Move backward to the beginning of a defun.
 Every top level declaration that contains a brace paren block is
@@ -1529,53 +1573,74 @@ defun."
   (interactive "p")
   (or arg (setq arg 1))
 
+  (or (not (eq this-command 'c-beginning-of-defun))
+      (eq last-command 'c-beginning-of-defun)
+      (and transient-mark-mode mark-active)
+      (push-mark))
+
   (c-save-buffer-state
       (beginning-of-defun-function end-of-defun-function
        (start (point))
-       where paren-state pos)
+       (paren-state (copy-tree (c-parse-state))) ; This must not share list
+					; structure with other users of c-state-cache.
+       (orig-point-min (point-min)) (orig-point-max (point-max))
+       lim			    ; Position of { which has been widened to.
+       where pos)
 
-    ;; Move back out of any macro/comment/string we happen to be in.
-    (c-beginning-of-macro)
-    (setq pos (c-literal-limits))
-    (if pos (goto-char (car pos)))
+    (save-restriction
+      (if (eq c-defun-tactic 'go-outward)
+	  (setq lim (c-widen-to-enclosing-decl-scope ; e.g. class, namespace.
+		     paren-state orig-point-min orig-point-max)))
 
-    (setq where (c-where-wrt-brace-construct))
+      ;; Move back out of any macro/comment/string we happen to be in.
+      (c-beginning-of-macro)
+      (setq pos (c-literal-limits))
+      (if pos (goto-char (car pos)))
 
-    (if (< arg 0)
-	;; Move forward to the closing brace of a function.
-	(progn
-	  (if (memq where '(at-function-end outwith-function))
-	      (setq arg (1+ arg)))
-	  (if (< arg 0)
-	      (setq arg (c-forward-to-nth-EOF-} (- arg) where)))
-	  ;; Move forward to the next opening brace....
-	  (when (and (= arg 0)
-		     (c-syntactic-re-search-forward "{" nil 'eob))
-	    (backward-char)
-	    ;; ... and backward to the function header.
-	    (c-beginning-of-decl-1)
-	    t))
+      (setq where (c-where-wrt-brace-construct))
 
-      ;; Move backward to the opening brace of a function.
-      (when (and (> arg 0)
-		 (eq (setq arg (c-backward-to-nth-BOF-{ arg where)) 0))
+      (if (< arg 0)
+	  ;; Move forward to the closing brace of a function.
+	  (progn
+	    (if (memq where '(at-function-end outwith-function))
+		(setq arg (1+ arg)))
+	    (if (< arg 0)
+		(c-while-widening-to-decl-block
+		 (< (setq arg (- (c-forward-to-nth-EOF-} (- arg) where))) 0)))
+	    ;; Move forward to the next opening brace....
+	    (when (and (= arg 0)
+		       (progn
+			 (c-while-widening-to-decl-block
+			  (not (c-syntactic-re-search-forward "{" nil 'eob)))
+			 (eq (char-before) ?{)))
+	      (backward-char)
+	      ;; ... and backward to the function header.
+	      (c-beginning-of-decl-1)
+	      t))
 
-	;; Go backward to this function's header.
-	(c-beginning-of-decl-1)
+	;; Move backward to the opening brace of a function, making successively
+	;; larger portions of the buffer visible as necessary.
+	(when (> arg 0)
+	  (c-while-widening-to-decl-block
+	   (> (setq arg (c-backward-to-nth-BOF-{ arg where)) 0)))
 
-	(setq pos (point))
-	;; We're now there, modulo comments and whitespace.
-	;; Try to be line oriented; position point at the closest
-	;; preceding boi that isn't inside a comment, but if we hit
-	;; the previous declaration then we use the current point
-	;; instead.
-	(while (and (/= (point) (c-point 'boi))
-		    (c-backward-single-comment)))
-	(if (/= (point) (c-point 'boi))
-	    (goto-char pos)))
+	(when (eq arg 0)
+	  ;; Go backward to this function's header.
+	  (c-beginning-of-decl-1)
 
-      (c-keep-region-active)
-      (= arg 0))))
+	  (setq pos (point))
+	  ;; We're now there, modulo comments and whitespace.
+	  ;; Try to be line oriented; position point at the closest
+	  ;; preceding boi that isn't inside a comment, but if we hit
+	  ;; the previous declaration then we use the current point
+	  ;; instead.
+	  (while (and (/= (point) (c-point 'boi))
+		      (c-backward-single-comment)))
+	  (if (/= (point) (c-point 'boi))
+	      (goto-char pos)))
+
+	(c-keep-region-active)
+	(= arg 0)))))
 
 (defun c-forward-to-nth-EOF-} (n where)
   ;; Skip to the closing brace of the Nth function after point.  If
@@ -1632,53 +1697,70 @@ the open-parenthesis that starts a defun; see `beginning-of-defun'."
   (interactive "p")
   (or arg (setq arg 1))
 
+  (or (not (eq this-command 'c-end-of-defun))
+      (eq last-command 'c-end-of-defun)
+      (and transient-mark-mode mark-active)
+      (push-mark))
+
   (c-save-buffer-state
       (beginning-of-defun-function end-of-defun-function
        (start (point))
-       where paren-state pos)
+       (paren-state (copy-tree (c-parse-state))) ; This must not share list
+				  ; structure with other users of c-state-cache.
+       (orig-point-min (point-min)) (orig-point-max (point-max))
+       lim
+       where pos)
+    (save-restriction
+      (if (eq c-defun-tactic 'go-outward)
+	  (setq lim (c-widen-to-enclosing-decl-scope ; e.g. class, namespace
+		     paren-state orig-point-min orig-point-max)))
 
-    ;; Move back out of any macro/comment/string we happen to be in.
-    (c-beginning-of-macro)
-    (setq pos (c-literal-limits))
-    (if pos (goto-char (car pos)))
+      ;; Move back out of any macro/comment/string we happen to be in.
+      (c-beginning-of-macro)
+      (setq pos (c-literal-limits))
+      (if pos (goto-char (car pos)))
 
-    (setq where (c-where-wrt-brace-construct))
+      (setq where (c-where-wrt-brace-construct))
 
-    (if (< arg 0)
-	;; Move backwards to the } of a function
-	(progn
-	  (if (memq where '(at-header outwith-function))
-	      (setq arg (1+ arg)))
-	  (if (< arg 0)
-	      (setq arg (c-backward-to-nth-BOF-{ (- arg) where)))
-	  (if (= arg 0)
-	      (c-syntactic-skip-backward "^}")))
+      (if (< arg 0)
+	  ;; Move backwards to the } of a function
+	  (progn
+	    (if (memq where '(at-header outwith-function))
+		(setq arg (1+ arg)))
+	    (if (< arg 0)
+		(c-while-widening-to-decl-block
+		 (< (setq arg (- (c-backward-to-nth-BOF-{ (- arg) where))) 0)))
+	    (if (= arg 0)
+		(c-while-widening-to-decl-block
+		 (progn (c-syntactic-skip-backward "^}")
+			(not (eq (char-before) ?}))))))
 
-      ;; Move forward to the } of a function
-      (if (> arg 0)
-	  (setq arg (c-forward-to-nth-EOF-} arg where))))
+	;; Move forward to the } of a function
+	(if (> arg 0)
+	    (c-while-widening-to-decl-block
+	     (> (setq arg (c-forward-to-nth-EOF-} arg where)) 0))))
 
-    ;; Do we need to move forward from the brace to the semicolon?
-    (when (eq arg 0)
-      (if (c-in-function-trailer-p)	; after "}" of struct/enum, etc.
-	  (c-syntactic-re-search-forward ";"))
+      ;; Do we need to move forward from the brace to the semicolon?
+      (when (eq arg 0)
+	(if (c-in-function-trailer-p) ; after "}" of struct/enum, etc.
+	    (c-syntactic-re-search-forward ";"))
 
-      (setq pos (point))
-      ;; We're there now, modulo comments and whitespace.
-      ;; Try to be line oriented; position point after the next
-      ;; newline that isn't inside a comment, but if we hit the
-      ;; next declaration then we use the current point instead.
-      (while (and (not (bolp))
-		  (not (looking-at "\\s *$"))
-		  (c-forward-single-comment)))
-      (cond ((bolp))
-	    ((looking-at "\\s *$")
-	     (forward-line 1))
-	    (t
-	     (goto-char pos))))
+	(setq pos (point))
+	;; We're there now, modulo comments and whitespace.
+	;; Try to be line oriented; position point after the next
+	;; newline that isn't inside a comment, but if we hit the
+	;; next declaration then we use the current point instead.
+	(while (and (not (bolp))
+		    (not (looking-at "\\s *$"))
+		    (c-forward-single-comment)))
+	(cond ((bolp))
+	      ((looking-at "\\s *$")
+	       (forward-line 1))
+	      (t
+	       (goto-char pos))))
 
-    (c-keep-region-active)
-    (= arg 0)))
+      (c-keep-region-active)
+      (= arg 0))))
 
 (defun c-defun-name ()
   "Return the name of the current defun, or NIL if there isn't one.
@@ -1764,6 +1846,11 @@ with a brace block."
   ;;
   ;; This function might do hidden buffer changes.
   (save-excursion
+    (save-restriction
+      (when (eq c-defun-tactic 'go-outward)
+	(c-narrow-to-most-enclosing-decl-block t)  ; e.g. class, namespace
+	(or (save-restriction
+	      (c-narrow-to-most-enclosing-decl-block nil)
 
     ;; Note: Some code duplication in `c-beginning-of-defun' and
     ;; `c-end-of-defun'.
@@ -1773,11 +1860,12 @@ with a brace block."
 	    lim pos end-pos)
 	(unless (c-safe
 		  (goto-char (c-least-enclosing-brace paren-state))
-		  ;; If we moved to the outermost enclosing paren then we
-		  ;; can use c-safe-position to set the limit.  Can't do
-		  ;; that otherwise since the earlier paren pair on
-		  ;; paren-state might very well be part of the
-		  ;; declaration we should go to.
+			    ;; If we moved to the outermost enclosing paren
+			    ;; then we can use c-safe-position to set the
+			    ;; limit. Can't do that otherwise since the
+			    ;; earlier paren pair on paren-state might very
+			    ;; well be part of the declaration we should go
+			    ;; to.
 		  (setq lim (c-safe-position (point) paren-state))
 		  t)
 	  ;; At top level.  Make sure we aren't inside a literal.
@@ -1861,8 +1949,12 @@ with a brace block."
 			 (forward-line 1)
 			 (point))
 			(t
-			 pos)))))
-	))))
+				   pos))))))))
+	    (and (not near)
+		 (goto-char (point-min))
+		 (c-forward-decl-or-cast-1 -1 nil nil)
+		 (eq (char-after) ?\{)
+		 (cons (point-min) (point-max))))))))
 
 (defun c-mark-function ()
   "Put mark at end of the current top-level declaration or macro, point at beginning.
@@ -1959,7 +2051,7 @@ function does not require the declaration to contain a brace block."
 	(c-narrow-to-comment-innards range) ; This may move point back.
 	(let* ((here (point))
 	       last
-	       (here-filler	   ; matches WS and comment-prefices at point.
+	       (here-filler	   ; matches WS and comment-prefixes at point.
 		(concat "\\=\\(^[ \t]*\\(" c-current-comment-prefix "\\)"
 			"\\|[ \t\n\r\f]\\)*"))
 	       (prefix-at-bol-here ; matches WS and prefix at BOL, just before point
@@ -1979,7 +2071,7 @@ function does not require the declaration to contain a brace block."
 
 	  ;; Now seek successively earlier sentence ends between PAR-BEG and
 	  ;; HERE, until the "start of sentence" following it is earlier than
-	  ;; HERE, or we hit PAR-BEG.  Beware of comment prefices!
+	  ;; HERE, or we hit PAR-BEG.  Beware of comment prefixes!
 	  (while (and (re-search-backward (c-sentence-end) par-beg 'limit)
 		      (setq last (point))
 		      (goto-char (match-end 0))	; tentative beginning of sentence
@@ -2086,7 +2178,7 @@ function does not require the declaration to contain a brace block."
 	   (end (1- (cdr range)))
 	   (here-filler		   ; matches WS and escaped newlines at point.
 	    "\\=\\([ \t\n\r\f]\\|\\\\[\n\r]\\)*")
-	   ;; Enhance paragraph-start and paragraph-separate also to recognise
+	   ;; Enhance paragraph-start and paragraph-separate also to recognize
 	   ;; blank lines terminated by escaped EOLs.  IT MAY WELL BE that
 	   ;; these values should be customizable user options, or something.
 	   (paragraph-start c-string-par-start)
@@ -2142,7 +2234,7 @@ function does not require the declaration to contain a brace block."
   (save-match-data
     (let* ((here (point))
 	   last
-	   ;; Enhance paragraph-start and paragraph-separate to recognise
+	   ;; Enhance paragraph-start and paragraph-separate to recognize
 	   ;; blank lines terminated by escaped EOLs.
 	   (paragraph-start c-string-par-start)
 	   (paragraph-separate c-string-par-separate)
@@ -2224,7 +2316,7 @@ function does not require the declaration to contain a brace block."
 
 (defun c-after-statement-terminator-p () ; Should we pass in LIM here?
   ;; Does point immediately follow a statement "terminator"?  A virtual
-  ;; semicolon is regarded here as such.  So is a an opening brace ;-)
+  ;; semicolon is regarded here as such.  So is an opening brace ;-)
   ;;
   ;; This function might do hidden buffer changes.
   (or (save-excursion
@@ -2877,7 +2969,7 @@ A prefix argument acts as a repeat count.  With a negative argument,
 move backward across a preprocessor conditional.
 
 If there aren't enough conditionals after \(or before) point, an
-error is signalled.
+error is signaled.
 
 \"#elif\" is treated like \"#else\" followed by \"#if\", except that
 the nesting level isn't changed when tracking subconditionals.
@@ -3999,16 +4091,19 @@ command to conveniently insert and align the necessary backslashes."
 		    ;; "Invalid search bound (wrong side of point)"
 		    ;; error in the subsequent re-search.  Maybe
 		    ;; another fix would be needed (2007-12-08).
-		    (and (> (- (cdr c-lit-limits) 2) (point))
-			 (search-forward-regexp
-			  (concat "\\=[ \t]*\\(" c-current-comment-prefix "\\)")
-			  (- (cdr c-lit-limits) 2) t)
-			 (not (search-forward-regexp
-			       "\\(\\s \\|\\sw\\)"
-			       (- (cdr c-lit-limits) 2) 'limit))
-			     ;; The comment ender IS on its own line.  Exclude
-			     ;; this line from the filling.
-			 (set-marker end (c-point 'bol))))
+;		    (or (<= (- (cdr c-lit-limits) 2) (point))
+; 2010-10-17  Construct removed.
+;		    (or (< (- (cdr c-lit-limits) 2) (point))
+		    (and
+		     (search-forward-regexp
+		      (concat "\\=[ \t]*\\(" c-current-comment-prefix "\\)")
+		      (- (cdr c-lit-limits) 2) t)
+		     (not (search-forward-regexp
+			   "\\(\\s \\|\\sw\\)"
+			   (- (cdr c-lit-limits) 2) 'limit))
+		     ;; The comment ender IS on its own line.  Exclude this
+		     ;; line from the filling.
+		     (set-marker end (c-point 'bol))));)
 
 		;; The comment ender is hanging.  Replace all space between it
 		;; and the last word either by one or two 'x's (when
@@ -4025,6 +4120,14 @@ command to conveniently insert and align the necessary backslashes."
 				       (goto-char ender-start)
 				       (current-column)))
 		       (point-rel (- ender-start here))
+		       (sentence-ends-comment
+			(save-excursion
+			  (goto-char ender-start)
+			  (and (search-backward-regexp
+				(c-sentence-end) (c-point 'bol) t)
+			       (goto-char (match-end 0))
+			  (looking-at "[ \t]*")
+			  (= (match-end 0) ender-start))))
 		       spaces)
 
 		  (save-excursion
@@ -4067,7 +4170,9 @@ command to conveniently insert and align the necessary backslashes."
 			      (setq spaces
 				    (max
 				     (min spaces
-					  (if sentence-end-double-space 2 1))
+					  (if (and sentence-ends-comment
+						   sentence-end-double-space)
+					      2 1))
 				     1)))
 			  ;; Insert the filler first to keep marks right.
 			  (insert-char ?x spaces t)
@@ -4581,5 +4686,4 @@ normally bound to C-o.  See `c-context-line-break' for the details."
 
 (cc-provide 'cc-cmds)
 
-;; arch-tag: bf0611dc-d1f4-449e-9e45-4ec7c6936677
 ;;; cc-cmds.el ends here
