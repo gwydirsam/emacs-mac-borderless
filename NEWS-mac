@@ -1,5 +1,15 @@
+* emacs-24.0.97-mac-2.93 [experimental/hackers-only] (2012-05-17)
+Based on Emacs 24.0.97
+
+** Fixed bugs
+
+*** Wrong Command-Control-D pop-up position in right-to-left
+paragraphs.
+
+
 * emacs-24.0.96-mac-2.92 [experimental/hackers-only] (2012-04-28)
 Based on Emacs 24.0.96
+http://lists.gnu.org/archive/html/emacs-devel/2012-04/msg00841.html
 
 ** Fixed bugs
 

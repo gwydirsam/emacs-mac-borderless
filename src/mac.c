@@ -1951,8 +1951,8 @@ xrm_get_resource (XrmDatabase database, const char *name, const char *class)
   nn = strlen (name);
   nc = strlen (class);
   key = make_uninit_string (nn + nc + 1);
-  strcpy (SSDATA (key), name);
-  strncpy (SSDATA (key) + nn + 1, class, nc);
+  memcpy (SDATA (key), name, nn + 1);
+  memcpy (SDATA (key) + nn + 1, class, nc);
 
   query_cache = Fgethash (HASHKEY_QUERY_CACHE, database, Qnil);
   if (NILP (query_cache))

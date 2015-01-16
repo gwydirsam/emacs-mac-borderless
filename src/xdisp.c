@@ -846,6 +846,7 @@ static int try_cursor_movement (Lisp_Object, struct text_pos, int *);
 static int trailing_whitespace_p (EMACS_INT);
 static intmax_t message_log_check_duplicate (EMACS_INT, EMACS_INT);
 static void push_it (struct it *, struct text_pos *);
+static void iterate_out_of_display_property (struct it *);
 static void pop_it (struct it *);
 static void sync_frame_with_window_matrix_rows (struct window *);
 static void select_frame_for_redisplay (Lisp_Object);
@@ -1310,8 +1311,8 @@ pos_visible_p (struct window *w, EMACS_INT charpos, int *x, int *y,
 	 glyph.  */
       int top_x = it.current_x;
       int top_y = it.current_y;
-      enum it_method it_method = it.method;
       /* Calling line_bottom_y may change it.method, it.position, etc.  */
+      enum it_method it_method = it.method;
       int bottom_y = (last_height = 0, line_bottom_y (&it));
       int window_top_y = WINDOW_HEADER_LINE_HEIGHT (w);
 
@@ -1319,6 +1320,31 @@ pos_visible_p (struct window *w, EMACS_INT charpos, int *x, int *y,
 	visible_p = bottom_y > window_top_y;
       else if (top_y < it.last_visible_y)
 	visible_p = 1;
+      if (bottom_y <= it.last_visible_y
+	  && it.bidi_p && it.bidi_it.scan_dir == -1
+	  && IT_CHARPOS (it) < charpos)
+	{
+	  /* When the last line of the window is scanned backwards
+	     under bidi iteration, we could be duped into thinking
+	     that we have passed CHARPOS, when in fact move_it_to
+	     simply stopped short of CHARPOS because it reached
+	     last_visible_y.  To see if that's what happened, we call
+	     move_it_to again with a slightly larger vertical limit,
+	     and see if it actually moved vertically; if it did, we
+	     didn't really reach CHARPOS, which is beyond window end.  */
+	  struct it save_it = it;
+	  /* Why 10? because we don't know how many canonical lines
+	     will the height of the next line(s) be.  So we guess.  */
+	  int ten_more_lines =
+	    10 * FRAME_LINE_HEIGHT (XFRAME (WINDOW_FRAME (w)));
+
+	  move_it_to (&it, charpos, -1, bottom_y + ten_more_lines, -1,
+		      MOVE_TO_POS | MOVE_TO_Y);
+	  if (it.current_y > top_y)
+	    visible_p = 0;
+
+	  it = save_it;
+	}
       if (visible_p)
 	{
 	  if (it_method == GET_FROM_DISPLAY_VECTOR)
@@ -1382,6 +1408,7 @@ pos_visible_p (struct window *w, EMACS_INT charpos, int *x, int *y,
 		  Lisp_Object startpos, endpos;
 		  EMACS_INT start, end;
 		  struct it it3;
+		  int it3_moved;
 
 		  /* Find the first and the last buffer positions
 		     covered by the display string.  */
@@ -1438,6 +1465,15 @@ pos_visible_p (struct window *w, EMACS_INT charpos, int *x, int *y,
 		     begins.  */
 		  start_display (&it3, w, top);
 		  move_it_to (&it3, -1, 0, top_y, -1, MOVE_TO_X | MOVE_TO_Y);
+		  /* If it3_moved stays zero after the 'while' loop
+		     below, that means we already were at a newline
+		     before the loop (e.g., the display string begins
+		     with a newline), so we don't need to (and cannot)
+		     inspect the glyphs of it3.glyph_row, because
+		     PRODUCE_GLYPHS will not produce anything for a
+		     newline, and thus it3.glyph_row stays at its
+		     stale content it got at top of the window.  */
+		  it3_moved = 0;
 		  /* Finally, advance the iterator until we hit the
 		     first display element whose character position is
 		     CHARPOS, or until the first newline from the
@@ -1449,6 +1485,7 @@ pos_visible_p (struct window *w, EMACS_INT charpos, int *x, int *y,
 		      if (IT_CHARPOS (it3) == charpos
 			  || ITERATOR_AT_END_OF_LINE_P (&it3))
 			break;
+		      it3_moved = 1;
 		      set_iterator_to_next (&it3, 0);
 		    }
 		  top_x = it3.current_x - it3.pixel_width;
@@ -1459,7 +1496,8 @@ pos_visible_p (struct window *w, EMACS_INT charpos, int *x, int *y,
 		     display string, move back over the glyphs
 		     produced from the string, until we find the
 		     rightmost glyph not from the string.  */
-		  if (IT_CHARPOS (it3) != charpos && EQ (it3.object, string))
+		  if (it3_moved
+		      && IT_CHARPOS (it3) != charpos && EQ (it3.object, string))
 		    {
 		      struct glyph *g = it3.glyph_row->glyphs[TEXT_AREA]
 					+ it3.glyph_row->used[TEXT_AREA];
@@ -3125,7 +3163,15 @@ handle_stop (struct it *it)
 		 overlays even if the actual buffer text is replaced.  */
 	      if (!handle_overlay_change_p
 		  || it->sp > 1
-		  || !get_overlay_strings_1 (it, 0, 0))
+		  /* Don't call get_overlay_strings_1 if we already
+		     have overlay strings loaded, because doing so
+		     will load them again and push the iterator state
+		     onto the stack one more time, which is not
+		     expected by the rest of the code that processes
+		     overlay strings.  */
+		  || (it->n_overlay_strings <= 0
+		      ? !get_overlay_strings_1 (it, 0, 0)
+		      : 0))
 		{
 		  if (it->ellipsis_p)
 		    setup_for_ellipsis (it, 0);
@@ -4681,10 +4727,22 @@ handle_single_display_spec (struct it *it, Lisp_Object spec, Lisp_Object object,
 	  if (!FRAME_WINDOW_P (it->f))
 	    /* If we return here, POSITION has been advanced
 	       across the text with this property.  */
-	    return 0;
+	    {
+	      /* Synchronize the bidi iterator with POSITION.  This is
+		 needed because we are not going to push the iterator
+		 on behalf of this display property, so there will be
+		 no pop_it call to do this synchronization for us.  */
+	      if (it->bidi_p)
+		{
+		  it->position = *position;
+		  iterate_out_of_display_property (it);
+		  *position = it->position;
+		}
+	      return 1;
+	    }
 	}
       else if (!frame_window_p)
-	return 0;
+	return 1;
 
 #ifdef HAVE_WINDOW_SYSTEM
       value = XCAR (XCDR (spec));
@@ -4692,7 +4750,15 @@ handle_single_display_spec (struct it *it, Lisp_Object spec, Lisp_Object object,
 	  || !(fringe_bitmap = lookup_fringe_bitmap (value)))
 	/* If we return here, POSITION has been advanced
 	   across the text with this property.  */
-	return 0;
+	{
+	  if (it && it->bidi_p)
+	    {
+	      it->position = *position;
+	      iterate_out_of_display_property (it);
+	      *position = it->position;
+	    }
+	  return 1;
+	}
 
       if (it)
 	{
@@ -5611,7 +5677,7 @@ push_it (struct it *it, struct text_pos *position)
 static void
 iterate_out_of_display_property (struct it *it)
 {
-  int buffer_p = BUFFERP (it->object);
+  int buffer_p = !STRINGP (it->string);
   EMACS_INT eob = (buffer_p ? ZV : it->end_charpos);
   EMACS_INT bob = (buffer_p ? BEGV : 0);
 
@@ -6780,6 +6846,16 @@ get_next_display_element (struct it *it)
 	       && FACE_FROM_ID (it->f, face_id)->box == FACE_NO_BOX);
 	}
     }
+  /* If we reached the end of the object we've been iterating (e.g., a
+     display string or an overlay string), and there's something on
+     IT->stack, proceed with what's on the stack.  It doesn't make
+     sense to return zero if there's unprocessed stuff on the stack,
+     because otherwise that stuff will never be displayed.  */
+  if (!success_p && it->sp > 0)
+    {
+      set_iterator_to_next (it, 0);
+      success_p = get_next_display_element (it);
+    }
 
   /* Value is 0 if end of buffer or string reached.  */
   return success_p;
@@ -6961,7 +7037,7 @@ set_iterator_to_next (struct it *it, int reseat_p)
          display vector entry (these entries may contain faces).  */
       it->face_id = it->saved_face_id;
 
-      if (it->dpvec + it->current.dpvec_index == it->dpend)
+      if (it->dpvec + it->current.dpvec_index >= it->dpend)
 	{
 	  int recheck_faces = it->ellipsis_p;
 
@@ -6999,6 +7075,26 @@ set_iterator_to_next (struct it *it, int reseat_p)
     case GET_FROM_STRING:
       /* Current display element is a character from a Lisp string.  */
       xassert (it->s == NULL && STRINGP (it->string));
+      /* Don't advance past string end.  These conditions are true
+	 when set_iterator_to_next is called at the end of
+	 get_next_display_element, in which case the Lisp string is
+	 already exhausted, and all we want is pop the iterator
+	 stack.  */
+      if (it->current.overlay_string_index >= 0)
+	{
+	  /* This is an overlay string, so there's no padding with
+	     spaces, and the number of characters in the string is
+	     where the string ends.  */
+	  if (IT_STRING_CHARPOS (*it) >= SCHARS (it->string))
+	    goto consider_string_end;
+	}
+      else
+	{
+	  /* Not an overlay string.  There could be padding, so test
+	     against it->end_charpos . */
+	  if (IT_STRING_CHARPOS (*it) >= it->end_charpos)
+	    goto consider_string_end;
+	}
       if (it->cmp_it.id >= 0)
 	{
 	  int i;
@@ -25981,7 +26077,10 @@ cursor_in_mouse_face_p (struct window *w)
    covers these buffer positions.  This is similar to
    row_containing_pos, but is more accurate when bidi reordering makes
    buffer positions change non-linearly with glyph rows.  */
-static void
+#ifndef HAVE_MACGUI
+static
+#endif
+void
 rows_from_pos_range (struct window *w,
 		     EMACS_INT start_charpos, EMACS_INT end_charpos,
 		     Lisp_Object disp_string,

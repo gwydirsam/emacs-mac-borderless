@@ -3567,8 +3567,17 @@ If BUFFER is not swapped, yank out of its message viewer buffer."
   (with-current-buffer buffer
     (unless (rmail-buffers-swapped-p)
       (setq buffer rmail-view-buffer)))
-  (insert-buffer buffer))
-
+  (insert-buffer buffer)
+  ;; If they yank the text of BUFFER, the encoding of BUFFER is a
+  ;; better default for the reply message than the default value of
+  ;; buffer-file-coding-system.
+  (and (coding-system-equal (default-value 'buffer-file-coding-system)
+			    buffer-file-coding-system)
+       (setq buffer-file-coding-system
+	     (coding-system-change-text-conversion
+	      buffer-file-coding-system (coding-system-base
+					 (with-current-buffer buffer
+					   buffer-file-coding-system))))))
 
 (defun rmail-start-mail (&optional noerase to subject in-reply-to cc
 				   replybuffer sendactions same-window
@@ -4563,7 +4572,7 @@ With prefix argument N moves forward N messages with these labels.
 
 ;;;***
 
-;;;### (autoloads (rmail-mime) "rmailmm" "rmailmm.el" "be7f4b94a269f840b8707defd515c4f9")
+;;;### (autoloads (rmail-mime) "rmailmm" "rmailmm.el" "cd7656f82944d0b92b0d093a5f3a4c36")
 ;;; Generated autoloads from rmailmm.el
 
 (autoload 'rmail-mime "rmailmm" "\

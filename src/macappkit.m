@@ -3626,11 +3626,8 @@ static int executing_applescript_p;
 extern int mac_get_emulated_btn (UInt32);
 extern int mac_to_emacs_modifiers (UInt32, UInt32);
 
-extern int fast_find_position (struct window *, EMACS_INT, int *, int *,
-			       int *, int *, Lisp_Object);
-extern struct glyph *x_y_to_hpos_vpos (struct window *, int, int,
-				       int *, int *, int *, int *, int *);
-extern void frame_to_window_pixel_xy (struct window *, int *, int *);
+extern CGRect mac_get_first_rect_for_range (struct window *, const CFRange *,
+					    CFRange *);
 
 static int mac_get_mouse_btn (NSEvent *);
 static int mac_event_to_emacs_modifiers (NSEvent *);
@@ -4482,32 +4479,69 @@ extern CFStringRef mac_ax_string_for_range (struct frame *,
 		MRC_AUTORELEASE ([[NSMutableAttributedString alloc]
 				   initWithString:((__bridge NSString *)
 						   string)]);
-	      NSUInteger i;
+	      int last_face_id = DEFAULT_FACE_ID;
+	      NSFont *lastFont =
+		[NSFont fontWithFace:(FACE_FROM_ID (f, last_face_id))];
+	      EMACS_INT start_charpos, end_charpos;
+	      struct glyph_row *r1, *r2;
 
+	      start_charpos = BUF_BEGV (b) + range.location;
+	      end_charpos = start_charpos + range.length;
 	      [attributedString beginEditing];
-	      for (i = 0; i < range.length; i++)
+	      [attributedString addAttribute:NSFontAttributeName
+				       value:lastFont
+				       range:(NSMakeRange (0, range.length))];
+	      rows_from_pos_range (w, start_charpos, end_charpos, Qnil,
+				   &r1, &r2);
+	      if (r1 == NULL || r2 == NULL)
 		{
-		  NSFont *font = nil;
-		  int hpos, vpos, x, y;
-		  struct glyph_row *row;
-		  struct glyph *glyph;
+		  struct glyph_row *first, *last;
 
-		  fast_find_position (w, BUF_BEGV (b) + range.location + i,
-				      &hpos, &vpos, &x, &y, Qnil);
-		  row = MATRIX_ROW (w->current_matrix, vpos);
-		  glyph = row->glyphs[TEXT_AREA] + hpos;
-		  if (glyph->charpos == BUF_BEGV (b) + range.location + i
-		      && glyph->type == CHAR_GLYPH
-		      && !glyph->glyph_not_available_p)
-		    font = [NSFont fontWithFace:(FACE_FROM_ID
-						 (f, glyph->face_id))];
-		  if (font == nil)
-		    font = [NSFont fontWithFace:(FACE_FROM_ID
-						 (f, DEFAULT_FACE_ID))];
-		  [attributedString addAttribute:NSFontAttributeName
-					   value:font
-					   range:(NSMakeRange (i, 1))];
+		  first = MATRIX_FIRST_TEXT_ROW (w->current_matrix);
+		  last = MATRIX_ROW (w->current_matrix,
+				     XFASTINT (w->window_end_vpos));
+		  if (start_charpos <= MATRIX_ROW_END_CHARPOS (last)
+		      && end_charpos > MATRIX_ROW_START_CHARPOS (first))
+		    {
+		      if (r1 == NULL)
+			r1 = first;
+		      if (r2 == NULL)
+			r2 = last;
+		    }
 		}
+	      if (r1 && r2)
+		for (; r1 <= r2; r1++)
+		  {
+		    struct glyph *glyph;
+
+		    for (glyph = r1->glyphs[TEXT_AREA];
+			 glyph < r1->glyphs[TEXT_AREA] + r1->used[TEXT_AREA];
+			 glyph++)
+		      if (BUFFERP (glyph->object)
+			  && glyph->charpos >= start_charpos
+			  && glyph->charpos < end_charpos
+			  && (glyph->type == CHAR_GLYPH
+			      || glyph->type == COMPOSITE_GLYPH)
+			  && !glyph->glyph_not_available_p)
+			{
+			  NSRange attributeRange =
+			    (glyph->type == CHAR_GLYPH
+			     ? NSMakeRange (glyph->charpos - start_charpos, 1)
+			     : [[attributedString string]
+				 rangeOfComposedCharacterSequenceAtIndex:(glyph->charpos - start_charpos)]);
+
+			  if (last_face_id != glyph->face_id)
+			    {
+			      last_face_id = glyph->face_id;
+			      lastFont =
+				[NSFont fontWithFace:(FACE_FROM_ID
+						      (f, last_face_id))];
+			    }
+			  [attributedString addAttribute:NSFontAttributeName
+						   value:lastFont
+						   range:attributeRange];
+			}
+		  }
 	      [attributedString endEditing];
 	      result = attributedString;
 
@@ -4620,42 +4654,10 @@ extern CFStringRef mac_ax_string_for_range (struct frame *,
       if (EQ (w->window_end_valid, w->buffer)
 	  && XINT (w->last_modified) == BUF_MODIFF (b)
 	  && XINT (w->last_overlay_modified) == BUF_OVERLAY_MODIFF (b))
-	{
-	  EMACS_INT last_charpos, charpos = BUF_BEGV (b) + aRange.location;
-	  struct glyph *end;
-	  int width = 0;
-
-	  fast_find_position (w, charpos, &hpos, &vpos, &x, &y, Qnil);
-	  row = MATRIX_ROW (w->current_matrix, vpos);
-	  glyph = row->glyphs[TEXT_AREA] + hpos;
-	  if (charpos < glyph->charpos
-	      && glyph->charpos < charpos + aRange.length)
-	    {
-	      aRange.location += glyph->charpos - charpos;
-	      aRange.length -= glyph->charpos - charpos;
-	      charpos = glyph->charpos;
-	    }
-	  end = row->glyphs[TEXT_AREA] + row->used[TEXT_AREA];
-
-	  last_charpos = charpos;
-	  while (glyph < end
-		 && !INTEGERP (glyph->object)
-		 && (!BUFFERP (glyph->object)
-		     || glyph->charpos < charpos + aRange.length))
-	    {
-	      if (BUFFERP (glyph->object))
-		last_charpos = glyph->charpos;
-	      width += glyph->pixel_width;
-	      ++glyph;
-	    }
-
-	  rect = NSMakeRect (WINDOW_TEXT_TO_FRAME_PIXEL_X (w, x),
-			     WINDOW_TO_FRAME_PIXEL_Y (w, y),
-			     width, row->height);
-	  if (actualRange)
-	    *actualRange = NSMakeRange (aRange.location,
-					last_charpos - charpos);
-	}
+	rect = NSRectFromCGRect (mac_get_first_rect_for_range (w, ((CFRange *)
+								   &aRange),
+							       ((CFRange *)
+								actualRange)));
     }
 
   if (actualRange && NSEqualRects (rect, NSZeroRect))
@@ -10162,36 +10164,50 @@ ax_get_string_for_range (EmacsView *emacsView, id parameter)
   return CF_BRIDGING_RELEASE (string);
 }
 
+static NSRect
+ax_get_bounds_for_range_1 (EmacsView *emacsView, NSRange range)
+{
+  NSRange actualRange;
+  NSRect rect;
+
+  rect = [emacsView firstRectForCharacterRange:range actualRange:&actualRange];
+  while (actualRange.length > 0)
+    {
+      NSRect rect1;
+
+      if (actualRange.location > range.location)
+	{
+	  NSRange range1 = NSMakeRange (range.location,
+					actualRange.location - range.location);
+
+	  rect1 = ax_get_bounds_for_range_1 (emacsView, range1);
+	  rect = NSUnionRect (rect, rect1);
+	}
+      if (NSMaxRange (actualRange) < NSMaxRange (range))
+	{
+	  range = NSMakeRange (NSMaxRange (actualRange),
+			       NSMaxRange (range) - NSMaxRange (actualRange));
+	  rect1 = [emacsView firstRectForCharacterRange:range
+					    actualRange:&actualRange];
+	  rect = NSUnionRect (rect, rect1);
+	}
+      else
+	break;
+    }
+
+  return rect;
+}
+
 static id
 ax_get_bounds_for_range (EmacsView *emacsView, id parameter)
 {
   NSRange range = [(NSValue *)parameter rangeValue];
-  NSRect rect = NSZeroRect;
+  NSRect rect;
 
-  while (1)
-    {
-      NSRange actualRange;
-      NSRect firstRect = [emacsView firstRectForCharacterRange:range
-						   actualRange:&actualRange];
-
-      if (NSWidth (rect) == 0 && NSHeight (rect) == 0)
-	rect = firstRect;
-      else
-	rect = NSUnionRect (rect, firstRect);
-      if ((range.length == 0 && actualRange.length == 0)
-	  || NSEqualRects (firstRect, NSZeroRect))
-	break;
-      if (actualRange.length > 0)
-	{
-	  range.length -= NSMaxRange (actualRange) - range.location;
-	  range.location = NSMaxRange (actualRange);
-	}
-      else
-	{
-	  range.length--;
-	  range.location++;
-	}
-    }
+  if (range.location >= NSNotFound)
+    rect = [emacsView firstRectForCharacterRange:range];
+  else
+    rect = ax_get_bounds_for_range_1 (emacsView, range);
 
   return [NSValue valueWithRect:rect];
 }

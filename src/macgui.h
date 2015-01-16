@@ -26,7 +26,6 @@ typedef struct _XDisplay Display; /* opaque */
 
 typedef Lisp_Object XrmDatabase;
 
-#ifdef HAVE_MACGUI
 #undef Z
 #undef DEBUG
 #undef free
@@ -61,14 +60,6 @@ typedef Lisp_Object XrmDatabase;
 #undef INFINITY
 #undef Z
 #define Z (current_buffer->text->z)
-#else /* not HAVE_MACGUI */
-#include <Quickdraw.h>		/* for WindowRef */
-#include <QDOffscreen.h>	/* for GWorldPtr */
-#include <Appearance.h>		/* for ThemeCursor */
-#include <Windows.h>
-#include <Controls.h>
-#include <Gestalt.h>
-#endif /* not HAVE_MACGUI */
 
 #ifndef CGFLOAT_DEFINED
 typedef float CGFloat;

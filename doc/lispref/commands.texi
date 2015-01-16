@@ -2704,6 +2704,7 @@ This function converts the string or vector @var{key} to a list of
 individual events, which you can put in @code{unread-command-events}.
 @end defun
 
+@ignore
 @defvar unread-command-char
 This variable holds a character to be read as command input.
 A value of -1 means ``empty''.
@@ -2712,6 +2713,7 @@ This variable is mostly obsolete now that you can use
 @code{unread-command-events} instead; it exists only to support programs
 written for Emacs versions 18 and earlier.
 @end defvar
+@end ignore
 
 @defun input-pending-p
 @cindex waiting for command key input
@@ -3209,7 +3211,7 @@ a recursive edit but also provides the other features of the debugger.
   Recursive editing levels are also used when you type @kbd{C-r} in
 @code{query-replace} or use @kbd{C-x q} (@code{kbd-macro-query}).
 
-@defun recursive-edit
+@deffn Command recursive-edit
 @cindex suspend evaluation
 This function invokes the editor command loop.  It is called
 automatically by the initialization of Emacs, to let the user begin
@@ -3236,7 +3238,7 @@ then type @kbd{C-M-c} to exit and continue executing @code{simple-rec}.
 (simple-rec)
      @result{} nil
 @end example
-@end defun
+@end deffn
 
 @deffn Command exit-recursive-edit
 This function exits from the innermost recursive edit (including

@@ -1,3 +1,28 @@
+2012-05-16  Bastien Guerry  <bzg@gnu.org>
+
+	* org.texi (Durations and time values): Fix typo.
+
+2012-05-12  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* cc-mode.texi: Avoid space before macro in 4th argument of cross
+	reference commands.  (Bug#11461)
+
+	* Makefile.in (gnus.dvi): Use $@ instead of $*.dvi.
+
+2012-05-02  Glenn Morris  <rgm@gnu.org>
+
+	* viper.texi: Make direntry shorter (also it is no longer "newest").
+
+	* emacs-gnutls.texi, ert.texi, org.texi:
+	Fix dircategory, direntry to match info/dir.
+
+2012-04-28  Glenn Morris  <rgm@gnu.org>
+
+	* faq.texi: Convert @inforefs to @xrefs.
+	Fix some malformed cross-references.
+	(File-name conventions): Shorten section name to avoid overfull line.
+	(How to add fonts): Use smallexample to avoid overfull lines.
+
 2012-04-26  Ippei Furuhashi  <top.tuna+orgmode@gmail.com>  (tiny change)
 
 	* org.texi (Agenda commands): Fix two typos: give corresponding

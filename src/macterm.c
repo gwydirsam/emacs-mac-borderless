@@ -4882,11 +4882,10 @@ mac_get_selected_range (struct window *w, CFRange *range)
 /* Store the text of the buffer BUF from START to END as Unicode
    characters in CHARACTERS.  Return non-zero if successful.  */
 
-int
+static int
 mac_store_buffer_text_to_unicode_chars (struct buffer *buf, EMACS_INT start,
 					EMACS_INT end, UniChar *characters)
 {
-#if 1
   EMACS_INT start_byte = buf_charpos_to_bytepos (buf, start);
 
 #define BUF_FETCH_CHAR_ADVANCE(OUTPUT, BUF, CHARIDX, BYTEIDX)	\
@@ -4918,142 +4917,215 @@ mac_store_buffer_text_to_unicode_chars (struct buffer *buf, EMACS_INT start,
     }
 
   return 1;
-#else
-  int start_byte, end_byte, char_count, byte_count;
-  struct coding_system coding;
-  unsigned char *dst = (unsigned char *) characters;
-
-  start_byte = buf_charpos_to_bytepos (buf, start);
-  end_byte = buf_charpos_to_bytepos (buf, end);
-  char_count = end - start;
-  byte_count = end_byte - start_byte;
-
-  if (setup_coding_system (
-#ifdef WORDS_BIG_ENDIAN
-			   intern ("utf-16be")
-#else
-			   intern ("utf-16le")
-#endif
-			   , &coding) < 0)
-    return 0;
-
-  coding.src_multibyte = !NILP (buf->enable_multibyte_characters);
-  coding.dst_multibyte = 0;
-  coding.mode |= CODING_MODE_LAST_BLOCK;
-  coding.composing = COMPOSITION_DISABLED;
-
-  if (BUF_GPT_BYTE (buf) <= start_byte || end_byte <= BUF_GPT_BYTE (buf))
-    encode_coding (&coding, BUF_BYTE_ADDRESS (buf, start_byte), dst,
-		   byte_count, char_count * sizeof (UniChar));
-  else
-    {
-      int first_byte_count = BUF_GPT_BYTE (buf) - start_byte;
-
-      encode_coding (&coding, BUF_BYTE_ADDRESS (buf, start_byte), dst,
-		     first_byte_count, char_count * sizeof (UniChar));
-      if (coding.result == CODING_FINISH_NORMAL)
-	encode_coding (&coding,
-		       BUF_BYTE_ADDRESS (buf, start_byte + first_byte_count),
-		       dst + coding.produced,
-		       byte_count - first_byte_count,
-		       char_count * sizeof (UniChar) - coding.produced);
-    }
-
-  if (coding.result != CODING_FINISH_NORMAL)
-    return 0;
-
-  return 1;
-#endif
 }
 
-/* Find the glyph matrix position of buffer position CHARPOS in window
-   *W.  HPOS, *VPOS, *X, and *Y are set to the positions found.  W's
-   current glyphs must be up to date.  If CHARPOS is above window
-   start return (0, 0, 0, 0).  If CHARPOS is after end of W, return end
-   of last line in W.  In the row containing CHARPOS, stop before glyphs
-   having STOP as object.  */
-
-int
-fast_find_position (struct window *w, EMACS_INT charpos, int *hpos, int *vpos,
-		    int *x, int *y, Lisp_Object stop)
+CGRect
+mac_get_first_rect_for_range (struct window *w, const CFRange *range,
+			      CFRange *actual_range)
 {
-  struct glyph_row *row, *first;
-  struct glyph *glyph, *end;
-  int past_end = 0;
+  struct buffer *b = XBUFFER (w->buffer);
+  EMACS_INT start_charpos, end_charpos, min_charpos, max_charpos;
+  struct glyph_row *row, *r2;
+  struct glyph *glyph, *end, *left_glyph, *right_glyph;
+  int x, left_x, right_x, text_area_width;
 
-  first = MATRIX_FIRST_TEXT_ROW (w->current_matrix);
-  if (charpos < MATRIX_ROW_START_CHARPOS (first))
-    {
-      *x = first->x;
-      *y = first->y;
-      *hpos = 0;
-      *vpos = MATRIX_ROW_VPOS (first, w->current_matrix);
-      return 1;
-    }
+  start_charpos = BUF_BEGV (b) + range->location;
+  end_charpos = start_charpos + range->length;
+  if (range->length == 0)
+    end_charpos++;
 
-  row = row_containing_pos (w, charpos, first, NULL, 0);
+  /* Find the rows corresponding to START_CHARPOS and END_CHARPOS.  */
+  rows_from_pos_range (w, start_charpos, end_charpos, Qnil, &row, &r2);
   if (row == NULL)
+    row = MATRIX_ROW (w->current_matrix, XFASTINT (w->window_end_vpos));
+  if (r2 == NULL)
+    r2 = MATRIX_ROW (w->current_matrix, XFASTINT (w->window_end_vpos));
+  if (row->y > r2->y)
+    row = r2;
+
+  if (!row->reversed_p)
     {
-      row = MATRIX_ROW (w->current_matrix, XFASTINT (w->window_end_vpos));
-      past_end = 1;
+      /* This row is in a left to right paragraph.  Scan it left to
+	 right.  */
+      glyph = row->glyphs[TEXT_AREA];
+      end = glyph + row->used[TEXT_AREA];
+      x = row->x;
+
+      /* Skip truncation glyphs at the start of the glyph row.  */
+      if (row->displays_text_p)
+	for (; glyph < end
+	       && INTEGERP (glyph->object)
+	       && glyph->charpos < 0;
+	     ++glyph)
+	  x += glyph->pixel_width;
+
+      /* Scan the glyph row, looking for the first glyph from buffer
+	 whose position is between START_CHARPOS and END_CHARPOS.  */
+      for (; glyph < end
+	     && !INTEGERP (glyph->object)
+	     && !(BUFFERP (glyph->object)
+		  && (glyph->charpos >= start_charpos
+		      && glyph->charpos < end_charpos));
+	   ++glyph)
+	x += glyph->pixel_width;
+
+      left_x = x;
+      left_glyph = glyph;
+    }
+  else
+    {
+      /* This row is in a right to left paragraph.  Scan it right to
+	 left.  */
+      struct glyph *g;
+
+      end = row->glyphs[TEXT_AREA] - 1;
+      glyph = end + row->used[TEXT_AREA];
+
+      /* Skip truncation glyphs at the start of the glyph row.  */
+      if (row->displays_text_p)
+	for (; glyph > end
+	       && INTEGERP (glyph->object)
+	       && glyph->charpos < 0;
+	     --glyph)
+	  ;
+
+      /* Scan the glyph row, looking for the first glyph from buffer
+	 whose position is between START_CHARPOS and END_CHARPOS.  */
+      for (; glyph > end
+	     && !INTEGERP (glyph->object)
+	     && !(BUFFERP (glyph->object)
+		  && (glyph->charpos >= start_charpos
+		      && glyph->charpos < end_charpos));
+	   --glyph)
+	;
+
+      glyph++; /* first glyph to the right of the first rect */
+      for (g = row->glyphs[TEXT_AREA], x = row->x; g < glyph; g++)
+	x += g->pixel_width;
+
+      right_x = x;
+      right_glyph = glyph;
     }
 
-  /* If whole rows or last part of a row came from a display overlay,
-     row_containing_pos will skip over such rows because their end pos
-     equals the start pos of the overlay or interval.
-
-     Move back if we have a STOP object and previous row's
-     end glyph came from STOP.  */
-  if (!NILP (stop))
+  if (range->length == 0)
     {
-      struct glyph_row *prev;
-      while ((prev = row - 1, prev >= first)
-	     && MATRIX_ROW_END_CHARPOS (prev) == charpos
-	     && prev->used[TEXT_AREA] > 0)
+      min_charpos = max_charpos = start_charpos;
+      if (!row->reversed_p)
+	right_x = left_x;
+      else
+	left_x = right_x;
+    }
+  else
+    {
+      if (!row->reversed_p)
 	{
-	  struct glyph *beg = prev->glyphs[TEXT_AREA];
-	  glyph = beg + prev->used[TEXT_AREA];
-	  while (--glyph >= beg
-		 && INTEGERP (glyph->object));
-	  if (glyph < beg
-	      || !EQ (stop, glyph->object))
-	    break;
-	  row = prev;
+	  if (MATRIX_ROW_END_CHARPOS (row) <= end_charpos)
+	    {
+	      min_charpos = max_charpos = MATRIX_ROW_END_CHARPOS (row);
+	      right_x = INT_MAX;
+	      right_glyph = end;
+	    }
+	  else
+	    {
+	      /* Skip truncation and continuation glyphs near the end
+		 of the row, and also blanks and stretch glyphs
+		 inserted by extend_face_to_end_of_line.  */
+	      while (end > glyph
+		     && INTEGERP ((end - 1)->object))
+		--end;
+	      /* Scan the rest of the glyph row from the end, looking
+		 for the first glyph whose position is between
+		 START_CHARPOS and END_CHARPOS */
+	      for (--end;
+		   end > glyph
+		     && !INTEGERP (end->object)
+		     && !(BUFFERP (end->object)
+			  && (end->charpos >= start_charpos
+			      && end->charpos < end_charpos));
+		   --end)
+		;
+	      /* Find the X coordinate of the last glyph of the first
+		 rect.  */
+	      for (; glyph <= end; ++glyph)
+		x += glyph->pixel_width;
+
+	      min_charpos = end_charpos;
+	      max_charpos = start_charpos;
+	      right_x = x;
+	      right_glyph = glyph;
+	    }
 	}
+      else
+	{
+	  if (MATRIX_ROW_END_CHARPOS (row) <= end_charpos)
+	    {
+	      min_charpos = max_charpos = MATRIX_ROW_END_CHARPOS (row);
+	      left_x = 0;
+	      left_glyph = end + 1;
+	    }
+	  else
+	    {
+	      /* Skip truncation and continuation glyphs near the end
+		 of the row, and also blanks and stretch glyphs
+		 inserted by extend_face_to_end_of_line.  */
+	      x = row->x;
+	      end++;
+	      while (end < glyph
+		     && INTEGERP (end->object))
+		{
+		  x += end->pixel_width;
+		  ++end;
+		}
+	      /* Scan the rest of the glyph row from the end, looking
+		 for the first glyph whose position is between
+		 START_CHARPOS and END_CHARPOS */
+	      for ( ;
+		    end < glyph
+		      && !INTEGERP (end->object)
+		      && !(BUFFERP (end->object)
+			   && (end->charpos >= start_charpos
+			       && end->charpos < end_charpos));
+		    ++end)
+		x += end->pixel_width;
+
+	      min_charpos = end_charpos;
+	      max_charpos = start_charpos;
+	      left_x = x;
+	      left_glyph = end;
+	    }
+	}
+
+      for (glyph = left_glyph; glyph < right_glyph; ++glyph)
+	if (!STRINGP (glyph->object) && glyph->charpos > 0)
+	  {
+	    if (glyph->charpos < min_charpos)
+	      min_charpos = glyph->charpos;
+	    if (glyph->charpos + 1 > max_charpos)
+	      max_charpos = glyph->charpos + 1;
+	  }
+      if (min_charpos > max_charpos)
+	min_charpos = max_charpos;
     }
 
-  *x = row->x;
-  *y = row->y;
-  *vpos = MATRIX_ROW_VPOS (row, w->current_matrix);
-
-  glyph = row->glyphs[TEXT_AREA];
-  end = glyph + row->used[TEXT_AREA];
-
-  /* Skip over glyphs not having an object at the start of the row.
-     These are special glyphs like truncation marks on terminal
-     frames.  */
-  if (row->displays_text_p)
-    while (glyph < end
-	   && INTEGERP (glyph->object)
-	   && !EQ (stop, glyph->object)
-	   && glyph->charpos < 0)
-      {
-	*x += glyph->pixel_width;
-	++glyph;
-      }
-
-  while (glyph < end
-	 && !INTEGERP (glyph->object)
-	 && !EQ (stop, glyph->object)
-	 && (!BUFFERP (glyph->object)
-	     || glyph->charpos < charpos))
+  if (actual_range)
     {
-      *x += glyph->pixel_width;
-      ++glyph;
+      actual_range->location = min_charpos - BUF_BEGV (b);
+      actual_range->length = max_charpos - min_charpos;
     }
 
-  *hpos = glyph - row->glyphs[TEXT_AREA];
-  return !past_end;
+  text_area_width = window_box_width (w, TEXT_AREA);
+  if (left_x < 0)
+    left_x = 0;
+  else if (left_x > text_area_width)
+    left_x = text_area_width;
+  if (right_x < 0)
+    right_x = 0;
+  else if (right_x > text_area_width)
+    right_x = text_area_width;
+
+  return CGRectMake (WINDOW_TEXT_TO_FRAME_PIXEL_X (w, left_x),
+		     WINDOW_TO_FRAME_PIXEL_Y (w, row->y),
+		     right_x - left_x, row->height);
 }
 
 void

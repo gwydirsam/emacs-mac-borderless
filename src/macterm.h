@@ -744,3 +744,11 @@ extern int mac_webkit_supports_svg_p (void);
 extern void macfont_update_antialias_threshold (void);
 extern void *macfont_get_nsctfont (struct font *);
 extern Lisp_Object macfont_nsctfont_to_spec (void *);
+
+/* Defined in xdisp.c */
+extern struct glyph *x_y_to_hpos_vpos (struct window *, int, int,
+				       int *, int *, int *, int *, int *);
+extern void frame_to_window_pixel_xy (struct window *, int *, int *);
+extern void rows_from_pos_range (struct window *, EMACS_INT , EMACS_INT,
+				 Lisp_Object, struct glyph_row **,
+				 struct glyph_row **);

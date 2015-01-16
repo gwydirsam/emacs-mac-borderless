@@ -1,3 +1,72 @@
+2012-05-06  Chong Yidong  <cyd@gnu.org>
+
+	* frames.texi (Mouse References, Mouse Commands): Fix index
+	entries (Bug#11362).
+
+2012-05-03  Glenn Morris  <rgm@gnu.org>
+
+	* custom.texi (Customization Groups, Custom Themes, Examining):
+	Improve page breaks.
+
+	* rmail.texi (Rmail Display): Use example rather than smallexample.
+
+	* calendar.texi: Convert inforefs to refs.
+
+	* dired.texi (Dired Enter): Improve page break.
+
+	* abbrevs.texi (Abbrev Concepts): Copyedits.
+
+	* maintaining.texi (Registering, Tag Syntax):
+	Tweak line and page breaks.
+
+	* programs.texi (Programs, Electric C): Copyedits.
+	(Program Modes): Add xref to Fortran.
+	(Left Margin Paren): Remove what was (oddly enough) the only use
+	of defvar in the entire Emacs manual.
+	(Hungry Delete): Remove footnote about ancient Emacs version.
+	(Other C Commands): Use example rather than smallexample.
+
+	* text.texi (Pages, Filling, Foldout, Org Mode, HTML Mode)
+	(Nroff Mode, Enriched Indentation, Table Rows and Columns):
+	Tweak line and page breaks.
+
+	* modes.texi (Major Modes, Minor Modes): Reword to improve page-breaks.
+	(Major Modes): Use example rather than smallexample.
+
+	* mule.texi (Output Coding): Reword to improve page-breaks.
+
+	* frames.texi (Fonts): Tweak line and page breaks.
+	Use example rather than smallexample.  Change cross-reference.
+	(Text-Only Mouse): Fix xref.
+
+	* buffers.texi (Buffers, Kill Buffer, Several Buffers)
+	(Indirect Buffers): Tweak line- and page-breaks.
+
+	* fixit.texi (Fixit, Undo): Reword to improve page-breaks.
+
+2012-05-01  Glenn Morris  <rgm@gnu.org>
+
+	* emacs.texi (@copying): Only print EDITION in the TeX version.
+
+2012-04-30  Glenn Morris  <rgm@gnu.org>
+
+	* search.texi (Regexp Search): Just say "Emacs".
+
+	* display.texi (Auto Scrolling):
+	Reword to avoid repetition and improve page break.
+
+2012-04-28  Glenn Morris  <rgm@gnu.org>
+
+	* xresources.texi (Resources):
+	* mule.texi (Language Environments):
+	* misc.texi (Amusements):
+	* maintaining.texi (VC Change Log):
+	* frames.texi (Fonts):
+	* custom.texi (Specifying File Variables, Minibuffer Maps):
+	* cmdargs.texi (Initial Options):
+	* building.texi (Flymake):
+	Reword to remove/reduce some overly long/short lines.
+
 2012-04-27  Glenn Morris  <rgm@gnu.org>
 
 	* emacs.texi: Some fixes for detailed menu.
@@ -9213,7 +9282,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2012  Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2012 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 
