@@ -1,9 +1,49 @@
+* emacs-24.0.95-mac-2.91 [experimental/hackers-only] (2012-04-02)
+Based on Emacs 24.0.95
+
+** Fixed bugs
+
+*** HiDPI mode gives a blurry magnified text look on Mac OS X 10.7.3.
+
+*** HiDPI mode shows wrong animation on transition from/to full screen.
+
+*** M-x electric-pair-mode RET gives the warning "Note, built-in
+variable `imagemagick-render-type' not bound".
+Reported by Leo.
+
+*** Tooltip place adjustment does not take account of multiple
+monitors.
+Reported by Pavel Martynenko.
+
+*** Drag-and-drop highlight is not displayed just after exiting from
+full screen.
+
+*** Momentum scroll events after horizontal flicking interfere with a
+multi-key sequence.
+
+*** "Emacs" (in the menu bar) -> "About Emacs" then typing "q" causes
+an error.
+
+** Improvements
+
+*** Support right-to-left text shaping.
+
+*** New variable `mac-system-move-file-to-trash-use-finder', which
+enables us to use the Finder for trashing so we can `Put Back' the
+trashed items from the context menu.
+
+*** Buffer switching by horizontal swiping/flicking and exiting from
+the splash screen are accompanied with an experimental simple
+animation effect on Mac OS X 10.5 and later.
+
+
 * emacs-24.0.94-mac-2.90 [experimental/hackers-only] (2012-03-03)
 Based on Emacs 24.0.94.  Drop support for Mac OS X 10.2 and 10.3.
 Be aware of the (platform-independent) change in selection:
 mouse-dragging no longer automatically copies the selected text to the
 clipboard without M-w or `Copy' in the menu bar or the tool bar,
 unless you set `mouse-drag-copy-region' to t.
+http://lists.gnu.org/archive/html/emacs-devel/2012-03/msg00030.html
 
 ** Fixed bugs
 

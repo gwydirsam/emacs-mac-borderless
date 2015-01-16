@@ -3042,44 +3042,98 @@ mac_ctfont_shape (CTFontRef font, CFStringRef string,
   if (used <= glyph_len)
     {
       CFArrayRef ctruns = CTLineGetGlyphRuns (ctline);
-      CFIndex i, k, ctrun_count = CFArrayGetCount (ctruns);
-      CFRange comp_range = CFRangeMake (0, 0);
+      CFIndex k, ctrun_count = CFArrayGetCount (ctruns);
       CGFloat total_advance = 0;
+      CFIndex total_glyph_count = 0;
 
-      for (i = k = 0; k < ctrun_count; k++)
+      for (k = 0; k < ctrun_count; k++)
 	{
 	  CTRunRef ctrun = CFArrayGetValueAtIndex (ctruns, k);
-	  CFIndex glyph_count = CTRunGetGlyphCount (ctrun);
-	  CFRange range;
+	  CFIndex i, glyph_count = CTRunGetGlyphCount (ctrun);
+	  CTRunStatus status = CTRunGetStatus (ctrun);
+	  struct mac_glyph_layout *glbuf;
+	  CFRange comp_range;
 
-	  for (range = CFRangeMake (0, 1); range.location < glyph_count;
-	       range.location++, i++)
+	  if (!(status & kCTRunStatusRightToLeft))
+	    glbuf = glyph_layouts + total_glyph_count;
+	  else
+	    glbuf = xmalloc (sizeof (struct mac_glyph_layout) * glyph_count);
+
+	  for (i = 0; i < glyph_count; i++)
 	    {
+	      struct mac_glyph_layout *gl = glbuf + i;
+	      CFRange range = CFRangeMake (i, 1);
 	      CFIndex index;
 	      CGPoint position;
 
 	      CTRunGetStringIndices (ctrun, range, &index);
-	      if (index >= comp_range.location + comp_range.length)
-		{
-		  CFRange new_range =
-		    CFStringGetRangeOfComposedCharactersAtIndex (string, index);
-
-		  comp_range.location = comp_range.location + comp_range.length;
-		  comp_range.length = (new_range.location + new_range.length
-				       - comp_range.location);
-		}
-
-	      glyph_layouts[i].comp_range = comp_range;
-	      glyph_layouts[i].string_index = index;
-	      CTRunGetGlyphs (ctrun, range, &glyph_layouts[i].glyph_id);
+	      gl->string_index = index;
+	      CTRunGetGlyphs (ctrun, range, &gl->glyph_id);
 
 	      CTRunGetPositions (ctrun, range, &position);
-	      glyph_layouts[i].advance_delta = position.x - total_advance;
-	      glyph_layouts[i].baseline_delta = position.y;
-	      glyph_layouts[i].advance =
-		CTRunGetTypographicBounds (ctrun, range, NULL, NULL, NULL);
-	      total_advance += glyph_layouts[i].advance;
+	      gl->advance_delta = position.x - total_advance;
+	      gl->baseline_delta = position.y;
+	      gl->advance = CTRunGetTypographicBounds (ctrun, range,
+						       NULL, NULL, NULL);
+	      total_advance += gl->advance;
 	    }
+
+	  comp_range = CTRunGetStringRange (ctrun);
+	  comp_range.length = 0;
+	  if (!(status & kCTRunStatusRightToLeft))
+	    {
+	      for (i = 0; i < glyph_count; i++)
+		{
+		  struct mac_glyph_layout *gl = glbuf + i;
+		  CFIndex index = gl->string_index;
+
+		  if (index >= comp_range.location + comp_range.length)
+		    {
+		      CFRange new_range =
+			CFStringGetRangeOfComposedCharactersAtIndex (string,
+								     index);
+
+		      comp_range.location += comp_range.length;
+		      comp_range.length = (new_range.location + new_range.length
+					   - comp_range.location);
+		    }
+		  gl->comp_range = comp_range;
+		}
+	    }
+	  else
+	    {
+	      CFRange range;
+
+	      i = 0;
+	      for (range = CFRangeMake (glyph_count, 0);
+		   range.location > 0; range.location--, range.length++)
+		{
+		  struct mac_glyph_layout *gl = glbuf + (range.location - 1);
+		  CFIndex index = gl->string_index;
+
+		  if (index >= comp_range.location + comp_range.length)
+		    {
+		      CFRange new_range =
+			CFStringGetRangeOfComposedCharactersAtIndex (string,
+								     index);
+
+		      comp_range.location += comp_range.length;
+		      comp_range.length = (new_range.location + new_range.length
+					   - comp_range.location);
+		      memcpy (glyph_layouts + total_glyph_count + i,
+			      glbuf + range.location,
+			      sizeof (struct mac_glyph_layout) * range.length);
+		      i += range.length;
+		      range.length = 0;
+		    }
+		  gl->comp_range = comp_range;
+		}
+	      memcpy (glyph_layouts + total_glyph_count + i, glbuf,
+		      sizeof (struct mac_glyph_layout) * range.length);
+	      xfree (glbuf);
+	    }
+
+	  total_glyph_count += glyph_count;
 	}
 
       result = used;

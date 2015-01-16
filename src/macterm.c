@@ -4675,7 +4675,6 @@ Lisp_Object Qinsert_text, Qset_marked_text;
 Lisp_Object Qaction, Qmac_action_key_paths;
 Lisp_Object Qaccessibility;
 Lisp_Object Qservice, Qpaste, Qperform;
-Lisp_Object Qmouse_drag_overlay;
 
 extern Lisp_Object Qundefined;
 extern int XTread_socket (struct terminal *, int, struct input_event *);
@@ -4838,37 +4837,27 @@ mac_get_emulated_btn (UInt32 modifiers)
 void
 mac_get_selected_range (struct window *w, CFRange *range)
 {
-  Lisp_Object overlay = find_symbol_value (Qmouse_drag_overlay);
   struct buffer *b = XBUFFER (w->buffer);
   EMACS_INT begv = BUF_BEGV (b), zv = BUF_ZV (b);
   EMACS_INT start, end;
 
-  if (OVERLAYP (overlay)
-      && XMARKER (OVERLAY_START (overlay))->buffer == b
-      && (start = marker_position (OVERLAY_START (overlay)),
-	  end = marker_position (OVERLAY_END (overlay)),
-	  start != end))
-    ;
+  if (w == XWINDOW (selected_window) && b == current_buffer)
+    start = PT;
+  else
+    start = marker_position (w->pointm);
+
+  if (NILP (Vtransient_mark_mode) || NILP (BVAR (b, mark_active)))
+    end = start;
   else
     {
-      if (w == XWINDOW (selected_window) && b == current_buffer)
-	start = PT;
-      else
-	start = marker_position (w->pointm);
+      EMACS_INT mark_pos = marker_position (BVAR (b, mark));
 
-      if (NILP (Vtransient_mark_mode) || NILP (BVAR (b, mark_active)))
-	end = start;
+      if (start <= mark_pos)
+	end = mark_pos;
       else
 	{
-	  EMACS_INT mark_pos = marker_position (BVAR (b, mark));
-
-	  if (start <= mark_pos)
-	    end = mark_pos;
-	  else
-	    {
-	      end = start;
-	      start = mark_pos;
-	    }
+	  end = start;
+	  start = mark_pos;
 	}
     }
 
@@ -5945,7 +5934,6 @@ syms_of_macterm (void)
   DEFSYM (Qpaste, "paste");
   DEFSYM (Qperform, "perform");
 
-  DEFSYM (Qmouse_drag_overlay, "mouse-drag-overlay");
   DEFSYM (Qtext_input, "text-input");
   DEFSYM (Qinsert_text, "insert-text");
   DEFSYM (Qset_marked_text, "set-marked-text");
@@ -5993,6 +5981,10 @@ baseline level.  The default value is nil.  */);
   DEFVAR_BOOL ("mac-redisplay-dont-reset-vscroll", mac_redisplay_dont_reset_vscroll,
 	       doc: /* Non-nil means update doesn't reset vscroll.  */);
   mac_redisplay_dont_reset_vscroll = 0;
+
+  DEFVAR_BOOL ("mac-ignore-momentum-wheel-events", mac_ignore_momentum_wheel_events,
+	       doc: /* Non-nil means momentum wheel events are ignored.  */);
+  mac_ignore_momentum_wheel_events = 0;
 
 /* Variables to configure modifier key assignment.  */
 

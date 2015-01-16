@@ -4332,6 +4332,7 @@ created glyph-string.  Otherwise, the value is nil.  */)
   if (XINT (n) < LGSTRING_GLYPH_LEN (gstring))
     LGSTRING_SET_GLYPH (gstring, XINT (n), Qnil);
 
+#ifndef HAVE_MACGUI
   glyph = LGSTRING_GLYPH (gstring, 0);
   from = LGLYPH_FROM (glyph);
   to = LGLYPH_TO (glyph);
@@ -4369,6 +4370,7 @@ created glyph-string.  Otherwise, the value is nil.  */)
 	LGLYPH_SET_FROM (glyph, from);
 	LGLYPH_SET_TO (glyph, to);
       }
+#endif
   return composition_gstring_put_cache (gstring, XINT (n));
 }
 

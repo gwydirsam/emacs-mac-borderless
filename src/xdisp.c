@@ -3685,7 +3685,9 @@ handle_face_prop (struct it *it)
 	     with, so that overlay strings appear in the same face as
 	     surrounding text, unless they specify their own
 	     faces.  */
-	  base_face_id = underlying_face_id (it);
+	  base_face_id = it->string_from_prefix_prop_p
+	    ? DEFAULT_FACE_ID
+	    : underlying_face_id (it);
 	}
 
       new_face_id = face_at_string_position (it->w,
@@ -5168,6 +5170,12 @@ next_overlay_string (struct it *it)
       it->current.overlay_string_index = -1;
       it->n_overlay_strings = 0;
       it->overlay_strings_charpos = -1;
+      /* If there's an empty display string on the stack, pop the
+	 stack, to resync the bidi iterator with IT's position.  Such
+	 empty strings are pushed onto the stack in
+	 get_overlay_strings_1.  */
+      if (it->sp > 0 && STRINGP (it->string) && !SCHARS (it->string))
+	pop_it (it);
 
       /* If we're at the end of the buffer, record that we have
 	 processed the overlay strings there already, so that
@@ -5465,8 +5473,15 @@ get_overlay_strings_1 (struct it *it, EMACS_INT charpos, int compute_stop_p)
       xassert (!compute_stop_p || it->sp == 0);
 
       /* When called from handle_stop, there might be an empty display
-         string loaded.  In that case, don't bother saving it.  */
-      if (!STRINGP (it->string) || SCHARS (it->string))
+         string loaded.  In that case, don't bother saving it.  But
+         don't use this optimization with the bidi iterator, since we
+         need the corresponding pop_it call to resync the bidi
+         iterator's position with IT's position, after we are done
+         with the overlay strings.  (The corresponding call to pop_it
+         in case of an empty display string is in
+         next_overlay_string.)  */
+      if (!(!it->bidi_p
+	    && STRINGP (it->string) && !SCHARS (it->string)))
 	push_it (it, NULL);
 
       /* Set up IT to deliver display elements from the first overlay
@@ -5575,6 +5590,7 @@ push_it (struct it *it, struct text_pos *position)
   p->font_height = it->font_height;
   p->voffset = it->voffset;
   p->string_from_display_prop_p = it->string_from_display_prop_p;
+  p->string_from_prefix_prop_p = it->string_from_prefix_prop_p;
   p->display_ellipsis_p = 0;
   p->line_wrap = it->line_wrap;
   p->bidi_p = it->bidi_p;
@@ -5684,6 +5700,7 @@ pop_it (struct it *it)
   it->font_height = p->font_height;
   it->voffset = p->voffset;
   it->string_from_display_prop_p = p->string_from_display_prop_p;
+  it->string_from_prefix_prop_p = p->string_from_prefix_prop_p;
   it->line_wrap = p->line_wrap;
   it->bidi_p = p->bidi_p;
   it->paragraph_embedding = p->paragraph_embedding;
@@ -6114,6 +6131,8 @@ reseat_1 (struct it *it, struct text_pos pos, int set_stop_p)
   it->multibyte_p = !NILP (BVAR (current_buffer, enable_multibyte_characters));
   it->sp = 0;
   it->string_from_display_prop_p = 0;
+  it->string_from_prefix_prop_p = 0;
+
   it->from_disp_prop_p = 0;
   it->face_before_selective_p = 0;
   if (it->bidi_p)
@@ -7361,7 +7380,7 @@ next_element_from_string (struct it *it)
   if (it->current.overlay_string_index >= 0)
     {
       /* Get the next character from an overlay string.  In overlay
-	 strings, There is no field width or padding with spaces to
+	 strings, there is no field width or padding with spaces to
 	 do.  */
       if (IT_STRING_CHARPOS (*it) >= SCHARS (it->string))
 	{
@@ -8959,7 +8978,6 @@ move_it_by_lines (struct it *it, int dvpos)
     {
       /* DVPOS == 0 means move to the start of the screen line.  */
       move_it_vertically_backward (it, 0);
-      xassert (it->current_x == 0 && it->hpos == 0);
       /* Let next call to line_bottom_y calculate real line height */
       last_height = 0;
     }
@@ -8967,7 +8985,20 @@ move_it_by_lines (struct it *it, int dvpos)
     {
       move_it_to (it, -1, -1, -1, it->vpos + dvpos, MOVE_TO_VPOS);
       if (!IT_POS_VALID_AFTER_MOVE_P (it))
-	move_it_to (it, IT_CHARPOS (*it) + 1, -1, -1, -1, MOVE_TO_POS);
+	{
+	  /* Only move to the next buffer position if we ended up in a
+	     string from display property, not in an overlay string
+	     (before-string or after-string).  That is because the
+	     latter don't conceal the underlying buffer position, so
+	     we can ask to move the iterator to the exact position we
+	     are interested in.  Note that, even if we are already at
+	     IT_CHARPOS (*it), the call below is not a no-op, as it
+	     will detect that we are at the end of the string, pop the
+	     iterator, and compute it->current_x and it->hpos
+	     correctly.  */
+	  move_it_to (it, IT_CHARPOS (*it) + it->string_from_display_prop_p,
+		      -1, -1, -1, MOVE_TO_POS);
+	}
     }
   else
     {
@@ -13808,16 +13839,31 @@ set_cursor_from_row (struct window *w, struct glyph_row *row,
 
 	    chprop = Fget_char_property (make_number (glyph_pos), Qcursor,
 					 glyph->object);
+	    if (!NILP (chprop))
+	      {
+		/* If the string came from a `display' text property,
+		   look up the buffer position of that property and
+		   use that position to update bpos_max, as if we
+		   actually saw such a position in one of the row's
+		   glyphs.  This helps with supporting integer values
+		   of `cursor' property on the display string in
+		   situations where most or all of the row's buffer
+		   text is completely covered by display properties,
+		   so that no glyph with valid buffer positions is
+		   ever seen in the row.  */
+		EMACS_INT prop_pos =
+		  string_buffer_position_lim (glyph->object, pos_before,
+					      pos_after, 0);
+
+		if (prop_pos >= pos_before)
+		  bpos_max = prop_pos - 1;
+	      }
 	    if (INTEGERP (chprop))
 	      {
 		bpos_covered = bpos_max + XINT (chprop);
 		/* If the `cursor' property covers buffer positions up
 		   to and including point, we should display cursor on
-		   this glyph.  Note that overlays and text properties
-		   with string values stop bidi reordering, so every
-		   buffer position to the left of the string is always
-		   smaller than any position to the right of the
-		   string.  Therefore, if a `cursor' property on one
+		   this glyph.  Note that, if a `cursor' property on one
 		   of the string's characters has an integer value, we
 		   will break out of the loop below _before_ we get to
 		   the position match above.  IOW, integer values of
@@ -13877,6 +13923,15 @@ set_cursor_from_row (struct window *w, struct glyph_row *row,
 
 	    chprop = Fget_char_property (make_number (glyph_pos), Qcursor,
 					 glyph->object);
+	    if (!NILP (chprop))
+	      {
+		EMACS_INT prop_pos =
+		  string_buffer_position_lim (glyph->object, pos_before,
+					      pos_after, 0);
+
+		if (prop_pos >= pos_before)
+		  bpos_max = prop_pos - 1;
+	      }
 	    if (INTEGERP (chprop))
 	      {
 		bpos_covered = bpos_max + XINT (chprop);
@@ -15619,7 +15674,7 @@ redisplay_window (Lisp_Object window, int just_this_one_p)
 	     accessible region of the buffer.  This can happen when we
 	     have just switched to a different buffer and/or changed
 	     its restriction.  In that case, startp is initialized to
-	     the character position 1 (BEG) because we did not yet
+	     the character position 1 (BEGV) because we did not yet
 	     have chance to display the buffer even once.  */
 	  && BEGV <= CHARPOS (startp) && CHARPOS (startp) <= ZV)
 	{
@@ -15628,7 +15683,7 @@ redisplay_window (Lisp_Object window, int just_this_one_p)
 
 	  SAVE_IT (it1, it, it1data);
 	  start_display (&it1, w, startp);
-	  move_it_vertically (&it1, margin);
+	  move_it_vertically (&it1, margin * FRAME_LINE_HEIGHT (f));
 	  margin_pos = IT_CHARPOS (it1);
 	  RESTORE_IT (&it, &it, it1data);
 	}
@@ -16344,7 +16399,10 @@ try_window_reusing_current_matrix (struct window *w)
 	   ++first_row_to_display)
 	{
 	  if (PT >= MATRIX_ROW_START_CHARPOS (first_row_to_display)
-	      && PT < MATRIX_ROW_END_CHARPOS (first_row_to_display))
+	      && (PT < MATRIX_ROW_END_CHARPOS (first_row_to_display)
+		  || (PT == MATRIX_ROW_END_CHARPOS (first_row_to_display)
+		      && first_row_to_display->ends_at_zv_p
+		      && pt_row == NULL)))
 	    pt_row = first_row_to_display;
 	}
 
@@ -16436,7 +16494,9 @@ try_window_reusing_current_matrix (struct window *w)
       if (pt_row)
 	{
 	  for (row = MATRIX_ROW (w->current_matrix, w->cursor.vpos);
-	       row < bottom_row && PT >= MATRIX_ROW_END_CHARPOS (row);
+	       row < bottom_row
+		 && PT >= MATRIX_ROW_END_CHARPOS (row)
+		 && !row->ends_at_zv_p;
 	       row++)
 	    {
 	      w->cursor.vpos++;
@@ -18183,8 +18243,10 @@ append_space_for_newline (struct it *it, int default_face_p)
 	  it->c = it->char_to_display = ' ';
 	  it->len = 1;
 
+	  /* If the default face was remapped, be sure to use the
+	     remapped face for the appended newline. */
 	  if (default_face_p)
-	    it->face_id = DEFAULT_FACE_ID;
+	    it->face_id = lookup_basic_face (it->f, DEFAULT_FACE_ID);
 	  else if (it->face_before_selective_p)
 	    it->face_id = it->saved_face_id;
 	  face = FACE_FROM_ID (it->f, it->face_id);
@@ -18220,7 +18282,7 @@ append_space_for_newline (struct it *it, int default_face_p)
 static void
 extend_face_to_end_of_line (struct it *it)
 {
-  struct face *face;
+  struct face *face, *default_face;
   struct frame *f = it->f;
 
   /* If line is already filled, do nothing.  Non window-system frames
@@ -18233,6 +18295,9 @@ extend_face_to_end_of_line (struct it *it)
 	 && it->glyph_row->reversed_p
 	 && !it->glyph_row->continued_p))
     return;
+
+  /* The default face, possibly remapped. */
+  default_face = FACE_FROM_ID (f, lookup_basic_face (f, DEFAULT_FACE_ID));
 
   /* Face extension extends the background and box of IT->face_id
      to the end of the line.  If the background equals the background
@@ -18271,7 +18336,7 @@ extend_face_to_end_of_line (struct it *it)
       if (it->glyph_row->used[TEXT_AREA] == 0)
 	{
 	  it->glyph_row->glyphs[TEXT_AREA][0] = space_glyph;
-	  it->glyph_row->glyphs[TEXT_AREA][0].face_id = it->face_id;
+	  it->glyph_row->glyphs[TEXT_AREA][0].face_id = face->id;
 	  it->glyph_row->used[TEXT_AREA] = 1;
 	}
 #ifdef HAVE_WINDOW_SYSTEM
@@ -18307,7 +18372,7 @@ extend_face_to_end_of_line (struct it *it)
 		 face, to avoid painting the rest of the window with
 		 the region face, if the region ends at ZV.  */
 	      if (it->glyph_row->ends_at_zv_p)
-		it->face_id = DEFAULT_FACE_ID;
+		it->face_id = default_face->id;
 	      else
 		it->face_id = face->id;
 	      append_stretch_glyph (it, make_number (0), stretch_width,
@@ -18340,7 +18405,7 @@ extend_face_to_end_of_line (struct it *it)
 	 avoid painting the rest of the window with the region face,
 	 if the region ends at ZV.  */
       if (it->glyph_row->ends_at_zv_p)
-	it->face_id = DEFAULT_FACE_ID;
+	it->face_id = default_face->id;
       else
 	it->face_id = face->id;
 
@@ -18473,9 +18538,11 @@ cursor_row_p (struct glyph_row *row)
       /* Suppose the row ends on a string.
 	 Unless the row is continued, that means it ends on a newline
 	 in the string.  If it's anything other than a display string
-	 (e.g. a before-string from an overlay), we don't want the
+	 (e.g., a before-string from an overlay), we don't want the
 	 cursor there.  (This heuristic seems to give the optimal
-	 behavior for the various types of multi-line strings.)  */
+	 behavior for the various types of multi-line strings.)
+	 One exception: if the string has `cursor' property on one of
+	 its characters, we _do_ want the cursor there.  */
       if (CHARPOS (row->end.string_pos) >= 0)
 	{
 	  if (row->continued_p)
@@ -18497,6 +18564,25 @@ cursor_row_p (struct glyph_row *row)
 		    result =
 		      (!NILP (prop)
 		       && display_prop_string_p (prop, glyph->object));
+		    /* If there's a `cursor' property on one of the
+		       string's characters, this row is a cursor row,
+		       even though this is not a display string.  */
+		    if (!result)
+		      {
+			Lisp_Object s = glyph->object;
+
+			for ( ; glyph >= beg && EQ (glyph->object, s); --glyph)
+			  {
+			    EMACS_INT gpos = glyph->charpos;
+
+			    if (!NILP (Fget_char_property (make_number (gpos),
+							   Qcursor, s)))
+			      {
+				result = 1;
+				break;
+			      }
+			  }
+		      }
 		    break;
 		  }
 	    }
@@ -18535,7 +18621,7 @@ cursor_row_p (struct glyph_row *row)
    `line-prefix' and `wrap-prefix' properties.  */
 
 static int
-push_display_prop (struct it *it, Lisp_Object prop)
+push_prefix_prop (struct it *it, Lisp_Object prop)
 {
   struct text_pos pos =
     STRINGP (it->string) ? it->current.string_pos : it->current.pos;
@@ -18559,6 +18645,7 @@ push_display_prop (struct it *it, Lisp_Object prop)
 	}
 
       it->string = prop;
+      it->string_from_prefix_prop_p = 1;
       it->multibyte_p = STRING_MULTIBYTE (it->string);
       it->current.overlay_string_index = -1;
       IT_STRING_CHARPOS (*it) = IT_STRING_BYTEPOS (*it) = 0;
@@ -18645,7 +18732,7 @@ handle_line_prefix (struct it *it)
       if (NILP (prefix))
 	prefix = Vline_prefix;
     }
-  if (! NILP (prefix) && push_display_prop (it, prefix))
+  if (! NILP (prefix) && push_prefix_prop (it, prefix))
     {
       /* If the prefix is wider than the window, and we try to wrap
 	 it, it would acquire its own wrap prefix, and so on till the
@@ -18982,8 +19069,13 @@ display_line (struct it *it)
 	  /* A row that displays right-to-left text must always have
 	     its last face extended all the way to the end of line,
 	     even if this row ends in ZV, because we still write to
-	     the screen left to right.  */
-	  if (row->reversed_p)
+	     the screen left to right.  We also need to extend the
+	     last face if the default face is remapped to some
+	     different face, otherwise the functions that clear
+	     portions of the screen will clear with the default face's
+	     background color.  */
+	  if (row->reversed_p
+	      || lookup_basic_face (it->f, DEFAULT_FACE_ID) != DEFAULT_FACE_ID)
 	    extend_face_to_end_of_line (it);
 	  break;
 	}
@@ -24006,7 +24098,7 @@ produce_glyphless_glyph (struct it *it, int for_no_font, Lisp_Object acronym)
 	  sprintf (buf, "%0*X", it->c < 0x10000 ? 4 : 6, it->c);
 	  str = buf;
 	}
-      for (len = 0; str[len] && ASCII_BYTE_P (str[len]); len++)
+      for (len = 0; str[len] && ASCII_BYTE_P (str[len]) && len < 6; len++)
 	code[len] = font->driver->encode_char (font, str[len]);
       upper_len = (len + 1) / 2;
       font->driver->text_extents (font, code, upper_len,

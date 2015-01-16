@@ -263,6 +263,8 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (suggest-key-bindings keyboard (choice (const :tag "off" nil)
 						    (integer :tag "time" 2)
 						    (other :tag "on")))
+	     ;; mac.c
+	     (mac-system-move-file-to-trash-use-finder mac boolean "23.4")
 	     ;; macselect.c
 	     (mac-dnd-known-types mac (repeat string) "22.1")
 	     ;; macterm.c
@@ -495,6 +497,8 @@ since it could result in memory overflow and make Emacs crash."
 	     (x-use-underline-position-properties display boolean "22.1")
 	     (x-underline-at-descent-line display boolean "22.1")
 	     (x-stretch-cursor display boolean "21.1")
+	     ;; xselect.c
+	     (x-select-enable-clipboard-manager killing boolean "24.1")
 	     ;; xsettings.c
 	     (font-use-system-font font-selection boolean "23.2")))
       this symbol group type standard version native-p rest prop propval
@@ -537,6 +541,8 @@ since it could result in memory overflow and make Emacs crash."
 		       (featurep 'ns))
 		      ((string-match "\\`x-.*gtk" (symbol-name symbol))
 		       (featurep 'gtk))
+		      ((string-match "clipboard-manager" (symbol-name symbol))
+		       (boundp 'x-select-enable-clipboard-manager))
 		      ((string-match "\\`x-" (symbol-name symbol))
 		       (fboundp 'x-create-frame))
 		      ((string-match "selection" (symbol-name symbol))
@@ -544,7 +550,10 @@ since it could result in memory overflow and make Emacs crash."
 		      ((string-match "fringe" (symbol-name symbol))
 		       (fboundp 'define-fringe-bitmap))
 		      ((string-match "\\`imagemagick" (symbol-name symbol))
-		       (fboundp 'imagemagick-types))
+		       ;; The function `imagemagick-types' exists in
+		       ;; imagemagick emulation by image-io, but the
+		       ;; variable `imagemagick-render-type' doesn't.
+		       (boundp 'imagemagick-render-type))
 		      ((equal "font-use-system-font" (symbol-name symbol))
 		       (featurep 'system-font-setting))
 		      ;; Conditioned on x-create-frame, because that's

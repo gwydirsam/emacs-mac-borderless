@@ -2089,7 +2089,7 @@ unwind_create_frame (Lisp_Object frame)
 static Lisp_Object
 unwind_create_frame_1 (Lisp_Object val)
 {
-  inhibit_window_configuration_change_hook = val;
+  inhibit_lisp_code = val;
   return Qnil;
 }
 
@@ -2350,9 +2350,8 @@ This function is an internal primitive--use `make-frame' instead.  */)
      Vframe_list.  */
   {
     int count2 = SPECPDL_INDEX ();
-    record_unwind_protect (unwind_create_frame_1,
-			   inhibit_window_configuration_change_hook);
-    inhibit_window_configuration_change_hook = Qt;
+    record_unwind_protect (unwind_create_frame_1, inhibit_lisp_code);
+    inhibit_lisp_code = Qt;
 
     x_default_parameter (f, parms, Qtool_bar_lines,
 			 NILP (Vtool_bar_mode)
@@ -3489,6 +3488,9 @@ static void
 compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx, Lisp_Object dy, int width, int height, int *root_x, int *root_y)
 {
   Lisp_Object left, top;
+  CGRect bounds =
+    CGRectMake (0, 0, x_display_pixel_width (FRAME_MAC_DISPLAY_INFO (f)),
+		x_display_pixel_height (FRAME_MAC_DISPLAY_INFO (f)));
 
   /* User-specified position?  */
   left = Fcdr (Fassq (Qleft, parms));
@@ -3499,43 +3501,63 @@ compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx, Lisp_Object 
   if (!INTEGERP (left) || !INTEGERP (top))
     {
       Point mouse_pos;
+      CGPoint point;
+      CGError err;
+      uint32_t count;
 
       BLOCK_INPUT;
       mac_get_global_mouse (&mouse_pos);
       *root_x = mouse_pos.h;
       *root_y = mouse_pos.v;
+      point.x = mouse_pos.h;
+      point.y = mouse_pos.v;
+      err = CGGetDisplaysWithPoint (point, 0, NULL, &count);
+      if (err == kCGErrorSuccess)
+	{
+	  CGDirectDisplayID *displays =
+	    alloca (sizeof (CGDirectDisplayID) * count);
+
+	  err = CGGetDisplaysWithPoint (point, count, displays, &count);
+	  if (err == kCGErrorSuccess && count > 0)
+	    {
+	      uint32_t i;
+
+	      bounds = CGDisplayBounds (displays[0]);
+	      for (i = 1; i < count; i++)
+		bounds = CGRectIntersection (bounds,
+					     CGDisplayBounds (displays[i]));
+	    }
+	}
       UNBLOCK_INPUT;
     }
 
   if (INTEGERP (top))
     *root_y = XINT (top);
-  else if (*root_y + XINT (dy) <= 0)
-    *root_y = 0; /* Can happen for negative dy */
-  else if (*root_y + XINT (dy) + height
-	   <= x_display_pixel_height (FRAME_MAC_DISPLAY_INFO (f)))
+  else if (*root_y + XINT (dy) <= CGRectGetMinY (bounds))
+    *root_y = CGRectGetMinY (bounds); /* Can happen for negative dy */
+  else if (*root_y + XINT (dy) + height <= CGRectGetMaxY (bounds))
     /* It fits below the pointer */
     *root_y += XINT (dy);
-  else if (height + XINT (dy) <= *root_y)
+  else if (CGRectGetMinY (bounds) + height + XINT (dy) <= *root_y)
     /* It fits above the pointer.  */
     *root_y -= height + XINT (dy);
   else
     /* Put it on the top.  */
-    *root_y = 0;
+    *root_y = CGRectGetMinY (bounds);
 
   if (INTEGERP (left))
     *root_x = XINT (left);
-  else if (*root_x + XINT (dx) <= 0)
-    *root_x = 0; /* Can happen for negative dx */
-  else if (*root_x + XINT (dx) + width
-	   <= x_display_pixel_width (FRAME_MAC_DISPLAY_INFO (f)))
+  else if (*root_x + XINT (dx) <= CGRectGetMinX (bounds))
+    *root_x = CGRectGetMinX (bounds); /* Can happen for negative dx */
+  else if (*root_x + XINT (dx) + width <= CGRectGetMaxX (bounds))
     /* It fits to the right of the pointer.  */
     *root_x += XINT (dx);
-  else if (width + XINT (dx) <= *root_x)
+  else if (CGRectGetMinX (bounds) + width + XINT (dx) <= *root_x)
     /* It fits to the left of the pointer.  */
     *root_x -= width + XINT (dx);
   else
     /* Put it left-justified on the screen--it ought to fit that way.  */
-    *root_x = 0;
+    *root_x = CGRectGetMinX (bounds);
 }
 
 
@@ -3932,6 +3954,73 @@ This is for internal use only.  Use `mac-font-panel-mode' instead.  */)
 
 
 /***********************************************************************
+			      Animation
+ ***********************************************************************/
+
+Lisp_Object QCdirection, QCduration;
+
+DEFUN ("mac-start-animation", Fmac_start_animation, Smac_start_animation, 1, MANY, 0,
+       doc: /* Start animation effect for FRAME-OR-WINDOW.
+The current display contents of FRAME-OR-WINDOW (the selected frame if
+nil) is captured and its actual animation effect will begin when the
+event is read from the window system next time.  The animation is
+processed asynchronously.
+
+PROPERTIES is a property list consisting of the followings:
+
+  Name	        Value           Meaning
+  ------------------------------------------------------------
+  :duration     number          animation duration in seconds
+  :direction    symbol (`left', `right', `up', or `down')
+                                direction for move-out
+
+Currently, the type of the animation is move-out if the :direction
+property is specified, and fade-out otherwise.
+Note: This function is experimental and the meaning of PROPERTIES is
+subject to change.  Use at your own risk.
+
+This function has no effect if compiled or run on Mac OS X 10.4 or
+earlier.
+usage: (mac-start-animation FRAME-OR-WINDOW &rest PROPERTIES)  */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+  extern void mac_start_animation (Lisp_Object, Lisp_Object);
+  Lisp_Object frame_or_window, properties;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+  SInt32 response;
+  OSErr err;
+
+  BLOCK_INPUT;
+  err = Gestalt (gestaltSystemVersion, &response);
+  UNBLOCK_INPUT;
+  if (err != noErr || response < 0x1050)
+    return Qnil;
+#endif
+
+  frame_or_window = args[0];
+  if (NILP (frame_or_window))
+    frame_or_window = selected_frame;
+  if (WINDOWP (frame_or_window))
+    CHECK_LIVE_WINDOW (frame_or_window);
+  else
+    CHECK_LIVE_FRAME (frame_or_window);
+  properties = Flist (nargs - 1, args + 1);
+
+  /* Call `redisplay' here?  */
+
+  BLOCK_INPUT;
+  mac_start_animation (frame_or_window, properties);
+  UNBLOCK_INPUT;
+
+  return Qnil;
+#else  /* MAC_OS_X_VERSION_MAX_ALLOWED < 1050 */
+  return Qnil;
+#endif	/* MAC_OS_X_VERSION_MAX_ALLOWED < 1050 */
+}
+
+
+/***********************************************************************
 			    Initialization
  ***********************************************************************/
 
@@ -3989,6 +4078,8 @@ syms_of_macfns (void)
   DEFSYM (Qundefined_color, "undefined-color");
   DEFSYM (Qcancel_timer, "cancel-timer");
   DEFSYM (Qfont_param, "font-parameter");
+  DEFSYM (QCdirection, ":direction");
+  DEFSYM (QCduration, ":duration");
   /* This is the end of symbol initialization.  */
 
   Fput (Qundefined_color, Qerror_conditions,
@@ -4136,4 +4227,5 @@ Chinese, Japanese, and Korean.  */);
 
   defsubr (&Sx_select_font);
   defsubr (&Smac_set_font_panel_visible_p);
+  defsubr (&Smac_start_animation);
 }

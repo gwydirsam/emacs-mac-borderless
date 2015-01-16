@@ -2467,9 +2467,11 @@ DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
     {
       BLOCK_INPUT;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+      if (!mac_system_move_file_to_trash_use_finder
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
-      if (FSMoveObjectToTrashSync != NULL)
+	  && FSMoveObjectToTrashSync != NULL
 #endif
+	  )
 	{
 	  /* FSPathMoveObjectToTrashSync tries to delete the
 	     destination of the specified symbolic link.  So we use
@@ -2478,11 +2480,8 @@ DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
 	  err = FSMoveObjectToTrashSync (&fref, NULL,
 					 kFSFileOperationDefaultOptions);
 	}
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
-      else				/* FSMoveObjectToTrashSync == NULL */
+      else
 #endif
-#endif
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
 	{
 	  const OSType finderSignature = 'MACS';
 	  SInt32 response;
@@ -2555,7 +2554,6 @@ DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
 	      AEDisposeDesc (&reply);
 	    }
 	}
-#endif
       UNBLOCK_INPUT;
     }
 
@@ -3950,4 +3948,13 @@ syms_of_mac (void)
 This is not a POSIX locale ID, but an ICU locale ID.  So encoding
 information is not included.  */);
   Vmac_system_locale = mac_get_system_locale ();
+
+  DEFVAR_BOOL ("mac-system-move-file-to-trash-use-finder",
+	       mac_system_move_file_to_trash_use_finder,
+     doc: /* *Non-nil means that `system-move-file-to-trash' uses the Finder.
+Setting this variable non-nil enables us to use the `Put Back' context
+menu for trashed items, but it also affects the `Edit' - `Undo' menu
+in the Finder.  On Mac OS X 10.4 and earlier, this variable has no
+effect and trashing is always done via the Finder.  */);
+  mac_system_move_file_to_trash_use_finder = 0;
 }

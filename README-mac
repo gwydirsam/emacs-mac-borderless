@@ -9,11 +9,9 @@ don't need to try this.
   *** IMPORTANT NOTE ***
 
   This version (2.9X) should be regarded as experimental/hackers-only.
-  There are some missing Emacs 24 features such as right-to-left
-  Complex Text Layout, and things are subject to change/removal in an
-  incompatible way.  Please refrain from distributing this in any
-  different form, including for (binary) distribution basis, until the
-  version gets to 3.0.
+  Things are subject to change/removal in an incompatible way.  Please
+  refrain from distributing this in any different form, including for
+  (binary) distribution basis, until the version gets to 3.0.
 
   Also, if you find a bug, then please try to reproduce it with some
   official builds such as X11 or NS (Cocoa).  If it turns out to be
@@ -136,9 +134,8 @@ Emacs 23 features besides those inherited from the above ancestors:
     nonmodal counterpart has been available since Emacs 22 Carbon port
     via `mac-font-panel-mode'.
   * Unicode character display including non-BMP ones.
-  * Complex Text Layout (left-to-right only) and text shaping.  They
-    are implemented using the Core Text or NS Text layout engine, so
-    you don't need libotf.
+  * Complex Text Layout and text shaping.  They are implemented using
+    the Core Text or NS Text layout engine, so you don't need libotf.
   * Glyph selection with variation selectors.  Most of Adobe-Japan1
     ideographic glyphs are accessible via IVSes (Ideographic Variation
     Sequences) even for the OS-bundled Hiragino fonts, which do not

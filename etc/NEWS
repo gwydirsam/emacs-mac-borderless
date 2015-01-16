@@ -123,6 +123,8 @@ and pops down the *Completions* buffer accordingly.
 *** Completion style can be set per-category `completion-category-overrides'.
 +++
 *** Completion of buffers now uses substring completion by default.
+---
+*** The `widget-complete-field' option has been removed.
 
 ** Mail changes
 
@@ -251,7 +253,8 @@ On character terminals, these methods are used for characters that
 cannot be encoded by the `terminal-coding-system'.
 
 ---
-*** New input methods for Farsi: farsi and farsi-translit.
+*** New input methods for Farsi: farsi and farsi-translit;
+and for Bulgarian: bulgarian-alt-phonetic.
 
 +++
 *** `nobreak-char-display' now also highlights Unicode hyphen chars
@@ -468,6 +471,11 @@ been shown in a specific window.
 This is handy for minibuffer-only frames, and is also used for the feature
 where mouse-1 pops up *Messages*"', which can now easily be changed.
 
+---
+** Minibuffers set `truncate-lines' to nil.
+If you want to change the value to something else, you could use
+for example minibuffer-setup-hook.
+
 
 * Editing Changes in Emacs 24.1
 
@@ -483,9 +491,12 @@ isearch-yank-kill.
 
 +++
 ** New commands `count-words-region' and `count-words'.
-
-*** `count-lines-region' is now an alias for `count-words-region',
-bound to M-=, which shows the number of lines, words, and characters.
++++
+*** M-= is bound to `count-words-region', not `count-lines-region'.
+The `count-words-region' command, when called interactively, reports
+the number of lines, words, and characters in the region.  It is a
+superset of the old `count-lines-region', which is now an obsolete
+alias for it.
 
 +++
 ** The default value of `backup-by-copying-when-mismatch' is now t.
@@ -542,7 +553,6 @@ point motion, do not alter the primary selection.
 *** mouse-2 is now bound to `mouse-yank-primary'.
 This pastes from the primary selection, ignoring the kill-ring.
 Previously, mouse-2 was bound to `mouse-yank-at-click'.
-
 +++
 *** `x-select-enable-clipboard' now defaults to t on all platforms.
 +++
@@ -569,7 +579,7 @@ between applications.
 
 +++
 *** Support for X cut buffers has been removed.
-
++++
 *** X clipboard managers are now supported.
 To inhibit this, change `x-select-enable-clipboard-manager' to nil.
 
@@ -768,6 +778,11 @@ See MH-E-NEWS for details.
 
 ---
 ** mpc.el: Can use pseudo tags of the form tag1|tag2 as a union of two tags.
+
+** nXML mode no longer binds C-RET to `nxml-complete'.
+Completion is now performed via `completion-at-point', bound to M-TAB.
+If `nxml-bind-meta-tab-to-complete-flag' is non-nil (the default),
+this performs tag completion.
 
 ---
 ** Prolog mode has been completely revamped, with lots of additional
@@ -1023,7 +1038,7 @@ for buffers with dead inferior processes has been generalized.
 ** The return value of `backup-buffer' has changed.
 It is now a list of three elements, where the second element is a list
 describing the original file's SELinux context.  If Emacs or the
-system lacks SELinux cupport, the context list is (nil nil nil nil).
+system lacks SELinux support, the context list is (nil nil nil nil).
 See the "Basic SELinux support" entry under "Changes in Emacs 24.1",
 above.
 
@@ -1050,12 +1065,21 @@ of the header line.
 ** Support for "old-style" backquotes, which have been obsolete for
 more than 10 years, has been further reduced.  Now a backquote not
 followed by a space is always treated as a "new-style" backquote.
-Please consider completely removing all "old-style" backquotes from
-your code as a matter of some urgency.  If your code uses backquotes
-as documented in the Elisp manual, and compiles without warning, then
-you have nothing to do in this regard.  Code not following the
-appropriate conventions may fail to compile.  The most common cause of
-trouble seems to be an old-style backquote followed by a newline.
+Please remove all "old-style" backquotes from your code.  If your code
+uses backquotes as documented in the Elisp manual, and compiles
+without warning, then you have nothing to do in this regard.  Code not
+following the appropriate conventions may fail to compile.
+
+The most common cause of trouble seems to be an old-style backquote
+followed by a newline.  Another cause of trouble is vector notation
+for key sequence notation: instead of [(control ,)] and [(control ')],
+you should write [(control ?,)] and [(control ?')], which will work in
+older Emacs too.
+
++++
+** The macro `eval-at-startup' was removed in Emacs 23.2, but this
+was not advertised at the time.  The function `custom-initialize-delay'
+replaced all known uses.
 
 ---
 ** view-buffer now treats special mode-class in the same way that
@@ -1097,7 +1121,8 @@ Use (where-is-internal <def> nil t) instead.
 
 +++
 ** The following obsolete (mostly since at least 21.1) functions and aliases
-have been removed (the appropriate new function is given in parentheses):
+have been removed (the appropriate new function is given in parentheses;
+"not needed" means you can just remove all calls to the function in question):
 comint-kill-output (comint-delete-output),
 decompose-composite-char (char-to-string),
 outline-visible (outline-invisible-p),
@@ -1113,7 +1138,9 @@ x-make-font-unitalic (make-face-unitalic),
 mldrag-drag-mode-line (mouse-drag-mode-line),
 mldrag-drag-vertical-line (mouse-drag-vertical-line),
 iswitchb-default-keybindings (iswitchb-mode), char-bytes (== 1),
-isearch-return-char (isearch-printing-char), make-local-hook (not needed)
+isearch-return-char (isearch-printing-char), make-local-hook (not needed),
+set-screen-height (set-frame-height), set-screen-width (set-frame-width)
+
 
 +++
 ** The following obsolete (mostly since at least 21.1) variables and varaliases
@@ -1352,7 +1379,7 @@ This can be useful when `inhibit-quit' is set.
 
 +++
 ** The new function `server-eval-at' allows evaluation of Lisp forms on
-named Emacs server instances, using TCP sockets.
+named Emacs server instances.
 
 +++
 ** `call-process' and `call-process-region' allow a `(:file "file")' spec
@@ -1426,8 +1453,8 @@ Trashing is performed if TRASH and `delete-by-moving-to-trash' are
 both non-nil.  Interactively, TRASH defaults to t, unless a prefix
 argument is supplied (see Trash changes, above).
 
-FIXME
-** New functions files-equal-p, file-subdir-of-p that [do something]
++++
+** New file predicate functions: file-equal-p, file-in-directory-p.
 
 +++
 ** Tool-bars can display separators.
@@ -1469,13 +1496,12 @@ These require Emacs to be built with ImageMagick support.
 image-transform-fit-to-height, image-transform-fit-to-width,
 image-transform-set-rotation, image-transform-set-scale.
 
++++
 ** XML and HTML parsing
-If Emacs is compiled with libxml2 support, there are two new functions:
-`libxml-parse-html-region' (which parses "real world" HTML) and
-`libxml-parse-xml-region' (which parses XML).  Both return an Emacs
-Lisp parse tree.
-
-FIXME: These should be front-ended by xml.el.
+If Emacs is compiled with libxml2 support, there are two new
+functions: `libxml-parse-html-region' (which parses "real world" HTML)
+and `libxml-parse-xml-region' (which parses XML).  Both return an
+Emacs Lisp parse tree.
 
 ** GnuTLS
 
@@ -1521,6 +1547,10 @@ display-delayed-warnings and collapse-delayed-warnings.
 from multiple input maps.  You can use this to make a keymap that
 inherits from multiple maps, eg:
  (set-keymap-parent newmap (make-composed-keymap othermap parent))
+
++++
+** New function `string-prefix-p'.
+(This was actually added in Emacs 23.2 but was not advertised at the time.)
 
 +++
 ** New reader macro ## that stands for the empty symbol.

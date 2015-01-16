@@ -1,3 +1,197 @@
+2012-04-01  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32menu.c (simple_dialog_show, add_menu_item): Use SAFE_ALLOCA
+	instead of alloca.  (Bug#11138)
+
+2012-04-01  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* w32menu.c (is_simple_dialog): Properly check lisp types.
+	(Bug#11141)
+
+2012-03-31  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_by_lines): When DVPOS is positive, and the
+	position we get to after a call to move_it_to fails the
+	IS_POS_VALID_AFTER_MOVE_P test, move to the next buffer position
+	only if we wind up in a string from display property.  (Bug#11063)
+
+	* window.c (Fdelete_other_windows_internal): Invalidate the row
+	and column information about mouse highlight, so that redisplay
+	restores it after reallocating the glyph matrices.  (Bug#7464)
+
+	* xdisp.c (set_cursor_from_row): If `cursor' property on a display
+	string comes from a `display' text property, use the buffer
+	position of that property as if we actually saw that position in
+	the row's glyphs.
+	(move_it_by_lines): Remove the assertion that
+	"it->current_x == 0 && it->hpos == 0" which can be legitimately
+	violated when there's a before-string at the beginning of a line.
+	(Bug#11063)
+
+2012-03-30  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (append_space_for_newline): If the default face was
+	remapped, use the remapped face for the appended newline.
+	(extend_face_to_end_of_line): Use the remapped default face for
+	extending the face to the end of the line.
+	(display_line): Call extend_face_to_end_of_line when the default
+	face was remapped.  (Bug#11068)
+
+2012-03-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* s/ms-w32.h: Discourage from defining HAVE_GETCWD.
+
+2012-03-28  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* keyboard.c (safe_run_hooks_error): Don't unquote strings.
+
+2012-03-27  Glenn Morris  <rgm@gnu.org>
+
+	* search.c (Fword_search_backward_lax, Fword_search_forward_lax):
+	Doc fixes.
+
+2012-03-26  Kenichi Handa  <handa@m17n.org>
+
+	* dispextern.h (struct glyph): Fix previous change.  Change the
+	bit length of glyphless.ch to 25 (Bug#11082).
+
+2012-03-26  Chong Yidong  <cyd@gnu.org>
+
+	* keyboard.c (Vselection_inhibit_update_commands): New variable.
+	(command_loop_1): Use it; inhibit selection update for
+	handle-select-window too (Bug#8996).
+
+2012-03-25  Fabrice Popineau  <fabrice.popineau@supelec.fr>
+
+	* w32heap.c (_heap_init, _heap_term): Remove dead MSVC-specific code.
+
+2012-03-25  Kenichi Handa  <handa@m17n.org>
+
+	* dispextern.h (struct glyph): Change the bit length of
+	glyphless.ch to 22 to make the member glyphless fit in 32 bits.
+
+2012-03-24  Eli Zaretskii  <eliz@gnu.org>
+
+	* s/ms-w32.h (tzname): Include time.h before redirecting to
+	_tzname.  Fixes the MSVC build.  (Bug#9960)
+
+2012-03-24  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* xdisp.c (produce_glyphless_glyph): Limit length of acronym to 6
+	characters.
+
+	* xterm.c (XTread_socket): Only modify handling_signal if
+	!SYNC_INPUT.  (Bug#11080)
+
+2012-03-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* bidi.c (bidi_fetch_char): Use STRING_CHAR_AND_LENGTH instead of
+	FETCH_MULTIBYTE_CHAR followed by CHAR_BYTES.  Prevents crashes
+	when fetching a multibyte character consumes more bytes than
+	CHAR_BYTES returns, due to unification of CJK characters in
+	string_char.  (Bug#11073)
+
+2012-03-23  Troels Nielsen  <bn.troels@gmail.com>  (tiny change)
+
+	* process.c (wait_reading_process_output): Handle pty disconnect
+	by refraining from sending oneself a SIGCHLD (bug#10933).
+
+2012-03-22  Chong Yidong  <cyd@gnu.org>
+
+	* dispextern.h (struct it): New member string_from_prefix_prop_p.
+
+	* xdisp.c (push_prefix_prop): Rename from push_display_prop.
+	Mark string as coming from a prefix property.
+	(handle_face_prop): Use default face for prefix strings (Bug#4281).
+	(pop_it, reseat_1): Save and restore string_from_prefix_prop_p.
+
+2012-03-21  Chong Yidong  <cyd@gnu.org>
+
+	* xfaces.c (Vface_remapping_alist): Doc fix.
+
+2012-03-20  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32proc.c (Fw32_set_console_codepage)
+	(Fw32_set_console_output_codepage, Fw32_get_codepage_charset):
+	Doc fixes.
+
+2012-03-20  Chong Yidong  <cyd@gnu.org>
+
+	* dispnew.c (Fredisplay, Vredisplay_preemption_period): Update doc
+	to reflect default non-nil value of redisplay-dont-pause.
+
+2012-03-19  Kenichi Handa  <handa@m17n.org>
+
+	* ftfont.c (ftfont_drive_otf): Mask bits of character code to make
+	it fit in a valid range (Bug#11003).
+
+2012-03-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (cursor_row_p): Even if the glyph row ends in a string
+	that is not from display property, accept the row as a "cursor
+	row" if one of the string's character has a non-nil `cursor'
+	property.  Fixes cursor positioning when there are newlines in
+	overlay strings, e.g. in icomplete.el.  (Bug#11035)
+
+2012-03-12  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* buffer.c (compare_overlays): Don't assume args differ (Bug#6830).
+
+2012-03-12  Chong Yidong  <cyd@gnu.org>
+
+	* eval.c (inhibit_lisp_code): Rename from
+	inhibit_window_configuration_change_hook; move from window.c.
+
+	* xfns.c (unwind_create_frame_1, Fx_create_frame):
+	* window.c (run_window_configuration_change_hook)
+	(syms_of_window): Callers changed.
+
+2012-03-11  Chong Yidong  <cyd@gnu.org>
+
+	* keymap.c (Fkey_description): Doc fix (Bug#9700).
+
+	* editfns.c (Fconstrain_to_field): Doc fix (Bug#9452).
+
+2012-03-10  Chong Yidong  <cyd@gnu.org>
+
+	* frame.c (other_visible_frames): Don't assume the selected frame
+	is visible (Bug#10955).
+
+2012-03-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* buffer.c (compare_overlays): Avoid qsort's instability (bug#6830).
+
+2012-03-08  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* gtkutil.c (x_wm_set_size_hint): Use one row in call to
+	FRAME_TEXT_LINES_TO_PIXEL_HEIGHT so base_height is greater than
+	zero (Bug#10954).
+
+2012-03-03  Glenn Morris  <rgm@gnu.org>
+
+	* alloc.c (Fgarbage_collect, misc-objects-consed): Doc fixes.
+
+2012-03-02  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (try_window_reusing_current_matrix): Don't move cursor
+	position past the first glyph_row that ends at ZV.  (Bug#10902)
+	(redisplay_window, next_element_from_string): Fix typos in
+	comments.
+	(redisplay_window): Pass to move_it_vertically the margin in
+	pixels, not in screen lines.
+
+2012-03-02  Glenn Morris  <rgm@gnu.org>
+
+	* buffer.c (buffer-list-update-hook): Doc fix.
+
+2012-02-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (get_overlay_strings_1): Under bidi redisplay, call
+	push_it before setting up the iterator for the first overlay
+	string, even if we have an empty string loaded.
+	(next_overlay_string): If there's an empty string on the iterator
+	stack, pop the stack.  (Bug#10903)
+
 2012-02-25  Paul Eggert  <eggert@cs.ucla.edu>
 
 	Generalize fix for crash due to non-contiguous EMACS_INT (Bug#10780).
@@ -170,8 +364,8 @@
 
 2012-02-04  Eli Zaretskii  <eliz@gnu.org>
 
-	* w32.c (get_emacs_configuration_options): Include
-	--enable-checking, if specified, in the return value.
+	* w32.c (get_emacs_configuration_options):
+	Include --enable-checking, if specified, in the return value.
 
 2012-02-04  Martin Rudalics  <rudalics@gmx.at>
 
@@ -277,8 +471,8 @@
 2012-01-19  Martin Rudalics  <rudalics@gmx.at>
 
 	* window.c (save_window_save, Fcurrent_window_configuration)
-	(Vwindow_persistent_parameters): Do not use Qstate.  Rewrite
-	doc-strings.
+	(Vwindow_persistent_parameters): Do not use Qstate.
+	Rewrite doc-strings.
 
 2012-01-19  Kenichi Handa  <handa@m17n.org>
 
@@ -452,9 +646,9 @@
 	* nsselect.m (CUT_BUFFER_SUPPORT): Remove define.
 	(symbol_to_nsstring): Fix indentation.
 	(ns_symbol_to_pb): New function.
-	(Fns_get_selection_internal): Renamed from Fns_get_cut_buffer_internal.
-	(Fns_rotate_cut_buffers_internal): Removed.
-	(Fns_store_selection_internal): Renamed from
+	(Fns_get_selection_internal): Rename from Fns_get_cut_buffer_internal.
+	(Fns_rotate_cut_buffers_internal): Remove.
+	(Fns_store_selection_internal): Rename from
 	Fns_store_cut_buffer_internal.
 	(ns_get_foreign_selection, Fx_own_selection_internal)
 	(Fx_disown_selection_internal, Fx_selection_exists_p)
@@ -595,7 +789,7 @@
 	(coding_set_destination): Return how many bytes
 	coding->destination was relocated.
 	(CODING_DECODE_CHAR, CODING_ENCODE_CHAR, CODING_CHAR_CHARSET)
-	(CODING_CHAR_CHARSET_P): Adjusted for the avove changes.
+	(CODING_CHAR_CHARSET_P): Adjust for the avove changes.
 
 2011-12-05  Kazuhiro Ito  <kzhr@d1.dion.ne.jp>  (tiny change)
 

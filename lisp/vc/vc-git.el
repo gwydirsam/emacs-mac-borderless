@@ -217,12 +217,20 @@ matching the resulting Git log output, and KEYWORDS is a list of
   ;; operation.
   (if (not (vc-git-registered file))
       'unregistered
-    (vc-git--call nil "add" "--refresh" "--" (file-relative-name file))
     (let ((diff (vc-git--run-command-string
-                 file "diff-index" "-z" "HEAD" "--")))
-      (if (and diff (string-match ":[0-7]\\{6\\} [0-7]\\{6\\} [0-9a-f]\\{40\\} [0-9a-f]\\{40\\} \\([ADMUT]\\)\0[^\0]+\0"
-				  diff))
-	  (vc-git--state-code (match-string 1 diff))
+                 file "diff-index" "-p" "--raw" "-z" "HEAD" "--")))
+      (if (and diff
+	       (string-match ":[0-7]\\{6\\} [0-7]\\{6\\} [0-9a-f]\\{40\\} [0-9a-f]\\{40\\} \\([ADMUT]\\)\0[^\0]+\0\\(.\\)?"
+			     diff))
+          (let ((diff-letter (match-string 1 diff)))
+            (if (not (match-beginning 2))
+                ;; Empty diff: file contents is the same as the HEAD
+                ;; revision, but timestamps are different (eg, file
+                ;; was "touch"ed).  Update timestamp in index:
+                (prog1 'up-to-date
+                  (vc-git--call nil "add" "--refresh" "--"
+                                (file-relative-name file)))
+              (vc-git--state-code diff-letter)))
 	(if (vc-git--empty-db-p) 'added 'up-to-date)))))
 
 (defun vc-git-working-revision (file)
@@ -1108,8 +1116,11 @@ The difference to vc-do-command is that this function always invokes
 (defun vc-git--call (buffer command &rest args)
   ;; We don't need to care the arguments.  If there is a file name, it
   ;; is always a relative one.  This works also for remote
-  ;; directories.
-  (apply 'process-file vc-git-program nil buffer nil command args))
+  ;; directories.  We enable `inhibit-null-byte-detection', otherwise
+  ;; Tramp's eol conversion might be confused.
+  (let ((inhibit-null-byte-detection t)
+	(process-environment (cons "PAGER=" process-environment)))
+    (apply 'process-file vc-git-program nil buffer nil command args)))
 
 (defun vc-git--out-ok (command &rest args)
   (zerop (apply 'vc-git--call '(t nil) command args)))

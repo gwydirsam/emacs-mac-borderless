@@ -1,6 +1,6 @@
 ;;; vc-bzr.el --- VC backend for the bzr revision control system
 
-;; Copyright (C) 2006-2012  Free Software Foundation, Inc.
+;; Copyright (C) 2006-2012 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; 	   Riccardo Murri <riccardo.murri@gmail.com>
@@ -89,18 +89,40 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
                  (repeat :tag "Argument List" :value ("") string))
   :group 'vc-bzr)
 
+(defcustom vc-bzr-status-switches
+  (ignore-errors
+    (with-temp-buffer
+      (call-process vc-bzr-program nil t nil "help" "status")
+      (if (search-backward "--no-classify" nil t)
+          "--no-classify")))
+  "String or list of strings specifying switches for bzr status under VC.
+The option \"--no-classify\" should be present if your bzr supports it."
+  :type '(choice (const :tag "None" nil)
+                 (string :tag "Argument String")
+                 (repeat :tag "Argument List" :value ("") string))
+  :group 'vc-bzr
+  :version "24.1")
+
 ;; since v0.9, bzr supports removing the progress indicators
 ;; by setting environment variable BZR_PROGRESS_BAR to "none".
 (defun vc-bzr-command (bzr-command buffer okstatus file-or-list &rest args)
   "Wrapper round `vc-do-command' using `vc-bzr-program' as COMMAND.
 Invoke the bzr command adding `BZR_PROGRESS_BAR=none' and
-`LC_MESSAGES=C' to the environment."
+`LC_MESSAGES=C' to the environment.  If BZR-COMMAND is \"status\",
+prepends `vc-bzr-status-switches' to ARGS."
   (let ((process-environment
          (list* "BZR_PROGRESS_BAR=none" ; Suppress progress output (bzr >=0.9)
                 "LC_MESSAGES=C"         ; Force English output
                 process-environment)))
     (apply 'vc-do-command (or buffer "*vc*") okstatus vc-bzr-program
-           file-or-list bzr-command args)))
+           file-or-list bzr-command
+           (if (and (string-equal "status" bzr-command)
+                    vc-bzr-status-switches)
+               (append (if (stringp vc-bzr-status-switches)
+                           (list vc-bzr-status-switches)
+                         vc-bzr-status-switches)
+                       args)
+             args))))
 
 (defun vc-bzr-async-command (bzr-command &rest args)
   "Wrapper round `vc-do-async-command' using `vc-bzr-program' as COMMAND.
@@ -431,7 +453,7 @@ If any error occurred in running `bzr status', then return nil."
             (skip-chars-forward " \n\t") ;Throw away spaces.
             (cons status
                   ;; "bzr" will output warnings and informational messages to
-                  ;; stderr; due to Emacs' `vc-do-command' (and, it seems,
+                  ;; stderr; due to Emacs's `vc-do-command' (and, it seems,
                   ;; `start-process' itself) limitations, we cannot catch stderr
                   ;; and stdout into different buffers.  So, if there's anything
                   ;; left in the buffer after removing the above status

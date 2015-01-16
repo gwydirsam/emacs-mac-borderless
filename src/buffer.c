@@ -1,6 +1,6 @@
 /* Buffer manipulation primitives for GNU Emacs.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2012  Free Software Foundation, Inc.
+Copyright (C) 1985-1989, 1993-1995, 1997-2012 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1717,7 +1717,7 @@ record_buffer (Lisp_Object buffer)
 /* Move BUFFER to the end of the buffer (a)lists.  Do nothing if the
    buffer is killed.  For the selected frame's buffer list this moves
    BUFFER to its end even if it was never shown in that frame.  If
-   this happens we have a feature, hence `unrecord-buffer' should be
+   this happens we have a feature, hence `bury-buffer-internal' should be
    called only when BUFFER was shown in the selected frame.  */
 
 DEFUN ("bury-buffer-internal", Fbury_buffer_internal, Sbury_buffer_internal,
@@ -2864,6 +2864,12 @@ compare_overlays (const void *v1, const void *v2)
     return s1->beg < s2->beg ? -1 : 1;
   if (s1->end != s2->end)
     return s2->end < s1->end ? -1 : 1;
+  /* Avoid the non-determinism of qsort by choosing an arbitrary ordering
+     between "equal" overlays.  The result can still change between
+     invocations of Emacs, but it won't change in the middle of
+     `find_field' (bug#6830).  */
+  if (XHASH (s1->overlay) != XHASH (s2->overlay))
+    return XHASH (s1->overlay) < XHASH (s2->overlay) ? -1 : 1;
   return 0;
 }
 
@@ -5996,7 +6002,7 @@ The function `kill-all-local-variables' runs this before doing anything else.  *
 	       doc: /* Hook run when the buffer list changes.
 Functions running this hook are `get-buffer-create',
 `make-indirect-buffer', `rename-buffer', `kill-buffer',
-`record-buffer' and `unrecord-buffer'.  */);
+and `bury-buffer-internal'.  */);
   Vbuffer_list_update_hook = Qnil;
   DEFSYM (Qbuffer_list_update_hook, "buffer-list-update-hook");
 

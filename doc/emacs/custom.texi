@@ -332,7 +332,7 @@ customization.  Use the @samp{Add Comment} item from the
 
 @smallexample
  [Set for Current Session] [Save for Future Sessions]
- [Undo Edits] [Reset to Saved] [Erase Customization]   [Finish]
+ [Undo Edits] [Reset to Saved] [Erase Customization]   [Exit]
 @end smallexample
 
 @noindent
@@ -351,7 +351,7 @@ C-s} (@code{Custom-save}) is like using the @samp{[Save for Future
 Sessions]} button.
 
 @vindex custom-buffer-done-kill
-  The @samp{[Finish]} button switches out of the customization buffer,
+  The @samp{[Exit]} button switches out of the customization buffer,
 and buries the buffer at the bottom of the buffer list.  To make it
 kill the customization buffer instead, change the variable
 @code{custom-buffer-done-kill} to @code{t}.
@@ -567,7 +567,7 @@ directory specified by the variable @code{custom-theme-directory}
 (which defaults to @file{~/.emacs.d/}), and a directory named
 @file{etc/themes} in your Emacs installation (see the variable
 @code{data-directory}).  The latter contains several Custom themes
-which are distributed with Emacs, which customize Emacs' faces to fit
+which are distributed with Emacs, which customize Emacs's faces to fit
 various color schemes.  (Note, however, that Custom themes need not be
 restricted to this purpose; they can be used to customize variables
 too).

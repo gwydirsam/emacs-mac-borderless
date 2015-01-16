@@ -1321,6 +1321,13 @@ the echo area or in a buffer where the cursor is not displayed."
   'mac-text-input-insert-text)
 
 ;;; Converted Actions
+(defun mac-handle-about (event)
+  "Display the *About GNU Emacs* buffer in response to EVENT."
+  (interactive "e")
+  ;; Convert a event bound in special-event-map to a normal event.
+  (setq unread-command-events
+	(append '(menu-bar help-menu about-emacs) unread-command-events)))
+
 (defun mac-handle-copy (event)
   "Copy the selected text to the clipboard.
 This is used in response to \"Speak selected text.\""
@@ -1372,7 +1379,7 @@ modifiers, it changes the global tool-bar visibility setting."
     (let ((frame (cdr (mac-ae-parameter ae 'frame))))
       (set-frame-parameter frame 'fullscreen nil))))
 
-(define-key mac-apple-event-map [action about] 'about-emacs)
+(define-key mac-apple-event-map [action about] 'mac-handle-about)
 (define-key mac-apple-event-map [action copy] 'mac-handle-copy)
 (define-key mac-apple-event-map [action preferences] 'customize)
 (define-key mac-apple-event-map [action toolbar-pill-button-clicked]
@@ -1691,12 +1698,15 @@ See also `mac-dnd-known-types'."
   :group 'mac
   :type 'boolean)
 
+(defvar mac-ignore-momentum-wheel-events)
+
 (defun mac-mwheel-scroll (event)
   "Scroll up or down according to the EVENT.
 Mostly like `mwheel-scroll', but try scrolling by pixel unit if
 EVENT has no modifier keys, `mac-mouse-wheel-smooth-scroll' is
 non-nil, and the input device supports it."
   (interactive (list last-input-event))
+  (setq mac-ignore-momentum-wheel-events nil)
   ;; (nth 3 event) is a list of the following form:
   ;; (isDirectionInvertedFromDevice	; nil (normal) or t (inverted)
   ;;  (deltaX deltaY deltaZ)		; floats
@@ -1706,19 +1716,20 @@ non-nil, and the input device supports it."
   ;; The list might end early if the remaining elements are all nil.
   ;; TODO: horizontal scrolling
   (if (not (memq (event-basic-type event) '(wheel-up wheel-down)))
-      (if (and (memq (event-basic-type event) '(wheel-left wheel-right))
-	       (eq (nth 1 (nth 3 (nth 3 event))) 1)) ;; NSTouchPhaseBegan
-	  ;; Post a swipe event when the momentum phase begins for
-	  ;; horizontal wheel events.
-	  (push (cons
-		 (event-convert-list
-		  (nconc (delq 'click
-			       (delq 'double
-				     (delq 'triple (event-modifiers event))))
-			 (if (eq (event-basic-type event) 'wheel-left)
-			     '(swipe-left) '(swipe-right))))
-		 (cdr event))
-		unread-command-events))
+      (when (and (memq (event-basic-type event) '(wheel-left wheel-right))
+		 (eq (nth 1 (nth 3 (nth 3 event))) 1)) ;; NSEventPhaseBegan
+	;; Post a swipe event when the momentum phase begins for
+	;; horizontal wheel events.
+	(setq mac-ignore-momentum-wheel-events t)
+	(push (cons
+	       (event-convert-list
+		(nconc (delq 'click
+			     (delq 'double
+				   (delq 'triple (event-modifiers event))))
+		       (if (eq (event-basic-type event) 'wheel-left)
+			   '(swipe-left) '(swipe-right))))
+	       (cdr event))
+	      unread-command-events))
     (if (or (not mac-mouse-wheel-smooth-scroll)
 	    (delq 'click (delq 'double (delq 'triple (event-modifiers event))))
 	    (null (nth 1 (nth 2 (nth 3 event)))))
@@ -2017,16 +2028,21 @@ Return non-nil if the new state is enabled."
 
 
 ;;; Swipe events
+(declare-function mac-start-animation "macfns.c"
+		  (frame-or-window &rest properties))
+
 (defun mac-previous-buffer (event)
   "Like `previous-buffer', but operate on the window where EVENT occurred."
   (interactive "e")
   (with-selected-window (posn-window (event-start event))
+    (mac-start-animation (selected-window) :direction 'right)
     (previous-buffer)))
 
 (defun mac-next-buffer (event)
   "Like `next-buffer', but operate on the window where EVENT occurred."
   (interactive "e")
   (with-selected-window (posn-window (event-start event))
+    (mac-start-animation (selected-window) :direction 'left)
     (next-buffer)))
 
 (global-set-key [swipe-left] 'mac-previous-buffer)
@@ -2185,6 +2201,12 @@ standard ones in `x-handle-args'."
 	      site-run-file nil
 	      inhibit-x-resources t))))
 
+(defun mac-exit-splash-screen ()
+  "Stop displaying the splash screen buffer with possibly an animation."
+  (interactive)
+  (mac-start-animation (selected-window))
+  (exit-splash-screen))
+
 (defun mac-initialize-window-system ()
   "Initialize Emacs for Mac GUI frames."
   ;; Make sure we have a valid resource name.
@@ -2293,6 +2315,9 @@ standard ones in `x-handle-args'."
 	      (mac-mouse-wheel-mode 1)))
 
   (add-hook 'menu-bar-update-hook 'mac-setup-help-topics)
+
+  (substitute-key-definition 'exit-splash-screen 'mac-exit-splash-screen
+			     splash-screen-keymap)
 
   (setq mac-initialized t))
 

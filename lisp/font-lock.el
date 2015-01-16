@@ -1,6 +1,6 @@
 ;;; font-lock.el --- Electric font lock mode
 
-;; Copyright (C) 1992-2012  Free Software Foundation, Inc.
+;; Copyright (C) 1992-2012 Free Software Foundation, Inc.
 
 ;; Author: Jamie Zawinski
 ;;	Richard Stallman
@@ -67,7 +67,7 @@
 ;;
 ;; The syntactic keyword pass places `syntax-table' text properties in the
 ;; buffer according to the variable `font-lock-syntactic-keywords'.  It is
-;; necessary because Emacs' syntax table is not powerful enough to describe all
+;; necessary because Emacs's syntax table is not powerful enough to describe all
 ;; the different syntactic constructs required by the sort of people who decide
 ;; that a single quote can be syntactic or not depending on the time of day.
 ;; (What sort of person could decide to overload the meaning of a quote?)
@@ -2284,7 +2284,7 @@ in which C preprocessor directives are used. e.g. `asm-mode' and
      `(;; Control structures.  Emacs Lisp forms.
        (,(concat
 	  "(" (regexp-opt
-	       '("cond" "if" "while" "while-no-input" "let" "let*"
+	       '("cond" "if" "while" "while-no-input" "let" "let*" "letrec"
 		 "prog" "progn" "progv" "prog1" "prog2" "prog*"
 		 "inline" "lambda" "save-restriction" "save-excursion"
 		 "save-selected-window" "save-window-excursion"
