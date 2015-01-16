@@ -1323,6 +1323,8 @@ the echo area or in a buffer where the cursor is not displayed."
 (defun mac-handle-about (event)
   "Display the *About GNU Emacs* buffer in response to EVENT."
   (interactive "e")
+  (if (use-fancy-splash-screens-p)
+      (mac-start-animation (fancy-splash-frame) :type 'mod :duration 0.5))
   ;; Convert a event bound in special-event-map to a normal event.
   (setq unread-command-events
 	(append '(menu-bar help-menu about-emacs) unread-command-events)))
@@ -1336,6 +1338,12 @@ This is used in response to \"Speak selected text.\""
 	     (buffer-substring-no-properties (region-beginning) (region-end))
 	   (error ""))))
     (x-set-selection 'CLIPBOARD string)))
+
+(defun mac-handle-preferences (event)
+  "Display the `Mac' customization group in response to EVENT."
+  (interactive "e")
+  (mac-start-animation (selected-window) :type 'swipe :duration 0.5)
+  (customize-group 'mac))
 
 (defun mac-handle-toolbar-pill-button-clicked (event)
   "Toggle visibility of tool-bars in response to EVENT.
@@ -1380,7 +1388,7 @@ modifiers, it changes the global tool-bar visibility setting."
 
 (define-key mac-apple-event-map [action about] 'mac-handle-about)
 (define-key mac-apple-event-map [action copy] 'mac-handle-copy)
-(define-key mac-apple-event-map [action preferences] 'customize)
+(define-key mac-apple-event-map [action preferences] 'mac-handle-preferences)
 (define-key mac-apple-event-map [action toolbar-pill-button-clicked]
  'mac-handle-toolbar-pill-button-clicked)
 (define-key mac-apple-event-map [action change-toolbar-display-mode]

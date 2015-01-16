@@ -1,4 +1,23 @@
+* emacs-24.1-rc-mac-2.94 [experimental/hackers-only] (2012-06-01)
+Based on Emacs 24.1 release candidate
+
+** Improvements
+
+*** Animation now supports the built-in Core Image transition filters
+via Core Animation.  The "About Emacs" and "Preferences..." menu items
+in the application menu (labeled "Emacs") in the menu bar are
+accompanied with a transition animation effect on Mac OS X 10.5 and
+later.  Animation is suppressed if the frame is not completely opaque,
+because it does not give an intended effect on such frames.
+
+Known issues: The `page-curl' transition does not look right on Mac OS
+X 10.5.  Also, the `page-curl-with-shadow' transition does not look
+right for some angles on Mac OS X 10.7.4.  Both transitions look
+blurry on Mac OS X 10.7.4 with HiDPI mode.
+
+
 * emacs-24.0.97-mac-2.93 [experimental/hackers-only] (2012-05-17)
+http://lists.gnu.org/archive/html/emacs-devel/2012-05/msg00367.html
 Based on Emacs 24.0.97
 
 ** Fixed bugs

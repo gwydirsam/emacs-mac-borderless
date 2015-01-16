@@ -1,3 +1,73 @@
+2012-06-01  Chong Yidong  <cyd@gnu.org>
+
+	* Version 24.1 released.
+
+2012-05-30  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (handle_stop): Detect whether we have overlay strings
+	loaded by testing it->current.overlay_string_index to be
+	non-negative, instead of checking whether n_overlay_strings is
+	positive.  (Bug#11587)
+
+2012-05-30  Chong Yidong  <cyd@gnu.org>
+
+	* keymap.c (describe_map_tree): Revert 2011-07-07 change (Bug#1169).
+
+	* doc.c (Fsubstitute_command_keys): Doc fix.
+
+2012-05-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* search.c (search_buffer): Remove calls to
+	r_alloc_inhibit_buffer_relocation, as it is now called by
+	maybe_unify_char, which was the cause of relocation of buffer text
+	in bug#11519.
+
+2012-05-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* charset.c (maybe_unify_char): Inhibit relocation of buffer text
+	for the duration of call to load_charset, to avoid problems with
+	callers of maybe_unify_char that access buffer text through C
+	pointers.
+
+	* ralloc.c (r_alloc_inhibit_buffer_relocation): Increment and
+	decrement the inhibition flag, instead of just setting or
+	resetting it.
+
+2012-05-24  Ken Brown  <kbrown@cornell.edu>
+
+	* callproc.c (Fcall_process): Restore a line that was accidentally
+	commented out in the 2011-02-13 change (bug#11547).
+
+2012-05-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* lisp.h [REL_ALLOC]: Add prototypes for external functions
+	defined on ralloc.c.
+
+	* buffer.c [REL_ALLOC]: Remove prototypes of
+	r_alloc_reset_variable, r_alloc, r_re_alloc, and r_alloc_free,
+	they are now on lisp.h.
+
+	* ralloc.c (r_alloc_inhibit_buffer_relocation): New function.
+
+	* search.c (search_buffer): Use it to inhibit relocation of buffer
+	text while re_search_2 is doing its job, because re_search_2 is
+	passed C pointers to buffer text.  (Bug#11519)
+
+2012-05-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* msdos.c (internal_terminal_init) <Vwindow_system_version>:
+	Update value to 24.
+
+2012-05-19  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_to): Under MOVE_TO_Y, when restoring iterator
+	state after an additional call to move_it_in_display_line_to, keep
+	the values of it->max_ascent and it->max_descent found for the
+	entire line.
+	(pos_visible_p): Revert the comparison against bottom_y to what it
+	was in revid eliz@gnu.org-20120513182235-4p6386j761ld0nwb.
+	(Bug#11464)
+
 2012-05-15  Eli Zaretskii  <eliz@gnu.org>
 
 	* xdisp.c (pos_visible_p): Fix last change.  (Bug#11464)

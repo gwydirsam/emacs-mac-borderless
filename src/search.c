@@ -1158,6 +1158,7 @@ search_buffer (Lisp_Object string, EMACS_INT pos, EMACS_INT pos_byte,
       while (n < 0)
 	{
 	  EMACS_INT val;
+
 	  val = re_search_2 (bufp, (char *) p1, s1, (char *) p2, s2,
 			     pos_byte - BEGV_BYTE, lim_byte - pos_byte,
 			     (NILP (Vinhibit_changing_match_data)
@@ -1202,6 +1203,7 @@ search_buffer (Lisp_Object string, EMACS_INT pos, EMACS_INT pos_byte,
       while (n > 0)
 	{
 	  EMACS_INT val;
+
 	  val = re_search_2 (bufp, (char *) p1, s1, (char *) p2, s2,
 			     pos_byte - BEGV_BYTE, lim_byte - pos_byte,
 			     (NILP (Vinhibit_changing_match_data)

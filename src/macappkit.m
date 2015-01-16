@@ -102,10 +102,12 @@ enum {
 #define CA_LAYER	CALayer
 #define CA_TRANSACTION	CATransaction
 #define CA_BASIC_ANIMATION CABasicAnimation
+#define CA_TRANSITION	CATransition
 #else
 #define CA_LAYER	(NSClassFromString (@"CALayer"))
 #define CA_TRANSACTION	(NSClassFromString (@"CATransaction"))
 #define CA_BASIC_ANIMATION (NSClassFromString (@"CABasicAnimation"))
+#define CA_TRANSITION	(NSClassFromString (@"CATransition"))
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
@@ -3326,6 +3328,16 @@ mac_set_frame_window_alpha (struct frame *f, CGFloat alpha)
   NSWindow *window = (__bridge id) FRAME_MAC_WINDOW (f);
 
   [window setAlphaValue:alpha];
+
+  return noErr;
+}
+
+OSStatus
+mac_get_frame_window_alpha (struct frame *f, CGFloat *out_alpha)
+{
+  NSWindow *window = (__bridge id) FRAME_MAC_WINDOW (f);
+
+  *out_alpha = [window alphaValue];
 
   return noErr;
 }
@@ -10331,7 +10343,10 @@ mac_update_accessibility_status (struct frame *f)
 ***********************************************************************/
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
-extern Lisp_Object QCdirection, QCduration, Qnone, Qfade_in, Qmove_in;
+extern Lisp_Object QCdirection, QCduration;
+extern Lisp_Object Qnone, Qfade_in, Qmove_in;
+extern Lisp_Object Qbars_swipe, Qcopy_machine, Qdissolve, Qflash, Qmod;
+extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
 
 @implementation EmacsFrameController (Animation)
 
@@ -10364,6 +10379,8 @@ extern Lisp_Object QCdirection, QCduration, Qnone, Qfade_in, Qmove_in;
   contentLayer.frame = CGRectMake (0, 0, NSWidth (rectInContentView),
 				   NSHeight (rectInContentView));
   contentLayer.contents = (id) [bitmap CGImage];
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
+    [contentLayer setValue:bitmap forKey:@"bitmapImageRep"];
   [layer addSublayer:contentLayer];
 
   return layer;
@@ -10411,22 +10428,236 @@ extern Lisp_Object QCdirection, QCduration, Qnone, Qfade_in, Qmove_in;
 
 @end
 
-Lisp_Object
+static Lisp_Object
+get_symbol_from_filter_input_key (NSString *key)
+{
+  NSArray *components =
+    [key componentsSeparatedByCamelCasingWithCharactersInSet:nil];
+  NSUInteger count = [components count];
+
+  if (count > 1 && [[components objectAtIndex:0] isEqualToString:@"input"])
+    {
+      NSMutableArray *symbolComponents =
+	[NSMutableArray arrayWithCapacity:(count - 1)];
+      NSUInteger index;
+      Lisp_Object string;
+
+      for (index = 1; index < count; index++)
+	[symbolComponents addObject:[[components objectAtIndex:index]
+				      lowercaseString]];
+      string = [[symbolComponents componentsJoinedByString:@"-"]
+		 UTF8LispString];
+      return Fintern (concat2 (build_string (":"), string), Qnil);
+    }
+  else
+    return Qnil;
+}
+
+static CIFilter *
+get_transition_filter_from_properties (struct frame *f, Lisp_Object properties)
+{
+  NSString *filterName;
+  CIFilter *filter;
+  NSDictionary *attributes;
+  Lisp_Object type = Fplist_get (properties, QCtype);
+
+  if (EQ (type, Qbars_swipe))
+    filterName = @"CIBarsSwipeTransition";
+  else if (EQ (type, Qcopy_machine))
+    filterName = @"CICopyMachineTransition";
+  else if (EQ (type, Qdissolve))
+    filterName = @"CIDissolveTransition";
+  else if (EQ (type, Qflash))
+    filterName = @"CIFlashTransition";
+  else if (EQ (type, Qmod))
+    filterName = @"CIModTransition";
+  else if (EQ (type, Qpage_curl))
+    filterName = @"CIPageCurlTransition";
+  else if (EQ (type, Qpage_curl_with_shadow))
+    {
+      if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6)
+	filterName = @"CIPageCurlTransition";
+      else
+	filterName = @"CIPageCurlWithShadowTransition";
+    }
+  else if (EQ (type, Qripple))
+    filterName = @"CIRippleTransition";
+  else if (EQ (type, Qswipe))
+    filterName = @"CISwipeTransition";
+  else
+    return nil;
+
+  filter = [CIFilter filterWithName:filterName];
+  [filter setDefaults];
+  if (EQ (type, Qbars_swipe)		   /* [0, 2pi], default pi */
+      || EQ (type, Qcopy_machine)	   /* [0, 2pi], default 0 */
+      || EQ (type, Qpage_curl)		   /* [-pi, pi], default 0 */
+      || EQ (type, Qpage_curl_with_shadow) /* [-pi, pi], default 0 */
+      || EQ (type, Qswipe))		   /* [-pi, pi], default 0 */
+    {
+      Lisp_Object direction = Fplist_get (properties, QCdirection);
+      double direction_angle;
+
+      if (EQ (direction, Qleft))
+	direction_angle = M_PI;
+      else if (EQ (direction, Qright))
+	direction_angle = 0;
+      else if (EQ (direction, Qdown))
+	{
+	  if (EQ (type, Qbars_swipe) || EQ (type, Qcopy_machine))
+	    direction_angle = 3 * M_PI_2;
+	  else
+	    direction_angle = - M_PI_2;
+	}
+      else if (EQ (direction, Qup))
+	direction_angle = M_PI_2;
+      else
+	direction = Qnil;
+
+      if (!NILP (direction))
+	[filter setValue:[NSNumber numberWithDouble:direction_angle]
+		  forKey:kCIInputAngleKey];
+    }
+
+  if ([filterName isEqualToString:@"CIPageCurlTransition"]
+      || EQ (type, Qripple))
+    /* TODO: create a real shading image like
+       /Library/Widgets/CI Filter Browser.wdgt/Images/restrictedshine.png */
+    [filter setValue:[CIImage emptyImage] forKey:kCIInputShadingImageKey];
+
+  attributes = [filter attributes];
+  for (NSString *key in [filter inputKeys])
+    {
+      NSDictionary *keyAttributes = [attributes objectForKey:key];
+
+      if ([[keyAttributes objectForKey:kCIAttributeClass]
+	    isEqualToString:@"NSNumber"]
+	  && ![key isEqualToString:kCIInputTimeKey])
+	{
+	  Lisp_Object symbol = get_symbol_from_filter_input_key (key);
+
+	  if (!NILP (symbol))
+	    {
+	      Lisp_Object value = Fplist_get (properties, symbol);
+
+	      if (NUMBERP (value))
+		[filter setValue:[NSNumber numberWithDouble:(XFLOATINT (value))]
+			  forKey:key];
+	    }
+	}
+      else if ([[keyAttributes objectForKey:kCIAttributeType]
+		 isEqualToString:kCIAttributeTypeOpaqueColor])
+	{
+	  Lisp_Object symbol = get_symbol_from_filter_input_key (key);
+
+	  if (!NILP (symbol))
+	    {
+	      Lisp_Object value = Fplist_get (properties, symbol);
+	      CGFloat components[3];
+	      int i;
+
+	      if (STRINGP (value))
+		{
+		  XColor xcolor;
+
+		  if (mac_defined_color (f, SSDATA (value), &xcolor, 0))
+		    value = list3 (make_number (xcolor.red),
+				   make_number (xcolor.green),
+				   make_number (xcolor.blue));
+		}
+	      for (i = 0; i < 3; i++)
+		{
+		  if (!CONSP (value))
+		    break;
+		  if (INTEGERP (XCAR (value)))
+		    components[i] =
+		      min (max (0, XINT (XCAR (value)) / 65535.0), 1);
+		  else if (FLOATP (XCAR (value)))
+		    components[i] =
+		      min (max (0, XFLOAT_DATA (XCAR (value))), 1);
+		  else
+		    break;
+		  value = XCDR (value);
+		}
+	      if (i == 3 && NILP (value))
+		[filter setValue:[CIColor colorWithRed:components[0]
+						 green:components[1]
+						  blue:components[2]]
+			  forKey:key];
+	    }
+	}
+    }
+
+  return filter;
+}
+
+static void
+adjust_transition_filter_for_layer (CIFilter *filter, CALayer *layer)
+{
+  NSDictionary *attributes = [filter attributes];
+
+  if ([[[attributes objectForKey:kCIInputCenterKey]
+	 objectForKey:kCIAttributeType]
+	isEqualToString:kCIAttributeTypePosition])
+    {
+      CGRect frame = layer.frame;
+
+      [filter setValue:[CIVector vectorWithX:(CGRectGetMidX (frame))
+					   Y:(CGRectGetMidY (frame))]
+		forKey:kCIInputCenterKey];
+    }
+
+  if ([[attributes objectForKey:kCIAttributeFilterName]
+	isEqualToString:@"CIPageCurlWithShadowTransition"]
+      /* Mac OS X 10.7 automatically sets inputBacksideImage for
+	 CIPageCurlTransition.  */
+      || (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6
+	  && [[attributes objectForKey:kCIAttributeFilterName]
+	       isEqualToString:@"CIPageCurlTransition"]))
+    {
+      CGRect frame = layer.frame;
+      CGAffineTransform atfm =
+	CGAffineTransformMakeTranslation (CGRectGetMinX (frame),
+					  CGRectGetMinY (frame));
+      CALayer *contentLayer = [[layer sublayers] objectAtIndex:0];
+      CIImage *image;
+
+      if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
+	{
+	  /* +[CIImage imageWithCGImage:] for inputBacksideImage
+	     causes crash when drawing on Mac OS X 10.5.  */
+	  NSBitmapImageRep *bitmap = [contentLayer
+				       valueForKey:@"bitmapImageRep"];
+
+	  image = MRC_AUTORELEASE ([[CIImage alloc]
+				     initWithBitmapImageRep:bitmap]);
+	}
+      else
+	image = [CIImage imageWithCGImage:((__bridge CGImageRef)
+					   contentLayer.contents)];
+      [filter setValue:[image imageByApplyingTransform:atfm]
+		forKey:@"inputBacksideImage"];
+    }
+}
+
+void
 mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
 {
   struct frame *f;
   EmacsFrameController *frameController;
   CGRect rect;
+  CIFilter *transitionFilter;
   CALayer *layer, *contentLayer;
-  Lisp_Object direction, duration, type;
+  Lisp_Object direction, duration;
   CGFloat h_ratio, v_ratio;
   enum {
+    ANIM_TYPE_NONE,
     ANIM_TYPE_MOVE_OUT,
     ANIM_TYPE_MOVE_IN,
     ANIM_TYPE_FADE_OUT,
     ANIM_TYPE_FADE_IN,
-    ANIM_TYPE_NONE
-  } anim_type = ANIM_TYPE_MOVE_OUT;
+    ANIM_TYPE_TRANSITION_FILTER
+  } anim_type;
 
   if (FRAMEP (frame_or_window))
     {
@@ -10445,39 +10676,56 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
 			    WINDOW_TOTAL_HEIGHT (w));
     }
   frameController = FRAME_CONTROLLER (f);
+
+  transitionFilter = get_transition_filter_from_properties (f, properties);
+  if (transitionFilter)
+    anim_type = ANIM_TYPE_TRANSITION_FILTER;
+  else
+    {
+      Lisp_Object type;
+
+      direction = Fplist_get (properties, QCdirection);
+
+      type = Fplist_get (properties, QCtype);
+      if (EQ (type, Qnone))
+	anim_type = ANIM_TYPE_NONE;
+      else if (EQ (type, Qfade_in))
+	anim_type = ANIM_TYPE_FADE_IN;
+      else if (EQ (type, Qmove_in))
+	anim_type = ANIM_TYPE_MOVE_IN;
+      else if (EQ (direction, Qleft) || EQ (direction, Qright)
+	       || EQ (direction, Qdown) || EQ (direction, Qup))
+	anim_type = ANIM_TYPE_MOVE_OUT;
+      else
+	anim_type = ANIM_TYPE_FADE_OUT;
+    }
+
   layer = [frameController layerForRect:(NSRectFromCGRect (rect))];
   contentLayer = [[layer sublayers] objectAtIndex:0];
 
-  direction = Fplist_get (properties, QCdirection);
-  h_ratio = v_ratio = 0;
-  if (EQ (direction, Qleft))
-    h_ratio = -1;
-  else if (EQ (direction, Qright))
-    h_ratio = 1;
-  else if (EQ (direction, Qdown))
-    v_ratio = -1;
-  else if (EQ (direction, Qup))
-    v_ratio = 1;
-  else
-    anim_type = ANIM_TYPE_FADE_OUT;
-
-  type = Fplist_get (properties, QCtype);
-  if (EQ (type, Qnone))
-    anim_type = ANIM_TYPE_NONE;
-  else if (EQ (type, Qfade_in))
-    anim_type = ANIM_TYPE_FADE_IN;
-  else if (EQ (type, Qmove_in))
-    anim_type = ANIM_TYPE_MOVE_IN;
-
   if (anim_type == ANIM_TYPE_FADE_IN)
     contentLayer.opacity = 0;
-  else if (anim_type == ANIM_TYPE_MOVE_IN)
+  else if (anim_type == ANIM_TYPE_MOVE_OUT
+	   || anim_type == ANIM_TYPE_MOVE_IN)
     {
-      CGPoint position = contentLayer.position;
+      h_ratio = v_ratio = 0;
+      if (EQ (direction, Qleft))
+	h_ratio = -1;
+      else if (EQ (direction, Qright))
+	h_ratio = 1;
+      else if (EQ (direction, Qdown))
+	v_ratio = -1;
+      else if (EQ (direction, Qup))
+	v_ratio = 1;
 
-      position.x -= CGRectGetWidth (layer.bounds) * h_ratio;
-      position.y -= CGRectGetHeight (layer.bounds) * v_ratio;
-      contentLayer.position = position;
+      if (anim_type == ANIM_TYPE_MOVE_IN)
+	{
+	  CGPoint position = contentLayer.position;
+
+	  position.x -= CGRectGetWidth (layer.bounds) * h_ratio;
+	  position.y -= CGRectGetHeight (layer.bounds) * v_ratio;
+	  contentLayer.position = position;
+	}
     }
 
   if (anim_type == ANIM_TYPE_MOVE_OUT || anim_type == ANIM_TYPE_MOVE_IN)
@@ -10527,6 +10775,33 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
 	position.x += CGRectGetWidth (layer.bounds) * h_ratio;
 	position.y += CGRectGetHeight (layer.bounds) * v_ratio;
 	contentLayer.position = position;
+      }
+      break;
+
+    case ANIM_TYPE_TRANSITION_FILTER:
+      {
+	CATransition *transition = [[CA_TRANSITION alloc] init];
+	NSMutableDictionary *actions;
+	CALayer *newContentLayer;
+
+	adjust_transition_filter_for_layer (transitionFilter, layer);
+	transition.filter = transitionFilter;
+
+	actions = [NSMutableDictionary
+		    dictionaryWithDictionary:[layer actions]];
+	[actions setObject:transition forKey:@"sublayers"];
+	MRC_RELEASE (transition);
+	layer.actions = actions;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+	[transition setValue:layer forKey:@"layerToBeRemoved"];
+	transition.delegate = frameController;
+#endif
+
+	newContentLayer = [CA_LAYER layer];
+	newContentLayer.frame = contentLayer.frame;
+	newContentLayer.opacity = 0;
+	[layer replaceSublayer:contentLayer with:newContentLayer];
       }
       break;
 

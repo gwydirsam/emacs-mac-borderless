@@ -1,3 +1,35 @@
+2012-06-01  Chong Yidong  <cyd@gnu.org>
+
+	* Version 24.1 released.
+
+2012-06-01  Chong Yidong  <cyd@gnu.org>
+
+	* cus-edit.el (customize-changed-options-previous-release): Bump
+	to 23.4.
+
+2012-05-31  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/bytecomp.el (byte-compile-fix-header): Handle
+	arbitrary file name lengths (Bug#11585).
+
+2012-05-28  Martin Rudalics  <rudalics@gmx.at>
+
+	* desktop.el (desktop-read): Clear previous and next buffers for
+	all windows and bury *Messages* buffer (bug#11556).
+
+2012-05-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* mail/sendmail.el (mail-yank-region): Recognize
+	rmail-yank-current-message in addition to insert-buffer.  Fixes
+	mail-mode's "C-c C-r" that otherwise does nothing when invoked in
+	a *mail* buffer created through rmail-start-mail with sendmail as
+	mail-user-agent.
+
+2012-05-17  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/cl-macs.el (cl-transform-lambda): Don't add spurious
+	parens around the arg list (bug#11499).  Silly backport.
+
 2012-05-16  Chong Yidong  <cyd@gnu.org>
 
 	* net/gnutls.el (gnutls-min-prime-bits): Improve docstring.

@@ -6,7 +6,7 @@
 ;; Maintainer: Bastien Guerry <bzg at gnu dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: http://orgmode.org
-;; Version: 7.8.10
+;; Version: 7.8.11
 ;;
 ;; This file is part of GNU Emacs.
 ;;
@@ -206,7 +206,7 @@ identifier."
 
 ;;; Version
 
-(defconst org-version "7.8.10"
+(defconst org-version "7.8.11"
   "The version number of the file org.el.")
 
 ;;;###autoload
@@ -5917,7 +5917,7 @@ needs to be inserted at a specific position in the font-lock sequence.")
     (when org-pretty-entities
       (catch 'match
 	(while (re-search-forward
-		"\\\\\\(frac[13][24]\\|[a-zA-Z]+\\)\\($\\|{}\\|[^[:alpha:]\n]\\)"
+		"\\\\\\(there4\\|sup[123]\\|frac[13][24]\\|[a-zA-Z]+\\)\\($\\|{}\\|[^[:alpha:]\n]\\)"
 		limit t)
 	  (if (and (not (org-in-indented-comment-line))
 		   (setq ee (org-entity-get (match-string 1)))
@@ -5990,14 +5990,15 @@ When FACE-OR-COLOR is not a string, just return it."
 (defun org-font-lock-add-priority-faces (limit)
   "Add the special priority faces."
   (while (re-search-forward "\\[#\\([A-Z0-9]\\)\\]" limit t)
-    (add-text-properties
-     (match-beginning 0) (match-end 0)
-     (list 'face (or (org-face-from-face-or-color
-		      'priority 'org-special-keyword
-		      (cdr (assoc (char-after (match-beginning 1))
-				  org-priority-faces)))
-		     'org-special-keyword)
-	   'font-lock-fontified t))))
+    (when (save-match-data (org-at-heading-p))
+      (add-text-properties
+       (match-beginning 0) (match-end 0)
+       (list 'face (or (org-face-from-face-or-color
+			'priority 'org-special-keyword
+			(cdr (assoc (char-after (match-beginning 1))
+				    org-priority-faces)))
+		       'org-special-keyword)
+	     'font-lock-fontified t)))))
 
 (defun org-get-tag-face (kwd)
   "Get the right face for a TODO keyword KWD.
@@ -12828,10 +12829,7 @@ headlines matching this string."
 		       org-outline-regexp)
 		     " *\\(\\<\\("
 		     (mapconcat 'regexp-quote org-todo-keywords-1 "\\|")
-		     (org-re
-		      (if todo-only
-			  "\\>\\)\\)[ \t]+\\(.*?\\)\\(:[[:alnum:]_@#%:]+:\\)?[ \t]*$"
-			"\\>\\)\\)? *\\([^ ].*?\\)\\(:[[:alnum:]_@#%:]+:\\)?[ \t]*$"))))
+		     (org-re "\\)\\>\\)? *\\(.*?\\)\\(:[[:alnum:]_@#%:]+:\\)?[ \t]*$")))
 	 (props (list 'face 'default
 		      'done-face 'org-agenda-done
 		      'undone-face 'default

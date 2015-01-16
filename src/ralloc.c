@@ -1201,6 +1201,17 @@ r_alloc_reset_variable (POINTER *old, POINTER *new)
   bloc->variable = new;
 }
 
+void
+r_alloc_inhibit_buffer_relocation (int inhibit)
+{
+  if (use_relocatable_buffers < 0)
+    use_relocatable_buffers = 0;
+  if (inhibit)
+    use_relocatable_buffers++;
+  else if (use_relocatable_buffers > 0)
+    use_relocatable_buffers--;
+}
+
 
 /***********************************************************************
 			    Initialization

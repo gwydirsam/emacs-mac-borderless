@@ -85,6 +85,7 @@ extern OSStatus mac_move_frame_window_structure (struct frame *,
 extern void mac_move_frame_window (struct frame *, short, short, Boolean);
 extern void mac_size_frame_window (struct frame *, short, short, Boolean);
 extern OSStatus mac_set_frame_window_alpha (struct frame *, CGFloat);
+extern OSStatus mac_get_frame_window_alpha (struct frame *, CGFloat *);
 extern void mac_get_global_mouse (Point *);
 extern Boolean mac_is_frame_window_toolbar_visible (struct frame *);
 extern CGRect mac_rect_make (struct frame *, CGFloat, CGFloat,
