@@ -1,4 +1,23 @@
+* emacs-24.2-mac-3.2 (2012-08-27)
+Based on Emacs 24.2.
+
+** Fixed bugs
+
+*** Preferred font family selection does not work on OS X 10.8.
+
+** Improvements
+
+*** If Emacs.app is launched from Finder or via Resume on OS X 10.8,
+then it inherits environment variable settings of user's login shell
+regardless of the existence of ~/.MacOSX/environment.plist, which is
+ignored on OS X 10.8 anyway.
+
+*** Use sRGB color space instead of device RGB.  This does not change
+the appearance on OS X 10.8 which regards device RGB as sRGB.
+
+
 * emacs-24.1-mac-3.1 (2012-07-26)
+http://lists.gnu.org/archive/html/emacs-devel/2012-07/msg00561.html
 
 ** Fixed bugs
 

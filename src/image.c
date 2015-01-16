@@ -2741,7 +2741,6 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
   if (NILP (specified_data))
     {
       Lisp_Object file;
-      CFStringRef path;
       CFURLRef url;
 
       file = x_find_image_file (specified_file);
@@ -2752,17 +2751,12 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
 	  return 0;
 	}
       file = mac_preprocess_image_for_2x_file (f, img, file);
-      path = cfstring_create_with_utf8_cstring (SSDATA (file));
-      if (path)
+      url = CFURLCreateFromFileSystemRepresentation (NULL, SDATA (file),
+						     SBYTES (file), false);
+      if (url)
 	{
-	  url = CFURLCreateWithFileSystemPath (NULL, path,
-					       kCFURLPOSIXPathStyle, 0);
-	  CFRelease (path);
-	  if (url)
-	    {
-	      source = CGImageSourceCreateWithURL (url, options);
-	      CFRelease (url);
-	    }
+	  source = CGImageSourceCreateWithURL (url, options);
+	  CFRelease (url);
 	}
     }
   else
@@ -3339,7 +3333,6 @@ image_load_quartz2d (struct frame *f, struct image *img, int png_p)
 
   if (NILP (specified_data))
     {
-      CFStringRef path;
       CFURLRef url;
 
       file = x_find_image_file (specified_file);
@@ -3348,12 +3341,13 @@ image_load_quartz2d (struct frame *f, struct image *img, int png_p)
 	  image_error ("Cannot find image file `%s'", specified_file, Qnil);
 	  return 0;
 	}
-      path = cfstring_create_with_utf8_cstring (SSDATA (file));
-      url = CFURLCreateWithFileSystemPath (NULL, path,
-					   kCFURLPOSIXPathStyle, 0);
-      CFRelease (path);
-      source = CGDataProviderCreateWithURL (url);
-      CFRelease (url);
+      url = CFURLCreateFromFileSystemRepresentation (NULL, SDATA (file),
+						     SBYTES (file), false);
+      if (url)
+	{
+	  source = CGDataProviderCreateWithURL (url);
+	  CFRelease (url);
+	}
     }
   else
     {

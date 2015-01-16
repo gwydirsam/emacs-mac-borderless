@@ -9,7 +9,7 @@
 
   This section briefly describes the peculiarities of using Emacs
 under Mac OS X with the Mac port.  This port provides a native GUI
-support for Mac OS X 10.4 -- 10.7.  Note that Emacs 23 and later
+support for Mac OS X 10.4 -- 10.8.  Note that Emacs 23 and later
 already contain the official GUI support via the NS (Cocoa) port for
 Mac OS X 10.4 and later (@pxref{Mac OS / GNUstep}).  So if it is good
 enough for you, then you don't need to try this.
@@ -61,15 +61,17 @@ of environment variables from the shell from which it is invoked.
 This also applies to an invocation via the @command{open} command on
 Mac OS X 10.4 and later.
 
-  When it is run from the Finder as a GUI application, how the
-environment variables are inherited depends on whether the file
-@file{~/.MacOSX/environment.plist} exists or not.  If it exists, then
-the Mac port inherits environment variable values defined in the file,
-and it affects all the applications invoked from the Finder as well as
-Emacs.  If it doesn't exist, then the Mac port inherits those defined
-in user's login shell, so settings in @file{/etc/profile},
-@file{~/.bash_profile}, etc. are in effect if you use bash as your
-login shell.
+  When it is run from the Finder as a GUI application on Mac OS X 10.7
+and earlier, how the environment variables are inherited depends on
+whether the file @file{~/.MacOSX/environment.plist} exists or not.  If
+it exists, then the Mac port inherits environment variable values
+defined in the file, and it affects all the applications invoked from
+the Finder as well as Emacs.  If it doesn't exist, then the Mac port
+inherits those defined in user's login shell, so settings in
+@file{/etc/profile}, @file{~/.bash_profile}, etc. are in effect if you
+use bash as your login shell.  On OS X 10.8 and later,
+@file{~/.MacOSX/environment.plist} is ignored and always inherits the
+login shell settings.
 
   Command line arguments are specified like
 
@@ -90,13 +92,14 @@ command line options on Mac OS X 10.6 and later is to use the
   Holding shift key on startup is recognized as the @samp{-Q} option,
 which means to start Emacs with minimum customizations.
 
-  On Mac OS X 10.7, @samp{fullscreen} and @samp{fullboth} values for
-the @samp{fullscreen} frame parameter have different meanings: the
-former means a new system-wide full screen mode with a dedicated
-desktop (or Space), while the latter means making the frame fullscreen
-in a desktop (or Space) shared with the other applications.  Because
-the command line option @samp{-fs} or @samp{--fullscreen} corresponds
-to @samp{fullboth}, it means the latter on all versions of Mac OS X.
+  On Mac OS X 10.7 and later, @samp{fullscreen} and @samp{fullboth}
+values for the @samp{fullscreen} frame parameter have different
+meanings: the former means a new system-wide full screen mode with a
+dedicated desktop (or Space), while the latter means making the frame
+fullscreen in a desktop (or Space) shared with the other applications.
+Because the command line option @samp{-fs} or @samp{--fullscreen}
+corresponds to @samp{fullboth}, it means the latter on all versions of
+Mac OS X.
 
 @cindex Preferences (Mac port)
   Although the Mac port does not support X resources (@pxref{X
@@ -217,8 +220,9 @@ newer mice/trackpads.  You can turn it off by setting
   Just as in many Cocoa applications (and some Carbon applications
 like Carbon Emacs), you can use @samp{Command-Control-D} for looking
 up a word under the mouse pointer in the selected window on Mac OS X
-10.4 and later.  The same functionality is provided by double-tapping
-a trackpad with three fingers on Mac OS X 10.7.
+10.4 and later.  The same functionality is provided by
+double/single-tapping a trackpad with three fingers on Mac OS X
+10.7/10.8, respectively.
 
   In addition to the standard Emacs events, the Mac port also accepts
 several gesture events on newer mice/trackpads, and some gestures have
@@ -295,12 +299,15 @@ instead by customizing the variable @code{face-ignored-fonts}:
 
 @vindex mac-text-scale-standard-width
   If you are using newer trackpads with Mac OS X 10.5.2 and later,
-then you can scale text size by pinch out/in.  On Mac OS X 10.7,
-double-tapping either a touch-sensitive mouse with one finger or a
-trackpad with two fingers changes the buffer text scaling to unscaled
-if previously scaled.  And if previously unscaled, then the buffer
-text is scaled so the default font occupies at least
-@code{mac-text-scale-standard-width} columns in the tapped window.
+then you can scale text size by pinch out/in.  On Mac OS X 10.7 and
+later, double-tapping either a touch-sensitive mouse with one finger
+or a trackpad with two fingers changes the buffer text scaling to
+unscaled if previously scaled.  And if previously unscaled and the
+pointer is either before the indentation or after the end of line,
+then the buffer text is scaled so the default font occupies at least
+@code{mac-text-scale-standard-width} columns in the tapped window.  If
+previously unscaled and the pointer is between the indentation and the
+end of line, then the buffer text is scaled to approximately 150%.
 
   The Mac port provides several font backends, @code{mac-ct} using the
 Core Text framework introduced in Mac OS X 10.5, @code{mac-fd} using
@@ -315,8 +322,9 @@ glyph selection with variation selectors.  Most of Adobe-Japan1
 ideographic glyphs are accessible via @acronym{IVSes} (Ideographic
 Variation Sequences) even for the OS-bundled Hiragino fonts, which do
 not contain the @acronym{UVS} subtable in their cmap table as of Mac
-OS X 10.6.  If compiled and executed on Mac OS X 10.7, then the Mac
-port can also display color bitmap fonts such as Apple Color Emoji.
+OS X 10.6.  If compiled and executed on Mac OS X 10.7 and later, then
+the Mac port can also display color bitmap fonts such as Apple Color
+Emoji.
 
   They also use non-integral x positions for displaying antialiased
 proportional fonts.  You can see the difference by putting the box

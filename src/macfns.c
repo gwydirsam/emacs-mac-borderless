@@ -1141,12 +1141,11 @@ mac_defined_color (struct frame *f, const char *color,
 
   if (!NILP (tem))
     {
+      mac_color_ref = XUINT (tem);
       if (f)
         {
           /* Apply gamma correction.  */
-          mac_color_ref = XUINT (tem);
           gamma_correct (f, &mac_color_ref);
-          XSETINT (tem, mac_color_ref);
         }
 
       color_def->pixel = mac_color_ref;
@@ -4261,13 +4260,9 @@ Chinese, Japanese, and Korean.  */);
     if (err == noErr)
       snprintf (carbon_version, sizeof (carbon_version), "%u.%u.%u",
 		(response >> 8) & 0xf, (response >> 4) & 0xf, response & 0xf);
-    {
-      extern double mac_appkit_version (void);
-
-      snprintf (carbon_version + strlen (carbon_version),
-		sizeof (carbon_version) - strlen (carbon_version),
-		" AppKit %g", mac_appkit_version ());
-    }
+    snprintf (carbon_version + strlen (carbon_version),
+	      sizeof (carbon_version) - strlen (carbon_version),
+	      " AppKit %g", mac_appkit_version ());
     Vmac_carbon_version_string =
       make_pure_string (carbon_version, strlen (carbon_version),
 			strlen (carbon_version), 0);

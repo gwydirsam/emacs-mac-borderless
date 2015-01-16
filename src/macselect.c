@@ -628,7 +628,8 @@ struct apple_event_binding
 
 struct suspended_ae_info
 {
-  UInt32 expiration_tick, suspension_id;
+  double expiration_uptime;
+  UInt32 suspension_id;
   AppleEvent apple_event, reply;
   struct suspended_ae_info *next;
 };
@@ -636,7 +637,7 @@ struct suspended_ae_info
 /* List of apple events deferred at the startup time.  */
 static struct suspended_ae_info *deferred_apple_events = NULL;
 
-/* List of suspended apple events, in order of expiration_tick.  */
+/* List of suspended apple events, in order of expiration_uptime.  */
 static struct suspended_ae_info *suspended_apple_events = NULL;
 
 static void
@@ -646,13 +647,13 @@ find_event_binding_fun (Lisp_Object key, Lisp_Object binding, Lisp_Object args,
   struct apple_event_binding *event_binding =
     (struct apple_event_binding *)data;
   Lisp_Object code_string;
+  UInt32 code;
 
   if (!SYMBOLP (key))
     return;
   code_string = Fget (key, args);
-  if (STRINGP (code_string) && SBYTES (code_string) == 4
-      && (EndianU32_BtoN (*((UInt32 *) SDATA (code_string)))
-	  == event_binding->code))
+  if (mac_string_to_four_char_code (code_string, &code)
+      && code == event_binding->code)
     {
       event_binding->key = key;
       event_binding->binding = binding;
@@ -789,10 +790,10 @@ mac_handle_apple_event_1 (Lisp_Object class, Lisp_Object id,
       suspension_id++;
       err = AEGetAttributePtr (apple_event, keyTimeoutAttr, typeSInt32,
 			       NULL, &timeout, sizeof (SInt32), NULL);
-      new->expiration_tick = TickCount () + timeout;
+      new->expiration_uptime = mac_system_uptime () + timeout / 60.0;
 
       for (p = &suspended_apple_events; *p; p = &(*p)->next)
-	if ((*p)->expiration_tick >= new->expiration_tick)
+	if ((*p)->expiration_uptime >= new->expiration_uptime)
 	  break;
       new->next = *p;
       *p = new;
@@ -862,12 +863,13 @@ mac_handle_apple_event (const AppleEvent *apple_event, AppleEvent *reply,
 static int
 cleanup_suspended_apple_events (struct suspended_ae_info **head, int all_p)
 {
-  UInt32 current_tick = TickCount (), nresumed = 0;
+  double current_uptime = mac_system_uptime ();
+  UInt32 nresumed = 0;
   struct suspended_ae_info *p, *next;
 
   for (p = *head; p; p = next)
     {
-      if (!all_p && p->expiration_tick > current_tick)
+      if (!all_p && p->expiration_uptime > current_uptime)
 	break;
       AESetTheCurrentEvent (&p->apple_event);
       AEResumeTheCurrentEvent (&p->apple_event, &p->reply,
@@ -1003,13 +1005,13 @@ Return t if the parameter is successfully set.  Otherwise return nil.  */)
   (Lisp_Object apple_event, Lisp_Object keyword, Lisp_Object descriptor)
 {
   Lisp_Object result = Qnil;
-  UInt32 suspension_id;
+  UInt32 suspension_id, code;
   struct suspended_ae_info *p;
 
   suspension_id = get_suspension_id (apple_event);
 
   CHECK_STRING (keyword);
-  if (SBYTES (keyword) != 4)
+  if (mac_string_to_four_char_code (keyword, &code))
     error ("Apple event keyword must be a 4-byte string: %s",
 	   SDATA (keyword));
 
@@ -1021,9 +1023,7 @@ Return t if the parameter is successfully set.  Otherwise return nil.  */)
     {
       OSErr err;
 
-      err = mac_ae_put_lisp (&p->reply,
-			     EndianU32_BtoN (*((UInt32 *) SDATA (keyword))),
-			     descriptor);
+      err = mac_ae_put_lisp (&p->reply, code, descriptor);
       if (err == noErr)
 	result = Qt;
     }

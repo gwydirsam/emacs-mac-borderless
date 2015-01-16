@@ -580,6 +580,8 @@ extern Lisp_Object x_get_focus_frame (struct frame *);
 
 /* Defined in mac.c.  */
 
+extern Lisp_Object mac_four_char_code_to_string (FourCharCode);
+extern Boolean mac_string_to_four_char_code (Lisp_Object, FourCharCode *);
 extern Lisp_Object mac_aedesc_to_lisp (const AEDesc *);
 extern OSErr mac_ae_put_lisp (AEDescList *, UInt32, Lisp_Object);
 extern OSErr create_apple_event_from_lisp (Lisp_Object, AppleEvent *);
@@ -621,6 +623,8 @@ extern void free_frame_menubar (struct frame *);
 
 extern Lisp_Object mac_nsvalue_to_lisp (CFTypeRef);
 extern void mac_alert_sound_play (void);
+extern double mac_appkit_version (void);
+extern double mac_system_uptime (void);
 extern OSStatus install_application_handler (void);
 extern void mac_set_frame_window_title (struct frame *, CFStringRef);
 extern void mac_set_frame_window_modified (struct frame *, Boolean);
@@ -641,8 +645,12 @@ extern OSStatus mac_set_frame_window_alpha (struct frame *, CGFloat);
 extern OSStatus mac_get_frame_window_alpha (struct frame *, CGFloat *);
 extern void mac_get_global_mouse (Point *);
 extern Boolean mac_is_frame_window_toolbar_visible (struct frame *);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
 extern CGRect mac_rect_make (struct frame *, CGFloat, CGFloat,
 			     CGFloat, CGFloat);
+#else
+#define mac_rect_make(f, x, y, w, h)	CGRectMake (x, y, w, h)
+#endif
 extern void mac_get_window_structure_bounds (struct frame *,
 					     NativeRectangle *);
 extern void mac_get_frame_mouse (struct frame *, Point *);

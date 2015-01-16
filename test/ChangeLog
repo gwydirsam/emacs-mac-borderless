@@ -1,3 +1,24 @@
+2012-08-24  Chong Yidong  <cyd@gnu.org>
+
+	* Version 24.2 released.
+
+2012-08-14  Chong Yidong  <cyd@gnu.org>
+
+	* automated/files.el: Test every combination of values for
+	enable-local-variables and enable-local-eval.
+
+2012-08-10  Glenn Morris  <rgm@gnu.org>
+
+	* automated/files.el (files-test-disable-local-variables): New test.
+
+2012-08-08  Glenn Morris  <rgm@gnu.org>
+
+	* automated/files.el: New file.
+
+2012-08-07  Glenn Morris  <rgm@gnu.org>
+
+	* automated/Makefile.in (all): Fix typo.
+
 2012-06-01  Chong Yidong  <cyd@gnu.org>
 
 	* Version 24.1 released.

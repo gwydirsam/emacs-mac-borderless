@@ -341,6 +341,74 @@ NSSizeToCGSize (NSSize nssize)
 
 @end				// NSAttributedString (Emacs)
 
+@implementation NSColor (Emacs)
+
++ (NSColor *)colorWithXColorPixel:(unsigned long)pixel
+{
+  CGFloat components[4];
+
+  components[0] = RED_FROM_ULONG (pixel) / 255.0;
+  components[1] = GREEN_FROM_ULONG (pixel) / 255.0;
+  components[2] = BLUE_FROM_ULONG (pixel) / 255.0;
+  components[3] = 1.0;
+
+  if ([self respondsToSelector:@selector(colorWithSRGBRed:green:blue:alpha:)])
+    return [self colorWithSRGBRed:components[0] green:components[1]
+			     blue:components[2] alpha:components[3]];
+  else
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
+  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_3))
+    {
+      static id sRGBColorSpace;
+
+      if (sRGBColorSpace == NULL)
+	{
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1040
+#define NS_COLOR_SPACE	NSColorSpace
+#else
+#define NS_COLOR_SPACE	(NSClassFromString (@"NSColorSpace"))
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	  if ([NS_COLOR_SPACE respondsToSelector:@selector(sRGBColorSpace)])
+#endif
+	    sRGBColorSpace = MRC_RETAIN ([NS_COLOR_SPACE sRGBColorSpace]);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	    {
+	      extern CMProfileRef mac_open_srgb_profile (void);
+	      CMProfileRef profile = mac_open_srgb_profile ();
+
+	      if (profile)
+		{
+		  sRGBColorSpace = [[NS_COLOR_SPACE alloc]
+				     initWithColorSyncProfile:profile];
+		  CMCloseProfile (profile);
+		}
+	      else
+		sRGBColorSpace =
+		  MRC_RETAIN ([NS_COLOR_SPACE deviceRGBColorSpace]);
+	    }
+#endif
+
+#undef NS_COLOR_SPACE
+	}
+
+      return [self colorWithColorSpace:sRGBColorSpace
+			    components:components count:4];
+    }
+  else
+#endif
+    return [self colorWithDeviceRed:components[0] green:components[1]
+			       blue:components[2] alpha:components[3]];
+}
+
+@end				// NSColor (Emacs)
+
 @implementation NSImage (Emacs)
 
 /* Create an image object from a Quartz 2D image.  */
@@ -874,6 +942,27 @@ double
 mac_appkit_version (void)
 {
   return NSAppKitVersionNumber;
+}
+
+double
+mac_system_uptime (void)
+{
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
+#endif
+    return [[NSProcessInfo processInfo] systemUptime];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+    {
+      Nanoseconds nanoseconds = AbsoluteToNanoseconds (UpTime ());
+
+      return nanoseconds.hi * 4.294967296 + nanoseconds.lo * 1e-9;
+    }
+#endif
 }
 
 
@@ -3418,6 +3507,7 @@ mac_convert_frame_point_to_global (struct frame *f, int *x, int *y)
   *y = - point.y + NSMaxY (baseScreenFrame);
 }
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
 CGRect
 mac_rect_make (struct frame *f, CGFloat x, CGFloat y, CGFloat w, CGFloat h)
 {
@@ -3426,6 +3516,7 @@ mac_rect_make (struct frame *f, CGFloat x, CGFloat y, CGFloat w, CGFloat h)
 
   return NSRectToCGRect ([frameController centerScanEmacsViewRect:rect]);
 }
+#endif
 
 void
 mac_update_proxy_icon (struct frame *f)
@@ -3457,14 +3548,8 @@ void
 mac_set_frame_window_background (struct frame *f, unsigned long color)
 {
   NSWindow *window = (__bridge id) FRAME_MAC_WINDOW (f);
-  CGFloat red, green, blue;
 
-  red = RED_FROM_ULONG (color) / 255.0;
-  green = GREEN_FROM_ULONG (color) / 255.0;
-  blue = BLUE_FROM_ULONG (color) / 255.0;
-
-  [window setBackgroundColor:[NSColor colorWithDeviceRed:red green:green
-						    blue:blue alpha:1.0]];
+  [window setBackgroundColor:[NSColor colorWithXColorPixel:color]];
 }
 
 /* Flush display of frame F, or of all frames if F is null.  */
@@ -6669,7 +6754,7 @@ static void update_dragged_types (void);
   NSRect emacsViewBounds = [emacsView bounds];
   int x, y;
 
-  last_mouse_movement_time = TickCount () * (1000 / 60);  /* to milliseconds */
+  last_mouse_movement_time = mac_system_uptime () * 1000;
 
   if (f == hlinfo->mouse_face_mouse_frame
       && ! (point.x >= 0 && point.x < NSMaxX (emacsViewBounds)
@@ -8902,8 +8987,8 @@ register_apple_event_specs (Lisp_Object key, Lisp_Object binding,
 	  unsigned long long code;
 	  NSNumber *value;
 
-	  eventID = EndianU32_BtoN (*((UInt32 *) SDATA (code_string)));
-	  eventClass = EndianU32_BtoN (*((UInt32 *) SDATA (args)));
+	  mac_string_to_four_char_code (code_string, &eventID);
+	  mac_string_to_four_char_code (args, &eventClass);
 	  code = ((unsigned long long) eventClass << 32) + eventID;
 	  value = [NSNumber numberWithUnsignedLongLong:code];
 
@@ -9432,10 +9517,9 @@ handle_action_invocation (NSInvocation *invocation)
   NSUInteger flags = [[NSApp currentEvent] modifierFlags];
   UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
 
-  modifiers = EndianU32_NtoB (modifiers);
   arg = Fcons (Fcons (build_string ("kmod"), /* kEventParamKeyModifiers */
 		      Fcons (build_string ("magn"), /* typeUInt32 */
-			     make_unibyte_string ((char *) &modifiers, 4))),
+			     mac_four_char_code_to_string (modifiers))),
 	       arg);
 
   [invocation getArgument:&sender atIndex:2];
@@ -9860,11 +9944,7 @@ mac_svg_load_image (struct frame *f, struct image *img, unsigned char *contents,
 				imageErrorFunc:image_error_func];
   NSData *data =
     [NSData dataWithBytesNoCopy:contents length:size freeWhenDone:NO];
-  NSColor *backgroundColor =
-    [NSColor colorWithDeviceRed:(color->red / 65535.0)
-			  green:(color->green / 65535.0)
-			   blue:(color->blue / 65535.0)
-			  alpha:1.0];
+  NSColor *backgroundColor = [NSColor colorWithXColorPixel:color->pixel];
   /* WebKit may repeatedly call waitpid for a child process
      (WebKitPluginHost) while it returns -1 in its plug-in
      initialization.  So we need to avoid calling wait3 for an
@@ -10723,7 +10803,7 @@ get_symbol_from_filter_input_key (NSString *key)
 	  if (!NILP (symbol))
 	    {
 	      Lisp_Object value = Fplist_get (properties, symbol);
-	      CGFloat components[3];
+	      CGFloat components[4];
 	      int i;
 
 	      if (STRINGP (value))
@@ -10750,10 +10830,23 @@ get_symbol_from_filter_input_key (NSString *key)
 		  value = XCDR (value);
 		}
 	      if (i == 3 && NILP (value))
-		[filter setValue:[CIColor colorWithRed:components[0]
-						 green:components[1]
-						  blue:components[2]]
-			  forKey:key];
+		{
+		  CGColorRef cg_color;
+		  CIColor *color;
+
+		  components[3] = 1.0;
+		  cg_color = CGColorCreate (mac_cg_color_space_rgb, components);
+		  if (cg_color)
+		    {
+		      color = [CIColor colorWithCGColor:cg_color];
+		      CGColorRelease (cg_color);
+		    }
+		  else
+		    color = [CIColor colorWithRed:components[0]
+					    green:components[1]
+					     blue:components[2]];
+		  [filter setValue:color forKey:key];
+		}
 	    }
 	}
     }

@@ -107,6 +107,10 @@ typedef unsigned int NSUInteger;
 - (Lisp_Object)UTF16LispString;
 @end
 
+@interface NSColor (Emacs)
++ (NSColor *)colorWithXColorPixel:(unsigned long)pixel;
+@end
+
 @interface NSImage (Emacs)
 + (id)imageWithCGImage:(CGImageRef)cgImage exclusive:(BOOL)flag;
 @end
@@ -710,6 +714,13 @@ typedef unsigned int NSUInteger;
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
 @interface NSNumber (AvailableOn1050AndLater)
 + (NSNumber *)numberWithInteger:(NSInteger)value;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+@interface NSColor (AvailableOn1070AndLater)
++ (NSColor *)colorWithSRGBRed:(CGFloat)red green:(CGFloat)green
+			 blue:(CGFloat)blue alpha:(CGFloat)alpha;
 @end
 #endif
 

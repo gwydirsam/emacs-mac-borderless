@@ -142,8 +142,13 @@ enum {
 #define mac_font_get_underline_position CTFontGetUnderlinePosition
 #define mac_font_get_underline_thickness CTFontGetUnderlineThickness
 #define mac_font_copy_graphics_font(font) CTFontCopyGraphicsFont (font, NULL)
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#define mac_font_copy_non_synthetic_table(font, table) \
+  CTFontCopyTable (font, table, kCTFontTableOptionNoOptions)
+#else
 #define mac_font_copy_non_synthetic_table(font, table) \
   CTFontCopyTable (font, table, kCTFontTableOptionExcludeSynthetic)
+#endif
 
 #define mac_font_create_preferred_family_for_attributes \
   mac_ctfont_create_preferred_family_for_attributes

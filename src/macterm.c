@@ -213,10 +213,80 @@ CGColorSpaceRef mac_cg_color_space_rgb;
 static CGColorRef mac_cg_color_black;
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+CMProfileRef
+mac_open_srgb_profile (void)
+{
+  CMProfileRef profile = NULL;
+  OSStatus err;
+  FSRef profiles_folder, fref;
+  AEDesc desc;
+  static const UniChar name[] = {'s', 'R', 'G', 'B', ' ', 'P', 'r', 'o',
+				 'f', 'i', 'l', 'e', '.', 'i', 'c', 'c'};
+
+  err = FSFindFolder (kOnSystemDisk, kColorSyncProfilesFolderType,
+		      kDontCreateFolder, &profiles_folder);
+  if (err == noErr)
+    err = FSMakeFSRefUnicode (&profiles_folder,
+			      sizeof (name) / sizeof (name[0]), name,
+			      kUnicodeUTF8Format, &fref);
+  if (err == noErr)
+    err = AECoercePtr (typeFSRef, &fref, sizeof (fref), TYPE_FILE_NAME, &desc);
+  if (err == noErr)
+    {
+      Size size;
+      CMProfileLocation loc;
+
+      size = AEGetDescDataSize (&desc);
+      if (size < sizeof (loc.u.pathLoc.path))
+	err = AEGetDescData (&desc, loc.u.pathLoc.path, size);
+      if (err == noErr)
+	{
+	  loc.u.pathLoc.path[size] = '\0';
+	  loc.locType = cmPathBasedProfile;
+	  CMOpenProfile (&profile, &loc);
+	}
+      AEDisposeDesc (&desc);
+    }
+
+  return profile;
+}
+#endif
+
 static void
 init_cg_color (void)
 {
-  mac_cg_color_space_rgb = CGColorSpaceCreateDeviceRGB ();
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+  if (&kCGColorSpaceSRGB != NULL)
+#endif
+    mac_cg_color_space_rgb = CGColorSpaceCreateWithName (kCGColorSpaceSRGB);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+    {
+      SInt32 response;
+      OSErr err;
+
+      err = Gestalt (gestaltSystemVersion, &response);
+      if (err == noErr && response >= 0x1040)
+	{
+	  CMProfileRef profile = mac_open_srgb_profile ();
+
+	  if (profile)
+	    {
+	      mac_cg_color_space_rgb =
+		CGColorSpaceCreateWithPlatformColorSpace (profile);
+	      CMCloseProfile (profile);
+	    }
+	}
+      if (mac_cg_color_space_rgb == NULL)
+	mac_cg_color_space_rgb = CGColorSpaceCreateDeviceRGB ();
+    }
+#endif
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
 #if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
   /* Don't check the availability of CGColorCreate; this symbol is
