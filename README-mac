@@ -1,7 +1,7 @@
 1. What's this?
 
 This is "Mac port" addition to GNU Emacs 24.  This provides a native
-GUI support for Mac OS X 10.4 - 10.7.  Note that Emacs 23 and later
+GUI support for Mac OS X 10.4 - 10.8.  Note that Emacs 23 and later
 already contain the official GUI support via the NS (Cocoa) port for
 Mac OS X 10.4 and later.  So if it is good enough for you, then you
 don't need to try this.
@@ -65,8 +65,8 @@ The Mac port is a descendant of the following ports for Mac OS X:
 
     - DictionaryService support
       You can look up a word under the mouse pointer in the selected
-      window by typing Command-Control-D (or double-tapping a trackpad
-      with three fingers on Mac OS X 10.7).
+      window by typing Command-Control-D (or double/single-tapping a
+      trackpad with three fingers on Mac OS X 10.7/10.8, resp.).
 
   * Carbon+AppKit port for Emacs 22.3: this is a port of the Carbon
     port above.  The two ports differ in the GUI implementation basis:
@@ -186,7 +186,7 @@ the following Mac-specific ones:
     view for Emacs frames.  It is required to support "Text to Speech"
     on Mac OS X 10.7.  Still there are several glitches.
   * Can display color bitmap fonts such as Apple Color Emoji, if
-    compiled and executed on Mac OS X 10.7.
+    compiled and executed on Mac OS X 10.7 or later.
   * New function `mac-start-animation', which provides animation
     effects on Mac OS 10.5 and later via Core Animation.  You can see
     the default animations with buffer switching by horizontal
@@ -234,13 +234,18 @@ Dock without separating a GUI process (not thread) from the main Emacs
      to `EMACS_SOURCE_TOP/mac/Emacs.app/Contents/Resources/Emacs.icns'
      by overriding the latter.
 
-  e. Copy all the files in the `src' subdirectory to
+  e. [Optional, recommended for Retina Display]
+     If you want to use high resolution versions of some tool bar
+     icons and the splash screen image, then copy all the files in the
+     subdirectory `etc/images' to `EMACS_SOURCE_TOP/etc/images'.
+
+  f. Copy all the files in the `src' subdirectory to
      `EMACS_SOURCE_TOP/src'.
 
-  f. Copy `lisp/term/mac-win.el' to
+  g. Copy `lisp/term/mac-win.el' to
      `EMACS_SOURCE_TOP/lisp/term/mac-win.el'.
 
-  g. Run configure with the "--with-mac" option.  You may also want to
+  h. Run configure with the "--with-mac" option.  You may also want to
      additionally specify "--enable-mac-app" to install the
      application bundle `Emacs.app' to /Applications.  If you want it
      to install in a different location, specify
@@ -253,9 +258,9 @@ Dock without separating a GUI process (not thread) from the main Emacs
      on Mac OS X 10.7 with Xcode 4.2 or later, then specify
      CC="clang -fobjc-arc".
 
-  h. make && make install.
+  i. make && make install.
 
-  i. open /Applications/Emacs.app (or MACAPPDIR/Emacs.app) if
+  j. open /Applications/Emacs.app (or MACAPPDIR/Emacs.app) if
      `--enable-mac-app' was specified.  Otherwise, open
      EMACS_SOURCE_TOP/mac/Emacs.app.
 

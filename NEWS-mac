@@ -1,5 +1,46 @@
+* emacs-24.1-mac-3.1 (2012-07-26)
+
+** Fixed bugs
+
+*** Scrolling up the contents of a buffer with a header line by mouse
+wheel is sometimes jumpy.
+
+*** Several glitches on PowerPC (such as not displaying fringe
+bitmaps) due to overlooked WORDS_BIG_ENDIAN -> WORDS_BIGENDIAN change.
+
+*** SVG image (rendered via WebKit) might be clipped if width or
+height is unspecified.
+Reported by Leo.
+Now use max X or Y value of the bounding box if width or height is
+specified as a percentage value or unspecified.
+
+*** Double-tapping either a touch-sensitive mouse with one finger or a
+trackpad with two fingers on Mac OS X 10.8 64-bit build is ignored.
+
+** Improvements
+
+*** Double-tapping either a touch-sensitive mouse with one finger or a
+trackpad with two fingers on Mac OS X 10.7 and later now scales the
+text to 150% if previously unscaled and the pointer lies between the
+indentation and end of line.
+
+*** Text scaling by gestures now tries to keep the vertical position
+of the text under the pointer.
+
+*** Support automatic selection of high resolution versions of images.
+All supported image types respect the "@2x" file name convention.  SVG
+images (via WebKit or librsvg) are rendered according to the backing
+scale factor.  An appropriate image is selected from a multiimage TIFF
+containing both 1x and 2x images if the image spec does not contain an
+explicit `:index' property.
+
+*** Prefer the integrated GPU to the discrete one for saving battery.
+This requires Mac OS X 10.7 and Early 2011 MacBook Pro.
+
+
 * emacs-24.1-mac-3.0 (2012-06-10)
 Based on Emacs 24.1.
+http://lists.gnu.org/archive/html/emacs-devel/2012-06/msg00165.html
 
 ** Fixed bugs
 
