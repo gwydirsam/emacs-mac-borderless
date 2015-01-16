@@ -1,5 +1,37 @@
+* emacs-24.2-mac-3.3 (2012-10-27)
+
+** Fixed bugs
+
+*** Wrong glyph advancement calculation in text shaping for non-zero
+advance delta cases.
+
+*** Full screen transition animations are not correct on OS X 10.8.
+
+*** XBM foreground and background are not in sRGB color space.
+
+*** mac-file-alias-p returns t for symbolic links on Mac OS X 10.6 and
+later.
+Reported by Leo.
+
+*** Scroll bar thumb dragging is not right on Mac OS X 10.6 and
+earlier (regression by the previous fix for Mac OS X 10.7 and later.)
+
+** Improvements
+
+*** Help key no longer activates "context help mode" (question-mark
+mouse pointer).
+
+*** Popup menu shown by C-mouse-down-1 now includes contextual menu on
+Mac OS X 10.6 and later.  Other popup menus remain quiet.
+
+*** Some combinations of regional indicator symbols such as U+1F1EF
+followed by U+1F1F5 now display national flags in color emoji on Mac
+OS X 10.7 and later.
+
+
 * emacs-24.2-mac-3.2 (2012-08-27)
 Based on Emacs 24.2.
+http://lists.gnu.org/archive/html/emacs-devel/2012-08/msg00803.html
 
 ** Fixed bugs
 
