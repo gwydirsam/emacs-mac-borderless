@@ -4012,7 +4012,7 @@ specifying the built-in Core Image transition filters:
   numeric properties:  :angle, :radius, :compression
 
 `page-curl': Simulate a curling page, revealing the new image as the
-             page curls.  This is not displayed right on Mac OS X 10.5.
+             page curls.
   numeric properties:  :angle, :radius
   symbolic properties: :direction
 

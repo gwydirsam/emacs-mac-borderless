@@ -6150,14 +6150,14 @@ face_for_overlay_string (struct window *w, EMACS_INT pos,
 
   *endptr = endpos;
 
-  default_face = FACE_FROM_ID (f, DEFAULT_FACE_ID);
-
-  /* Optimize common cases where we can use the default face.  */
+  /* Optimize common case where we can use the default face.  */
   if (NILP (prop)
-      && !(pos >= region_beg && pos < region_end))
+      && !(pos >= region_beg && pos < region_end)
+      && NILP (Vface_remapping_alist))
     return DEFAULT_FACE_ID;
 
   /* Begin with attributes from the default face.  */
+  default_face = FACE_FROM_ID (f, lookup_basic_face (f, DEFAULT_FACE_ID));
   memcpy (attrs, default_face->lface, sizeof attrs);
 
   /* Merge in attributes specified via text properties.  */

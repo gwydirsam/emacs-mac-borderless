@@ -349,7 +349,10 @@ NSSizeToCGSize (NSSize nssize)
 {
   NSImage *image;
 
-  if ([NSBitmapImageRep instancesRespondToSelector:@selector(initWithCGImage:)])
+  if ([self instancesRespondToSelector:@selector(initWithCGImage:size:)])
+    image = [[self alloc] initWithCGImage:cgImage size:NSZeroSize];
+  else if ([NSBitmapImageRep
+	     instancesRespondToSelector:@selector(initWithCGImage:)])
     {
       NSBitmapImageRep *rep =
 	[[NSBitmapImageRep alloc] initWithCGImage:cgImage];
@@ -2109,12 +2112,12 @@ extern void mac_save_keyboard_input_source (void);
   if (has_resize_indicator_at_bottom_right_p ())
     [overlayView setShowsResizeIndicator:YES];
 
+  overlayWindow = window;
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
   if (NSClassFromString (@"CALayer"))
     [self setupLayerHostingView];
 #endif
-
-  overlayWindow = window;
 }
 
 - (void)setupWindow
@@ -10352,10 +10355,16 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
 
 - (void)setupLayerHostingView
 {
+  CALayer *rootLayer = [CA_LAYER layer];
+  CGFloat scaleFactor = [overlayWindow userSpaceScaleFactor];
+
   layerHostingView = [[NSView alloc] initWithFrame:[overlayView frame]];
   [layerHostingView setAutoresizingMask:(NSViewWidthSizable
 					 | NSViewHeightSizable)];
-  [layerHostingView setLayer:[CA_LAYER layer]];
+  rootLayer.anchorPoint = CGPointZero;
+  rootLayer.sublayerTransform =
+    CATransform3DMakeScale (scaleFactor, scaleFactor, 1.0);
+  [layerHostingView setLayer:rootLayer];
   [layerHostingView setWantsLayer:YES];
 
   [overlayView addSubview:layerHostingView];
@@ -10363,7 +10372,8 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
 
 - (CALayer *)layerForRect:(NSRect)rect
 {
-  NSWindow *window = [emacsView window];
+  struct frame *f = emacsFrame;
+  NSWindow *window = (__bridge id) FRAME_MAC_WINDOW (f);
   NSView *contentView = [window contentView];
   NSRect rectInContentView = [emacsView convertRect:rect toView:contentView];
   NSBitmapImageRep *bitmap =
@@ -10394,40 +10404,6 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
   [CA_TRANSACTION flush];
 }
 
-/* Delegate Methods  */
-
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
-- (id <CAAction>)actionForLayer:(CALayer *)layer forKey:(NSString *)event
-{
-  id action = nil;
-
-  if ([event isEqualToString:@"bounds"]
-      || [event isEqualToString:@"opacity"]
-      || [event isEqualToString:@"position"])
-    {
-      CABasicAnimation *animation =
-	[CA_BASIC_ANIMATION animationWithKeyPath:event];
-
-      [animation setValue:[layer superlayer] forKey:@"layerToBeRemoved"];
-      animation.delegate = self;
-      action = animation;
-    }
-
-  return action;
-}
-
-- (void)animationDidStop:(CAAnimation *)anim finished:(BOOL)flag
-{
-  CALayer *layer = [anim valueForKey:@"layerToBeRemoved"];
-
-  [CA_TRANSACTION setValue:((id) kCFBooleanTrue)
-		    forKey:kCATransactionDisableActions];
-  [layer removeFromSuperlayer];
-}
-#endif
-
-@end
-
 static Lisp_Object
 get_symbol_from_filter_input_key (NSString *key)
 {
@@ -10453,9 +10429,9 @@ get_symbol_from_filter_input_key (NSString *key)
     return Qnil;
 }
 
-static CIFilter *
-get_transition_filter_from_properties (struct frame *f, Lisp_Object properties)
+- (CIFilter *)transitionFilterFromProperties:(Lisp_Object)properties
 {
+  struct frame *f = emacsFrame;
   NSString *filterName;
   CIFilter *filter;
   NSDictionary *attributes;
@@ -10591,19 +10567,19 @@ get_transition_filter_from_properties (struct frame *f, Lisp_Object properties)
   return filter;
 }
 
-static void
-adjust_transition_filter_for_layer (CIFilter *filter, CALayer *layer)
+- (void)adjustTransitionFilter:(CIFilter *)filter forLayer:(CALayer *)layer
 {
+  CGFloat scaleFactor = [overlayWindow userSpaceScaleFactor];
   NSDictionary *attributes = [filter attributes];
 
   if ([[[attributes objectForKey:kCIInputCenterKey]
 	 objectForKey:kCIAttributeType]
 	isEqualToString:kCIAttributeTypePosition])
     {
-      CGRect frame = layer.frame;
+      CGPoint center = [layer position];
 
-      [filter setValue:[CIVector vectorWithX:(CGRectGetMidX (frame))
-					   Y:(CGRectGetMidY (frame))]
+      [filter setValue:[CIVector vectorWithX:(center.x * scaleFactor)
+					   Y:(center.y * scaleFactor)]
 		forKey:kCIInputCenterKey];
     }
 
@@ -10617,10 +10593,17 @@ adjust_transition_filter_for_layer (CIFilter *filter, CALayer *layer)
     {
       CGRect frame = layer.frame;
       CGAffineTransform atfm =
-	CGAffineTransformMakeTranslation (CGRectGetMinX (frame),
-					  CGRectGetMinY (frame));
+	CGAffineTransformMakeTranslation (CGRectGetMinX (frame) * scaleFactor,
+					  CGRectGetMinY (frame) * scaleFactor);
       CALayer *contentLayer = [[layer sublayers] objectAtIndex:0];
       CIImage *image;
+
+      if ([overlayWindow respondsToSelector:@selector(backingScaleFactor)])
+	{
+	  CGFloat scale = 1.0 / [overlayWindow backingScaleFactor];
+
+	  atfm = CGAffineTransformScale (atfm, scale, scale);
+	}
 
       if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5)
 	{
@@ -10628,7 +10611,15 @@ adjust_transition_filter_for_layer (CIFilter *filter, CALayer *layer)
 	     causes crash when drawing on Mac OS X 10.5.  */
 	  NSBitmapImageRep *bitmap = [contentLayer
 				       valueForKey:@"bitmapImageRep"];
+#undef Z
+	  CIVector *extent =
+	    [CIVector vectorWithX:(CGRectGetMinX (frame) * scaleFactor)
+				Y:(CGRectGetMinY (frame) * scaleFactor)
+				Z:(CGRectGetWidth (frame) * scaleFactor)
+				W:(CGRectGetHeight (frame) * scaleFactor)];
+#define Z (current_buffer->text->z)
 
+	  [filter setValue:extent forKey:kCIInputExtentKey];
 	  image = MRC_AUTORELEASE ([[CIImage alloc]
 				     initWithBitmapImageRep:bitmap]);
 	}
@@ -10639,6 +10630,40 @@ adjust_transition_filter_for_layer (CIFilter *filter, CALayer *layer)
 		forKey:@"inputBacksideImage"];
     }
 }
+
+/* Delegate Methods  */
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+- (id <CAAction>)actionForLayer:(CALayer *)layer forKey:(NSString *)event
+{
+  id action = nil;
+
+  if ([event isEqualToString:@"bounds"]
+      || [event isEqualToString:@"opacity"]
+      || [event isEqualToString:@"position"])
+    {
+      CABasicAnimation *animation =
+	[CA_BASIC_ANIMATION animationWithKeyPath:event];
+
+      [animation setValue:[layer superlayer] forKey:@"layerToBeRemoved"];
+      animation.delegate = self;
+      action = animation;
+    }
+
+  return action;
+}
+
+- (void)animationDidStop:(CAAnimation *)anim finished:(BOOL)flag
+{
+  CALayer *layer = [anim valueForKey:@"layerToBeRemoved"];
+
+  [CA_TRANSACTION setValue:((id) kCFBooleanTrue)
+		    forKey:kCATransactionDisableActions];
+  [layer removeFromSuperlayer];
+}
+#endif
+
+@end
 
 void
 mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
@@ -10677,7 +10702,8 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
     }
   frameController = FRAME_CONTROLLER (f);
 
-  transitionFilter = get_transition_filter_from_properties (f, properties);
+  transitionFilter =
+    [frameController transitionFilterFromProperties:properties];
   if (transitionFilter)
     anim_type = ANIM_TYPE_TRANSITION_FILTER;
   else
@@ -10784,7 +10810,8 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
 	NSMutableDictionary *actions;
 	CALayer *newContentLayer;
 
-	adjust_transition_filter_for_layer (transitionFilter, layer);
+	[frameController adjustTransitionFilter:transitionFilter
+				       forLayer:layer];
 	transition.filter = transitionFilter;
 
 	actions = [NSMutableDictionary

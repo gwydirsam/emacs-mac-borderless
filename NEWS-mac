@@ -1,5 +1,24 @@
+* emacs-24.1-mac-3.0 (2012-06-10)
+Based on Emacs 24.1.
+
+** Fixed bugs
+
+*** The `page-curl' transition does not look right on Mac OS X 10.5.
+
+*** Wrong display of the backside image for the
+`page-curl-with-shadow' transition on Mac OS X 10.7 with HiDPI mode.
+
+*** Wrong display of animations on Mac OS X 10.5 and 10.6 when
+resolution independence is in effect.
+
+*** Incomplete input area (aka "active input area", "marked text", or
+"preedit area") does not respect buffer text scaling.
+Apply Chong Yidong's fix for Bug#2066.
+
+
 * emacs-24.1-rc-mac-2.94 [experimental/hackers-only] (2012-06-01)
 Based on Emacs 24.1 release candidate
+http://lists.gnu.org/archive/html/emacs-devel/2012-06/msg00009.html
 
 ** Improvements
 
@@ -17,8 +36,8 @@ blurry on Mac OS X 10.7.4 with HiDPI mode.
 
 
 * emacs-24.0.97-mac-2.93 [experimental/hackers-only] (2012-05-17)
-http://lists.gnu.org/archive/html/emacs-devel/2012-05/msg00367.html
 Based on Emacs 24.0.97
+http://lists.gnu.org/archive/html/emacs-devel/2012-05/msg00367.html
 
 ** Fixed bugs
 

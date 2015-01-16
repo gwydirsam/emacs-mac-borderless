@@ -625,6 +625,8 @@ typedef unsigned int NSUInteger;
 - (void)setupLayerHostingView;
 - (CALayer *)layerForRect:(NSRect)rect;
 - (void)addLayer:(CALayer *)layer;
+- (CIFilter *)transitionFilterFromProperties:(Lisp_Object)properties;
+- (void)adjustTransitionFilter:(CIFilter *)filter forLayer:(CALayer *)layer;
 @end
 #endif
 
@@ -695,6 +697,12 @@ typedef unsigned int NSUInteger;
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
 @interface NSNumber (AvailableOn1050AndLater)
 + (NSNumber *)numberWithInteger:(NSInteger)value;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+@interface NSImage (AvailableOn1060AndLater)
+- (id)initWithCGImage:(CGImageRef)cgImage size:(NSSize)size;
 @end
 #endif
 

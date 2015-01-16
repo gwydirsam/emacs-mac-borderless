@@ -2,18 +2,13 @@
 
 This is "Mac port" addition to GNU Emacs 24.  This provides a native
 GUI support for Mac OS X 10.4 - 10.7.  Note that Emacs 23 and later
-already contains the official GUI support via the NS (Cocoa) port for
+already contain the official GUI support via the NS (Cocoa) port for
 Mac OS X 10.4 and later.  So if it is good enough for you, then you
 don't need to try this.
 
   *** IMPORTANT NOTE ***
 
-  This version (2.9X) should be regarded as experimental/hackers-only.
-  Things are subject to change/removal in an incompatible way.  Please
-  refrain from distributing this in any different form, including for
-  (binary) distribution basis, until the version gets to 3.0.
-
-  Also, if you find a bug, then please try to reproduce it with some
+  If you find a bug, then please try to reproduce it with some
   official builds such as X11 or NS (Cocoa).  If it turns out to be
   specific to the Mac port, then please report it to
   "mituharu+bug-gnu-emacs-mac@math.s.chiba-u.ac.jp".  Otherwise (i.e.,
@@ -141,6 +136,15 @@ Emacs 23 features besides those inherited from the above ancestors:
     Sequences) even for the OS-bundled Hiragino fonts, which do not
     contain the UVS subtable in their cmap table as of Mac OS X 10.6.
 
+It also supports the following Emacs 24 features that are not
+supported on all the standard platforms/ports:
+
+  * Can be compiled with the ImageMagick support.  Even without the
+    ImageMagick library, the Mac port provides a fallback using the
+    Image I/O framework so you can scale and rotate images.
+  * The variable `tool-bar-style' works like in GTK+.  The values
+    `both-horiz', `text-image-horiz' are synonymous with `both'.
+
 In addition to the standard Emacs 24 features, the Mac port includes
 the following Mac-specific ones:
 
@@ -155,7 +159,8 @@ the following Mac-specific ones:
     QuickCursor 2.0, you need to kill the buffer after saving it in
     order to reflect the changes to the original text area.)
   * "Click in the scroll bar to: Jump to the spot that's clicked"
-    setting in the System Preferences is supported.
+    setting in the System Preferences is supported.  Pressing the
+    option key while clicking toggles this behavior temporarily.
   * Change of text smoothing threshold setting in the Appearance pane
     of the System Preferences is reflected immediately.
   * Several keyboard shortcuts (notably those for Keyboard Navigation)
@@ -178,7 +183,16 @@ the following Mac-specific ones:
   * New function `mac-file-alias-p', which is parallel to
     `file-symlink-p'.
   * Experimental support for accessibility with respect to the custom
-    view for Emacs frames.  Still there are several glitches.
+    view for Emacs frames.  It is required to support "Text to Speech"
+    on Mac OS X 10.7.  Still there are several glitches.
+  * Can display color bitmap fonts such as Apple Color Emoji, if
+    compiled and executed on Mac OS X 10.7.
+  * New function `mac-start-animation', which provides animation
+    effects on Mac OS 10.5 and later via Core Animation.  You can see
+    the default animations with buffer switching by horizontal
+    swiping/flicking, exiting from the splash screen by typing "q",
+    and the "About Emacs" and "Preferences..." menu items in the
+    application menu (labeled "Emacs") in the menu bar.
 
 As Quickdraw-style font rendering is considered obsolete as of Mac OS
 X 10.5, the variable `mac-allow-anti-aliasing', which was supported in

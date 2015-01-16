@@ -1258,7 +1258,6 @@ AMTAR
 am__leading_dot
 SET_MAKE
 AWK
-mkdir_p
 MKDIR_P
 INSTALL_STRIP_PROGRAM
 STRIP
@@ -2065,8 +2064,7 @@ Optional Packages:
                           don't use Motif or Xaw3d scroll bars
   --without-xaw3d         don't use Xaw3d
   --without-xim           don't use X11 XIM
-  --with-mac              use GUI on Mac OS X. This is
-                          experimental/hackers-only!
+  --with-mac              use GUI on Mac OS X.
   --with-ns               use NeXTstep (Cocoa or GNUstep) windowing system
   --without-gpm           don't use -lgpm for mouse support on a GNU/Linux
                           console
@@ -3642,12 +3640,6 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $MKDIR_P" >&5
 $as_echo "$MKDIR_P" >&6; }
 
-
-mkdir_p="$MKDIR_P"
-case $mkdir_p in
-  [\\/$]* | ?:[\\/]*) ;;
-  */*) mkdir_p="\$(top_builddir)/$mkdir_p" ;;
-esac
 
 for ac_prog in gawk mawk nawk awk
 do
@@ -22775,14 +22767,6 @@ if test $USE_XASSERTS = yes; then
 fi
 
 echo
-
-if test "$HAVE_MACGUI" = "yes"; then
-   echo
-   echo "Warning: The Mac port 2.9X is experimental/hackers-only.
-It is not recommended for casual use
-or as a basis of (binary) distributions."
-   echo
-fi
 
 if test "$HAVE_NS" = "yes"; then
    echo
