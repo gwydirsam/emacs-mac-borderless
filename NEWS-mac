@@ -1,4 +1,19 @@
+* emacs-24.3-mac-4.6 (2013-12-27)
+
+** Fixed bugs
+
+*** 64-bit binary does not run if compiled on Mac OS X 10.5.
+
+*** Typing Command-H while a tooltip is shown makes it unerasable.
+Reported by Peter Dyballa.
+
+*** Crash when a tooltip is shown in a non-primary monitor with
+explicit geometry specified.
+Reported by Robert Dallas Gray.
+
+
 * emacs-24.3-mac-4.5 (2013-11-06)
+http://lists.gnu.org/archive/html/emacs-devel/2013-11/msg00225.html
 
 ** Fixed bugs
 

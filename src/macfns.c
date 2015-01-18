@@ -3646,6 +3646,10 @@ Text larger than the specified size is clipped.  */)
   mac_move_frame_window (f, root_x, root_y, false);
   mac_size_frame_window (f, width, height, true);
   mac_show_frame_window (f);
+  /* Now that we have deferred creation of the window device and also
+     turned off automatic display for tooltip windows, we have to draw
+     the internal border ourselves after showing the window.  */
+  mac_clear_area (f, 0, 0, width, height);
   mac_bring_frame_window_to_front (f);
   unblock_input ();
 
@@ -3697,7 +3701,11 @@ Value is t if tooltip was open, nil otherwise.  */)
 
   if (FRAMEP (frame))
     {
-      delete_frame (frame, Qnil);
+      /* Fx_hide_tip might be called just after Command-H has hidden
+	 all the frames.  We pass Qt for the `force' arg so as to
+	 avoid the "Attempt to delete the sole visible or iconified
+	 frame" error in that case.  */
+      delete_frame (frame, Qt);
       deleted = Qt;
     }
 

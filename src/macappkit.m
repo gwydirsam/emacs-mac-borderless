@@ -2379,7 +2379,6 @@ extern void mac_save_keyboard_input_source (void);
   Class windowClass;
   NSRect contentRect;
   NSUInteger windowStyle;
-  BOOL deferCreation;
   EmacsWindow *window;
 
   if (!FRAME_TOOLTIP_P (f))
@@ -2395,17 +2394,25 @@ extern void mac_save_keyboard_input_source (void);
 	  windowStyle = (NSTitledWindowMask | NSClosableWindowMask
 			 | NSMiniaturizableWindowMask | NSResizableWindowMask);
 	}
-      deferCreation = YES;
     }
   else
     {
       windowClass = [EmacsWindow class];
       windowStyle = NSBorderlessWindowMask;
-      deferCreation = NO;
     }
 
   if (oldWindow == nil)
-    contentRect = [emacsView frame];
+    {
+      NSScreen *screen = nil;
+
+      if (f->size_hint_flags & (USPosition | PPosition))
+	screen = [NSScreen screenContainingPoint:(NSMakePoint (f->left_pos,
+							       f->top_pos))];
+      if (screen == nil)
+	screen = [NSScreen mainScreen];
+      contentRect.origin = [screen frame].origin;
+      contentRect.size = [emacsView frame].size;
+    }
   else
     {
       NSView *contentView = [oldWindow contentView];
@@ -2419,7 +2426,7 @@ extern void mac_save_keyboard_input_source (void);
   window = [[windowClass alloc] initWithContentRect:contentRect
 					  styleMask:windowStyle
 					    backing:NSBackingStoreBuffered
-					      defer:deferCreation];
+					      defer:YES];
 #if USE_ARC
   /* Increase retain count to accommodate itself to
      released-when-closed on ARC.  Just setting released-when-closed
@@ -10801,6 +10808,12 @@ didCompleteLayoutForTextContainer:(NSTextContainer *)aTextContainer
 static NSArray *
 document_rasterizer_get_classes (void)
 {
+#if __LP64__ && MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+  /* If we load classes before dumping on Mac OS X 10.5 x86_64, then
+     the dumped executable fails to load on startup.  */
+  if (noninteractive)
+    return nil;
+#endif
   return [NSArray arrayWithObjects:[EmacsPDFDocument class],
 		  [EmacsDocumentRasterizer class],
 		  nil];

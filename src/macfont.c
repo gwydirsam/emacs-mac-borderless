@@ -258,7 +258,7 @@ cfnumber_get_font_symbolic_traits_value (CFNumberRef number,
   SInt64 sint64_value;
 
   /* Getting symbolic traits with kCFNumberSInt32Type is lossy on Mac
-     OS 10.6 when the value is greater than or equal to 1 << 31.  */
+     OS X 10.6 when the value is greater than or equal to 1 << 31.  */
   if (CFNumberGetValue (number, kCFNumberSInt64Type, &sint64_value))
     {
       *sym_traits = (FontSymbolicTraits) sint64_value;
@@ -733,8 +733,7 @@ macfont_lookup_cache (CFStringRef key)
 	     CTFontCopyCharacterSet nor -[NSFont coveredCharacterSet]
 	     for this font is correct for non-BMP characters on Mac OS
 	     X 10.5, anyway.  */
-	  if (CFStringCompare (key, CFSTR ("LastResort"), 0)
-	      == kCFCompareEqualTo)
+	  if (CFEqual (key, CFSTR ("LastResort")))
 	    {
 	      CFRange range = CFRangeMake (0, MAX_UNICODE_CHAR + 1);
 
@@ -1692,8 +1691,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
 	 10.7 returns NULL if pat_desc represents the LastResort font.
 	 So we use CTFontDescriptorCreateMatchingFontDescriptor (no
 	 trailing "s") for such a font.  */
-      if (CFStringCompare (family_name, CFSTR ("LastResort"), 0)
-	  != kCFCompareEqualTo)
+      if (!CFEqual (family_name, CFSTR ("LastResort")))
 	descs = mac_font_descriptor_create_matching_font_descriptors (pat_desc,
 								      NULL);
       else
@@ -2047,12 +2045,9 @@ macfont_open (FRAME_PTR f, Lisp_Object entity, int pixel_size)
       family_name = mac_font_copy_family_name (macfont);
       if (family_name)
 	{
-	  if ((CFStringCompare (family_name, CFSTR ("Courier"), 0)
-	       == kCFCompareEqualTo)
-	      || (CFStringCompare (family_name, CFSTR ("Helvetica"), 0)
-		  == kCFCompareEqualTo)
-	      || (CFStringCompare (family_name, CFSTR ("Times"), 0)
-		  == kCFCompareEqualTo))
+	  if (CFEqual (family_name, CFSTR ("Courier"))
+	      || CFEqual (family_name, CFSTR ("Helvetica"))
+	      || CFEqual (family_name, CFSTR ("Times")))
 	    ascent += (ascent + descent) * .15f;
 	  else if (CFStringHasPrefix (family_name, CFSTR ("Hiragino")))
 	    {
@@ -3062,7 +3057,7 @@ mac_ctfont_equal_in_postscript_name (CTFontRef font1, CTFontRef font2)
       name2 = CTFontCopyPostScriptName (font2);
       if (name2)
 	{
-	  result = (CFStringCompare (name1, name2, 0) == kCFCompareEqualTo);
+	  result = CFEqual (name1, name2);
 	  CFRelease (name2);
 	}
       CFRelease (name1);
@@ -3436,8 +3431,8 @@ mac_font_copy_default_descriptors_for_language (CFStringRef language)
 
       for (i = 0; macfont_language_default_font_names[i].language; i++)
 	{
-	  if (CFStringCompare (macfont_language_default_font_names[i].language,
-			       language, 0) == kCFCompareEqualTo)
+	  if (CFEqual (macfont_language_default_font_names[i].language,
+		       language))
 	    {
 	      CFMutableArrayRef descriptors =
 		CFArrayCreateMutable (NULL, 0, &kCFTypeArrayCallBacks);
@@ -3517,8 +3512,7 @@ mac_font_copy_default_name_for_charset_and_languages (CFCharacterSetRef charset,
 	      if (family)
 		{
 		  if (!CFStringHasPrefix (family, CFSTR ("."))
-		      && (CFStringCompare (family, CFSTR ("LastResort"), 0)
-			  != kCFCompareEqualTo))
+		      && !CFEqual (family, CFSTR ("LastResort")))
 		    {
 		      result = family;
 		      break;
