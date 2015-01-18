@@ -1387,6 +1387,29 @@ the echo area or in a buffer where the cursor is not displayed."
 				  (cdr replacement-range)))
 	      (error nil)))))))
 
+(defvar mac-emoji-font-regexp "\\<emoji\\>"
+  "Regexp matching font names for emoji.
+This is used for complementing the variation selector
+16 (emoji-style) when inserting emoji characters that are
+sensitive to the variation selector.")
+
+(defun mac-complement-emoji-by-variation-selector (string)
+  (let ((len (length string))
+	base)
+    (cond ((and (= len 1)
+		(string-match
+		 (regexp-quote string)
+		 (mapconcat 'cdr mac-emoji-variation-characters-alist "")))
+	   (concat string "\uFE0F"))
+	  ((and (= len 2)
+		(eq (aref string 1) #x20E3)
+		(string-match
+		 (regexp-quote (setq base (substring string 0 1)))
+		 (cdr (assq 'keycap mac-emoji-variation-characters-alist))))
+	   (concat base "\uFE0F\u20E3"))
+	  (t
+	   string))))
+
 (defun mac-text-input-insert-text (event)
   (interactive "e")
   (let* ((ae (mac-event-ae event))
@@ -1421,7 +1444,14 @@ the echo area or in a buffer where the cursor is not displayed."
 			   (+ (point-min) (car replacement-range)
 			      (cdr replacement-range)))
 	  (error nil)))
-    (mac-unread-string (mac-utxt-to-string text coding))))
+    (let ((string (mac-utxt-to-string text coding))
+	  (font (cdr (get-text-property 0 'NSFont text)))) ; NSFontAttributeName
+      (if (and (fontp font)
+	       (not (next-single-property-change 0 'NSFont text))
+	       (string-match mac-emoji-font-regexp
+			     (symbol-name (font-get font :family))))
+	  (setq string (mac-complement-emoji-by-variation-selector string)))
+      (mac-unread-string string))))
 
 (define-key mac-apple-event-map [text-input set-marked-text]
   'mac-text-input-set-marked-text)

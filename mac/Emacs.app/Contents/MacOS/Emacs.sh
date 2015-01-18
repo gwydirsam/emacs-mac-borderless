@@ -21,7 +21,22 @@
 ### Code:
 
 filename="$(basename "$0")"
-set "$(dirname "$0")/${filename%.sh}" "$@"
+filename="$(dirname "$0")/${filename%.sh}"
+
+case $PWD in
+    /)
+	# As of OS X 10.8, this is always the case if invoked from the
+	# launch service.  Just in case this behavior is changed on
+	# future versions...
+	cd
+	case $filename in
+	    /*) ;;
+	    *) filename=/"$filename" ;;
+	esac
+	;;
+esac
+
+set "$filename" "$@"
 
 case $(sw_vers -productVersion) in
     10.[0-7]|10.[0-7].*)

@@ -1130,7 +1130,7 @@ cfobject_to_lisp (CFTypeRef obj, int flags, int hash_bound)
     }
   else
     {
-      Lisp_Object tag_result = mac_nsvalue_to_lisp (obj);
+      Lisp_Object tag_result = mac_nsobject_to_lisp (obj);
 
       if (CONSP (tag_result))
 	{

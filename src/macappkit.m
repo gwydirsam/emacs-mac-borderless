@@ -346,6 +346,43 @@ NSSizeToCGSize (NSSize nssize)
 
 @implementation NSColor (Emacs)
 
+static NSColorSpace *
+get_srgb_color_space ()
+{
+  static NSColorSpace *sRGBColorSpace;
+
+  if (sRGBColorSpace == nil)
+    {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+      if ([NSColorSpace respondsToSelector:@selector(sRGBColorSpace)])
+#endif
+	sRGBColorSpace = MRC_RETAIN ([NSColorSpace sRGBColorSpace]);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+      else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	{
+	  extern CMProfileRef mac_open_srgb_profile (void);
+	  CMProfileRef profile = mac_open_srgb_profile ();
+
+	  if (profile)
+	    {
+	      sRGBColorSpace = [[NSColorSpace alloc]
+				 initWithColorSyncProfile:profile];
+	      CMCloseProfile (profile);
+	    }
+	  else
+	    sRGBColorSpace =
+	      MRC_RETAIN ([NSColorSpace deviceRGBColorSpace]);
+	}
+#endif
+    }
+
+  return sRGBColorSpace;
+}
+
 + (NSColor *)colorWithXColorPixel:(unsigned long)pixel
 {
   CGFloat components[4];
@@ -359,41 +396,47 @@ NSSizeToCGSize (NSSize nssize)
     return [self colorWithSRGBRed:components[0] green:components[1]
 			     blue:components[2] alpha:components[3]];
   else
+    return [self colorWithColorSpace:(get_srgb_color_space ())
+			  components:components count:4];
+}
+
+- (CGColorRef)copyCGColor
+{
+  if ([self respondsToSelector:@selector(CGColor)])
+    return CGColorRetain ([self CGColor]);
+  else
     {
-      static id sRGBColorSpace;
+      NSColorSpace *colorSpace = [self colorSpace];
+      CGColorSpaceRef cgColorSpace = nil;
+      CGFloat *components;
 
-      if (sRGBColorSpace == nil)
+      if ([colorSpace respondsToSelector:@selector(CGColorSpace)])
 	{
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
-	  if ([NSColorSpace respondsToSelector:@selector(sRGBColorSpace)])
-#endif
-	    sRGBColorSpace = MRC_RETAIN ([NSColorSpace sRGBColorSpace]);
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
-	  else
-#endif
-#endif
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	  cgColorSpace = [colorSpace CGColorSpace];
+	  if (cgColorSpace)
 	    {
-	      extern CMProfileRef mac_open_srgb_profile (void);
-	      CMProfileRef profile = mac_open_srgb_profile ();
-
-	      if (profile)
-		{
-		  sRGBColorSpace = [[NSColorSpace alloc]
-				     initWithColorSyncProfile:profile];
-		  CMCloseProfile (profile);
-		}
-	      else
-		sRGBColorSpace =
-		  MRC_RETAIN ([NSColorSpace deviceRGBColorSpace]);
+	      components = alloca (sizeof (CGFloat)
+				   * [self numberOfComponents]);
+	      [self getComponents:components];
 	    }
-#endif
 	}
+      if (cgColorSpace == nil)
+	{
+	  NSColor *colorInSRGB =
+	    [self colorUsingColorSpace:(get_srgb_color_space ())];
 
-      return [self colorWithColorSpace:sRGBColorSpace
-			    components:components count:4];
+	  if (colorInSRGB)
+	    {
+	      components = alloca (sizeof (CGFloat) * 4);
+	      cgColorSpace = mac_cg_color_space_rgb;
+	      [colorInSRGB getComponents:components];
+	    }
+	}
+      if (cgColorSpace)
+	return CGColorCreate (cgColorSpace, components);
     }
+
+  return NULL;
 }
 
 @end				// NSColor (Emacs)
@@ -554,6 +597,16 @@ NSSizeToCGSize (NSSize nssize)
   return (NSMinY (frame) != NSMinY (visibleFrame)
 	  || NSMinX (frame) != NSMinX (visibleFrame)
 	  || NSMaxX (frame) != NSMaxX (visibleFrame));
+}
+
+- (BOOL)canShowMenuBar
+{
+  return ([self isEqual:[[NSScreen screens] objectAtIndex:0]]
+	  /* OS X 10.9 may have menu bars on non-main screens (in an
+	     inactive appearance) if [NSScreen
+	     screensHaveSeparateSpaces] returns YES.  */
+	  || ([NSScreen respondsToSelector:@selector(screensHaveSeparateSpaces)]
+	      && [NSScreen screensHaveSeparateSpaces]));
 }
 
 @end				// NSScreen (Emacs)
@@ -788,7 +841,7 @@ extern Lisp_Object Qrange, Qpoint, Qsize, Qrect;
    created from NSRange, NSPoint, NSSize, or NSRect, then return
    nil.  */
 
-Lisp_Object
+static Lisp_Object
 mac_nsvalue_to_lisp (CFTypeRef obj)
 {
   Lisp_Object result = Qnil;
@@ -835,6 +888,34 @@ mac_nsvalue_to_lisp (CFTypeRef obj)
       if (!NILP (tag))
 	result = Fcons (tag, result);
     }
+
+  return result;
+}
+
+static Lisp_Object
+mac_nsfont_to_lisp (CFTypeRef obj)
+{
+  Lisp_Object result = Qnil;
+
+  if ([(__bridge id)obj isKindOfClass:[NSFont class]])
+    {
+      result = macfont_nsctfont_to_spec ((void *) obj);
+      if (!NILP (result))
+	result = Fcons (Qfont, result);
+    }
+
+  return result;
+}
+
+Lisp_Object
+mac_nsobject_to_lisp (CFTypeRef obj)
+{
+  Lisp_Object result;
+
+  result = mac_nsvalue_to_lisp (obj);
+  if (!NILP (result))
+    return result;
+  result = mac_nsfont_to_lisp (obj);
 
   return result;
 }
@@ -905,9 +986,6 @@ mac_alloc_autorelease_pool (void)
 {
   NSAutoreleasePool *pool;
 
-  if (noninteractive)
-    return NULL;
-
   block_input ();
   pool = [[NSAutoreleasePool alloc] init];
   unblock_input ();
@@ -918,9 +996,6 @@ mac_alloc_autorelease_pool (void)
 void
 mac_release_autorelease_pool (void *pool)
 {
-  if (noninteractive)
-    return;
-
   block_input ();
   [(NSAutoreleasePool *)pool release];
   unblock_input ();
@@ -1784,7 +1859,11 @@ emacs_windows_need_display_p (void)
 	{
 	  if ((options & (NSApplicationPresentationFullScreen
 			  | NSApplicationPresentationAutoHideMenuBar))
-	      == NSApplicationPresentationFullScreen)
+	      == NSApplicationPresentationFullScreen
+	      /* Application can be in full screen mode without hiding
+		 the dock on OS X 10.9.  */
+	      && (options & (NSApplicationPresentationHideDock
+			     | NSApplicationPresentationAutoHideDock)))
 	    {
 	      options |= NSApplicationPresentationAutoHideMenuBar;
 	      [NSApp setPresentationOptions:options];
@@ -1796,7 +1875,7 @@ emacs_windows_need_display_p (void)
 	{
 	  NSScreen *screen = [window screen];
 
-	  if ([screen isEqual:[[NSScreen screens] objectAtIndex:0]])
+	  if ([screen canShowMenuBar])
 	    options = (NSApplicationPresentationAutoHideMenuBar
 		       | NSApplicationPresentationAutoHideDock);
 	  else if ([screen containsDock])
@@ -1843,7 +1922,7 @@ emacs_windows_need_display_p (void)
 		  {
 		    NSScreen *screen = [window screen];
 
-		    if ([screen isEqual:[[NSScreen screens] objectAtIndex:0]])
+		    if ([screen canShowMenuBar])
 		      options |= (NSApplicationPresentationAutoHideMenuBar
 				  | NSApplicationPresentationAutoHideDock);
 		    else if ([screen containsDock])
@@ -1887,7 +1966,7 @@ emacs_windows_need_display_p (void)
 #endif
       if (windowManagerState & WM_STATE_FULLSCREEN)
 	{
-	  if ([[window screen] isEqual:[[NSScreen screens] objectAtIndex:0]])
+	  if ([[window screen] canShowMenuBar])
 	    {
 	      options = (NSApplicationPresentationAutoHideDock
 			 | NSApplicationPresentationDisableMenuBarTransparency);
@@ -7189,32 +7268,41 @@ peek_if_next_event_activates_menu_bar (void)
       err = GetEventParameter (event, kEventParamMouseLocation,
 			       typeHIPoint, NULL, sizeof (HIPoint), NULL,
 			       &point);
-      if (err == noErr
-	  && point.x >= 0 && point.y >= 0
-	  && point.x < CGDisplayPixelsWide (kCGDirectMainDisplay))
+      if (err == noErr)
 	{
-	  CGFloat menuBarHeight;
+	  NSRect baseScreenFrame = mac_get_base_screen_frame ();
+	  NSPoint mouseLocation =
+	    NSMakePoint (point.x - NSMinX (baseScreenFrame),
+			 - point.y + NSMaxY (baseScreenFrame));
+	  NSScreen *screen = [NSScreen screenContainingPoint:mouseLocation];
+
+	  if ([screen canShowMenuBar])
+	    {
+	      NSRect frame = [screen frame];
+	      CGFloat menuBarHeight;
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
-	  /* -[NSMenu menuBarHeight] is unreliable on 10.4. */
-	  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4))
+	      /* -[NSMenu menuBarHeight] is unreliable on 10.4. */
+	      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_4))
 #endif
-	    {
-	      menuBarHeight = [[NSApp mainMenu] menuBarHeight];
-	    }
+		{
+		  menuBarHeight = [[NSApp mainMenu] menuBarHeight];
+		}
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020
-	  else
+	      else
 #endif
 #endif
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1050 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
-	    {
-	      menuBarHeight = [NSMenuView menuBarHeight];
-	    }
+		{
+		  menuBarHeight = [NSMenuView menuBarHeight];
+		}
 #endif
-
-	  if (point.y < menuBarHeight)
-	    return event;
+	      frame.origin.y = NSMaxY (frame) - menuBarHeight;
+	      frame.size.height = menuBarHeight;
+	      if (NSMouseInRect (mouseLocation, frame, NO))
+		return event;
+	    }
 	}
     }
 
@@ -9902,7 +9990,9 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
   transform = [NSAffineTransform transform];
   [transform scaleBy:scaleFactor];
   [transform translateXBy:(- NSMinX (rect)) yBy:(- NSMinY (rect))];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
   if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5))
+#endif
     {
       [NSGraphicsContext saveGraphicsState];
       [NSGraphicsContext setCurrentContext:gcontext];
@@ -9920,6 +10010,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
       [self displayRectIgnoringOpacity:rect inContext:gcontext];
       [NSGraphicsContext restoreGraphicsState];
     }
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
   else
     {
       NSRect bounds = [self bounds];
@@ -9972,6 +10063,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
       MRC_RELEASE (rep);
       [NSGraphicsContext restoreGraphicsState];
     }
+#endif
   CGContextRelease (context);
 
   return ximg;
@@ -10025,46 +10117,101 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
       @try
 	{
-	  DOMSVGRect *boundingBox =
-	    [mainFrame valueForKeyPath:@"DOMDocument.rootElement.BBox"];
 	  id val;
 	  NSNumber *unitType, *num;
 	  enum {
 	    SVG_LENGTHTYPE_PERCENTAGE = 2
 	  };
 
-	  val = [mainFrame
-		  valueForKeyPath:@"DOMDocument.rootElement.width.baseVal"];
-	  unitType = [val valueForKey:@"unitType"];
-	  if ([unitType intValue] == SVG_LENGTHTYPE_PERCENTAGE)
+	  if (NSClassFromString (@"DOMSVGDocument"))
 	    {
-	      frameRect.size.width =
-		roundf ([boundingBox x] + [boundingBox width]);
-	      num = [val valueForKey:@"valueInSpecifiedUnits"];
-	      width = lround (frameRect.size.width * [num doubleValue] / 100);
-	    }
-	  else
-	    {
-	      num = [val valueForKey:@"value"];
-	      width = lround ([num doubleValue]);
-	      frameRect.size.width = width;
-	    }
+	      /* SVG DOM Objective-C bindings is available.  */
+	      DOMSVGRect *boundingBox =
+		[mainFrame valueForKeyPath:@"DOMDocument.rootElement.BBox"];
 
-	  val = [mainFrame
+	      val =
+		[mainFrame
+		  valueForKeyPath:@"DOMDocument.rootElement.width.baseVal"];
+	      unitType = [val valueForKey:@"unitType"];
+	      if ([unitType intValue] == SVG_LENGTHTYPE_PERCENTAGE)
+		{
+		  frameRect.size.width =
+		    roundf ([boundingBox x] + [boundingBox width]);
+		  num = [val valueForKey:@"valueInSpecifiedUnits"];
+		  width = lround (frameRect.size.width
+				  * [num doubleValue] / 100);
+		}
+	      else
+		{
+		  num = [val valueForKey:@"value"];
+		  width = lround ([num doubleValue]);
+		  frameRect.size.width = width;
+		}
+
+	      val =
+		[mainFrame
 		  valueForKeyPath:@"DOMDocument.rootElement.height.baseVal"];
-	  unitType = [val valueForKey:@"unitType"];
-	  if ([unitType intValue] == SVG_LENGTHTYPE_PERCENTAGE)
-	    {
-	      frameRect.size.height =
-		roundf ([boundingBox y] + [boundingBox height]);
-	      num = [val valueForKey:@"valueInSpecifiedUnits"];
-	      height = lround (frameRect.size.height * [num doubleValue] / 100);
+	      unitType = [val valueForKey:@"unitType"];
+	      if ([unitType intValue] == SVG_LENGTHTYPE_PERCENTAGE)
+		{
+		  frameRect.size.height =
+		    roundf ([boundingBox y] + [boundingBox height]);
+		  num = [val valueForKey:@"valueInSpecifiedUnits"];
+		  height = lround (frameRect.size.height
+				   * [num doubleValue] / 100);
+		}
+	      else
+		{
+		  num = [val valueForKey:@"value"];
+		  height = lround ([num doubleValue]);
+		  frameRect.size.height = height;
+		}
 	    }
 	  else
 	    {
-	      num = [val valueForKey:@"value"];
-	      height = lround ([num doubleValue]);
-	      frameRect.size.height = height;
+	      /* SVG DOM Objective-C bindings is not available.  Use
+		 JavaScript bindings instead.  */
+	      WebScriptObject *rootElement, *boundingBox;
+
+	      rootElement = [[webView windowScriptObject]
+			      valueForKeyPath:@"document.rootElement"];
+	      boundingBox = [rootElement callWebScriptMethod:@"getBBox"
+					       withArguments:[NSArray array]];
+	      val = [rootElement valueForKeyPath:@"width.baseVal"];
+	      unitType = [val valueForKey:@"unitType"];
+	      if ([unitType intValue] == SVG_LENGTHTYPE_PERCENTAGE)
+		{
+		  frameRect.size.width =
+		    round ([[boundingBox valueForKey:@"x"] doubleValue]
+			   + [[boundingBox valueForKey:@"width"] doubleValue]);
+		  num = [val valueForKey:@"valueInSpecifiedUnits"];
+		  width = lround (frameRect.size.width
+				  * [num doubleValue] / 100);
+		}
+	      else
+		{
+		  num = [val valueForKey:@"value"];
+		  width = lround ([num doubleValue]);
+		  frameRect.size.width = width;
+		}
+
+	      val = [rootElement valueForKeyPath:@"height.baseVal"];
+	      unitType = [val valueForKey:@"unitType"];
+	      if ([unitType intValue] == SVG_LENGTHTYPE_PERCENTAGE)
+		{
+		  frameRect.size.height =
+		    round ([[boundingBox valueForKey:@"y"] doubleValue]
+			   + [[boundingBox valueForKey:@"height"] doubleValue]);
+		  num = [val valueForKey:@"valueInSpecifiedUnits"];
+		  height = lround (frameRect.size.height
+				   * [num doubleValue] / 100);
+		}
+	      else
+		{
+		  num = [val valueForKey:@"value"];
+		  height = lround ([num doubleValue]);
+		  frameRect.size.height = height;
+		}
 	    }
 	}
       @catch (NSException *exception)
@@ -10186,6 +10333,313 @@ mac_svg_load_image (struct frame *f, struct image *img, unsigned char *contents,
   MRC_RELEASE (loader);
 
   return result;
+}
+
+
+/***********************************************************************
+			Document rasterization
+***********************************************************************/
+
+extern Lisp_Object Qcount, Qdocument_attributes;
+
+@implementation EmacsDocumentRasterizer
+- (id)initWithAttributedString:(NSAttributedString *)anAttributedString
+	    documentAttributes:(NSDictionary *)docAttributes
+{
+  NSLayoutManager *layoutManager;
+  NSTextContainer *textContainer;
+  int viewMode;
+  NSSize containerSize;
+  NSRange glyphRange;
+
+  self = [super init];
+
+  if (self == nil)
+    return nil;
+
+  textStorage = [[NSTextStorage alloc]
+		  initWithAttributedString:anAttributedString];
+  layoutManager = [[NSLayoutManager alloc] init];
+  textContainer = [[NSTextContainer alloc] init];
+
+  [layoutManager setUsesScreenFonts:NO];
+
+  [layoutManager addTextContainer:textContainer];
+  MRC_RELEASE (textContainer);
+  [textStorage addLayoutManager:layoutManager];
+  MRC_RELEASE (layoutManager);
+
+  if (!(textStorage && layoutManager && textContainer))
+    {
+      MRC_RELEASE (textStorage);
+      MRC_RELEASE (layoutManager);
+      MRC_RELEASE (textContainer);
+      MRC_RELEASE (self);
+
+      return nil;
+    }
+
+  viewMode = [[docAttributes objectForKey:NSViewModeDocumentAttribute]
+	       intValue];
+  if (viewMode == 0)
+    [textContainer setLineFragmentPadding:0];
+  else
+    {
+      /* page layout */
+      NSSize pageSize =
+	[[docAttributes objectForKey:NSPaperSizeDocumentAttribute] sizeValue];
+      NSString * __unsafe_unretained marginAttributes[4] = {
+	NSLeftMarginDocumentAttribute, NSRightMarginDocumentAttribute,
+	NSTopMarginDocumentAttribute, NSBottomMarginDocumentAttribute
+      };
+      NSNumber * __unsafe_unretained marginValues[4];
+      int i;
+
+      for (i = 0; i < 4; i++)
+	marginValues[i] = [docAttributes objectForKey:marginAttributes[i]];
+      for (i = 0; i < 2; i++)
+	if (marginValues[i])
+	  pageSize.width -= [marginValues[i] doubleValue];
+      for (; i < 4; i++)
+	if (marginValues[i])
+	  pageSize.height -= [marginValues[i] doubleValue];
+
+      pageSize.width = ceil (pageSize.width);
+      pageSize.height = ceil (pageSize.height);
+      [textContainer setContainerSize:pageSize];
+
+      [layoutManager setDelegate:self];
+    }
+
+  /* Fully lay out.  */
+  glyphRange =
+    [layoutManager
+      glyphRangeForCharacterRange:(NSMakeRange (0, [textStorage length]))
+	     actualCharacterRange:NULL];
+  (void) [layoutManager
+	   textContainerForGlyphAtIndex:(NSMaxRange (glyphRange) - 1)
+			 effectiveRange:NULL];
+
+  if (viewMode == 0)
+    {
+      NSRect rect = [layoutManager usedRectForTextContainer:textContainer];
+      NSSize containerSize = NSMakeSize (ceil (NSMaxX (rect)),
+					 ceil (NSMaxY (rect)));
+
+      [textContainer setContainerSize:containerSize];
+    }
+
+  return self;
+}
+
+#if !USE_ARC
+- (void)dealloc
+{
+  [textStorage release];
+  [super dealloc];
+}
+#endif
+
+- (NSLayoutManager *)layoutManager
+{
+  return [[textStorage layoutManagers] objectAtIndex:0];
+}
+
+- (NSUInteger)pageCount
+{
+  NSLayoutManager *layoutManager = [self layoutManager];
+
+  return [[layoutManager textContainers] count];
+}
+
+- (void)setPageIndex:(NSUInteger)index
+{
+  pageIndex = index;
+}
+
+- (NSSize)containerSize
+{
+  NSLayoutManager *layoutManager = [self layoutManager];
+  NSTextContainer *firstContainer =
+    [[layoutManager textContainers] objectAtIndex:pageIndex];
+
+  return [firstContainer containerSize];
+}
+
+- (void)drawWithRect:(NSRect)rect
+{
+  NSLayoutManager *layoutManager = [self layoutManager];
+  NSTextContainer *textContainer =
+    [[layoutManager textContainers] objectAtIndex:pageIndex];
+  NSSize containerSize = [textContainer containerSize];
+  NSRange glyphRange = [layoutManager glyphRangeForTextContainer:textContainer];
+  NSAffineTransform *transform = [NSAffineTransform transform];
+
+  [transform translateXBy:(NSMinX (rect)) yBy:(NSMaxY (rect))];
+  [transform scaleXBy:(NSWidth (rect) / containerSize.width)
+		  yBy:(- NSHeight (rect) / containerSize.height)];
+  [transform concat];
+  [layoutManager drawBackgroundForGlyphRange:glyphRange atPoint:NSZeroPoint];
+  [layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:NSZeroPoint];
+}
+
+- (void)layoutManager:(NSLayoutManager *)aLayoutManager
+didCompleteLayoutForTextContainer:(NSTextContainer *)aTextContainer
+		atEnd:(BOOL)flag
+{
+  if (aTextContainer == nil)
+    {
+      NSLayoutManager *layoutManager = [self layoutManager];
+      NSTextContainer *firstContainer =
+	[[layoutManager textContainers] objectAtIndex:0];
+      NSSize containerSize = [firstContainer containerSize];
+      NSTextContainer *textContainer = [[NSTextContainer alloc]
+					 initWithContainerSize:containerSize];
+
+      [aLayoutManager addTextContainer:textContainer];
+      MRC_RELEASE (textContainer);
+    }
+}
+
+@end				// EmacsDocumentRasterizer
+
+CFArrayRef
+mac_document_copy_type_identifiers ()
+{
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+  if ([NSAttributedString respondsToSelector:@selector(textTypes)])
+#endif
+    return CF_BRIDGING_RETAIN ([NSAttributedString textTypes]);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+    {
+      NSArray *textFileTypes = [NSAttributedString textFileTypes];
+      CFMutableArrayRef identifiers =
+	CFArrayCreateMutable (NULL, [textFileTypes count],
+			      &kCFTypeArrayCallBacks);
+      CFIndex count = 0;
+      NSEnumerator *enumerator = [textFileTypes objectEnumerator];
+      NSString *textFileType;
+
+      while ((textFileType = [enumerator nextObject]) != nil)
+	{
+	  OSType hfsTypeCode = NSHFSTypeCodeFromFileType (textFileType);
+	  CFStringRef identifier;
+
+	  if (hfsTypeCode)
+	    {
+	      CFStringRef osTypeString = UTCreateStringForOSType (hfsTypeCode);
+
+	      if (osTypeString)
+		{
+		  identifier =
+		    UTTypeCreatePreferredIdentifierForTag (kUTTagClassOSType,
+							   osTypeString, NULL);
+		  CFRelease (osTypeString);
+		}
+	    }
+	  else
+	    identifier =
+	      UTTypeCreatePreferredIdentifierForTag (kUTTagClassFilenameExtension,
+						     ((__bridge CFStringRef)
+						      textFileType), NULL);
+	  if (identifier)
+	    {
+	      if (!CFArrayContainsValue (identifiers, CFRangeMake (0, count),
+					 identifier))
+		{
+		  CFArrayAppendValue (identifiers, identifier);
+		  count++;
+		}
+	      CFRelease (identifier);
+	    }
+	}
+
+      return identifiers;
+    }
+#endif
+}
+
+CFTypeRef
+mac_document_create (CFURLRef url, CFDataRef data, CFIndex page,
+		     CGSize *size, CGColorRef *background,
+		     Lisp_Object *metadata)
+{
+  NSAttributedString *attrString = NULL;
+  NSDictionary *docAttributes;
+  CFTypeRef result = NULL;
+
+  if (url)
+    attrString = [[NSAttributedString alloc]
+		   initWithURL:((__bridge NSURL *) url) options:nil
+		   documentAttributes:&docAttributes error:NULL];
+  else if (data)
+    attrString = [[NSAttributedString alloc]
+		   initWithData:((__bridge NSData *) data) options:nil
+		   documentAttributes:&docAttributes error:NULL];
+  if (attrString)
+    {
+      EmacsDocumentRasterizer *documentRasterizer =
+	[[EmacsDocumentRasterizer alloc]
+	  initWithAttributedString:attrString
+		documentAttributes:docAttributes];
+
+      if (documentRasterizer)
+	{
+	  NSUInteger pageCount = [documentRasterizer pageCount];
+
+	  if (page >= 0 && page < pageCount)
+	    {
+	      [documentRasterizer setPageIndex:page];
+	      result = CF_BRIDGING_RETAIN (documentRasterizer);
+
+	      if (size)
+		*size = NSSizeToCGSize ([documentRasterizer containerSize]);
+	      if (background)
+		{
+		  NSColor *backgroundColor =
+		    [docAttributes
+		      objectForKey:NSBackgroundColorDocumentAttribute];
+
+		  /* `backgroundColor' might be nil, but that's OK.  */
+		  *background = [backgroundColor copyCGColor];
+		}
+	      if (metadata)
+		{
+		  *metadata =
+		    Fcons (Qdocument_attributes,
+			   Fcons (cfobject_to_lisp (((__bridge CFTypeRef)
+						     docAttributes), 0, -1),
+				  Qnil));
+		  if (pageCount > 1)
+		    *metadata = Fcons (Qcount,
+				       Fcons (make_number (pageCount),
+					      *metadata));
+		}
+	    }
+	  MRC_RELEASE (documentRasterizer);
+	}
+    }
+
+  return result;
+}
+
+void
+mac_document_draw (CGContextRef c, CGRect rect, CFTypeRef obj)
+{
+  EmacsDocumentRasterizer *rasterizer =
+    (__bridge EmacsDocumentRasterizer *) obj;
+  NSGraphicsContext *gcontext =
+    [NSGraphicsContext graphicsContextWithGraphicsPort:c flipped:YES];
+
+  [NSGraphicsContext saveGraphicsState];
+  [NSGraphicsContext setCurrentContext:gcontext];
+  [rasterizer drawWithRect:(NSRectFromCGRect (rect))];
+  [NSGraphicsContext restoreGraphicsState];
 }
 
 
@@ -10781,6 +11235,10 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
     }
   [layerHostingView setLayer:rootLayer];
   [layerHostingView setWantsLayer:YES];
+  /* OS X 10.9 needs this.  */
+  if ([layerHostingView
+	respondsToSelector:@selector(setLayerUsesCoreImageFilters:)])
+    [layerHostingView setLayerUsesCoreImageFilters:YES];
 
   [overlayView addSubview:layerHostingView];
 }

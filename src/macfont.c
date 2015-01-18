@@ -1538,9 +1538,8 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
   if (! attributes)
     goto finish;
 
-  charset = ((CFCharacterSetRef)
-	     CFDictionaryGetValue (attributes,
-				   MAC_FONT_CHARACTER_SET_ATTRIBUTE));
+  charset = CFDictionaryGetValue (attributes,
+				  MAC_FONT_CHARACTER_SET_ATTRIBUTE);
   if (charset)
     {
       CFRetain (charset);
@@ -1558,13 +1557,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
       val = Qnil;
     }
 
-  languages = ((CFArrayRef)
-	       CFDictionaryGetValue (attributes, MAC_FONT_LANGUAGES_ATTRIBUTE));
-  if (languages)
-    {
-      CFRetain (languages);
-      CFDictionaryRemoveValue (attributes, MAC_FONT_LANGUAGES_ATTRIBUTE);
-    }
+  languages = CFDictionaryGetValue (attributes, MAC_FONT_LANGUAGES_ATTRIBUTE);
 
   if (INTEGERP (AREF (spec, FONT_SPACING_INDEX)))
     spacing = XINT (AREF (spec, FONT_SPACING_INDEX));
@@ -1646,6 +1639,12 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
 	      families = mutable_families;
 	    }
 	}
+    }
+
+  if (languages)
+    {
+      CFRetain (languages);
+      CFDictionaryRemoveValue (attributes, MAC_FONT_LANGUAGES_ATTRIBUTE);
     }
 
   val = Qnil;
@@ -2849,11 +2848,26 @@ mac_ctfont_create_preferred_family_for_attributes (CFDictionaryRef attributes)
     {
       CFAttributedStringRef attr_string = NULL;
       CTLineRef ctline = NULL;
-      CFDictionaryRef attrs =
-	CFDictionaryCreate (NULL, NULL, NULL, 0,
-			    &kCFTypeDictionaryKeyCallBacks,
-			    &kCFTypeDictionaryValueCallBacks);
+      CFStringRef keys[] = {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+	kCTLanguageAttributeName
+#else
+	CFSTR ("NSLanguage")
+#endif
+      };
+      CFTypeRef values[] = {NULL};
+      CFIndex num_values = 0;
+      CFArrayRef languages;
+      CFDictionaryRef attrs;
 
+      languages = CFDictionaryGetValue (attributes,
+					MAC_FONT_LANGUAGES_ATTRIBUTE);
+      if (languages && CFArrayGetCount (languages) > 0)
+	values[num_values++] = CFArrayGetValueAtIndex (languages, 0);
+      attrs = CFDictionaryCreate (NULL, (const void **) keys,
+				  (const void **) values, num_values,
+				  &kCFTypeDictionaryKeyCallBacks,
+				  &kCFTypeDictionaryValueCallBacks);
       if (attrs)
 	{
 	  attr_string = CFAttributedStringCreate (NULL, charset_string, attrs);

@@ -37,6 +37,9 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifndef NSAppKitVersionNumber10_7
 #define NSAppKitVersionNumber10_7 1138
 #endif
+#ifndef NSAppKitVersionNumber10_8
+#define NSAppKitVersionNumber10_8 1187
+#endif
 
 #ifndef NSINTEGER_DEFINED
 typedef int NSInteger;
@@ -67,6 +70,7 @@ typedef unsigned int NSUInteger;
 @protocol NSToolbarDelegate @end
 @protocol NSMenuDelegate @end
 @protocol NSUserInterfaceItemSearching @end
+@protocol NSLayoutManagerDelegate @end
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
@@ -102,6 +106,7 @@ typedef unsigned int NSUInteger;
 
 @interface NSColor (Emacs)
 + (NSColor *)colorWithXColorPixel:(unsigned long)pixel;
+- (CGColorRef)copyCGColor;
 @end
 
 @interface NSImage (Emacs)
@@ -121,6 +126,7 @@ typedef unsigned int NSUInteger;
 + (NSScreen *)screenContainingPoint:(NSPoint)aPoint;
 + (NSScreen *)closestScreenForRect:(NSRect)aRect;
 - (BOOL)containsDock;
+- (BOOL)canShowMenuBar;
 @end
 
 @interface EmacsApplication : NSApplication
@@ -639,6 +645,25 @@ typedef unsigned int NSUInteger;
 - (int)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor;
 @end
 
+/* Class for document rasterization.  It also works as the layout
+   manager delegate when rasterizing a multi-page document.  */
+
+@interface EmacsDocumentRasterizer : NSObject <NSLayoutManagerDelegate>
+{
+  /* The text storage for the document to be rasterized.  */
+  NSTextStorage *textStorage;
+
+  /* The index of the page to be rasterized.  */
+  NSUInteger pageIndex;
+}
+- (id)initWithAttributedString:(NSAttributedString *)anAttributedString
+	    documentAttributes:(NSDictionary *)docAttributes;
+- (NSUInteger)pageCount;
+- (void)setPageIndex:(NSUInteger)index;
+- (NSSize)containerSize;
+- (void)drawWithRect:(NSRect)rect;
+@end
+
 @interface EmacsFrameController (Accessibility)
 - (void)postAccessibilityNotificationsToEmacsView;
 @end
@@ -715,10 +740,28 @@ typedef unsigned int NSUInteger;
 @end
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@interface NSAttributedString (AvailableOn1050AndLater)
++ (NSArray *)textTypes;
+@end
+#endif
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
 @interface NSColor (AvailableOn1070AndLater)
 + (NSColor *)colorWithSRGBRed:(CGFloat)red green:(CGFloat)green
 			 blue:(CGFloat)blue alpha:(CGFloat)alpha;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1080
+@interface NSColor (AvailableOn1080AndLater)
+- (CGColorRef)CGColor;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@interface NSColorSpace (AvailableOn1050AndLater)
+- (CGColorSpaceRef)CGColorSpace;
 @end
 #endif
 
@@ -830,6 +873,12 @@ enum {
 @end
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1090
+@interface NSScreen (AvailableOn1090AndLater)
++ (BOOL)screensHaveSeparateSpaces;
+@end
+#endif
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
 @interface NSMenu (AvailableOn1060AndLater)
 - (BOOL)popUpMenuPositioningItem:(NSMenuItem *)item
@@ -894,6 +943,12 @@ enum {
 @property CGFloat contentsScale;
 @end
 #endif
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1090
+@interface NSView (AvailableOn1090AndLater)
+- (void)setLayerUsesCoreImageFilters:(BOOL)usesFilters;
+@end
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050

@@ -552,7 +552,7 @@ extern int mac_service_provider_registered_p (void);
 
 /* Defined in macappkit.m.  */
 
-extern Lisp_Object mac_nsvalue_to_lisp (CFTypeRef);
+extern Lisp_Object mac_nsobject_to_lisp (CFTypeRef);
 extern void mac_alert_sound_play (void);
 extern double mac_appkit_version (void);
 extern double mac_system_uptime (void);
@@ -654,7 +654,10 @@ extern int mac_tracking_area_works_with_cursor_rects_invalidation_p (void);
 extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
 extern int mac_webkit_supports_svg_p (void);
-
+extern CFArrayRef mac_document_copy_type_identifiers (void);
+extern CFTypeRef mac_document_create (CFURLRef, CFDataRef, CFIndex,
+				      CGSize *, CGColorRef *, Lisp_Object *);
+extern void mac_document_draw (CGContextRef, CGRect, CFTypeRef);
 extern CFTypeRef mac_sound_create (Lisp_Object, Lisp_Object);
 extern void mac_sound_play (CFTypeRef, Lisp_Object, Lisp_Object);
 

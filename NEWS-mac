@@ -1,4 +1,41 @@
+* emacs-24.3-mac-4.4 (2013-10-24)
+
+** Fixed bugs
+
+*** Default directory is set to `/' on OS X 10.9.
+
+*** Some animation effects cause crash on OS X 10.9.
+
+*** SVG images (via WebKit) cannot be loaded on OS X 10.9.
+
+*** Clicking a menu bar in an inactive appearance shows bogus menus on
+OS X 10.9.
+
+*** Switching full screen state on multi-monitor environment may cause
+exception on OS X 10.9.
+
+*** Focusing on a `fullboth' frame in a non-primary monitor does not
+hide the menu bars on OS X 10.9.
+Note: the menu bar hidden by a `fullboth' frame in a non-primary
+monitor does not appear automatically by moving the mouse to the place
+where the menu bar was.  I suspect this is a bug in AppKit.
+
+*** Battery status is not shown correctly on OS X 10.9.
+Apply a fix for bug#15694 by Masashi Fujimoto and Glenn Morris.
+
+** Improvements
+
+*** Double clicking an emoji character in the Character Viewer now
+complements the Variation Selector 16 if the character is sensitive to
+the selector.
+
+*** The image type `image-io' can now additionally rasterize data in
+several document formats.  The list of supported formats can be
+obtained by `(image-io-types)'.
+
+
 * emacs-24.3-mac-4.3 (2013-09-21)
+http://lists.gnu.org/archive/html/emacs-devel/2013-09/msg00416.html
 
 ** Fixed bugs
 
