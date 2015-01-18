@@ -354,6 +354,16 @@ works as a fallback of @code{imagemagick} if the Mac port is not
 compiled with the ImageMagick support, so you can scale and rotate
 images even without ImageMagick.
 
+The @code{image-io} image type also provides rasterization of several
+document formats such as PDF, RTF, HTML, WEBARCHIVE, DOC, etc.  The
+list of supported formats can be obtained by evaluating
+@code{(image-io-types)}.  Because the @code{image-io} image type
+accepts the same image descriptor properties as the @code{imagemagick}
+image type does (@pxref{ImageMagick Images,,, elisp, The Emacs Lisp
+Reference Manual}), you can specify the page number (0 for the first
+page) of the document by the @code{:index} property and get the number
+of pages by the @code{image-metadata} function.
+
 @cindex high-resolution image support (Mac port)
 When loading an image from a file, the Mac port respects the
 @code{@@2x} naming convention for high-resolution and automatically
@@ -376,10 +386,12 @@ preferred on the Mac port.
 
 As SVG images are inherently resolution-independent, the images are
 automatically rendered with appropriate scaling for high-resolution
-environment.  Note that resolution can change dynamically on Mac OS X
-10.7 and later even for the same frame, when it is moved from one
-monitor to another for example.  The Mac port detects such a
-resolution change and re-render images or reload files automatically.
+environment.  Rasterization of documents by the @code{image-io} image
+type mentioned above also takes account of resolution.  Note that
+resolution can change dynamically on Mac OS X 10.7 and later even for
+the same frame, when it is moved from one monitor to another for
+example.  The Mac port detects such a resolution change and re-render
+images or reload files automatically.
 
 @cindex color specifications (Mac port)
 When specifying colors, RGB triplets (@pxref{Colors}) are interpreted

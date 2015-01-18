@@ -75,6 +75,8 @@ typedef struct _XImage
   int bits_per_pixel;		/* bits per pixel (ZPixmap) */
 } *Pixmap;
 
+typedef const struct _EmacsDocument *EmacsDocumentRef; /* opaque */
+
 #define Cursor ThemeCursor
 #define No_Cursor (-1)
 

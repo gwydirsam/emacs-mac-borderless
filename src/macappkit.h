@@ -19,6 +19,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #undef Z
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <Quartz/Quartz.h>
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
 #import <QuartzCore/QuartzCore.h>
 #endif
@@ -127,6 +128,13 @@ typedef unsigned int NSUInteger;
 + (NSScreen *)closestScreenForRect:(NSRect)aRect;
 - (BOOL)containsDock;
 - (BOOL)canShowMenuBar;
+@end
+
+/* Workarounds for memory leaks on OS X 10.9.  Should be removed once
+   the problem is fixed in the framework.  */
+@interface NSApplication (Undocumented)
+- (void)_installMemoryPressureDispatchSources;
+- (void)_installMemoryStatusDispatchSources;
 @end
 
 @interface EmacsApplication : NSApplication
@@ -645,23 +653,38 @@ typedef unsigned int NSUInteger;
 - (int)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor;
 @end
 
-/* Class for document rasterization.  It also works as the layout
-   manager delegate when rasterizing a multi-page document.  */
+/* Protocol for document rasterization.  */
 
-@interface EmacsDocumentRasterizer : NSObject <NSLayoutManagerDelegate>
+@protocol EmacsDocumentRasterizer <NSObject>
+- (id)initWithURL:(NSURL *)url;
+- (id)initWithData:(NSData *)data;
++ (NSArray *)supportedTypes;
+- (NSUInteger)pageCount;
+- (NSSize)integralSizeOfPageAtIndex:(NSUInteger)index;
+- (CGColorRef)copyBackgroundCGColorOfPageAtIndex:(NSUInteger)index;
+- (NSDictionary *)documentAttributesOfPageAtIndex:(NSUInteger)index;
+- (void)drawPageAtIndex:(NSUInteger)index inRect:(NSRect)rect
+	      inContext:(CGContextRef)ctx;
+@end
+
+/* Class for PDF rasterization.  */
+
+@interface EmacsPDFDocument : PDFDocument <EmacsDocumentRasterizer>
+@end
+
+/* Class for document rasterization other than PDF.  It also works as
+   the layout manager delegate when rasterizing a multi-page
+   document.  */
+
+@interface EmacsDocumentRasterizer : NSObject <EmacsDocumentRasterizer, NSLayoutManagerDelegate>
 {
-  /* The text storage for the document to be rasterized.  */
+  /* The text storage and document attributes for the document to be
+     rasterized.  */
   NSTextStorage *textStorage;
-
-  /* The index of the page to be rasterized.  */
-  NSUInteger pageIndex;
+  NSDictionary *documentAttributes;
 }
 - (id)initWithAttributedString:(NSAttributedString *)anAttributedString
 	    documentAttributes:(NSDictionary *)docAttributes;
-- (NSUInteger)pageCount;
-- (void)setPageIndex:(NSUInteger)index;
-- (NSSize)containerSize;
-- (void)drawWithRect:(NSRect)rect;
 @end
 
 @interface EmacsFrameController (Accessibility)
@@ -879,6 +902,12 @@ enum {
 @end
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1090
+@interface NSSavePanel (AvailableOn1090AndLater)
+- (void)setShowsTagField:(BOOL)flag;
+@end
+#endif
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
 @interface NSMenu (AvailableOn1060AndLater)
 - (BOOL)popUpMenuPositioningItem:(NSMenuItem *)item
@@ -918,6 +947,7 @@ typedef NSUInteger NSEventPhase;
 - (NSEventPhase)momentumPhase;
 - (BOOL)isDirectionInvertedFromDevice;
 - (NSEventPhase)phase;
++ (BOOL)isSwipeTrackingFromScrollEventsEnabled;
 @end
 #endif
 
@@ -943,6 +973,12 @@ enum {
 @property CGFloat contentsScale;
 @end
 #endif
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+@interface NSFileHandle (AvailableOn1060AndLater)
++ (id)fileHandleForReadingFromURL:(NSURL *)url error:(NSError **)error;
+@end
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1090

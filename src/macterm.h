@@ -655,9 +655,13 @@ extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
 extern int mac_webkit_supports_svg_p (void);
 extern CFArrayRef mac_document_copy_type_identifiers (void);
-extern CFTypeRef mac_document_create (CFURLRef, CFDataRef, CFIndex,
-				      CGSize *, CGColorRef *, Lisp_Object *);
-extern void mac_document_draw (CGContextRef, CGRect, CFTypeRef);
+extern EmacsDocumentRef mac_document_create_with_url (CFURLRef);
+extern EmacsDocumentRef mac_document_create_with_data (CFDataRef);
+extern size_t mac_document_get_page_count (EmacsDocumentRef);
+extern void mac_document_copy_page_info (EmacsDocumentRef, size_t, CGSize *,
+					 CGColorRef *, CFDictionaryRef *);
+extern void mac_document_draw_page (CGContextRef, CGRect, EmacsDocumentRef,
+				    size_t);
 extern CFTypeRef mac_sound_create (Lisp_Object, Lisp_Object);
 extern void mac_sound_play (CFTypeRef, Lisp_Object, Lisp_Object);
 

@@ -1881,11 +1881,13 @@ non-nil, and the input device supports it."
   ;;  (deltaX deltaY deltaZ)		; floats
   ;;  (scrollingDeltaX scrollingDeltaY) ; nil or floats
   ;;  (phase momentumPhase)		; nil, nil and an integer, or integers
+  ;;  isSwipeTrackingFromScrollEventsEnabled ; nil or t
   ;;  )
   ;; The list might end early if the remaining elements are all nil.
   ;; TODO: horizontal scrolling
   (if (not (memq (event-basic-type event) '(wheel-up wheel-down)))
       (when (and (memq (event-basic-type event) '(wheel-left wheel-right))
+		 (nth 4 (nth 3 event)) ;; "Swipe between pages" enabled.
 		 (eq (nth 1 (nth 3 (nth 3 event))) 1)) ;; NSEventPhaseBegan
 	;; Post a swipe event when the momentum phase begins for
 	;; horizontal wheel events.

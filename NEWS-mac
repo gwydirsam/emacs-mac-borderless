@@ -1,4 +1,44 @@
+* emacs-24.3-mac-4.5 (2013-11-06)
+
+** Fixed bugs
+
+*** Resizing a frame from its top or left edge flaps on OS X 10.9.
+
+*** Animation effects become invisible after exiting from full screen
+on OS X 10.9.
+
+*** Memory leaks by multiple installations of memory pressure/status
+dispatch sources on OS X 10.9, caused by repeated start/stop of the
+main event loop.
+I think this is a bug in AppKit.  A workaround is added.
+
+*** (insert-image (create-image "" 'image-io t)) causes crash.
+
+*** Info directory in the application bundle is not respected.
+Reported by Dave Abrahams.
+
+** Improvements
+
+*** Suppress confusing "Tags:" field in the "New File" dialog on OS X
+10.9.
+
+*** The image type `image-io' can now additionally rasterize data in
+PDF format.
+
+*** Document rasterization (including PDF) in the image type
+`image-io' now caches the loaded documents for a while so as to avoid
+loading a multi-page document several times when successively
+rasterizing multiple pages of the document.
+
+*** Respect the "Swipe between pages" setting for touch-sensitive
+mice/trackpads.
+
+*** Fonts used in the "CJK variety" line in the etc/HELLO file are
+selected consistently regardless of the system language setting.
+
+
 * emacs-24.3-mac-4.4 (2013-10-24)
+http://lists.gnu.org/archive/html/emacs-devel/2013-10/msg00743.html
 
 ** Fixed bugs
 

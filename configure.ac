@@ -4408,7 +4408,7 @@ fail;
        libs_quartz_core=
      fi
      # Whether to use the Cocoa framework.
-     libs_macgui="-framework Carbon -framework WebKit $libs_quartz_core -framework IOKit -framework Cocoa"
+     libs_macgui="-framework Carbon -framework WebKit -framework Quartz $libs_quartz_core -framework IOKit -framework Cocoa"
      headerpad_extra=690
    elif test "$HAVE_NS" = "yes"; then
      libs_macgui="-framework AppKit"
