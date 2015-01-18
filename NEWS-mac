@@ -1,4 +1,11 @@
+* emacs-24.2.90-mac-3.90 [experimental/hackers-only] (2012-11-25)
+Based on Emacs 24.2.90.  Remove mac-{get,set}-file-{creator,type} and
+mac-process-hi-command.  Move the "//#define PURE_SECTION" line from
+src/s/darwin.h to src/conf_post.h.
+
+
 * emacs-24.2-mac-3.3 (2012-10-27)
+http://lists.gnu.org/archive/html/emacs-devel/2012-10/msg00733.html
 
 ** Fixed bugs
 

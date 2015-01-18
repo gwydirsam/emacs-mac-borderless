@@ -331,8 +331,5 @@ macselect.o: macselect.c macterm.h macgui.h frame.h dispextern.h blockinput.h \
 macappkit.o: macappkit.m blockinput.h atimer.h systime.h macterm.h macgui.h \
   frame.h $(INTERVALS_H) charset.h character.h fontset.h termhooks.h buffer.h \
   window.h keyboard.h coding.h keymap.h macfont.h macappkit.h lisp.h $(config_h)
-mactoolbox.o: mactoolbox.c blockinput.h atimer.h systime.h macterm.h macgui.h \
-  frame.h dispextern.h charset.h character.h coding.h composite.h fontset.h \
-  termhooks.h buffer.h window.h keyboard.h font.h ccl.h lisp.h $(config_h)
 
 ### deps.mk ends here

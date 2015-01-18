@@ -8,7 +8,12 @@ don't need to try this.
 
   *** IMPORTANT NOTE ***
 
-  If you find a bug, then please try to reproduce it with some
+  This version (3.9X) should be regarded as experimental/hackers-only.
+  Things are subject to change/removal in an incompatible way.  Please
+  refrain from distributing this in any different form, including for
+  (binary) distribution basis, until the version gets to 4.0.
+
+  Also, if you find a bug, then please try to reproduce it with some
   official builds such as X11 or NS (Cocoa).  If it turns out to be
   specific to the Mac port, then please report it to
   "mituharu+bug-gnu-emacs-mac@math.s.chiba-u.ac.jp".  Otherwise (i.e.,

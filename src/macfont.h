@@ -21,15 +21,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #endif
 
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
 #define USE_NS_FONT_DESCRIPTOR 1
-#endif
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1040 || (MAC_OS_X_VERSION_MIN_REQUIRED < 1040 && MAC_OS_X_VERSION_MIN_REQUIRED >= 1020)
-#define USE_NS_FONT_MANAGER 1
-#endif
-
 #endif
 
 /* Symbolic types of this font-driver.  */
@@ -42,10 +34,6 @@ extern Lisp_Object Qmac_ct;
 #if USE_NS_FONT_DESCRIPTOR
 /* Core Text emulation by NSFontDescriptor, for Mac OS X 10.4. */
 extern Lisp_Object Qmac_fd;
-#endif
-#if USE_NS_FONT_MANAGER
-/* Core Text emulation by NSFontManager, for Mac OS X 10.2 - 10.3. */
-extern Lisp_Object Qmac_fm;
 #endif
 
 /* Structure used by Mac `shape' functions for storing layout

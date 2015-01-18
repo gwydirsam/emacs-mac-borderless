@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License
 along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
-#include <setjmp.h>
 
 #include "lisp.h"
 #include "dispextern.h"
@@ -51,10 +50,6 @@ static CTLineRef mac_ctfont_create_line_with_string_and_font (CFStringRef,
 #if USE_NS_FONT_DESCRIPTOR
 /* Core Text emulation by NSFontDescriptor, for Mac OS X 10.4. */
 Lisp_Object Qmac_fd;
-#endif
-#if USE_NS_FONT_MANAGER
-/* Core Text emulation by NSFontManager, for Mac OS X 10.2 - 10.3. */
-Lisp_Object Qmac_fm;
 #endif
 
 /* The font property key specifying the font design destination.  The
@@ -1014,7 +1009,7 @@ static int macfont_has_char (Lisp_Object, int);
 static unsigned macfont_encode_char (struct font *, int);
 static int macfont_text_extents (struct font *, unsigned int *, int,
 				 struct font_metrics *);
-static int macfont_draw (struct glyph_string *, int, int, int, int, int);
+static int macfont_draw (struct glyph_string *, int, int, int, int, bool);
 static Lisp_Object macfont_shape (Lisp_Object);
 static int macfont_variation_glyphs (struct font *, int c,
 				     unsigned variations[256]);
@@ -1022,7 +1017,7 @@ static void macfont_filter_properties (Lisp_Object, Lisp_Object);
 
 struct font_driver macfont_driver =
   {
-    0,				/* Qmac_ct, Qmac_fd, or Qmac_fm */
+    LISP_INITIALLY_ZERO,	/* Qmac_ct or Qmac_fd */
     0,				/* case insensitive */
     macfont_get_cache,
     macfont_list,
@@ -1081,7 +1076,9 @@ macfont_get_charset (Lisp_Object registry)
   re[j] = '\0';
   regexp = make_unibyte_string (re, j);
   for (i = 0; cf_charset_table[i].name; i++)
-    if (fast_c_string_match_ignore_case (regexp, cf_charset_table[i].name) >= 0)
+    if (fast_c_string_match_ignore_case
+	(regexp, cf_charset_table[i].name,
+	 strlen (cf_charset_table[i].name)) >= 0)
       break;
   if (! cf_charset_table[i].name)
     return -1;
@@ -1109,24 +1106,9 @@ macfont_get_charset (Lisp_Object registry)
 	  CFRelease (charset);
 	  return -1;
 	}
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1030
-#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-      if (CFCharacterSetCreateCopy != NULL)
-#endif
-	{
-	  cf_charset_table[i].cf_charset = CFCharacterSetCreateCopy (NULL,
-								     charset);
-	  CFRelease (charset);
-	}
-#if MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-      else		       /* CFCharacterSetCreateCopy == NULL */
-#endif
-#endif
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1030 || MAC_OS_X_VERSION_MIN_REQUIRED == 1020
-	{
-	  cf_charset_table[i].cf_charset = charset;
-	}
-#endif
+      cf_charset_table[i].cf_charset = CFCharacterSetCreateCopy (NULL,
+								 charset);
+      CFRelease (charset);
       /* CFCharacterSetCreateWithCharactersInString does not handle
 	 surrogate pairs properly as of Mac OS X 10.5.  */
      cf_charset_table[i].cf_charset_string = string;
@@ -1160,9 +1142,10 @@ struct OpenTypeSpec
 static struct OpenTypeSpec *
 macfont_get_open_type_spec (Lisp_Object otf_spec)
 {
-  struct OpenTypeSpec *spec = xmalloc (sizeof (struct OpenTypeSpec));
+  struct OpenTypeSpec *spec = xmalloc (sizeof *spec);
   Lisp_Object val;
-  int i, j, negative;
+  int i, j;
+  bool negative;
 
   if (! spec)
     return NULL;
@@ -1199,7 +1182,7 @@ macfont_get_open_type_spec (Lisp_Object otf_spec)
       spec->features[i] =
 	(min (PTRDIFF_MAX, SIZE_MAX) / sizeof (int) < XINT (len)
 	 ? 0
-	 : xmalloc (sizeof (int) * XINT (len)));
+	 : malloc (XINT (len) * sizeof *spec->features[i]));
       if (! spec->features[i])
 	{
 	  if (i > 0 && spec->features[0])
@@ -1466,10 +1449,10 @@ macfont_supports_charset_and_languages_p (FontDescriptorRef desc,
 	    result = CFCharacterSetIsSupersetOfSet (desc_charset, charset);
 	  else 			/* VECTORP (chars) */
 	    {
-	      int j;
+	      ptrdiff_t j;
 
 	      for (j = 0; j < ASIZE (chars); j++)
-		if (NATNUMP (AREF (chars, j))
+		if (TYPE_RANGED_INTEGERP (UTF32Char, AREF (chars, j))
 		    && CFCharacterSetIsLongCharacterMember (desc_charset,
 							    XFASTINT (AREF (chars, j))))
 		  break;
@@ -1534,7 +1517,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
   CFCharacterSetRef charset = NULL;
   CFArrayRef languages = NULL;
 
-  BLOCK_INPUT;
+  block_input ();
 
   family = AREF (spec, FONT_FAMILY_INDEX);
   if (! NILP (family))
@@ -1831,7 +1814,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
   if (attributes) CFRelease (attributes);
   if (family_name) CFRelease (family_name);
 
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return val;
 }
@@ -1843,7 +1826,7 @@ macfont_match (Lisp_Object frame, Lisp_Object spec)
   CFMutableDictionaryRef attributes;
   FontDescriptorRef pat_desc = NULL, desc = NULL;
 
-  BLOCK_INPUT;
+  block_input ();
 
   attributes = macfont_create_attributes_with_spec (spec);
   if (attributes)
@@ -1863,7 +1846,7 @@ macfont_match (Lisp_Object frame, Lisp_Object spec)
 					  0);
       CFRelease (desc);
     }
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   FONT_ADD_LOG ("macfont-match", spec, entity);
   return entity;
@@ -1875,7 +1858,7 @@ macfont_list_family (Lisp_Object frame)
   Lisp_Object list = Qnil;
   CFArrayRef families;
 
-  BLOCK_INPUT;
+  block_input ();
 
   families = mac_font_create_available_families ();
   if (families)
@@ -1887,7 +1870,7 @@ macfont_list_family (Lisp_Object frame)
       CFRelease (families);
     }
 
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return list;
 }
@@ -1899,9 +1882,9 @@ macfont_free_entity (Lisp_Object entity)
 				  AREF (entity, FONT_EXTRA_INDEX));
   CFStringRef name = XSAVE_VALUE (XCDR (val))->pointer;
 
-  BLOCK_INPUT;
+  block_input ();
   CFRelease (name);
-  UNBLOCK_INPUT;
+  unblock_input ();
 }
 
 static Lisp_Object
@@ -1931,9 +1914,9 @@ macfont_open (FRAME_PTR f, Lisp_Object entity, int pixel_size)
   if (size == 0)
     size = pixel_size;
 
-  BLOCK_INPUT;
+  block_input ();
   macfont = mac_font_create_with_name (font_name, size);
-  UNBLOCK_INPUT;
+  unblock_input ();
   if (! macfont)
     return Qnil;
 
@@ -1953,7 +1936,7 @@ macfont_open (FRAME_PTR f, Lisp_Object entity, int pixel_size)
   font->driver = &macfont_driver;
   font->encoding_charset = font->repertory_charset = -1;
 
-  BLOCK_INPUT;
+  block_input ();
 
   macfont_info = (struct macfont_info *) font;
   macfont_info->macfont = macfont;
@@ -2059,11 +2042,11 @@ macfont_open (FRAME_PTR f, Lisp_Object entity, int pixel_size)
   font->underline_position = - mac_font_get_underline_position (macfont) + 0.5;
   font->underline_thickness = mac_font_get_underline_thickness (macfont) + 0.5;
 
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   /* Unfortunately Xft doesn't provide a way to get minimum char
      width.  So, we use space_width instead.  */
-  font->min_width = font->space_width; /* XXX */
+  font->min_width = font->max_width = font->space_width; /* XXX */
 
   font->baseline_offset = 0;
   font->relative_compose = 0;
@@ -2079,7 +2062,7 @@ macfont_close (FRAME_PTR f, struct font *font)
   struct macfont_info *macfont_info = (struct macfont_info *) font;
   int i;
 
-  BLOCK_INPUT;
+  block_input ();
   CFRelease (macfont_info->macfont);
   CGFontRelease (macfont_info->cgfont);
   if (macfont_info->screen_font)
@@ -2090,7 +2073,7 @@ macfont_close (FRAME_PTR f, struct font *font)
       xfree (macfont_info->metrics[i]);
   if (macfont_info->metrics)
     xfree (macfont_info->metrics);
-  UNBLOCK_INPUT;
+  unblock_input ();
 }
 
 static int
@@ -2099,7 +2082,7 @@ macfont_has_char (Lisp_Object font, int c)
   int result;
   CFCharacterSetRef charset;
 
-  BLOCK_INPUT;
+  block_input ();
   if (FONT_ENTITY_P (font))
     {
       Lisp_Object val;
@@ -2114,7 +2097,7 @@ macfont_has_char (Lisp_Object font, int c)
     charset = macfont_get_cf_charset (XFONT_OBJECT (font));
 
   result = CFCharacterSetIsLongCharacterMember (charset, c);
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return result;
 }
@@ -2125,9 +2108,9 @@ macfont_encode_char (struct font *font, int c)
   struct macfont_info *macfont_info = (struct macfont_info *) font;
   CGGlyph glyph;
 
-  BLOCK_INPUT;
+  block_input ();
   glyph = macfont_get_glyph_for_character (font, c);
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return glyph != kCGFontIndexInvalid ? glyph : FONT_INVALID_CODE;
 }
@@ -2138,7 +2121,7 @@ macfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
 {
   int width, i;
 
-  BLOCK_INPUT;
+  block_input ();
   width = macfont_glyph_extents (font, code[0], metrics, NULL, 0);
   for (i = 1; i < nglyphs; i++)
     {
@@ -2159,7 +2142,7 @@ macfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
 	}
       width += w;
     }
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   if (metrics)
     metrics->width = width;
@@ -2169,7 +2152,7 @@ macfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
 
 static int
 macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
-	      int with_background)
+	      bool with_background)
 {
   FRAME_PTR f = s->f;
   struct macfont_info *macfont_info = (struct macfont_info *) s->font;
@@ -2178,7 +2161,7 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
   int len = to - from;
   int i;
 
-  BLOCK_INPUT;
+  block_input ();
 
   context = mac_begin_cg_clip (f, s->gc);
 
@@ -2313,7 +2296,7 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
 
   mac_end_cg_clip (f);
 
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return len;
 }
@@ -2324,7 +2307,7 @@ macfont_shape (Lisp_Object lgstring)
   struct font *font;
   struct macfont_info *macfont_info;
   FontRef macfont;
-  EMACS_INT glyph_len, len, i, j;
+  ptrdiff_t glyph_len, len, i, j;
   CFIndex nonbmp_len;
   UniChar *unichars;
   CFIndex *nonbmp_indices;
@@ -2368,7 +2351,7 @@ macfont_shape (Lisp_Object lgstring)
     }
   nonbmp_indices[j] = len + j;	/* sentinel */
 
-  BLOCK_INPUT;
+  block_input ();
 
   string = CFStringCreateWithCharactersNoCopy (NULL, unichars, len + nonbmp_len,
 					       kCFAllocatorNull);
@@ -2383,12 +2366,12 @@ macfont_shape (Lisp_Object lgstring)
       CFRelease (string);
     }
 
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   if (used == 0)
     return Qnil;
 
-  BLOCK_INPUT;
+  block_input ();
 
   for (i = 0; i < used; i++)
     {
@@ -2459,7 +2442,7 @@ macfont_shape (Lisp_Object lgstring)
 	}
     }
 
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return make_number (used);
 }
@@ -2760,7 +2743,7 @@ macfont_variation_glyphs (struct font *font, int c, unsigned variations[256])
   CharacterCollection uvs_collection;
   int i, n = 0;
 
-  BLOCK_INPUT;
+  block_input ();
   uvs_table = macfont_get_uvs_table (font, &uvs_collection);
 
   if (uvs_table)
@@ -2790,7 +2773,7 @@ macfont_variation_glyphs (struct font *font, int c, unsigned variations[256])
 	    }
 	}
     }
-  UNBLOCK_INPUT;
+  unblock_input ();
 
   return n;
 }
@@ -3388,9 +3371,9 @@ mac_register_font_driver (struct frame *f)
       SInt32 response;
       OSErr err;
 
-      BLOCK_INPUT;
+      block_input ();
       err = Gestalt (gestaltSystemVersion, &response);
-      UNBLOCK_INPUT;
+      unblock_input ();
       if (err == noErr)
 	{
 #if USE_CORE_TEXT
@@ -3403,15 +3386,10 @@ mac_register_font_driver (struct frame *f)
 	    macfont_driver.type = Qmac_fd;
 	  else
 #endif
-#if USE_NS_FONT_MANAGER
-	  if (response >= 0x1020)
-	    macfont_driver.type = Qmac_fm;
-	  else
-#endif
-	    abort ();
+	    emacs_abort ();
 	}
       else
-	abort ();
+	emacs_abort ();
 
       macfont_driver_type = macfont_driver.type;
     }
@@ -3441,16 +3419,6 @@ syms_of_macfont (void)
     mac_fdfont_driver = macfont_driver;
     mac_fdfont_driver.type = Qmac_fd;
     register_font_driver (&mac_fdfont_driver, NULL);
-  }
-#endif
-#if USE_NS_FONT_MANAGER
-  {
-    static struct font_driver mac_fmfont_driver;
-
-    DEFSYM (Qmac_fm, "mac-fm");
-    mac_fmfont_driver = macfont_driver;
-    mac_fmfont_driver.type = Qmac_fm;
-    register_font_driver (&macfont_driver, NULL);
   }
 #endif
   DEFSYM (QCdestination, ":destination");

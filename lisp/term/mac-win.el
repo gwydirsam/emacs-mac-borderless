@@ -64,6 +64,8 @@
 ;; An alist of X options and the function which handles them.  See
 ;; ../startup.el.
 
+(eval-when-compile (require 'cl-lib))
+
 ;; (if (not (eq window-system 'mac))
 ;;     (error "%s: Loading mac-win.el but not compiled for Mac" (invocation-name)))
 
@@ -1696,12 +1698,15 @@ See also `mac-dnd-known-types'."
 (declare-function accelerate-menu "macmenu.c" (&optional frame) t)
 
 (defun mac-menu-bar-open (&optional frame)
-  "Open the menu bar if `menu-bar-mode' is on, otherwise call `tmm-menubar'."
+  "Open the menu bar if it is shown.
+`popup-menu' is used if it is off."
   (interactive "i")
-  (if (and menu-bar-mode
-	   (fboundp 'accelerate-menu))
-      (accelerate-menu frame)
-    (tmm-menubar)))
+  (cond
+   ((and (not (zerop (or (frame-parameter nil 'menu-bar-lines) 0)))
+	 (fboundp 'accelerate-menu))
+    (accelerate-menu frame))
+   (t
+    (popup-menu (mouse-menu-bar-map) last-nonmenu-event))))
 
 (defun mac-mouse-buffer-menu (event)
   "Like 'mouse-buffer-menu', but contextual menu is added if possible."
@@ -2274,6 +2279,8 @@ standard ones in `x-handle-args'."
 
 (defun mac-initialize-window-system ()
   "Initialize Emacs for Mac GUI frames."
+  (cl-assert (not mac-initialized))
+
   ;; Make sure we have a valid resource name.
   (or (stringp x-resource-name)
       (let (i)
@@ -2393,6 +2400,7 @@ standard ones in `x-handle-args'."
 
   (setq mac-initialized t))
 
+(add-to-list 'display-format-alist '("\\`Mac\\'" . mac))
 (add-to-list 'handle-args-function-alist '(mac . mac-handle-args))
 (add-to-list 'frame-creation-function-alist '(mac . x-create-frame-with-faces))
 (add-to-list 'window-system-initialization-alist '(mac . mac-initialize-window-system))

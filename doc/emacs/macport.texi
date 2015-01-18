@@ -340,17 +340,10 @@ displayed with the rounded width 3, for example.
 executes it as an AppleScript command, and returns the result as a
 string.
 
-@findex mac-set-file-creator
-@findex mac-get-file-creator
-@findex mac-set-file-type
-@findex mac-get-file-type
 @findex mac-file-alias-p
-  The functions @code{mac-set-file-creator},
-@code{mac-get-file-creator}, @code{mac-set-file-type}, and
-@code{mac-get-file-type} can be used to set and get creator and file
-codes.  The function @code{mac-file-alias-p} can be used to check if
-the specified file name is a name of an alias file, and if so, which
-file it is referring to.
+  The function @code{mac-file-alias-p} can be used to check if the
+specified file name is a name of an alias file, and if so, which file
+it is referring to.
 
 @findex mac-get-preference
 @findex mac-convert-property-list
