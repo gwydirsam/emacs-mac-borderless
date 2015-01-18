@@ -2844,10 +2844,8 @@ mac_ctfont_create_preferred_family_for_attributes (CFDictionaryRef attributes)
   CFStringRef result = NULL;
   CFStringRef charset_string =
     CFDictionaryGetValue (attributes, MAC_FONT_CHARACTER_SET_STRING_ATTRIBUTE);
-  CFIndex length;
 
-  if (charset_string
-      && (length = CFStringGetLength (charset_string)) > 0)
+  if (charset_string && CFStringGetLength (charset_string) > 0)
     {
       CFAttributedStringRef attr_string = NULL;
       CTLineRef ctline = NULL;

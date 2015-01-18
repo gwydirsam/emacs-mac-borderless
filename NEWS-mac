@@ -1,4 +1,28 @@
+* emacs-24.3-mac-4.3 (2013-09-21)
+
+** Fixed bugs
+
+*** Invocation via "Login Items" or "Resume" does not respect PATH
+setting in ~/.MacOSX/environment.plist on OS X 10.7 and earlier.
+Note: OS X 10.8 does not use ~/.MacOSX/environment.plist anyway.
+
+*** Spotlight in Help menu is not installed on Mac OS X 10.5 if
+language setting is other than English.
+
+*** Closing a window causes crash if compiled with ARC.
+This primarily happens with the latest clang Apple LLVM version 5.0,
+but also with earlier versions if the memory leak below is fixed.
+
+*** Memory leaks with ARC on clang Apple LLVM version 4.2 (possibly
+compiler bug).
+
+** Improvements
+
+*** Try built-in libxml2 on OS X 10.8 as a fallback.
+
+
 * emacs-24.3-mac-4.2 (2013-05-11)
+http://lists.gnu.org/archive/html/emacs-devel/2013-05/msg00264.html
 
 ** Fixed bugs
 

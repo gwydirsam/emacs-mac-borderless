@@ -463,9 +463,15 @@ NSSizeToCGSize (NSSize nssize)
 - (void)runTemporarilyWithBlock:(void (^)(void))block
 {
   [[NSRunLoop currentRunLoop]
-    performSelector:@selector(stopAfterCallingBlock:)
-    target:self argument:block order:0
-    modes:[NSArray arrayWithObject:NSDefaultRunLoopMode]];
+    performSelector:@selector(stopAfterCallingBlock:) target:self
+#if USE_ARC && defined (__clang__) && __clang_major__ < 5
+    /* `copy' is unnecessary for ARC on clang Apple LLVM version 5.0.
+       Without `copy', earlier versions leak memory.  */
+	   argument:[block copy]
+#else
+	   argument:block
+#endif
+	      order:0 modes:[NSArray arrayWithObject:NSDefaultRunLoopMode]];
   [self run];
 }
 #else
@@ -857,6 +863,26 @@ has_full_screen_with_dedicated_desktop (void)
 
 /* Autorelease pool.  */
 
+#if __clang_major__ >= 3
+#define BEGIN_AUTORELEASE_POOL	@autoreleasepool {
+#define END_AUTORELEASE_POOL	}
+#define BEGIN_AUTORELEASE_POOL_BLOCK_INPUT	\
+  @autoreleasepool {
+#define END_AUTORELEASE_POOL_BLOCK_INPUT	\
+  block_input (); } unblock_input ()
+#else
+#define BEGIN_AUTORELEASE_POOL					\
+  { NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]
+#define END_AUTORELEASE_POOL			\
+  [pool release]; }
+#define BEGIN_AUTORELEASE_POOL_BLOCK_INPUT				\
+  block_input ();							\
+  { NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];		\
+  unblock_input ()
+#define END_AUTORELEASE_POOL_BLOCK_INPUT		\
+  block_input (); [pool release]; } unblock_input ()
+#endif
+
 #if MAC_USE_AUTORELEASE_LOOP
 void
 mac_autorelease_loop (Lisp_Object (^body) (void))
@@ -865,25 +891,9 @@ mac_autorelease_loop (Lisp_Object (^body) (void))
 
   do
     {
-#if __clang_major__ >= 3
-      @autoreleasepool {
-#else
-      NSAutoreleasePool *pool;
-
-      block_input ();
-      pool = [[NSAutoreleasePool alloc] init];
-      unblock_input ();
-#endif
-
+      BEGIN_AUTORELEASE_POOL_BLOCK_INPUT;
       val = body ();
-
-      block_input ();
-#if __clang_major__ >= 3
-      }
-#else
-      [pool release];
-#endif
-      unblock_input ();
+      END_AUTORELEASE_POOL_BLOCK_INPUT;
     }
   while (!NILP (val));
 }
@@ -947,6 +957,49 @@ mac_system_uptime (void)
 
       return nanoseconds.hi * 4.294967296 + nanoseconds.lo * 1e-9;
     }
+#endif
+}
+
+Boolean
+mac_is_current_process_frontmost (void)
+{
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+  return [[NSRunningApplication currentApplication] isActive];
+#else
+  OSErr err;
+  ProcessSerialNumber front_psn;
+  static const ProcessSerialNumber current_psn = {0, kCurrentProcess};
+  Boolean front_p;
+
+  err = GetFrontProcess (&front_psn);
+  if (err == noErr)
+    err = SameProcess (&front_psn, &current_psn, &front_p);
+  if (err == noErr)
+    return front_p;
+  return false;
+#endif
+}
+
+void
+mac_bring_current_process_to_front (Boolean front_window_only_p)
+{
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+  NSApplicationActivationOptions options;
+
+  if (front_window_only_p)
+    options = NSApplicationActivateIgnoringOtherApps;
+  else
+    options = (NSApplicationActivateAllWindows
+	       | NSApplicationActivateIgnoringOtherApps);
+  [[NSRunningApplication currentApplication] activateWithOptions:options];
+#else
+  static const ProcessSerialNumber current_psn = {0, kCurrentProcess};
+
+  if (front_window_only_p)
+    SetFrontProcessWithOptions (&current_psn,
+				kSetFrontProcessFrontWindowOnly);
+  else
+    SetFrontProcess (&current_psn);
 #endif
 }
 
@@ -2260,6 +2313,12 @@ extern void mac_save_keyboard_input_source (void);
 					  styleMask:windowStyle
 					    backing:NSBackingStoreBuffered
 					      defer:deferCreation];
+#if USE_ARC
+  /* Increase retain count to accommodate itself to
+     released-when-closed on ARC.  Just setting released-when-closed
+     to NO leads to crash in some situations.  */
+  CF_BRIDGING_RETAIN (window);
+#endif
   if (oldWindow)
     {
       [window setTitle:[oldWindow title]];
@@ -3281,6 +3340,21 @@ extern void mac_save_keyboard_input_source (void);
     [overlayWindow setAlphaValue:[emacsWindow alphaValue]];
 }
 
+- (BOOL)isWindowFrontmost
+{
+  NSArray *orderedWindows = [NSApp orderedWindows];
+
+  if ([orderedWindows count] > 0)
+    {
+      NSWindow *frontWindow = [orderedWindows objectAtIndex:0];
+
+      return ([frontWindow isEqual:overlayWindow]
+	      || [frontWindow isEqual:emacsWindow]);
+    }
+
+  return NO;
+}
+
 @end				// EmacsFrameController
 
 /* Window Manager function replacements.  */
@@ -3383,13 +3457,11 @@ mac_collapse_frame_window (struct frame *f, Boolean collapse)
 }
 
 Boolean
-mac_is_frame_window_front (struct frame *f)
+mac_is_frame_window_frontmost (struct frame *f)
 {
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  NSArray *orderedWindows = [NSApp orderedWindows];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-  return ([orderedWindows count] > 0
-	  && [[orderedWindows objectAtIndex:0] isEqual:window]);
+  return [frameController isWindowFrontmost];
 }
 
 void
@@ -5115,8 +5187,7 @@ mac_end_cg_clip (struct frame *f)
 
 void
 mac_scroll_area (struct frame *f, GC gc, int src_x, int src_y,
-		 unsigned int width, unsigned int height, int dest_x,
-		 int dest_y)
+		 int width, int height, int dest_x, int dest_y)
 {
   EmacsFrameController *frameController = FRAME_CONTROLLER (f);
   NSRect rect = NSMakeRect (src_x, src_y, width, height);
@@ -7170,11 +7241,7 @@ XTread_socket (struct terminal *terminal, struct input_event *hold_quit)
   /* So people can tell when we have read the available input.  */
   input_signal_count++;
 
-#if __clang_major__ >= 3
-  @autoreleasepool {
-#else
-  pool = [[NSAutoreleasePool alloc] init];
-#endif
+  BEGIN_AUTORELEASE_POOL;
 
   minimumInterval = [emacsController minimumIntervalForReadSocket];
   if (lastCallDate
@@ -7266,11 +7333,7 @@ XTread_socket (struct terminal *terminal, struct input_event *hold_quit)
 	}
     }
 
-#if __clang_major__ >= 3
-  }
-#else
-  [pool release];
-#endif
+  END_AUTORELEASE_POOL;
 
   unblock_input ();
 
@@ -7721,7 +7784,7 @@ extern int name_is_separator (const char *);
 static void update_services_menu_types (void);
 static void mac_fake_menu_bar_click (EventPriority);
 
-static NSString *localizedMenuTitleForEdit;
+static NSString *localizedMenuTitleForEdit, *localizedMenuTitleForHelp;
 
 @implementation NSMenu (Emacs)
 
@@ -8207,6 +8270,9 @@ init_menu_bar (void)
   NSMenu *appleMenu = [[NSMenu alloc] init];
   EmacsMenu *mainMenu = [[EmacsMenu alloc] init];
   NSBundle *appKitBundle = [NSBundle bundleWithIdentifier:@"com.apple.AppKit"];
+  NSString *localizedTitleForServices = /* Mac OS X 10.6 and later.  */
+    NSLocalizedStringFromTableInBundle (@"Services", @"Services",
+					appKitBundle, NULL);
 
   [NSApp setServicesMenu:servicesMenu];
 
@@ -8220,8 +8286,8 @@ init_menu_bar (void)
 	     action:@selector(preferences:) keyEquivalent:@""];
   [appleMenu addItem:[NSMenuItem separatorItem]];
   [appleMenu setSubmenu:servicesMenu
-	     forItem:[appleMenu addItemWithTitle:@"Services"
-				action:nil keyEquivalent:@""]];
+		forItem:[appleMenu addItemWithTitle:localizedTitleForServices
+					     action:nil keyEquivalent:@""]];
   [appleMenu addItem:[NSMenuItem separatorItem]];
   [appleMenu addItemWithTitle:@"Hide Emacs"
 	     action:@selector(hide:) keyEquivalent:@"h"];
@@ -8250,6 +8316,9 @@ init_menu_bar (void)
   localizedMenuTitleForEdit =
     MRC_RETAIN (NSLocalizedStringFromTableInBundle (@"Edit", @"InputManager",
 						    appKitBundle, NULL));
+  localizedMenuTitleForHelp =
+    MRC_RETAIN (NSLocalizedStringFromTableInBundle (@"Help", @"HelpManager",
+						    appKitBundle, NULL));
 }
 
 /* Fill menu bar with the items defined by WV.  If DEEP_P, consider
@@ -8259,7 +8328,7 @@ init_menu_bar (void)
 void
 mac_fill_menubar (widget_value *wv, int deep_p)
 {
-  NSMenu *newMenu, *mainMenu = [NSApp mainMenu];
+  NSMenu *newMenu, *mainMenu = [NSApp mainMenu], *helpMenu = nil;
   NSInteger index, nitems = [mainMenu numberOfItems];
   int needs_update_p = deep_p;
 
@@ -8273,6 +8342,10 @@ mac_fill_menubar (widget_value *wv, int deep_p)
 					      kCFStringEncodingMacRoman));
       NSMenu *submenu;
 
+      /* The title of the Help menu needs to be localized in order for
+	 Spotlight for Help to be installed on Mac OS X 10.5.  */
+      if ([title isEqualToString:@"Help"])
+	title = localizedMenuTitleForHelp;
       if (!needs_update_p)
 	{
 	  if (index >= nitems)
@@ -8292,6 +8365,8 @@ mac_fill_menubar (widget_value *wv, int deep_p)
 	 "Edit" menu, we have to localize the menu title.  */
       if ([title isEqualToString:@"Edit"])
 	title = localizedMenuTitleForEdit;
+      else if (title == localizedMenuTitleForHelp)
+	helpMenu = submenu;
 
       [newMenu setSubmenu:submenu
 		  forItem:[newMenu addItemWithTitle:title action:nil
@@ -8315,6 +8390,8 @@ mac_fill_menubar (widget_value *wv, int deep_p)
       MRC_RELEASE (appleMenuItem);
 
       [NSApp setMainMenu:newMenu];
+      if (helpMenu && [NSApp respondsToSelector:@selector(setHelpMenu:)])
+	[NSApp setHelpMenu:helpMenu];
     }
 
   MRC_RELEASE (newMenu);

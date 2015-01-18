@@ -1515,16 +1515,23 @@ modifiers, it changes the global tool-bar visibility setting."
 (defvar mac-help-topics)
 
 (defun mac-setup-help-topics ()
-  (unless mac-help-topics
-    (require 'info)
-    (info-initialize)
-    (let ((filename (Info-find-file "Emacs" t)))
-      (if (null filename)
-	  (setq mac-help-topics t)
-	(setq mac-help-topics
-	      (mapcar (lambda (node-info)
-			(encode-coding-string (car node-info) 'utf-8))
-		      (Info-toc-build filename)))))))
+  (unless (or mac-help-topics inhibit-menubar-update)
+    (let ((current-message (current-message)))
+      (unwind-protect
+	  (progn
+	    (require 'info)
+	    (info-initialize)
+	    (let ((filename (Info-find-file "Emacs" t)))
+	      (if (null filename)
+		  (setq mac-help-topics t)
+		(setq mac-help-topics
+		      (mapcar (lambda (node-info)
+				(encode-coding-string (car node-info) 'utf-8))
+			      (Info-toc-build filename))))))
+	(unless (equal (current-message) current-message)
+	  (if current-message
+	      (message "%s" current-message)
+	    (message nil)))))))
 
 (defun mac-handle-select-help-topic (event)
   (interactive "e")
@@ -2532,6 +2539,7 @@ standard ones in `x-handle-args'."
 	      (mac-mouse-wheel-mode 1)))
 
   (add-hook 'menu-bar-update-hook 'mac-setup-help-topics)
+  (run-with-idle-timer 0.1 nil 'mac-setup-help-topics)
 
   (substitute-key-definition 'exit-splash-screen 'mac-exit-splash-screen
 			     splash-screen-keymap)

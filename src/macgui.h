@@ -220,7 +220,7 @@ typedef uint32_t WMState;
 
 typedef struct {
     int x, y;
-    unsigned width, height;
+    int width, height;
 } XRectangle;
 
 #define NativeRectangle XRectangle

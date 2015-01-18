@@ -337,6 +337,7 @@ typedef unsigned int NSUInteger;
 - (void)invalidateCursorRectsForEmacsView;
 - (void)maskRoundedBottomCorners:(NSRect)clipRect directly:(BOOL)flag;
 - (void)storeModifyFrameParametersEvent:(Lisp_Object)alist;
+- (BOOL)isWindowFrontmost;
 @end
 
 /* Class for Emacs view that handles drawing events only.  It is used
@@ -502,12 +503,6 @@ typedef unsigned int NSUInteger;
 @end
 
 @interface EmacsFrameController (Toolbar) <NSToolbarDelegate>
-- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar
-     itemForItemIdentifier:(NSString *)itemIdentifier
- willBeInsertedIntoToolbar:(BOOL)flag;
-- (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar;
-- (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar;
-- (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
 - (void)setupToolBarWithVisibility:(BOOL)visible;
 - (void)updateToolbarDisplayMode;
 - (void)storeToolBarEvent:(id)sender;
@@ -761,6 +756,7 @@ typedef NSUInteger NSApplicationPresentationOptions;
 - (void)registerUserInterfaceItemSearchHandler:(id<NSUserInterfaceItemSearching>)handler;
 - (BOOL)searchString:(NSString *)searchString inUserInterfaceItemString:(NSString *)stringToSearch
 	 searchRange:(NSRange)searchRange foundRange:(NSRange *)foundRange;
+- (void)setHelpMenu:(NSMenu *)helpMenu;
 @end
 #endif
 

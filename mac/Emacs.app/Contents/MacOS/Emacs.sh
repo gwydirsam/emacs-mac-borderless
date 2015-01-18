@@ -23,11 +23,16 @@
 filename="$(basename "$0")"
 set "$(dirname "$0")/${filename%.sh}" "$@"
 
-# "sw_vers -productVersion" requires 10.3.
-case $(sw_vers | awk '/^ProductVersion:/ {print $2}') in
+case $(sw_vers -productVersion) in
     10.[0-7]|10.[0-7].*)
 	# "$HOME/.MacOSX/environment.plist" is ignored on OS X 10.8.
 	if [ -f "$HOME/.MacOSX/environment.plist" ]; then
+	    # Invocation via "Login Items" or "Resume" resets PATH.
+	    case ${SHLVL} in
+		1)
+		    p="$(defaults read "$HOME/.MacOSX/environment" PATH 2>/dev/null)" && PATH="$p"
+		    ;;
+	    esac
 	    exec "$@"
 	fi
 	;;

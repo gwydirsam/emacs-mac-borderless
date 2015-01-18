@@ -217,9 +217,6 @@ extern CGFloat mac_font_get_underline_position (FontRef);
 extern CGFloat mac_font_get_underline_thickness (FontRef);
 extern CGFontRef mac_font_copy_graphics_font (FontRef);
 extern CFDataRef mac_font_copy_non_synthetic_table (FontRef, FourCharCode);
-extern ATSUTextLayout mac_font_get_text_layout_for_text_ptr (FontRef,
-							     ConstUniCharArrayPtr,
-							     UniCharCount);
 
 extern CFStringRef mac_font_create_preferred_family_for_attributes (CFDictionaryRef);
 extern CGFloat mac_font_get_advance_width_for_glyph (FontRef, CGGlyph);

@@ -280,12 +280,17 @@ Preference that can be set with the @command{defaults} command.
 defaults write org.gnu.Emacs AppleAntiAliasingThreshold @var{n}
 @end example
 
-  The bold variant of a font is displayed as a synthetic one, if it
-lacks genuine bold (e.g., Monaco).  Unfortunately, synthetic bold
-looks thinner if the background is darker than the foreground and the
-@acronym{LCD} font smoothing is turned on.  In such cases, you can
-turn off synthetic bold for particular fonts and use overstriking
-instead by customizing the variable @code{face-ignored-fonts}:
+  The bold and italic variants of a font are synthesized if it lacks
+genuine ones (e.g., Monaco).  Unfortunately, synthetic ones look so
+ugly (faint or smudgy) without anti-aliasing.  So the Mac port
+automatically turns on anti-aliasing for synthetic bold or italic,
+regardless of the anti-aliasing settings mentioned above.
+
+  Also, synthetic bold looks thinner if the background is darker than
+the foreground and the @acronym{LCD} font smoothing is turned on.  In
+such cases, you can turn off synthetic bold for particular fonts and
+use overstriking instead by customizing the variable
+@code{face-ignored-fonts}:
 
 @example
 (add-to-list 'face-ignored-fonts "\\`-[^-]*-monaco-bold-")
@@ -372,8 +377,8 @@ preferred on the Mac port.
 As SVG images are inherently resolution-independent, the images are
 automatically rendered with appropriate scaling for high-resolution
 environment.  Note that resolution can change dynamically on Mac OS X
-10.7 and later even for the same frame, by dragging it from one
-display to another for example.  The Mac port detects such a
+10.7 and later even for the same frame, when it is moved from one
+monitor to another for example.  The Mac port detects such a
 resolution change and re-render images or reload files automatically.
 
 @cindex color specifications (Mac port)
