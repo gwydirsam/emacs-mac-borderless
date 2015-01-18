@@ -1,5 +1,28 @@
+* emacs-24.3-mac-4.1 (2013-04-11)
+
+** Fixed bugs
+
+*** Crash if an unknown font/fontset is set to default-frame-alist.
+
+*** Invoking Service producing output does not replace the selected
+text.
+Reported by Nicholas Riley.
+
+*** Invoking Service via C-mouse-down-1 may not insert the output
+correctly.
+
+** Improvements
+
+*** Add sound support.  Like on other platforms, it is synchronous and
+you cannot quit it with C-g.
+
+*** Round frame bottom corners on OS X 10.7 and later, even when
+internal-border-width is 0.
+
+
 * emacs-24.3-mac-4.0 (2013-03-11)
 Based on Emacs 24.3.
+http://lists.gnu.org/archive/html/emacs-devel/2013-03/msg00251.html
 
 ** Fixed bugs
 
