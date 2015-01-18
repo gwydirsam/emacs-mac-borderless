@@ -668,6 +668,6 @@ extern Lisp_Object macfont_nsctfont_to_spec (void *);
 extern struct glyph *x_y_to_hpos_vpos (struct window *, int, int,
 				       int *, int *, int *, int *, int *);
 extern void frame_to_window_pixel_xy (struct window *, int *, int *);
-extern void rows_from_pos_range (struct window *, EMACS_INT , EMACS_INT,
+extern void rows_from_pos_range (struct window *, ptrdiff_t , ptrdiff_t,
 				 Lisp_Object, struct glyph_row **,
 				 struct glyph_row **);

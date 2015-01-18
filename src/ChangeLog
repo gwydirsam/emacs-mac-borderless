@@ -1,3 +1,86 @@
+2013-02-05  Daniel Colascione  <dancol@dancol.org>
+
+	* emacs.c: Use execvp, not execv, when DAEMON_MUST_EXEC, so that
+	daemon mode works on cygw32 when Emacs is installed and not just
+	during development.
+
+2013-02-01  Eli Zaretskii  <eliz@gnu.org>
+
+	* callproc.c (Fcall_process): Make sure program name in PATH and
+	new_argv[0] is encoded, if needed.  Otherwise, un-encoded string
+	is passed to exec/spawnve, which fails unless the file-name
+	encoding is UTF-8.
+
+	* w32proc.c (sys_spawnve): Make sure escape_char is initialized,
+	even if w32-quote-process-args is nil.
+
+2013-01-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (sys_open): Zero out the flags for the new file descriptor.
+	(sys_close): Zero out the flags for the file descriptor before
+	closing it.  (Bug#13546)
+
+2013-01-26  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (parse_root, get_volume_info, readdir, read_unc_volume)
+	(logon_network_drive, stat_worker, symlink, chase_symlinks): Use
+	CharNextExA and CharPrevExA to iterate over file names encoded in
+	DBCS.  (Bug#13553)
+
+2013-01-25  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (w32_get_long_filename, init_environment, readlink):
+	Support file names encoded in DBCS codepages.
+	(readlink): Use the current file-name-coding-system, not the ANSI
+	codepage, to decode and handle targets of symlinks.
+
+2013-01-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (max_filename_mbslen): New function.
+	(normalize_filename, readdir): Use it to detect locales where ANSI
+	encoding of file names uses a double-byte character set (DBCS).
+	If a DBCS encoding is used, advance by characters using
+	CharNextExA, instead of incrementing a 'char *' pointer.  Use
+	_mbslwr instead of _strlwr.  (Bug#13515)
+
+2013-01-22  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32heap.c (allocate_heap) [!_WIN64]: Decrease the initial
+	request of memory reservation to 1.7GB.  (Bug#13065)
+
+2013-01-20  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* coding.c (detect_coding_iso_2022): Move back mis-reordered code
+	at check_extra_latin label.  (Bug#13505)
+
+2013-01-17  Glenn Morris  <rgm@gnu.org>
+
+	* fns.c (Frandom): Doc fix.
+
+2013-01-13  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsfont.m (LCD_SMOOTHING_MARGIN): New define.
+	(nsfont_draw): Remove disabling of LCD smoothing.
+	(ns_glyph_metrics): Add LCD_SMOOTHING_MARGIN to bearings to fix
+	Bug#11484 with LCD smoothing on.
+
+2013-01-11  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>  (tiny change)
+
+	* gtkutil.c (xg_initialize): Backport from trunk.
+	Add ifdef HAVE_FREETYPE around x_last_font_name (Bug#13403).
+
+2013-01-11  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Backport typo fix from trunk, for AIX (Bug#13408).
+	* eval.c (mark_backtrace) [BYTE_MARK_STACK]: Remove stray '*'.
+	This follows up on the 2012-09-29 patch that removed indirection
+	for the 'function' field.  Reported by Sergey Vinokurov in
+	<http://lists.gnu.org/archive/html/emacs-devel/2012-11/msg00263.html>.
+
+	Fix SIGDANGER handlers, for AIX (Bug#13408).
+	* sysdep.c.c (handle_danger_signal, deliver_danger_signal) [SIGDANGER]:
+	Move handlers here from emacs.c; they were out of place.
+
 2013-01-05  Eli Zaretskii  <eliz@gnu.org>
 
 	* xdisp.c (dump_glyph): Align glyph data better.  Use "pD" instead

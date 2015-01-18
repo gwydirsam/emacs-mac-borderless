@@ -4795,7 +4795,8 @@ mac_get_selected_range (struct window *w, CFRange *range)
   else
     start = marker_position (w->pointm);
 
-  if (NILP (Vtransient_mark_mode) || NILP (BVAR (b, mark_active)))
+  if (NILP (Vtransient_mark_mode) || NILP (BVAR (b, mark_active))
+      || XMARKER (BVAR (b, mark))->buffer == NULL)
     end = start;
   else
     {

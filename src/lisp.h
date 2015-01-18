@@ -1692,7 +1692,8 @@ typedef struct {
    : RANGED_INTEGERP (0, x, TYPE_MAXIMUM (type)))
 
 #define INTEGERP(x) (LISP_INT_TAG_P (XTYPE ((x))))
-#ifdef USE_LSB_TAG /* Below usually gives shorter instructions.  */
+#if defined USE_LSB_TAG && !(LONG_MAX < LLONG_MAX && defined WIDE_EMACS_INT)
+/* Below usually gives shorter instructions.  */
 #define SYMBOLP(x) (XTYPE (XIL (XUNTAG (x, Lisp_Symbol))) == 0)
 #define MISCP(x) (XTYPE (XIL (XUNTAG (x, Lisp_Misc))) == 0)
 #define VECTORLIKEP(x) (XTYPE (XIL (XUNTAG (x, Lisp_Vectorlike))) == 0)

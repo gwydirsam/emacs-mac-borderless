@@ -269,7 +269,8 @@ typedef unsigned int NSUInteger;
      EmacsFrameController object is associated with as delegate.  */
   struct frame *emacsFrame;
 
-  /* The view for the Emacs frame.  */
+  /* Window and view for the Emacs frame.  */
+  EmacsWindow *emacsWindow;
   EmacsView *emacsView;
 
   /* Window and view overlaid on the Emacs frame window.  */
@@ -308,6 +309,7 @@ typedef unsigned int NSUInteger;
 - (void)setupEmacsView;
 - (void)setupWindow;
 - (struct frame *)emacsFrame;
+- (EmacsWindow *)emacsWindow;
 - (WMState)windowManagerState;
 - (void)setWindowManagerState:(WMState)newState;
 - (void)updateBackingScaleFactor;

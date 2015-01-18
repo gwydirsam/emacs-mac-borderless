@@ -955,11 +955,11 @@ mac_system_uptime (void)
 			     Application
  ************************************************************************/
 
-#define FRAME_MAC_WINDOW_OBJECT(f) ((__bridge EmacsWindow *)	\
-				    FRAME_MAC_WINDOW (f))
+#define FRAME_CONTROLLER(f) ((__bridge EmacsFrameController *)	\
+			     FRAME_MAC_WINDOW (f))
+#define FRAME_MAC_WINDOW_OBJECT(f) ([FRAME_CONTROLLER(f) emacsWindow])
 
 static EmacsController *emacsController;
-static NSMutableSet *emacsFrameControllers;
 
 static void init_menu_bar (void);
 static void init_apple_event_handler (void);
@@ -1680,7 +1680,8 @@ emacs_windows_need_display_p (void)
 
   if ([window isKindOfClass:[EmacsWindow class]])
     {
-      EmacsFrameController *frameController = [window delegate];
+      EmacsFrameController *frameController = ((EmacsFrameController *)
+					       [window delegate]);
       WMState windowManagerState = [frameController windowManagerState];
       NSApplicationPresentationOptions options;
 
@@ -1739,7 +1740,7 @@ emacs_windows_need_display_p (void)
 		      continue;
 		  }
 
-		frameController = [window delegate];
+		frameController = (EmacsFrameController *) [window delegate];
 		windowManagerState = [frameController windowManagerState];
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
 		if (has_full_screen_with_dedicated_desktop ()
@@ -1771,7 +1772,8 @@ emacs_windows_need_display_p (void)
 
   if ([window isKindOfClass:[EmacsWindow class]])
     {
-      EmacsFrameController *frameController = [window delegate];
+      EmacsFrameController *frameController = ((EmacsFrameController *)
+					       [window delegate]);
       WMState windowManagerState = [frameController windowManagerState];
       NSApplicationPresentationOptions options;
 
@@ -1817,8 +1819,6 @@ install_application_handler (void)
      delegate.  */
   [NSApp run];
 
-  emacsFrameControllers = [[NSMutableSet alloc] init];
-
   return noErr;
 }
 
@@ -1843,10 +1843,6 @@ extern void mac_save_keyboard_input_source (void);
 #define DEFAULT_NUM_COLS (80)
 #define RESIZE_CONTROL_WIDTH (15)
 #define RESIZE_CONTROL_HEIGHT (15)
-
-#define FRAME_CONTROLLER(f)					\
-  ((EmacsFrameController *)					\
-   [(__bridge EmacsWindow *)(FRAME_MAC_WINDOW (f)) delegate])
 
 @implementation EmacsWindow
 
@@ -2051,7 +2047,8 @@ extern void mac_save_keyboard_input_source (void);
 {
   Lisp_Object alist =
     list1 (Fcons (Qtool_bar_lines, make_number ([sender state] != NSOffState)));
-  EmacsFrameController *frameController = [self delegate];
+  EmacsFrameController *frameController = ((EmacsFrameController *)
+					   [self delegate]);
 
   [frameController storeModifyFrameParametersEvent:alist];
 }
@@ -2166,27 +2163,23 @@ extern void mac_save_keyboard_input_source (void);
 
 - (void)attachOverlayWindow;
 {
-  struct frame *f = emacsFrame;
-  EmacsWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-
-  [window addChildWindow:overlayWindow ordered:NSWindowAbove];
-  [window addObserver:self forKeyPath:@"alphaValue" options:0 context:NULL];
+  [emacsWindow addChildWindow:overlayWindow ordered:NSWindowAbove];
+  [emacsWindow addObserver:self forKeyPath:@"alphaValue"
+		   options:0 context:NULL];
   [overlayView adjustWindowFrame];
   [overlayWindow orderFront:nil];
 }
 
 - (void)detachOverlayWindow
 {
-  NSWindow *window = [overlayWindow parentWindow];
-
-  [window removeObserver:self forKeyPath:@"alphaValue"];
-  [window removeChildWindow:overlayWindow];
+  [emacsWindow removeObserver:self forKeyPath:@"alphaValue"];
+  [emacsWindow removeChildWindow:overlayWindow];
 }
 
 - (void)setupWindow
 {
   struct frame *f = emacsFrame;
-  EmacsWindow *oldWindow = FRAME_MAC_WINDOW_OBJECT (f);
+  EmacsWindow *oldWindow = emacsWindow;
   Class windowClass;
   NSRect contentRect;
   NSUInteger windowStyle;
@@ -2247,8 +2240,7 @@ extern void mac_save_keyboard_input_source (void);
       hourglass = nil;
     }
 
-  /* Will be released with released-when-closed.  */
-  FRAME_MAC_WINDOW (f) = (void *) CF_BRIDGING_RETAIN (MRC_AUTORELEASE (window));
+  emacsWindow = window;
   [window setDelegate:self];
   [window useOptimizedDrawing:YES];
   [[window contentView] addSubview:emacsView];
@@ -2299,10 +2291,16 @@ extern void mac_save_keyboard_input_source (void);
   return emacsFrame;
 }
 
+- (EmacsWindow *)emacsWindow
+{
+  return emacsWindow;
+}
+
 #if !USE_ARC
 - (void)dealloc
 {
   [emacsView release];
+  /* emacsWindow is released via released-when-closed.  */
   [hourglass release];
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
   [layerHostingView release];
@@ -2320,12 +2318,11 @@ extern void mac_save_keyboard_input_source (void);
 {
   struct frame *f = emacsFrame;
   XSizeHints *size_hints = FRAME_SIZE_HINTS (f);
-  EmacsWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
   NSRect windowFrame, emacsViewBounds;
   NSSize emacsViewSizeInPixels, emacsViewSize;
   CGFloat dw, dh;
 
-  windowFrame = [window frame];
+  windowFrame = [emacsWindow frame];
   if (size_hints == NULL)
     return windowFrame.size;
 
@@ -2429,8 +2426,6 @@ extern void mac_save_keyboard_input_source (void);
 
 - (void)updateCollectionBehavior
 {
-  struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
   NSWindowCollectionBehavior behavior;
 
   if (windowManagerState & WM_STATE_NO_MENUBAR)
@@ -2454,14 +2449,13 @@ extern void mac_save_keyboard_input_source (void);
 	behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
 #endif
     }
-  [window setCollectionBehavior:behavior];
+  [emacsWindow setCollectionBehavior:behavior];
 }
 
 - (NSRect)preprocessWindowManagerStateChange:(WMState)newState
 {
-  struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  NSRect frameRect = [window frame], screenRect = [[window screen] frame];
+  NSRect frameRect = [emacsWindow frame];
+  NSRect screenRect = [[emacsWindow screen] frame];
   WMState oldState, diff;
 
   oldState = windowManagerState;
@@ -2504,10 +2498,7 @@ extern void mac_save_keyboard_input_source (void);
 
 - (NSRect)postprocessWindowManagerStateChange:(NSRect)frameRect
 {
-  struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-
-  frameRect = [window constrainFrameRect:frameRect toScreen:nil];
+  frameRect = [emacsWindow constrainFrameRect:frameRect toScreen:nil];
   if (!(windowManagerState & WM_STATE_FULLSCREEN))
     {
       NSSize hintedFrameSize = [self hintedWindowFrameSize:frameRect.size
@@ -2525,7 +2516,6 @@ extern void mac_save_keyboard_input_source (void);
 - (void)setWindowManagerState:(WMState)newState
 {
   struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
   WMState oldState, diff;
   enum {
     SET_FRAME_UNNECESSARY,
@@ -2543,7 +2533,7 @@ extern void mac_save_keyboard_input_source (void);
     {
       windowManagerState ^= (diff & (WM_STATE_STICKY | WM_STATE_NO_MENUBAR));
 
-      if ([window respondsToSelector:@selector(setCollectionBehavior:)])
+      if ([emacsWindow respondsToSelector:@selector(setCollectionBehavior:)])
 	[self updateCollectionBehavior];
     }
 
@@ -2551,12 +2541,13 @@ extern void mac_save_keyboard_input_source (void);
   if (has_full_screen_with_dedicated_desktop ()
       && (diff & WM_STATE_DEDICATED_DESKTOP))
     {
-      window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+      emacsWindow.collectionBehavior |=
+	NSWindowCollectionBehaviorFullScreenPrimary;
 
       if (diff & WM_STATE_FULLSCREEN)
 	{
 	  fullScreenTargetState = newState;
-	  [window toggleFullScreen:nil];
+	  [emacsWindow toggleFullScreen:nil];
 	}
       else if (newState & WM_STATE_DEDICATED_DESKTOP)
 	{
@@ -2586,7 +2577,7 @@ extern void mac_save_keyboard_input_source (void);
 	  fullScreenTargetState = ((newState & ~WM_STATE_FULLSCREEN)
 				   | WM_STATE_MAXIMIZED_HORZ
 				   | WM_STATE_MAXIMIZED_VERT);
-	  [window toggleFullScreen:nil];
+	  [emacsWindow toggleFullScreen:nil];
 	  fullscreenFrameParameterAfterTransition = &Qfullboth;
 	}
     }
@@ -2626,20 +2617,19 @@ extern void mac_save_keyboard_input_source (void);
 	    {
 #endif
 	      [self setupWindow];
-	      window = FRAME_MAC_WINDOW_OBJECT (f);
 #if 0
 	    }
 	  else
 	    {
 	      /* Changing NSFullScreenWindowMask does not preserve the
 		 toolbar visibility value on Mac OS X 10.7.  */
-	      BOOL isToolbarVisible = [[window toolbar] isVisible];
+	      BOOL isToolbarVisible = [[emacsWindow toolbar] isVisible];
 
-	      [window setStyleMask:([window styleMask]
-				    ^ NSFullScreenWindowMask)];
-	      [window setHasShadow:(!(newState & WM_STATE_FULLSCREEN))];
-	      [[window toolbar] setVisible:isToolbarVisible];
-	      if ([window isKeyWindow])
+	      [emacsWindow setStyleMask:([emacsWindow styleMask]
+					 ^ NSFullScreenWindowMask)];
+	      [emacsWindow setHasShadow:(!(newState & WM_STATE_FULLSCREEN))];
+	      [[emacsWindow toolbar] setVisible:isToolbarVisible];
+	      if ([emacsWindow isKeyWindow])
 		{
 		  [emacsController updatePresentationOptions];
 		  /* This is a workaround.  On Mac OS X 10.7, the
@@ -2665,22 +2655,22 @@ extern void mac_save_keyboard_input_source (void);
 #if 0
       else
 	{
-	  NSUInteger styleMask = [window styleMask];
+	  NSUInteger styleMask = [emacsWindow styleMask];
 
 	  if (showsResizeIndicator)
 	    styleMask |= NSResizableWindowMask;
 	  else
 	    styleMask &= ~NSResizableWindowMask;
-	  [window setStyleMask:styleMask];
+	  [emacsWindow setStyleMask:styleMask];
 	}
 #endif
 
       frameRect = [self postprocessWindowManagerStateChange:frameRect];
-      [window setFrame:frameRect display:YES];
+      [emacsWindow setFrame:frameRect display:YES];
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
       if (setFrameType == SET_FRAME_TOGGLE_FULL_SCREEN_LATER)
-	[window toggleFullScreen:nil];
+	[emacsWindow toggleFullScreen:nil];
 #endif
     }
 
@@ -2690,12 +2680,11 @@ extern void mac_save_keyboard_input_source (void);
 - (void)updateBackingScaleFactor
 {
   struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
   int backingScaleFactor;
 
-  if ([window respondsToSelector:@selector(backingScaleFactor)])
-    backingScaleFactor = [window backingScaleFactor];
-  else if ([window userSpaceScaleFactor] > 1)
+  if ([emacsWindow respondsToSelector:@selector(backingScaleFactor)])
+    backingScaleFactor = [emacsWindow backingScaleFactor];
+  else if ([emacsWindow userSpaceScaleFactor] > 1)
     backingScaleFactor = 2;
   else
     backingScaleFactor = 1;
@@ -2782,7 +2771,6 @@ extern void mac_save_keyboard_input_source (void);
 
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
-  EmacsWindow *window = [notification object];
   struct frame *f = emacsFrame;
   struct input_event inev;
 
@@ -2848,9 +2836,7 @@ extern void mac_save_keyboard_input_source (void);
 
 - (void)windowDidChangeScreen:(NSNotification *)notification
 {
-  EmacsWindow *window = [notification object];
-
-  if ([window isKeyWindow])
+  if ([emacsWindow isKeyWindow])
     [emacsController updatePresentationOptions];
 }
 
@@ -3008,16 +2994,12 @@ extern void mac_save_keyboard_input_source (void);
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
 - (void)setupFullScreenTransitionView
 {
-  struct frame *f = emacsFrame;
-  NSWindow *window;
   NSView *contentView, *transitionView;
   NSRect contentViewRect;
   NSBitmapImageRep *bitmap;
   CALayer *layer;
 
-  window = FRAME_MAC_WINDOW_OBJECT (f);
-
-  contentView = [window contentView];
+  contentView = [emacsWindow contentView];
   contentViewRect = [contentView visibleRect];
   bitmap = [contentView bitmapImageRepForCachingDisplayInRect:contentViewRect];
   [contentView cacheDisplayInRect:contentViewRect toBitmapImageRep:bitmap];
@@ -3026,7 +3008,7 @@ extern void mac_save_keyboard_input_source (void);
   contentViewRect.origin = NSZeroPoint;
   layer.bounds = NSRectToCGRect (contentViewRect);
   layer.contents = (id) [bitmap CGImage];
-  layer.contentsScale = [window backingScaleFactor];
+  layer.contentsScale = [emacsWindow backingScaleFactor];
   layer.contentsGravity = kCAGravityTopLeft;
 
   transitionView = [[NSView alloc] initWithFrame:contentViewRect];
@@ -3220,12 +3202,7 @@ extern void mac_save_keyboard_input_source (void);
 			change:(NSDictionary *)change context:(void *)context
 {
   if ([keyPath isEqualToString:@"alphaValue"])
-    {
-      struct frame *f = emacsFrame;
-      NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-
-      [overlayWindow setAlphaValue:[window alphaValue]];
-    }
+    [overlayWindow setAlphaValue:[emacsWindow alphaValue]];
 }
 
 @end				// EmacsFrameController
@@ -3583,8 +3560,8 @@ mac_flush (struct frame *f)
 void
 mac_update_begin (struct frame *f)
 {
-  EmacsWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  EmacsFrameController *frameController = [window delegate];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  EmacsWindow *window = [frameController emacsWindow];
 
   [window disableFlushWindow];
   [frameController lockFocusOnEmacsView];
@@ -3594,8 +3571,8 @@ mac_update_begin (struct frame *f)
 void
 mac_update_end (struct frame *f)
 {
-  EmacsWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  EmacsFrameController *frameController = [window delegate];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  EmacsWindow *window = [frameController emacsWindow];
 
   unset_global_focus_view_frame ();
   [frameController unlockFocusOnEmacsView];
@@ -3627,7 +3604,7 @@ mac_cursor_to (int vpos, int hpos, int y, int x)
     }
 }
 
-/* Create a new Mac window for the frame F and store it in
+/* Create a new Mac window for the frame F and store its delegate in
    FRAME_MAC_WINDOW (f).  */
 
 void
@@ -3647,9 +3624,9 @@ mac_create_frame_window (struct frame *f)
     }
 
   frameController = [[EmacsFrameController alloc] initWithEmacsFrame:f];
-  [emacsFrameControllers addObject:frameController];
-  MRC_RELEASE (frameController);
-  window = FRAME_MAC_WINDOW_OBJECT (f);
+  window = [frameController emacsWindow];
+  FRAME_MAC_WINDOW (f) =
+    (void *) CF_BRIDGING_RETAIN (MRC_AUTORELEASE (frameController));
 
   if (f->size_hint_flags & (USPosition | PPosition))
     {
@@ -3679,10 +3656,9 @@ void
 mac_dispose_frame_window (struct frame *f)
 {
   NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
   [window close];
-  [emacsFrameControllers removeObject:frameController];
+  CFRelease (FRAME_MAC_WINDOW (f));
 }
 
 void
@@ -3739,7 +3715,8 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 
 - (struct frame *)emacsFrame
 {
-  EmacsFrameController *frameController = [[self window] delegate];
+  EmacsFrameController *frameController = ((EmacsFrameController *)
+					   [[self window] delegate]);
 
   return [frameController emacsFrame];
 }
@@ -6013,11 +5990,9 @@ extern void mac_get_window_gravity_reference_point (struct frame *, int,
 
 - (void)setupToolBarWithVisibility:(BOOL)visible
 {
-  struct frame *f = emacsFrame;
   NSString *identifier =
-    [NSString stringWithFormat:TOOLBAR_IDENTIFIER_FORMAT, f];
+    [NSString stringWithFormat:TOOLBAR_IDENTIFIER_FORMAT, self];
   NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:identifier];
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
   NSButton *button;
 
   if (toolbar == nil)
@@ -6032,12 +6007,12 @@ extern void mac_get_window_gravity_reference_point (struct frame *, int,
   [toolbar setDelegate:self];
   [toolbar setVisible:visible];
 
-  [window setToolbar:toolbar];
+  [emacsWindow setToolbar:toolbar];
   MRC_RELEASE (toolbar);
 
   [self updateToolbarDisplayMode];
 
-  button = [window standardWindowButton:NSWindowToolbarButton];
+  button = [emacsWindow standardWindowButton:NSWindowToolbarButton];
   [button setTarget:emacsController];
   [button setAction:(NSSelectorFromString (@"toolbar-pill-button-clicked:"))];
 }
@@ -6047,9 +6022,7 @@ extern void mac_get_window_gravity_reference_point (struct frame *, int,
 
 - (void)updateToolbarDisplayMode
 {
-  struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  NSToolbar *toolbar = [window toolbar];
+  NSToolbar *toolbar = [emacsWindow toolbar];
   NSToolbarDisplayMode displayMode = NSToolbarDisplayModeDefault;
 
   if (EQ (Vtool_bar_style, Qimage))
@@ -6099,7 +6072,6 @@ extern void mac_get_window_gravity_reference_point (struct frame *, int,
 - (void)noteToolBarMouseMovement:(NSEvent *)event
 {
   struct frame *f = emacsFrame;
-  NSWindow *window;
   NSView *hitView;
 
   /* Return if mouse dragged.  */
@@ -6109,8 +6081,8 @@ extern void mac_get_window_gravity_reference_point (struct frame *, int,
   if (!VECTORP (f->tool_bar_items))
     return;
 
-  window = FRAME_MAC_WINDOW_OBJECT (f);
-  hitView = [[[window contentView] superview] hitTest:[event locationInWindow]];
+  hitView = [[[emacsWindow contentView] superview]
+	      hitTest:[event locationInWindow]];
   if ([hitView respondsToSelector:@selector(item)])
     {
       id item = [hitView performSelector:@selector(item)];
@@ -6149,9 +6121,8 @@ Boolean
 mac_is_frame_window_toolbar_visible (struct frame *f)
 {
   NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  NSToolbar *toolbar = [window toolbar];
 
-  return [toolbar isVisible];
+  return [[window toolbar] isVisible];
 }
 
 /* Update the tool bar for frame F.  Add new buttons and remove old.  */
@@ -6159,8 +6130,8 @@ mac_is_frame_window_toolbar_visible (struct frame *f)
 void
 update_frame_tool_bar (FRAME_PTR f)
 {
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  EmacsFrameController *frameController = [window delegate];
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  NSWindow *window = [frameController emacsWindow];
   short rx, ry;
   NSToolbar *toolbar;
   NSArray *items;
@@ -10458,9 +10429,7 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
 
 - (CALayer *)layerForRect:(NSRect)rect
 {
-  struct frame *f = emacsFrame;
-  NSWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
-  NSView *contentView = [window contentView];
+  NSView *contentView = [emacsWindow contentView];
   NSRect rectInContentView = [emacsView convertRect:rect toView:contentView];
   NSBitmapImageRep *bitmap =
     [contentView bitmapImageRepForCachingDisplayInRect:rectInContentView];

@@ -1488,7 +1488,7 @@ Special commands:
 ;;;***
 
 ;;;### (autoloads (auth-source-cache-expiry) "auth-source" "gnus/auth-source.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20755 17565 391628 0))
 ;;; Generated autoloads from gnus/auth-source.el
 
 (defvar auth-source-cache-expiry 7200 "\
@@ -3098,7 +3098,7 @@ Obsoletes `c-forward-into-nomenclature'.
 ;;;***
 
 ;;;### (autoloads (c-guess-basic-syntax) "cc-engine" "progmodes/cc-engine.el"
-;;;;;;  (20718 7922 212742 0))
+;;;;;;  (20750 47885 906996 0))
 ;;; Generated autoloads from progmodes/cc-engine.el
 
 (autoload 'c-guess-basic-syntax "cc-engine" "\
@@ -6426,8 +6426,8 @@ Optional arguments are passed to `dig-invoke'.
 ;;;***
 
 ;;;### (autoloads (dired-mode dired-noselect dired-other-frame dired-other-window
-;;;;;;  dired dired-listing-switches) "dired" "dired.el" (20707 18685
-;;;;;;  911514 0))
+;;;;;;  dired dired-listing-switches) "dired" "dired.el" (20730 4700
+;;;;;;  471174 0))
 ;;; Generated autoloads from dired.el
 
 (defvar dired-listing-switches (purecopy "-al") "\
@@ -7630,8 +7630,8 @@ With prefix arg NOCONFIRM, execute current line as-is without editing.
 
 ;;;***
 
-;;;### (autoloads (global-ede-mode) "ede" "cedet/ede.el" (20707 18685
-;;;;;;  911514 0))
+;;;### (autoloads (global-ede-mode) "ede" "cedet/ede.el" (20748 34276
+;;;;;;  6200 0))
 ;;; Generated autoloads from cedet/ede.el
 
 (defvar global-ede-mode nil "\
@@ -9490,7 +9490,7 @@ corresponding to a successful execution.
 ;;;;;;  visit-tags-table tags-table-mode find-tag-default-function
 ;;;;;;  find-tag-hook tags-add-tables tags-compression-info-list
 ;;;;;;  tags-table-list tags-case-fold-search) "etags" "progmodes/etags.el"
-;;;;;;  (20708 61830 550462 877000))
+;;;;;;  (20728 47414 952831 0))
 ;;; Generated autoloads from progmodes/etags.el
 
 (defvar tags-file-name nil "\
@@ -15300,8 +15300,8 @@ on these modes.
 ;;;***
 
 ;;;### (autoloads (imenu imenu-add-menubar-index imenu-add-to-menubar
-;;;;;;  imenu-sort-function) "imenu" "imenu.el" (20707 18685 911514
-;;;;;;  0))
+;;;;;;  imenu-sort-function) "imenu" "imenu.el" (20744 53127 564979
+;;;;;;  207000))
 ;;; Generated autoloads from imenu.el
 
 (defvar imenu-sort-function nil "\
@@ -15884,7 +15884,7 @@ For example, invoke \"emacs -batch -f batch-info-validate $info/ ~/*.info\"
 ;;;***
 
 ;;;### (autoloads (inversion-require-emacs) "inversion" "cedet/inversion.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20741 50977 527555 250000))
 ;;; Generated autoloads from cedet/inversion.el
 
 (autoload 'inversion-require-emacs "inversion" "\
@@ -17485,8 +17485,7 @@ The mail client is taken to be the handler of mailto URLs.
 
 ;;;### (autoloads (makefile-imake-mode makefile-bsdmake-mode makefile-makepp-mode
 ;;;;;;  makefile-gmake-mode makefile-automake-mode makefile-mode)
-;;;;;;  "make-mode" "progmodes/make-mode.el" (20707 18685 911514
-;;;;;;  0))
+;;;;;;  "make-mode" "progmodes/make-mode.el" (20746 5161 430619 0))
 ;;; Generated autoloads from progmodes/make-mode.el
 
 (autoload 'makefile-mode "make-mode" "\
@@ -19500,7 +19499,7 @@ including a reproducible test case and send the message.
 ;;;;;;  org-run-like-in-org-mode turn-on-orgstruct++ turn-on-orgstruct
 ;;;;;;  orgstruct-mode org-global-cycle org-cycle org-mode org-clock-persistence-insinuate
 ;;;;;;  turn-on-orgtbl org-version org-babel-do-load-languages) "org"
-;;;;;;  "org/org.el" (20716 21904 19206 0))
+;;;;;;  "org/org.el" (20755 21797 420152 0))
 ;;; Generated autoloads from org/org.el
 
 (autoload 'org-babel-do-load-languages "org" "\
@@ -19726,7 +19725,7 @@ Call the customize function with org as argument.
 ;;;;;;  org-search-view org-agenda-list org-batch-store-agenda-views
 ;;;;;;  org-store-agenda-views org-batch-agenda-csv org-batch-agenda
 ;;;;;;  org-agenda org-toggle-sticky-agenda) "org-agenda" "org/org-agenda.el"
-;;;;;;  (20716 59992 836492 0))
+;;;;;;  (20755 21797 420152 0))
 ;;; Generated autoloads from org/org-agenda.el
 
 (autoload 'org-toggle-sticky-agenda "org-agenda" "\
@@ -20005,8 +20004,8 @@ Special support for editing Org-mode files made to export to beamer.
 ;;;***
 
 ;;;### (autoloads (org-capture-import-remember-templates org-capture
-;;;;;;  org-capture-string) "org-capture" "org/org-capture.el" (20716
-;;;;;;  21904 19206 0))
+;;;;;;  org-capture-string) "org-capture" "org/org-capture.el" (20723
+;;;;;;  1786 641767 0))
 ;;; Generated autoloads from org/org-capture.el
 
 (autoload 'org-capture-string "org-capture" "\
@@ -20092,7 +20091,7 @@ Turn on or update column view in the agenda.
 ;;;***
 
 ;;;### (autoloads (org-check-version) "org-compat" "org/org-compat.el"
-;;;;;;  (20716 21904 19206 0))
+;;;;;;  (20723 1786 641767 0))
 ;;; Generated autoloads from org/org-compat.el
 
 (autoload 'org-check-version "org-compat" "\
@@ -20103,7 +20102,7 @@ Try very hard to provide sensible version strings.
 ;;;***
 
 ;;;### (autoloads (org-git-version org-release) "org-version" "org/org-version.el"
-;;;;;;  (20716 59992 836492 0))
+;;;;;;  (20755 21797 420152 0))
 ;;; Generated autoloads from org/org-version.el
 
 (autoload 'org-release "org-version" "\
@@ -21590,7 +21589,7 @@ Proced buffers.
 
 ;;;### (autoloads (profiler-find-profile-other-frame profiler-find-profile-other-window
 ;;;;;;  profiler-find-profile profiler-start) "profiler" "profiler.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20731 13121 306545 521000))
 ;;; Generated autoloads from profiler.el
 
 (autoload 'profiler-start "profiler" "\
@@ -21916,7 +21915,7 @@ If EXTENSION is any other symbol, it is ignored.
 ;;;***
 
 ;;;### (autoloads (python-mode run-python) "python" "progmodes/python.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20745 21595 25221 0))
 ;;; Generated autoloads from progmodes/python.el
 
 (add-to-list 'auto-mode-alist (cons (purecopy "\\.py\\'") 'python-mode))
@@ -22720,7 +22719,7 @@ This means the number of non-shy regexp grouping constructs
 
 ;;;### (autoloads (remember-diary-extract-entries remember-clipboard
 ;;;;;;  remember-other-frame remember) "remember" "textmodes/remember.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20746 41950 779927 439000))
 ;;; Generated autoloads from textmodes/remember.el
 
 (autoload 'remember "remember" "\
@@ -22739,8 +22738,7 @@ Call `remember' in another frame.
 
 (autoload 'remember-clipboard "remember" "\
 Remember the contents of the current clipboard.
-Most useful for remembering things from Netscape or other X Windows
-application.
+Most useful for remembering things from other applications.
 
 \(fn)" t nil)
 
@@ -22935,7 +22933,7 @@ variable.
 ;;;;;;  rmail-secondary-file-directory rmail-primary-inbox-list rmail-highlighted-headers
 ;;;;;;  rmail-retry-ignored-headers rmail-displayed-headers rmail-ignored-headers
 ;;;;;;  rmail-user-mail-address-regexp rmail-movemail-variant-p rmail-spool-directory
-;;;;;;  rmail-file-name) "rmail" "mail/rmail.el" (20709 57006 458286
+;;;;;;  rmail-file-name) "rmail" "mail/rmail.el" (20728 47414 952831
 ;;;;;;  0))
 ;;; Generated autoloads from mail/rmail.el
 
@@ -23878,7 +23876,7 @@ vertically fixed relative to window boundaries during scrolling.
 ;;;***
 
 ;;;### (autoloads (semantic-mode semantic-default-submodes) "semantic"
-;;;;;;  "cedet/semantic.el" (20707 18685 911514 0))
+;;;;;;  "cedet/semantic.el" (20748 34276 6200 0))
 ;;; Generated autoloads from cedet/semantic.el
 
 (defvar semantic-default-submodes '(global-semantic-idle-scheduler-mode global-semanticdb-minor-mode) "\
@@ -28239,7 +28237,7 @@ To untrace a function, use `untrace-function' or `untrace-all'.
 ;;;### (autoloads (tramp-unload-tramp tramp-completion-handle-file-name-completion
 ;;;;;;  tramp-completion-handle-file-name-all-completions tramp-unload-file-name-handlers
 ;;;;;;  tramp-file-name-handler tramp-syntax tramp-mode) "tramp"
-;;;;;;  "net/tramp.el" (20707 18685 911514 0))
+;;;;;;  "net/tramp.el" (20748 34276 6200 0))
 ;;; Generated autoloads from net/tramp.el
 
 (defvar tramp-mode t "\
@@ -32015,7 +32013,7 @@ Example:
 ;;;***
 
 ;;;### (autoloads (xml-parse-region xml-parse-file) "xml" "xml.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20738 3139 627868 0))
 ;;; Generated autoloads from xml.el
 
 (autoload 'xml-parse-file "xml" "\
@@ -32382,8 +32380,8 @@ Zone out, completely.
 ;;;;;;  "vc/ediff-ptch.el" "vc/ediff-vers.el" "vc/ediff-wind.el"
 ;;;;;;  "vc/pcvs-info.el" "vc/pcvs-parse.el" "vc/pcvs-util.el" "vc/vc-dav.el"
 ;;;;;;  "vcursor.el" "vt-control.el" "vt100-led.el" "w32-common-fns.el"
-;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (20718 10765 940268
-;;;;;;  335000))
+;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (20755 24213 662096
+;;;;;;  604000))
 
 ;;;***
 

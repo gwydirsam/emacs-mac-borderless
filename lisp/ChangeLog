@@ -1,3 +1,137 @@
+2013-02-02  Alan Mackenzie  <acm@muc.de>
+
+	Fix bug in the state cache mechanism.  Remove 'BOD "strategy".  Refactor.
+	* progmodes/cc-engine.el (c-get-fallback-scan-pos): Remove.
+	(c-parse-state-get-strategy): Don't return 'BOD any more.
+	(c-append-lower-brace-pair-to-state-cache): Extra parameter HERE
+	instead of narrowing.  Widen to top of buffer before searching
+	backwards for a brace pair.
+	(c-state-push-any-brace-pair): Add HERE parameter to function
+	call.
+	(c-append-to-state-cache): Extra parameter HERE in place of
+	narrowing.  Narrow to parameter HERE, in place of being called
+	narrowed.
+	(c-remove-stale-state-cache): Extra parameter HERE in place of
+	narrowing.  Check there's an open brace in the cache before
+	searching for its match.
+	(c-invalidate-state-cache-1): Add HERE parameter to function call.
+	(c-parse-state-1): Don't narrow here for 'forward strategy,
+	instead passing extra parameter HERE to several functions.  Remove
+	'BOD strategy.
+
+2013-02-01  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* mouse.el (mouse-drag-track): Always deactivate the mark before
+	running the final event's command since that command is in charge of
+	activating the mark if needed (bug#13523).
+
+2013-02-01  Juri Linkov  <juri@jurta.org>
+
+	* replace.el (perform-replace): Move let-bindings of isearch-*
+	variables deeper to the loop that searches for the next match.
+	Add bindings for `isearch-nonincremental' and `isearch-adjusted'.
+	Use `isearch-search-fun-default' instead of `isearch-search-fun'.
+	(Bug#13579)
+
+	* isearch.el (isearch-search-fun-default): Check for null
+	first element of isearch-cmds as a precaution when it's used
+	with inactive isearch.
+
+2013-02-01  Andrew W. Nosenko  <andrew.w.nosenko@gmail.com>  (tiny change)
+
+	* net/tramp.el (tramp-check-for-regexp): Avoid "Args out of range"
+	error when buffer in question is narrowed so position 1 is out of
+	visible part.
+
+2013-01-31  Glenn Morris  <rgm@gnu.org>
+
+	* textmodes/remember.el (remember-clipboard): Doc fix.
+
+2013-01-30  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* progmodes/make-mode.el (makefile-fill-paragraph): Reset syntax-table
+	properties (bug#13179).
+
+2013-01-30  Glenn Morris  <rgm@gnu.org>
+
+	* mouse.el (mouse-drag-line): Avoid pushing same event onto
+	unread-command-events twice in some cases.  This tries to implement
+	the 2012-07-26 changes in a different way.  (Bug#13560)
+
+2013-01-30  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el
+	(python-pdbtrack-comint-output-filter-function): Enhancements on
+	stacktrace detection.  (thanks @gnovak)
+
+2013-01-30  Glenn Morris  <rgm@gnu.org>
+
+	* imenu.el (imenu-default-create-index-function):
+	Put back a version of the infinite loop test removed 2013-01-23.
+
+2013-01-28  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-shell-parse-command):
+	Find python-shell-interpreter with modified environment.
+
+2013-01-26  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/cl.el (cl-set-getf): Add compatibility alias.
+
+2013-01-24  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el: Enhancements to header documentation about
+	skeletons.  (Bug#5716)
+
+2013-01-23  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* imenu.el (imenu-default-create-index-function): Remove useless
+	infinite loop check.  (Bug#13438)
+
+2013-01-23  Alan Mackenzie  <acm@muc.de>
+
+	Fix a bug in the state cache mechanism.  Refactor this a bit.
+
+	* progmodes/cc-engine.el (c-parse-state-get-strategy): Remove the
+	`cache-pos' element from the return value.
+	(c-append-lower-brace-pair-to-state-cache): "Narrow" to end of
+	buffer to enable proper searching from beyond HERE.  Amend the
+	test for detecting the sought brace pair.  Amend the value written
+	to the "brace desert cache" when the brace isn't found.
+	(c-remove-stale-state-cache): Rename `good-pos' to `start-point',
+	and several other variables analogously.
+	(c-remove-stale-state-cache-backwards): Change `cache-pos' from a
+	parameter to a locally calculated variable.
+	(c-parse-state-1): Change the calling conventions to the two
+	defuns involving `cache-pos'.
+
+2013-01-23  Chong Yidong  <cyd@gnu.org>
+
+	* xml.el (xml-entity-or-char-ref-re): Fix regexp.
+
+2013-01-18  Leo Liu  <sdl.web@gmail.com>
+
+	* dired.el (dired-get-marked-files): Prune erroneous values due to
+	last change.  (Bug#13152)
+
+2013-01-17  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/etags.el (tags-table-check-computed-list):
+	Preserve point in tags buffer.  (Bug#13412)
+
+2013-01-16  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-lisp/lisp-mode.el (lisp-indent-function): Doc fix.
+
+	* mail/rmailmm.el (rmail-insert-mime-forwarded-message):
+	Revert 2012-12-29 change.  Ref:
+	<http://lists.gnu.org/archive/html/emacs-devel/2013-01/msg00360.html>
+
+2013-01-10  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-nav-end-of-statement):
+	Fix cornercase when handling multiline strings.
+
 2013-01-10  Glenn Morris  <rgm@gnu.org>
 
 	* emacs-lisp/authors.el (authors-ignored-files)
@@ -140,8 +274,8 @@
 
 2012-12-29  Mark Lillibridge  <mark.lillibridge@hp.com>
 
-	* mail/rmailmm.el (rmail-insert-mime-forwarded-message): Insert
-	the undecoded text of the message being forwarded.  (Bug#9521)
+	* mail/rmailmm.el (rmail-insert-mime-forwarded-message):
+	Insert the undecoded text of the message being forwarded.  (Bug#9521)
 
 2012-12-28  Michael Albinus  <michael.albinus@gmx.de>
 
@@ -151,8 +285,8 @@
 2012-12-26  Dmitry Gutov  <dgutov@yandex.ru>
 
 	* progmodes/ruby-mode.el (ruby-indent-beg-re): Only allow "class",
-	"module" and "def" to have indentation before them.  Regression
-	from 109911 (see the new test).
+	"module" and "def" to have indentation before them.
+	Regression from 109911 (see the new test).
 
 2012-12-24  Dmitry Gutov  <dgutov@yandex.ru>
 
@@ -194,8 +328,8 @@
 
 2012-12-07  Eli Zaretskii  <eliz@gnu.org>
 
-	* textmodes/texinfo.el (texinfo-enable-quote-envs): Add
-	"smallexample".
+	* textmodes/texinfo.el (texinfo-enable-quote-envs):
+	Add "smallexample".
 
 2012-12-07  Le Wang  <l26wang@gmail.com>
 
@@ -9588,7 +9722,7 @@
 	* server.el (server--on-display-p): New function.
 	(server--on-display-p): Use it.
 
-2012-04-04  Gabor Vida  <vidagabor@gmail.com>  (tiny change)
+2012-04-04  Gábor Vida  <vidagabor@gmail.com>  (tiny change)
 
 	* ido.el (ido-wide-find-dirs-or-files): Use file-name-absolute-p
 	(bug#11145).
@@ -18689,7 +18823,7 @@
 	* nxml/rng-xsd.el (rng-xsd-check-pattern): Use case-sensitive
 	matching (Bug#8516).
 
-2011-01-22  Jari Aalto  <jari.aalto@cante.net>
+2011-05-22  Jari Aalto  <jari.aalto@cante.net>
 
 	* vc/vc-dir.el (vc-default-dir-printer): Give edited tag a
 	different face (Bug#8178).

@@ -483,6 +483,8 @@ enum metrics_status
       METRICS_SET_VALUE (metrics, descent, status);} while (0)
 
 #define METRICS_NCOLS_PER_ROW	(128)
+#define LCD_FONT_SMOOTHING_LEFT_MARGIN	(0.396)
+#define LCD_FONT_SMOOTHING_RIGHT_MARGIN	(0.396)
 
 static int
 macfont_glyph_extents (struct font *font, CGGlyph glyph,
@@ -578,6 +580,12 @@ macfont_glyph_extents (struct font *font, CGGlyph glyph,
 				  + (cache->width_frac
 				     / (CGFloat) WIDTH_FRAC_SCALE));
 	      break;
+	    }
+	  if (bounds.size.width > 0)
+	    {
+	      bounds.origin.x -= LCD_FONT_SMOOTHING_LEFT_MARGIN;
+	      bounds.size.width += (LCD_FONT_SMOOTHING_LEFT_MARGIN
+				    + LCD_FONT_SMOOTHING_RIGHT_MARGIN);
 	    }
 	  bounds = CGRectIntegral (bounds);
 	  METRICS_SET_VALUE (cache, lbearing, CGRectGetMinX (bounds));
@@ -3371,28 +3379,17 @@ mac_register_font_driver (struct frame *f)
 {
   if (NILP (macfont_driver.type))
     {
-      SInt32 response;
-      OSErr err;
-
-      block_input ();
-      err = Gestalt (gestaltSystemVersion, &response);
-      unblock_input ();
-      if (err == noErr)
-	{
-#if USE_CORE_TEXT
-	  if (response >= 0x1050)
-	    macfont_driver.type = Qmac_ct;
-	  else
-#endif
-#if USE_NS_FONT_DESCRIPTOR
-	  if (response >= 0x1040)
-	    macfont_driver.type = Qmac_fd;
-	  else
-#endif
-	    emacs_abort ();
-	}
+#if !USE_NS_FONT_DESCRIPTOR
+      macfont_driver.type = Qmac_ct;
+#elif !USE_CORE_TEXT
+      macfont_driver.type = Qmac_fd;
+#else /* USE_CORE_TEXT && USE_NS_FONT_DESCRIPTOR */
+      if (CTGetCoreTextVersion != NULL
+	  && CTGetCoreTextVersion () >= kCTVersionNumber10_5)
+	macfont_driver.type = Qmac_ct;
       else
-	emacs_abort ();
+	macfont_driver.type = Qmac_fd;
+#endif
 
       macfont_driver_type = macfont_driver.type;
     }

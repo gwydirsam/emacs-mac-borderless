@@ -2541,31 +2541,15 @@ TERMINAL should be a terminal object, a frame or a display name (a string).
 If omitted or nil, that stands for the selected frame's display.  */)
   (Lisp_Object terminal)
 {
-  SInt32 response, major, minor, bugfix;
+  SInt32 major, minor, bugfix;
   OSErr err;
 
   block_input ();
-  err = Gestalt (gestaltSystemVersion, &response);
+  err = Gestalt (gestaltSystemVersionMajor, &major);
   if (err == noErr)
-    {
-      if (response >= 0x00001040)
-	{
-	  err = Gestalt ('sys1', &major);
-	  if (err == noErr)
-	    err = Gestalt ('sys2', &minor);
-	  if (err == noErr)
-	    err = Gestalt ('sys3', &bugfix);
-	}
-      else
-	{
-	  bugfix = response & 0xf;
-	  response >>= 4;
-	  minor = response & 0xf;
-	  response >>= 4;
-	  /* convert BCD to int */
-	  major = response - (response >> 4) * 6;
-	}
-    }
+    err = Gestalt (gestaltSystemVersionMinor, &minor);
+  if (err == noErr)
+    err = Gestalt (gestaltSystemVersionBugFix, &bugfix);
   unblock_input ();
 
   if (err != noErr)
@@ -3883,13 +3867,9 @@ usage: (mac-start-animation FRAME-OR-WINDOW &rest PROPERTIES) */)
   CGFloat alpha;
   ptrdiff_t count;
 #if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
-  SInt32 response;
-  OSErr err;
+  extern CFTimeInterval CACurrentMediaTime (void) AVAILABLE_MAC_OS_X_VERSION_10_5_AND_LATER;
 
-  block_input ();
-  err = Gestalt (gestaltSystemVersion, &response);
-  unblock_input ();
-  if (err != noErr || response < 0x1050)
+  if (CACurrentMediaTime == NULL)
     return Qnil;
 #endif
   check_mac ();

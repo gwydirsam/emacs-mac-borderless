@@ -598,6 +598,8 @@ decode_options (int argc, char **argv)
       alt_display = "ns";
 #elif defined (HAVE_NTGUI)
       alt_display = "w32";
+#elif defined (HAVE_MACGUI)
+      alt_display = "Mac";
 #endif
 
       display = egetenv ("DISPLAY");

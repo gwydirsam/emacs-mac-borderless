@@ -4915,6 +4915,7 @@ The following commands are available:
   (org-set-local 'calc-embedded-open-mode "# ")
   (modify-syntax-entry ?@ "w")
   (if org-startup-truncated (setq truncate-lines t))
+  (when org-startup-indented (require 'org-indent) (org-indent-mode 1))
   (org-set-local 'font-lock-unfontify-region-function
 		 'org-unfontify-region)
   ;; Activate before-change-function
@@ -4970,9 +4971,6 @@ The following commands are available:
     (org-set-local 'outline-isearch-open-invisible-function
 		   (lambda (&rest ignore) (org-show-context 'isearch))))
 
-  ;; Turn on org-beamer-mode?
-  (and org-startup-with-beamer-mode (org-beamer-mode))
-
   ;; Setup the pcomplete hooks
   (set (make-local-variable 'pcomplete-command-completion-function)
        'org-pcomplete-initial)
@@ -4992,15 +4990,13 @@ The following commands are available:
 	   (= (point-min) (point-max)))
       (insert "#    -*- mode: org -*-\n\n"))
   (unless org-inhibit-startup
+    (and org-startup-with-beamer-mode (org-beamer-mode))
     (when org-startup-align-all-tables
       (let ((bmp (buffer-modified-p)))
 	(org-table-map-tables 'org-table-align 'quietly)
 	(set-buffer-modified-p bmp)))
     (when org-startup-with-inline-images
       (org-display-inline-images))
-    (when org-startup-indented
-      (require 'org-indent)
-      (org-indent-mode 1))
     (unless org-inhibit-startup-visibility-stuff
       (org-set-startup-visibility)))
   ;; Try to set org-hide correctly
@@ -5422,7 +5418,7 @@ by a #."
 		 '(font-lock-fontified t invisible t)
 	       '(font-lock-fontified t face org-document-info-keyword)))
 	    (add-text-properties
-	     (match-beginning 6) (1+ (match-end 6))
+	     (match-beginning 6) (min (point-max) (1+ (match-end 6)))
 	     (if (string-equal dc1 "+title:")
 	    	 '(font-lock-fontified t face org-document-title)
 	       '(font-lock-fontified t face org-document-info))))
@@ -7402,7 +7398,12 @@ even level numbers will become the next higher odd number."
 	    ((< change 0) (max 1 (1+ (* 2 (/ (+ level (* 2 change)) 2))))))
     (max 1 (+ level (or change 0)))))
 
-(org-define-obsolete-function-alias 'org-get-legal-level 'org-get-valid-level "23.1")
+(if (boundp 'define-obsolete-function-alias)
+    (if (or (featurep 'xemacs) (< emacs-major-version 23))
+	(define-obsolete-function-alias 'org-get-legal-level
+	  'org-get-valid-level)
+      (define-obsolete-function-alias 'org-get-legal-level
+	'org-get-valid-level "23.1")))
 
 (defvar org-called-with-limited-levels nil) ;; Dynamically bound in
 ;; ̀org-with-limited-levels'
@@ -9684,12 +9685,14 @@ application the system uses for this file type."
 			 "[ \t]:[^ \t\n]+:[ \t]*$")))
 	   (not (get-text-property (point) 'org-linked-text)))
       (or (let* ((lkall (org-offer-links-in-entry (current-buffer) (point) arg))
-		 (lk (car lkall))
+		 (lk0 (car lkall))
+		 (lk (if (stringp lk0) (list lk0) lk0))
 		 (lkend (cdr lkall)))
-	    (when lk
-	      (prog1 (search-forward lk nil lkend)
-		(goto-char (match-beginning 0))
-		(org-open-at-point))))
+	    (mapcar (lambda(l)
+		      (search-forward l nil lkend)
+		      (goto-char (match-beginning 0))
+		      (org-open-at-point))
+		    lk))
 	  (progn (require 'org-attach) (org-attach-reveal 'if-exists))))
      ((run-hook-with-args-until-success 'org-open-at-point-functions))
      ((and (org-at-timestamp-p t)
@@ -13524,7 +13527,10 @@ ignore inherited ones."
 		(error nil)))))
 	(if local
 	    tags
-	  (append (org-remove-uninherited-tags org-file-tags) tags))))))
+	  (reverse (delete-dups
+		    (reverse (append
+			      (org-remove-uninherited-tags
+			       org-file-tags) tags)))))))))
 
 (defun org-add-prop-inherited (s)
   (add-text-properties 0 (length s) '(inherited t) s)
@@ -15915,7 +15921,8 @@ Don't touch the rest."
     (floor (* (string-to-number (match-string 1 ts))
 	      (cdr (assoc (match-string 2 ts)
 			  '(("d" . 1)    ("w" . 7)
-			    ("m" . 30.4) ("y" . 365.25)))))))
+			    ("m" . 30.4) ("y" . 365.25)
+			    ("h" . 0.041667)))))))
    ;; go for the default.
    (t org-deadline-warning-days)))
 
@@ -16652,6 +16659,15 @@ effort string \"2hours\" is equivalent to 120 minutes."
   :type '(alist :key-type (string :tag "Modifier")
 		:value-type (number :tag "Minutes")))
 
+(defcustom org-agenda-inhibit-startup t
+  "Inhibit startup when preparing agenda buffers.
+When this variable is `t' (the default), the initialization of
+the Org agenda buffers is inhibited: e.g. the visibility state
+is not set, the tables are not re-aligned, etc."
+  :type 'boolean
+  :version "24.3"
+  :group 'org-agenda)
+
 (defun org-duration-string-to-minutes (s &optional output-to-string)
   "Convert a duration string S to minutes.
 
@@ -16991,6 +17007,7 @@ When a buffer is unmodified, it is just killed.  When modified, it is saved
 	(pc '(:org-comment t))
 	(pall '(:org-archived t :org-comment t))
 	(inhibit-read-only t)
+	(org-inhibit-startup org-agenda-inhibit-startup)
 	(rea (concat ":" org-archive-tag ":"))
 	bmp file re)
     (save-excursion
@@ -17798,7 +17815,7 @@ BEG and END default to the buffer boundaries."
 			     (list 'org-display-inline-remove-overlay))
 		(push ov org-inline-image-overlays)))))))))
 
-(org-define-obsolete-function-alias
+(define-obsolete-function-alias
   'org-display-inline-modification-hook 'org-display-inline-remove-overlay "24.3")
 
 (defun org-display-inline-remove-overlay (ov after beg end &optional len)
@@ -18178,7 +18195,7 @@ If not, return to the original position and throw an error."
 (defvar org-table-auto-blank-field) ; defined in org-table.el
 (defvar org-speed-command nil)
 
-(org-define-obsolete-function-alias
+(define-obsolete-function-alias
   'org-speed-command-default-hook 'org-speed-command-activate "24.3")
 
 (defun org-speed-command-activate (keys)
@@ -18191,7 +18208,7 @@ Use `org-speed-commands-user' for further customization."
     (cdr (assoc keys (append org-speed-commands-user
 			     org-speed-commands-default)))))
 
-(org-define-obsolete-function-alias
+(define-obsolete-function-alias
   'org-babel-speed-command-hook 'org-babel-speed-command-activate "24.3")
 
 (defun org-babel-speed-command-activate (keys)
@@ -19026,14 +19043,13 @@ Otherwise, return a user error."
       (beginning-of-line 1)
       (looking-at "\\(?:#\\+\\(?:setupfile\\|include\\):?[ \t]+\"?\\|[ \t]*<include\\>.*?file=\"\\)\\([^\"\n>]+\\)"))
     (find-file (org-trim (match-string 1))))
+   ((org-at-table.el-p) (org-edit-src-code))
    ((or (org-at-table-p)
 	(save-excursion
 	  (beginning-of-line 1)
 	  (let ((case-fold-search )) (looking-at "[ \t]*#\\+tblfm:"))))
     (call-interactively 'org-table-edit-formulas))
-   ((or (org-in-block-p '("src" "example" "latex" "html"))
-	(org-at-table.el-p))
-    (org-edit-src-code))
+   ((org-in-block-p '("src" "example" "latex" "html")) (org-edit-src-code))
    ((org-in-fixed-width-region-p) (org-edit-fixed-width-region))
    ((org-at-regexp-p org-any-link-re) (call-interactively 'ffap))
    (t (user-error "No special environment to edit here"))))
@@ -20975,58 +20991,62 @@ hierarchy of headlines by UP levels before marking the subtree."
 
 (declare-function message-in-body-p "message" ())
 (defvar org-element--affiliated-re) ; From org-element.el
+(defvar orgtbl-line-start-regexp) ; From org-table.el
 (defun org-adaptive-fill-function ()
   "Compute a fill prefix for the current line.
 Return fill prefix, as a string, or nil if current line isn't
 meant to be filled."
   (let (prefix)
-    (when (and (derived-mode-p 'message-mode) (message-in-body-p))
-      (save-excursion
-	(beginning-of-line)
-	(cond ((looking-at message-cite-prefix-regexp)
-	       (setq prefix (match-string-no-properties 0)))
-	      ((looking-at org-outline-regexp)
-	       (setq prefix "")))))
-    (or prefix
-	(org-with-wide-buffer
-	 (let* ((p (line-beginning-position))
-		(element (save-excursion (beginning-of-line) (org-element-at-point)))
-		(type (org-element-type element))
-		(post-affiliated
-		 (save-excursion
-		   (goto-char (org-element-property :begin element))
-		   (while (looking-at org-element--affiliated-re) (forward-line))
-		   (point))))
-	   (unless (< p post-affiliated)
-	     (case type
-	       (comment (looking-at "[ \t]*# ?") (match-string 0))
-	       (footnote-definition "")
-	       ((item plain-list)
-		(make-string (org-list-item-body-column post-affiliated) ? ))
-	       (paragraph
-		;; Fill prefix is usually the same as the current line,
-		;; except if the paragraph is at the beginning of an item.
-		(let ((parent (org-element-property :parent element)))
-		  (cond ((eq (org-element-type parent) 'item)
-			 (make-string (org-list-item-body-column
-				       (org-element-property :begin parent))
-				      ? ))
-			((save-excursion (beginning-of-line) (looking-at "[ \t]+"))
-			 (match-string 0))
-			(t  ""))))
-	       (comment-block
-		;; Only fill contents if P is within block boundaries.
-		(let* ((cbeg (save-excursion (goto-char post-affiliated)
-					     (forward-line)
-					     (point)))
-		       (cend (save-excursion
-			       (goto-char (org-element-property :end element))
-			       (skip-chars-backward " \r\t\n")
-			       (line-beginning-position))))
-		  (when (and (>= p cbeg) (< p cend))
-		    (if (save-excursion (beginning-of-line) (looking-at "[ \t]+"))
-			(match-string 0)
-		      "")))))))))))
+    (catch 'exit
+      (when (derived-mode-p 'message-mode)
+	(save-excursion
+	  (beginning-of-line)
+	  (cond ((or (not (message-in-body-p))
+		     (looking-at orgtbl-line-start-regexp))
+		 (throw 'exit nil))
+		((looking-at message-cite-prefix-regexp)
+		 (throw 'exit (match-string-no-properties 0)))
+		((looking-at org-outline-regexp)
+		 (throw 'exit (make-string (length (match-string 0)) ? ))))))
+      (org-with-wide-buffer
+       (let* ((p (line-beginning-position))
+	      (element (save-excursion (beginning-of-line) (org-element-at-point)))
+	      (type (org-element-type element))
+	      (post-affiliated
+	       (save-excursion
+		 (goto-char (org-element-property :begin element))
+		 (while (looking-at org-element--affiliated-re) (forward-line))
+		 (point))))
+	 (unless (< p post-affiliated)
+	   (case type
+	     (comment (looking-at "[ \t]*# ?") (match-string 0))
+	     (footnote-definition "")
+	     ((item plain-list)
+	      (make-string (org-list-item-body-column post-affiliated) ? ))
+	     (paragraph
+	      ;; Fill prefix is usually the same as the current line,
+	      ;; except if the paragraph is at the beginning of an item.
+	      (let ((parent (org-element-property :parent element)))
+		(cond ((eq (org-element-type parent) 'item)
+		       (make-string (org-list-item-body-column
+				     (org-element-property :begin parent))
+				    ? ))
+		      ((save-excursion (beginning-of-line) (looking-at "[ \t]+"))
+		       (match-string 0))
+		      (t  ""))))
+	     (comment-block
+	      ;; Only fill contents if P is within block boundaries.
+	      (let* ((cbeg (save-excursion (goto-char post-affiliated)
+					   (forward-line)
+					   (point)))
+		     (cend (save-excursion
+			     (goto-char (org-element-property :end element))
+			     (skip-chars-backward " \r\t\n")
+			     (line-beginning-position))))
+		(when (and (>= p cbeg) (< p cend))
+		  (if (save-excursion (beginning-of-line) (looking-at "[ \t]+"))
+		      (match-string 0)
+		    "")))))))))))
 
 (declare-function message-goto-body "message" ())
 (defvar message-cite-prefix-regexp)	; From message.el

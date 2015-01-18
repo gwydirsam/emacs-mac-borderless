@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.2.92)
+AC_INIT(emacs, 24.2.93)
 AC_CONFIG_HEADER(src/config.h:src/config.in)
 AC_CONFIG_SRCDIR(src/lisp.h)
 AC_CONFIG_AUX_DIR(build-aux)
@@ -621,7 +621,7 @@ fi
 
 AC_ARG_ENABLE([gcc-warnings],
   [AS_HELP_STRING([--enable-gcc-warnings],
-                  [turn on lots of GCC warnings. This is intended for
+                  [turn on lots of GCC warnings/errors. This is intended for
 		   developers, and may generate false alarms when used
 		   with older or non-GNU development tools.])],
   [case $enableval in
@@ -4633,6 +4633,11 @@ if test "$HAVE_MACGUI" = "yes"; then
 It is not recommended for casual use
 or as a basis of (binary) distributions."
    echo
+   if test "$with_wide_int" = yes; then
+      echo "Warning: \`--with-wide-int' is not eagerly tested on the Mac port.
+Use it at your own risk."
+      echo
+   fi
 fi
 
 if test "$HAVE_NS" = "yes"; then

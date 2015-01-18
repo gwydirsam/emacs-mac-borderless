@@ -1,3 +1,41 @@
+2013-02-07  Bastien Guerry  <bzg@gnu.org>
+
+	* org.texi (References): Clarify an example.
+	(Installation): Fix instructions.
+	(Org-Plot): Fix link.
+	(Checkboxes, Radio lists): Fix typos.
+
+2013-02-06  Glenn Morris  <rgm@gnu.org>
+
+	* cl.texi (Equality Predicates): Mention memql.
+
+2013-02-03  Eric Ludlam  <zappo@gnu.org>
+
+	* doc/misc/ede.texi (Creating a project): Make ede-new doc less
+	specific, and only about items it supports, indicating that there
+	might be more.  Remove refs to simple project and direct automake
+	from ede new.
+	(Simple projects): Re-write to not talk about ede-simple-project
+	which is deprecated, and instead use the term to mean projects
+	that don't do much management, just project wrapping.  Add
+	ede-generic-project link.
+	(ede-generic-project): New node (bug#11441).
+
+2013-02-03  Glenn Morris  <rgm@gnu.org>
+
+	* cl.texi (Equality Predicates): Fix eq/eql pedantry.
+
+2013-01-13  Bastien Guerry  <bzg@gnu.org>
+
+	* org.texi (Installation): Simplify.
+
+2013-01-13  François Allisson  <francois@allisson.co>  (tiny change)
+
+	* org.texi (Handling links): Update the mention to the obsolete
+	variable `org-link-to-org-use-id' with a mention to the newer
+	variable `org-id-link-to-org-use-id'.  Mention the need to load
+	the org-id library.
+
 2013-01-08  Bastien Guerry  <bzg@gnu.org>
 
 	* org.texi (Pushing to MobileOrg): Add footnote about using

@@ -849,8 +849,10 @@ This handles splitting the command if it would be bigger than
     ;; does not understand and throws an error.
     ;; It may also be a valid X display, but if Emacs is compiled for ns, it
     ;; can not make X frames.
-    (if (featurep 'ns-win)
-	(setq w 'ns display "ns"))
+    (cond ((featurep 'ns-win)
+	   (setq w 'ns display "ns"))
+	  ((featurep 'mac-win)
+	   (setq w 'mac display "Mac")))
 
     (cond (w
            ;; Flag frame as client-created, but use a dummy client.

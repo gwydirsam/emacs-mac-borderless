@@ -678,7 +678,7 @@ The alternate method, which is the one most often used, is to call
   ;; in these major modes.  But save that change for later.
   (cond ((and imenu-prev-index-position-function
 	      imenu-extract-index-name-function)
-	 (let ((index-alist '()) (pos (point))
+	 (let ((index-alist '()) (pos -1)
 	       name)
 	   (goto-char (point-max))
 	   ;; Search for the function

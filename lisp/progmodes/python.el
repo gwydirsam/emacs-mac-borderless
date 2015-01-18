@@ -155,7 +155,10 @@
 ;; dabbrev.  If you have `dabbrev-mode' activated and
 ;; `python-skeleton-autoinsert' is set to t, then whenever you type
 ;; the name of any of those defined and hit SPC, they will be
-;; automatically expanded.
+;; automatically expanded.  As an alternative you can use the defined
+;; skeleton commands: `python-skeleton-class', `python-skeleton-def'
+;; `python-skeleton-for', `python-skeleton-if', `python-skeleton-try'
+;; and `python-skeleton-while'.
 
 ;; FFAP: You can find the filename for a given module when using ffap
 ;; out of the box.  This feature needs an inferior python shell
@@ -1188,7 +1191,16 @@ of the statement."
                 (not (eobp))
                 (cond ((setq string-start (python-syntax-context 'string))
                        (goto-char string-start)
-                       (python-nav-end-of-statement t))
+                       (if (python-syntax-context 'paren)
+                           ;; Ended up inside a paren, roll again.
+                           (python-nav-end-of-statement t)
+                         ;; This is not inside a paren, move to the
+                         ;; end of this string.
+                         (goto-char (+ (point)
+                                       (python-syntax-count-quotes
+                                        (char-after (point)) (point))))
+                         (or (re-search-forward (rx (syntax string-delimiter)) nil t)
+                             (goto-char (point-max)))))
                       ((python-syntax-context 'paren)
                        ;; The statement won't end before we've escaped
                        ;; at least one level of parenthesis.
@@ -1302,7 +1314,7 @@ backward to previous block."
   "Safe version of standard `forward-sexp'.
 When ARG > 0 move forward, else if ARG is < 0."
   (or arg (setq arg 1))
-  (let ((forward-sexp-function nil)
+  (let ((forward-sexp-function)
         (paren-regexp
          (if (> arg 0) (python-rx close-paren) (python-rx open-paren)))
         (search-fn
@@ -1642,7 +1654,11 @@ uniqueness for different types of configurations."
 
 (defun python-shell-parse-command ()
   "Calculate the string used to execute the inferior Python process."
-  (format "%s %s" python-shell-interpreter python-shell-interpreter-args))
+  (let ((process-environment (python-shell-calculate-process-environment))
+        (exec-path (python-shell-calculate-exec-path)))
+    (format "%s %s"
+            (executable-find python-shell-interpreter)
+            python-shell-interpreter-args)))
 
 (defun python-shell-calculate-process-environment ()
   "Calculate process environment given `python-shell-virtualenv-path'."
@@ -2301,15 +2317,17 @@ Argument OUTPUT is a string with the output from the comint process."
            (file-name
             (with-temp-buffer
               (insert full-output)
-              (goto-char (point-min))
-              ;; OK, this sucked but now it became a cool hack. The
-              ;; stacktrace information normally is on the first line
-              ;; but in some cases (like when doing a step-in) it is
-              ;; on the second.
-              (when (or (looking-at python-pdbtrack-stacktrace-info-regexp)
-                        (and
-                         (forward-line)
-                         (looking-at python-pdbtrack-stacktrace-info-regexp)))
+              ;; When the debugger encounters a pdb.set_trace()
+              ;; command, it prints a single stack frame.  Sometimes
+              ;; it prints a bit of extra information about the
+              ;; arguments of the present function.  When ipdb
+              ;; encounters an exception, it prints the _entire_ stack
+              ;; trace.  To handle all of these cases, we want to find
+              ;; the _last_ stack frame printed in the most recent
+              ;; batch of output, then jump to the corrsponding
+              ;; file/line number.
+              (goto-char (point-max))
+              (when (re-search-backward python-pdbtrack-stacktrace-info-regexp nil t)
                 (setq line-number (string-to-number
                                    (match-string-no-properties 2)))
                 (match-string-no-properties 1)))))
