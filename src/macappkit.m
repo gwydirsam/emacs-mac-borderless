@@ -3078,6 +3078,7 @@ extern void mac_save_keyboard_input_source (void);
   NSRect srcRect = [window frame], destRect;
   NSView *contentView = [window contentView];
   CGFloat titleBarHeight;
+  BOOL toolbarIsVisible;
 
   [self setupFullScreenTransitionView];
   [self detachOverlayWindow];
@@ -3093,6 +3094,7 @@ extern void mac_save_keyboard_input_source (void);
 
   NSDisableScreenUpdates ();
 
+  toolbarIsVisible = [[window toolbar] isVisible];
   [window setStyleMask:([window styleMask] | NSFullScreenWindowMask)];
 
   destRect = [self postprocessWindowManagerStateChange:destRect];
@@ -3128,6 +3130,9 @@ extern void mac_save_keyboard_input_source (void);
       [self attachOverlayWindow];
       /* Mac OS X 10.7 needs this.  */
       [emacsView setFrame:[[emacsView superview] bounds]];
+      /* This is a workaround for the problem of not preserving
+	 toolbar visibility value.  */
+      [[window toolbar] setVisible:toolbarIsVisible];
     }];
 }
 
@@ -3145,6 +3150,7 @@ extern void mac_save_keyboard_input_source (void);
   NSRect srcRect = [window frame], destRect;
   NSView *contentView = [window contentView];
   CGFloat titleBarHeight;
+  BOOL toolbarIsVisible;
 
   [self setupFullScreenTransitionView];
   [self detachOverlayWindow];
@@ -3158,6 +3164,7 @@ extern void mac_save_keyboard_input_source (void);
 
   NSDisableScreenUpdates ();
 
+  toolbarIsVisible = [[window toolbar] isVisible];
   [window setStyleMask:([window styleMask] & ~NSFullScreenWindowMask)];
 
   destRect = [self postprocessWindowManagerStateChange:destRect];
@@ -3197,6 +3204,9 @@ extern void mac_save_keyboard_input_source (void);
       [self attachOverlayWindow];
       /* Mac OS X 10.7 needs this.  */
       [emacsView setFrame:[[emacsView superview] bounds]];
+      /* This is a workaround for the problem of not preserving
+	 toolbar visibility value.  */
+      [[window toolbar] setVisible:toolbarIsVisible];
     }];
 }
 #endif

@@ -46,5 +46,5 @@ gnome-icons-theme package for more information.
 The mapping is mostly derived from x-gtk-stock-map in term/x-win.el.
 
 * The file splash@2x.png is generated from splash.svg in GNU Emacs
-23.4 using `rsvg-convert'.  The original data is licensed under the
+24.3 using `rsvg-convert'.  The original data is licensed under the
 GNU General Public License version 3 (see COPYING) or later.

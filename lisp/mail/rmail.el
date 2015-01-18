@@ -4194,6 +4194,7 @@ This has an effect only if a summary buffer exists."
 ;; Put the summary buffer back on the screen, if user wants that.
 (defun rmail-maybe-display-summary ()
   (let ((selected (selected-window))
+	(buffer (current-buffer))
 	window)
     ;; If requested, make sure the summary is displayed.
     (and rmail-summary-buffer (buffer-name rmail-summary-buffer)
@@ -4215,7 +4216,8 @@ This has an effect only if a summary buffer exists."
 	     (progn
 	       (select-window window)
 	       (enlarge-window (- rmail-summary-window-size (window-height))))
-	   (select-window selected)))))
+	   (select-window selected)
+	   (set-buffer buffer)))))
 
 ;;;; *** Rmail Local Fontification ***
 
@@ -4707,7 +4709,7 @@ If prefix argument REVERSE is non-nil, sorts in reverse order.
 
 ;;;### (autoloads (rmail-summary-by-senders rmail-summary-by-topic
 ;;;;;;  rmail-summary-by-regexp rmail-summary-by-recipients rmail-summary-by-labels
-;;;;;;  rmail-summary) "rmailsum" "rmailsum.el" "6cafe6b03e187b5836e3c359322b5cbf")
+;;;;;;  rmail-summary) "rmailsum" "rmailsum.el" "856fc6e337d5398b302c448ee7a2315e")
 ;;; Generated autoloads from rmailsum.el
 
 (autoload 'rmail-summary "rmailsum" "\

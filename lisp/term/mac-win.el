@@ -2398,6 +2398,7 @@ standard ones in `x-handle-args'."
   (if (eq (lookup-key global-map [C-down-mouse-1]) 'mouse-buffer-menu)
       (global-set-key [C-down-mouse-1] 'mac-mouse-buffer-menu))
 
+  (x-apply-session-resources)
   (setq mac-initialized t))
 
 (add-to-list 'display-format-alist '("\\`Mac\\'" . mac))

@@ -46,6 +46,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "window.h"
 #include "keyboard.h"
 #include "intervals.h"
+#include "process.h"
 #include "atimer.h"
 #include "keymap.h"
 #include "font.h"
@@ -638,7 +639,7 @@ mac_invert_rectangle (struct frame *f, int x, int y,
   CGContextRef context;
 
   context = mac_begin_cg_clip (f, NULL);
-  CGContextSetRGBFillColor (context, 1.0f, 1.0f, 1.0f, 1.0f);
+  CGContextSetGrayFillColor (context, 1.0f, 1.0f);
   CGContextSetBlendMode (context, kCGBlendModeDifference);
   CGContextFillRect (context, mac_rect_make (f, x, y, width, height));
   mac_end_cg_clip (f);

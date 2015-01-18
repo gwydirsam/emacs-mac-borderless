@@ -1,3 +1,146 @@
+2012-12-11  Alan Mackenzie  <acm@muc.de>
+
+	Make CC Mode not hang when _some_ lines end in CRLF.  Bug #11841.
+	* progmodes/cc-engine.el (c-backward-comments): Add code to work
+	around `forward-comment' not recognizing ^M as whitespace.
+
+2012-12-11  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-skeleton-class)
+	(python-skeleton-def): Do not add space after defun name.
+
+2012-12-09  Chong Yidong  <cyd@gnu.org>
+
+	* simple.el (set-mark-default-inactive): Mark as obsolete, for
+	removal after 24.3.
+
+2012-12-08  Dani Moncayo <dmoncayo@gmail.com>
+
+	* simple.el (just-one-space): Doc fix.
+
+2012-12-07  Eli Zaretskii  <eliz@gnu.org>
+
+	* textmodes/texinfo.el (texinfo-enable-quote-envs): Add
+	"smallexample".
+
+2012-12-07  Le Wang  <l26wang@gmail.com>
+
+	* hilit-chg.el (hilit-chg-set-face-on-change): Don't burp in
+	narrowed buffer (bug#12361).
+
+2012-12-07  Michael Heerdegen  <michael_heerdegen@web.de>
+
+	* emacs-lisp/debug.el (debug): Fix hard-coded frame counts (bug#10025).
+	Virtually backported from trunk.
+
+2012-12-07  Juanma Barranquero  <lekktu@gmail.com>
+
+	* vc/vc-hooks.el (vc-state): Doc fix.
+
+2012-12-06  Glenn Morris  <rgm@gnu.org>
+
+	* mail/rmail.el (rmail-maybe-display-summary):
+	Preserve buffer, in case select-window changes it.  (Bug#13066)
+
+2012-12-06  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/cl.el, emacs-lisp/cl-lib.el: Move cl-unload-function and
+	cl-load-hook where they belong.
+
+2012-12-06  Chong Yidong  <cyd@gnu.org>
+
+	* ffap.el (ffap-replace-file-component): Fix typo.
+
+2012-12-05  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* progmodes/octave-mod.el (octave-mark-block): Move out of tokens and
+	fix open-paren-like token test (bug#12785).
+
+2012-12-04  Glenn Morris  <rgm@gnu.org>
+
+	* mail/rmailsum.el (rmail-new-summary): Tweak for
+	rmail-maybe-display-summary changing buffer.  (Bug#13066)
+
+2012-12-03  Juri Linkov  <juri@jurta.org>
+
+	* info.el (Info-fontify-node): Don't hide the last newline.
+	(Bug#12272)
+
+2012-12-01  Leo Liu  <sdl.web@gmail.com>
+
+	* files.el (dir-locals-read-from-file): Check file non-empty
+	before reading.  (Bug#13038)
+
+2012-11-28  Glenn Morris  <rgm@gnu.org>
+
+	* jka-cmpr-hook.el (jka-compr-get-compression-info):
+	Remove any version extension before checking filename.  (Bug#13006)
+	(jka-compr-compression-info-list): Belated :version bump.
+
+2012-11-28  Chong Yidong  <cyd@gnu.org>
+
+	* simple.el (transient-mark-mode): Doc fix (Bug#11523).
+
+	* buff-menu.el (Buffer-menu-delete-backwards, Buffer-menu-mode)
+	(buffer-menu): Doc fix (Bug#12294).
+
+2012-11-27  Roland Winkler  <winkler@gnu.org>
+
+	* calendar/diary-lib.el (diary-header-line-format): Use keybinding
+	of diary-show-all-entries in the diary buffer (Bug#12994).
+
+2012-11-27  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp-sh.el (tramp-perl-encode): Use "read STDIN" instead of
+	"<STDIN>".  This is binary safe.
+
+2012-11-27  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* textmodes/table.el (table-insert): Don't use `symbol-name' on
+	lexically scoped variables (bug#13005).
+
+2012-11-26  Glenn Morris  <rgm@gnu.org>
+
+	* vc/vc-hooks.el (vc-mistrust-permissions):
+	Default to t, to avoid data-loss.  (Bug#11490)
+
+2012-11-26  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-indent-guess-indent-offset):
+	If indentation is guessed make python-indent-offset buffer-local.
+
+	Fix Imenu regression.
+	* progmodes/python.el (python-nav-beginning-of-defun):
+	Fix forward movement when statement(s) separates point from defun.
+	(python-imenu-prev-index-position): New function.
+
+2012-11-26  Eli Zaretskii  <eliz@gnu.org>
+
+	* subr.el (buffer-file-type): Declare with defvar-local.  Doc fix.
+
+	* dos-w32.el (find-file-not-found-set-buffer-file-coding-system):
+	Don't set buffer-file-type.  Return nil.  (Bug#12989)
+
+2012-11-26  Glenn Morris  <rgm@gnu.org>
+
+	* hippie-exp.el (hippie-expand-try-functions-list):
+	Re-autoload it.  (Bug#12982)
+
+2012-11-25  Eli Zaretskii  <eliz@gnu.org>
+
+	* descr-text.el (describe-char-padded-string):
+	Call internal-char-font only on GUI frames.  (Bug#11964)
+
+2012-11-24  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* buff-menu.el (Buffer-menu-buffer+size-width): Fix customize type
+	and obsoletion message.
+
+2012-11-24  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/cl-macs.el (cl--transform-lambda): Add back `declare' in
+	the constructs to keep outside of the `cl-block' (bug#12977).
+
 2012-11-24  Chong Yidong  <cyd@gnu.org>
 
 	* mouse.el (mouse-drag-line): Even if the line is not draggable,
@@ -3228,7 +3371,7 @@
 	* calendar/cal-tex.el (cal-tex-weekly-common):
 	Restore leading blank page.
 
-2012-08-22  Le Wang  <l26wang@gmail.com>  (tiny change)
+2012-08-22  Le Wang  <l26wang@gmail.com>
 
 	* misc.el (forward-to-word, backward-to-word): Activate or extend
 	the region under `shift-select-mode'.  (Bug#12231)

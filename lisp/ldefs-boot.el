@@ -114,7 +114,7 @@ Completion is available.
 ;;;;;;  add-change-log-entry-other-window add-change-log-entry find-change-log
 ;;;;;;  prompt-for-change-log-name add-log-mailing-address add-log-full-name
 ;;;;;;  add-log-current-defun-function) "add-log" "vc/add-log.el"
-;;;;;;  (20627 5636 279161 0))
+;;;;;;  (20665 30571 397937 0))
 ;;; Generated autoloads from vc/add-log.el
 
 (put 'change-log-default-name 'safe-local-variable 'string-or-null-p)
@@ -3098,7 +3098,7 @@ Obsoletes `c-forward-into-nomenclature'.
 ;;;***
 
 ;;;### (autoloads (c-guess-basic-syntax) "cc-engine" "progmodes/cc-engine.el"
-;;;;;;  (20655 4659 718544 0))
+;;;;;;  (20676 3539 115445 55000))
 ;;; Generated autoloads from progmodes/cc-engine.el
 
 (autoload 'c-guess-basic-syntax "cc-engine" "\
@@ -4133,8 +4133,8 @@ For example, the function `case' has an indent property
 
 ;;;***
 
-;;;### (autoloads nil "cl-lib" "emacs-lisp/cl-lib.el" (20647 7990
-;;;;;;  336071 0))
+;;;### (autoloads nil "cl-lib" "emacs-lisp/cl-lib.el" (20673 22507
+;;;;;;  803402 0))
 ;;; Generated autoloads from emacs-lisp/cl-lib.el
 
 (define-obsolete-variable-alias 'custom-print-functions 'cl-custom-print-functions "24.3")
@@ -5782,7 +5782,7 @@ There is some minimal font-lock support (see vars
 ;;;***
 
 ;;;### (autoloads (cancel-debug-on-entry debug-on-entry debug) "debug"
-;;;;;;  "emacs-lisp/debug.el" (20641 21435 927560 0))
+;;;;;;  "emacs-lisp/debug.el" (20673 62576 292524 0))
 ;;; Generated autoloads from emacs-lisp/debug.el
 
 (setq debugger 'debug)
@@ -6030,7 +6030,7 @@ the first time the mode is used.
 ;;;***
 
 ;;;### (autoloads (describe-char describe-text-properties) "descr-text"
-;;;;;;  "descr-text.el" (20627 5636 279161 0))
+;;;;;;  "descr-text.el" (20658 59320 825234 0))
 ;;; Generated autoloads from descr-text.el
 
 (autoload 'describe-text-properties "descr-text" "\
@@ -6289,7 +6289,7 @@ Deuglify broken Outlook (Express) articles and redisplay.
 ;;;***
 
 ;;;### (autoloads (diary-mode diary-mail-entries diary) "diary-lib"
-;;;;;;  "calendar/diary-lib.el" (20627 5636 279161 0))
+;;;;;;  "calendar/diary-lib.el" (20661 34515 886991 0))
 ;;; Generated autoloads from calendar/diary-lib.el
 
 (autoload 'diary "diary-lib" "\
@@ -10508,7 +10508,7 @@ you can set `feedmail-queue-reminder-alist' to nil.
 
 ;;;### (autoloads (ffap-bindings ffap-guess-file-name-at-point dired-at-point
 ;;;;;;  ffap-at-mouse ffap-menu find-file-at-point ffap-next) "ffap"
-;;;;;;  "ffap.el" (20627 5636 279161 0))
+;;;;;;  "ffap.el" (20672 2821 649863 462000))
 ;;; Generated autoloads from ffap.el
 
 (autoload 'ffap-next "ffap" "\
@@ -12443,7 +12443,7 @@ Declare back end NAME with ABILITIES as a Gnus back end.
 ;;;***
 
 ;;;### (autoloads (gnus-summary-bookmark-jump) "gnus-sum" "gnus/gnus-sum.el"
-;;;;;;  (20627 5636 279161 0))
+;;;;;;  (20668 15056 236206 0))
 ;;; Generated autoloads from gnus/gnus-sum.el
 
 (autoload 'gnus-summary-bookmark-jump "gnus-sum" "\
@@ -12455,7 +12455,7 @@ BOOKMARK is a bookmark name or a bookmark record.
 ;;;***
 
 ;;;### (autoloads (gnus-sync-install-hooks gnus-sync-initialize)
-;;;;;;  "gnus-sync" "gnus/gnus-sync.el" (20627 5636 279161 0))
+;;;;;;  "gnus-sync" "gnus/gnus-sync.el" (20668 15056 236206 0))
 ;;; Generated autoloads from gnus/gnus-sync.el
 
 (autoload 'gnus-sync-initialize "gnus-sync" "\
@@ -13742,8 +13742,8 @@ Unconditionally turn off `hs-minor-mode'.
 ;;;;;;  highlight-compare-buffers highlight-changes-rotate-faces
 ;;;;;;  highlight-changes-previous-change highlight-changes-next-change
 ;;;;;;  highlight-changes-remove-highlight highlight-changes-visible-mode
-;;;;;;  highlight-changes-mode) "hilit-chg" "hilit-chg.el" (20533
-;;;;;;  49334 755743 0))
+;;;;;;  highlight-changes-mode) "hilit-chg" "hilit-chg.el" (20673
+;;;;;;  62576 292524 0))
 ;;; Generated autoloads from hilit-chg.el
 
 (autoload 'highlight-changes-mode "hilit-chg" "\
@@ -13874,9 +13874,16 @@ See `highlight-changes-mode' for more information on Highlight-Changes mode.
 
 ;;;***
 
-;;;### (autoloads (make-hippie-expand-function hippie-expand) "hippie-exp"
-;;;;;;  "hippie-exp.el" (20627 5636 279161 0))
+;;;### (autoloads (make-hippie-expand-function hippie-expand hippie-expand-try-functions-list)
+;;;;;;  "hippie-exp" "hippie-exp.el" (20658 59320 825234 0))
 ;;; Generated autoloads from hippie-exp.el
+
+(defvar hippie-expand-try-functions-list '(try-complete-file-name-partially try-complete-file-name try-expand-all-abbrevs try-expand-list try-expand-line try-expand-dabbrev try-expand-dabbrev-all-buffers try-expand-dabbrev-from-kill try-complete-lisp-symbol-partially try-complete-lisp-symbol) "\
+The list of expansion functions tried in order by `hippie-expand'.
+To change the behavior of `hippie-expand', remove, change the order of,
+or insert functions in this list.")
+
+(custom-autoload 'hippie-expand-try-functions-list "hippie-exp" t)
 
 (autoload 'hippie-expand "hippie-exp" "\
 Try to expand text before point, using multiple methods.
@@ -15488,7 +15495,7 @@ of `inferior-lisp-program').  Runs the hooks from
 ;;;;;;  Info-goto-emacs-key-command-node Info-goto-emacs-command-node
 ;;;;;;  Info-mode info-finder info-apropos Info-index Info-directory
 ;;;;;;  Info-on-current-buffer info-standalone info-emacs-bug info-emacs-manual
-;;;;;;  info info-other-window) "info" "info.el" (20656 24810 495254
+;;;;;;  info info-other-window) "info" "info.el" (20669 26731 29158
 ;;;;;;  0))
 ;;; Generated autoloads from info.el
 
@@ -16968,8 +16975,8 @@ Major mode for browsing CVS log output.
 
 ;;;***
 
-;;;### (autoloads (longlines-mode) "longlines" "longlines.el" (20533
-;;;;;;  49334 755743 0))
+;;;### (autoloads (longlines-mode) "longlines" "longlines.el" (20665
+;;;;;;  30571 397937 0))
 ;;; Generated autoloads from longlines.el
 
 (autoload 'longlines-mode "longlines" "\
@@ -19404,7 +19411,7 @@ startup file, `~/.emacs-octave'.
 ;;;***
 
 ;;;### (autoloads (octave-mode) "octave-mod" "progmodes/octave-mod.el"
-;;;;;;  (20627 5636 279161 0))
+;;;;;;  (20672 1863 520809 0))
 ;;; Generated autoloads from progmodes/octave-mod.el
 
 (autoload 'octave-mode "octave-mod" "\
@@ -19492,7 +19499,7 @@ including a reproducible test case and send the message.
 ;;;;;;  org-run-like-in-org-mode turn-on-orgstruct++ turn-on-orgstruct
 ;;;;;;  orgstruct-mode org-global-cycle org-cycle org-mode org-clock-persistence-insinuate
 ;;;;;;  turn-on-orgtbl org-version org-babel-do-load-languages) "org"
-;;;;;;  "org/org.el" (20627 5636 279161 0))
+;;;;;;  "org/org.el" (20684 29334 349097 0))
 ;;; Generated autoloads from org/org.el
 
 (autoload 'org-babel-do-load-languages "org" "\
@@ -19718,7 +19725,7 @@ Call the customize function with org as argument.
 ;;;;;;  org-search-view org-agenda-list org-batch-store-agenda-views
 ;;;;;;  org-store-agenda-views org-batch-agenda-csv org-batch-agenda
 ;;;;;;  org-agenda org-toggle-sticky-agenda) "org-agenda" "org/org-agenda.el"
-;;;;;;  (20627 5636 279161 0))
+;;;;;;  (20684 29334 349097 0))
 ;;; Generated autoloads from org/org-agenda.el
 
 (autoload 'org-toggle-sticky-agenda "org-agenda" "\
@@ -20095,7 +20102,7 @@ Try very hard to provide sensible version strings.
 ;;;***
 
 ;;;### (autoloads (org-git-version org-release) "org-version" "org/org-version.el"
-;;;;;;  (20627 5636 279161 0))
+;;;;;;  (20684 29334 349097 0))
 ;;; Generated autoloads from org/org-version.el
 
 (autoload 'org-release "org-version" "\
@@ -21907,7 +21914,7 @@ If EXTENSION is any other symbol, it is ignored.
 ;;;***
 
 ;;;### (autoloads (python-mode run-python) "python" "progmodes/python.el"
-;;;;;;  (20641 21435 927560 0))
+;;;;;;  (20684 29334 349097 0))
 ;;; Generated autoloads from progmodes/python.el
 
 (add-to-list 'auto-mode-alist (cons (purecopy "\\.py\\'") 'python-mode))
@@ -22926,7 +22933,7 @@ variable.
 ;;;;;;  rmail-secondary-file-directory rmail-primary-inbox-list rmail-highlighted-headers
 ;;;;;;  rmail-retry-ignored-headers rmail-displayed-headers rmail-ignored-headers
 ;;;;;;  rmail-user-mail-address-regexp rmail-movemail-variant-p rmail-spool-directory
-;;;;;;  rmail-file-name) "rmail" "mail/rmail.el" (20627 5636 279161
+;;;;;;  rmail-file-name) "rmail" "mail/rmail.el" (20673 22507 803402
 ;;;;;;  0))
 ;;; Generated autoloads from mail/rmail.el
 
@@ -24544,7 +24551,7 @@ Set up file shadowing.
 ;;;***
 
 ;;;### (autoloads (shell shell-dumb-shell-regexp) "shell" "shell.el"
-;;;;;;  (20627 5636 279161 0))
+;;;;;;  (20664 26060 105416 0))
 ;;; Generated autoloads from shell.el
 
 (defvar shell-dumb-shell-regexp (purecopy "cmd\\(proxy\\)?\\.exe") "\
@@ -26099,7 +26106,7 @@ The variable `tab-width' controls the spacing of tab stops.
 ;;;;;;  table-recognize table-insert-row-column table-insert-column
 ;;;;;;  table-insert-row table-insert table-point-left-cell-hook
 ;;;;;;  table-point-entered-cell-hook table-load-hook table-cell-map-hook)
-;;;;;;  "table" "textmodes/table.el" (20627 5636 279161 0))
+;;;;;;  "table" "textmodes/table.el" (20660 26103 312755 0))
 ;;; Generated autoloads from textmodes/table.el
 
 (defvar table-cell-map-hook nil "\
@@ -26807,7 +26814,7 @@ Normally input is edited in Emacs and sent a line at a time.
 ;;;***
 
 ;;;### (autoloads (serial-term ansi-term term make-term) "term" "term.el"
-;;;;;;  (20647 7990 336071 0))
+;;;;;;  (20668 16794 117311 852000))
 ;;; Generated autoloads from term.el
 
 (autoload 'make-term "term" "\
@@ -27271,7 +27278,7 @@ if large.  You can use `Info-split' to do this manually.
 ;;;***
 
 ;;;### (autoloads (texinfo-mode texinfo-close-quote texinfo-open-quote)
-;;;;;;  "texinfo" "textmodes/texinfo.el" (20627 5636 279161 0))
+;;;;;;  "texinfo" "textmodes/texinfo.el" (20674 45241 160557 0))
 ;;; Generated autoloads from textmodes/texinfo.el
 
 (defvar texinfo-open-quote (purecopy "``") "\
@@ -32364,8 +32371,8 @@ Zone out, completely.
 ;;;;;;  "vc/ediff-ptch.el" "vc/ediff-vers.el" "vc/ediff-wind.el"
 ;;;;;;  "vc/pcvs-info.el" "vc/pcvs-parse.el" "vc/pcvs-util.el" "vc/vc-dav.el"
 ;;;;;;  "vcursor.el" "vt-control.el" "vt100-led.el" "w32-common-fns.el"
-;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (20656 58993 363290
-;;;;;;  189000))
+;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (20684 33410 30137
+;;;;;;  687000))
 
 ;;;***
 

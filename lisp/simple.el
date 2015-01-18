@@ -744,7 +744,7 @@ If BACKWARD-ONLY is non-nil, only delete them before point."
 
 (defun just-one-space (&optional n)
   "Delete all spaces and tabs around point, leaving one space (or N spaces).
-If N is negative, delete newlines as well."
+If N is negative, delete newlines as well, leaving -N spaces."
   (interactive "*p")
   (unless n (setq n 1))
   (let ((orig-pos (point))
@@ -4135,11 +4135,12 @@ after C-u \\[set-mark-command]."
 
 (defcustom set-mark-default-inactive nil
   "If non-nil, setting the mark does not activate it.
-This causes \\[set-mark-command] and \\[exchange-point-and-mark] to
-behave the same whether or not `transient-mark-mode' is enabled."
+This option does the same thing as disabling Transient Mark mode,
+and it will be removed in the near future."
   :type 'boolean
   :group 'editing-basics
   :version "23.1")
+(make-obsolete-variable 'set-mark-default-inactive nil "24.3")
 
 (defun set-mark-command (arg)
   "Set the mark where point is, or jump to the mark.
@@ -4332,14 +4333,14 @@ else--for example, incremental search, \\[beginning-of-buffer], and \\[end-of-bu
 You can also deactivate the mark by typing \\[keyboard-quit] or
 \\[keyboard-escape-quit].
 
-Many commands change their behavior when Transient Mark mode is in effect
-and the mark is active, by acting on the region instead of their usual
-default part of the buffer's text.  Examples of such commands include
-\\[comment-dwim], \\[flush-lines], \\[keep-lines], \
+Many commands change their behavior when Transient Mark mode is
+in effect and the mark is active, by acting on the region instead
+of their usual default part of the buffer's text.  Examples of
+such commands include \\[comment-dwim], \\[flush-lines], \\[keep-lines],
 \\[query-replace], \\[query-replace-regexp], \\[ispell], and \\[undo].
-Invoke \\[apropos-documentation] and type \"transient\" or
-\"mark.*active\" at the prompt, to see the documentation of
-commands which are sensitive to the Transient Mark mode."
+To see the documentation of commands which are sensitive to the
+Transient Mark mode, invoke \\[apropos-documentation] and type \"transient\"
+or \"mark.*active\" at the prompt."
   :global t
   ;; It's defined in C/cus-start, this stops the d-m-m macro defining it again.
   :variable transient-mark-mode)

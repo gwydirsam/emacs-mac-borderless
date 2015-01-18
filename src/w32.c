@@ -101,17 +101,17 @@ typedef struct _MEMORY_STATUS_EX {
    _WIN32_WINNT than what we use.  w32api supplied with MinGW 3.15
    defines it in psapi.h  */
 typedef struct _PROCESS_MEMORY_COUNTERS_EX {
-  DWORD cb;
-  DWORD PageFaultCount;
-  DWORD PeakWorkingSetSize;
-  DWORD WorkingSetSize;
-  DWORD QuotaPeakPagedPoolUsage;
-  DWORD QuotaPagedPoolUsage;
-  DWORD QuotaPeakNonPagedPoolUsage;
-  DWORD QuotaNonPagedPoolUsage;
-  DWORD PagefileUsage;
-  DWORD PeakPagefileUsage;
-  DWORD PrivateUsage;
+  DWORD  cb;
+  DWORD  PageFaultCount;
+  SIZE_T PeakWorkingSetSize;
+  SIZE_T WorkingSetSize;
+  SIZE_T QuotaPeakPagedPoolUsage;
+  SIZE_T QuotaPagedPoolUsage;
+  SIZE_T QuotaPeakNonPagedPoolUsage;
+  SIZE_T QuotaNonPagedPoolUsage;
+  SIZE_T PagefileUsage;
+  SIZE_T PeakPagefileUsage;
+  SIZE_T PrivateUsage;
 } PROCESS_MEMORY_COUNTERS_EX,*PPROCESS_MEMORY_COUNTERS_EX;
 #endif
 
@@ -150,10 +150,18 @@ typedef struct _REPARSE_DATA_BUFFER {
     } DUMMYUNIONNAME;
 } REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 
+#ifndef FILE_DEVICE_FILE_SYSTEM
 #define FILE_DEVICE_FILE_SYSTEM	9
+#endif
+#ifndef METHOD_BUFFERED
 #define METHOD_BUFFERED	        0
+#endif
+#ifndef FILE_ANY_ACCESS
 #define FILE_ANY_ACCESS	        0x00000000
+#endif
+#ifndef CTL_CODE
 #define CTL_CODE(t,f,m,a)       (((t)<<16)|((a)<<14)|((f)<<2)|(m))
+#endif
 #define FSCTL_GET_REPARSE_POINT \
   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 42, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
@@ -343,8 +351,8 @@ typedef BOOL (WINAPI * GetProcessMemoryInfo_Proc) (
     DWORD cb);
 typedef BOOL (WINAPI * GetProcessWorkingSetSize_Proc) (
     HANDLE hProcess,
-    DWORD * lpMinimumWorkingSetSize,
-    DWORD * lpMaximumWorkingSetSize);
+    PSIZE_T lpMinimumWorkingSetSize,
+    PSIZE_T lpMaximumWorkingSetSize);
 typedef BOOL (WINAPI * GlobalMemoryStatus_Proc) (
     LPMEMORYSTATUS lpBuffer);
 typedef BOOL (WINAPI * GlobalMemoryStatusEx_Proc) (
@@ -3354,8 +3362,7 @@ w32_add_to_cache (PSID sid, unsigned id, char *name)
 #define GID 2
 
 static int
-get_name_and_id (PSECURITY_DESCRIPTOR psd, const char *fname,
-		 unsigned *id, char *nm, int what)
+get_name_and_id (PSECURITY_DESCRIPTOR psd, unsigned *id, char *nm, int what)
 {
   PSID sid = NULL;
   char machine[MAX_COMPUTERNAME_LENGTH+1];
@@ -3365,7 +3372,6 @@ get_name_and_id (PSECURITY_DESCRIPTOR psd, const char *fname,
   DWORD name_len = sizeof (name);
   char domain[1024];
   DWORD domain_len = sizeof (domain);
-  char *mp = NULL;
   int use_dflt = 0;
   int result;
 
@@ -3380,22 +3386,7 @@ get_name_and_id (PSECURITY_DESCRIPTOR psd, const char *fname,
     use_dflt = 1;
   else if (!w32_cached_id (sid, id, nm))
     {
-      /* If FNAME is a UNC, we need to lookup account on the
-	 specified machine.  */
-      if (IS_DIRECTORY_SEP (fname[0]) && IS_DIRECTORY_SEP (fname[1])
-	  && fname[2] != '\0')
-	{
-	  const char *s;
-	  char *p;
-
-	  for (s = fname + 2, p = machine;
-	       *s && !IS_DIRECTORY_SEP (*s); s++, p++)
-	    *p = *s;
-	  *p = '\0';
-	  mp = machine;
-	}
-
-      if (!lookup_account_sid (mp, sid, name, &name_len,
+      if (!lookup_account_sid (NULL, sid, name, &name_len,
 			       domain, &domain_len, &ignore)
 	  || name_len > UNLEN+1)
 	use_dflt = 1;
@@ -3410,9 +3401,7 @@ get_name_and_id (PSECURITY_DESCRIPTOR psd, const char *fname,
 }
 
 static void
-get_file_owner_and_group (PSECURITY_DESCRIPTOR psd,
-			  const char *fname,
-			  struct stat *st)
+get_file_owner_and_group (PSECURITY_DESCRIPTOR psd, struct stat *st)
 {
   int dflt_usr = 0, dflt_grp = 0;
 
@@ -3423,9 +3412,9 @@ get_file_owner_and_group (PSECURITY_DESCRIPTOR psd,
     }
   else
     {
-      if (get_name_and_id (psd, fname, &st->st_uid, st->st_uname, UID))
+      if (get_name_and_id (psd, &st->st_uid, st->st_uname, UID))
 	dflt_usr = 1;
-      if (get_name_and_id (psd, fname, &st->st_gid, st->st_gname, GID))
+      if (get_name_and_id (psd, &st->st_gid, st->st_gname, GID))
 	dflt_grp = 1;
     }
   /* Consider files to belong to current user/group, if we cannot get
@@ -3647,19 +3636,19 @@ stat_worker (const char * path, struct stat * buf, int follow_symlinks)
 	psd = get_file_security_desc_by_handle (fh);
       if (psd)
 	{
-	  get_file_owner_and_group (psd, name, buf);
+	  get_file_owner_and_group (psd, buf);
 	  LocalFree (psd);
 	}
       else if (is_windows_9x () == TRUE)
-	get_file_owner_and_group (NULL, name, buf);
+	get_file_owner_and_group (NULL, buf);
       else if (!(is_a_symlink && follow_symlinks))
 	{
 	  psd = get_file_security_desc_by_name (name);
-	  get_file_owner_and_group (psd, name, buf);
+	  get_file_owner_and_group (psd, buf);
 	  xfree (psd);
 	}
       else
-	get_file_owner_and_group (NULL, name, buf);
+	get_file_owner_and_group (NULL, buf);
       CloseHandle (fh);
     }
   else
@@ -3767,7 +3756,7 @@ stat_worker (const char * path, struct stat * buf, int follow_symlinks)
       else
 	buf->st_mode = S_IFREG;
 
-      get_file_owner_and_group (NULL, name, buf);
+      get_file_owner_and_group (NULL, buf);
     }
 
 #if 0
@@ -4612,8 +4601,8 @@ get_process_memory_info (HANDLE h_proc,
 
 static BOOL WINAPI
 get_process_working_set_size (HANDLE h_proc,
-			      DWORD *minrss,
-			      DWORD *maxrss)
+			      PSIZE_T minrss,
+			      PSIZE_T maxrss)
 {
   static GetProcessWorkingSetSize_Proc
     s_pfn_Get_Process_Working_Set_Size = NULL;
@@ -4858,7 +4847,7 @@ system_process_attributes (Lisp_Object pid)
   unsigned egid;
   PROCESS_MEMORY_COUNTERS mem;
   PROCESS_MEMORY_COUNTERS_EX mem_ex;
-  DWORD minrss, maxrss;
+  SIZE_T minrss, maxrss;
   MEMORYSTATUS memst;
   MEMORY_STATUS_EX memstex;
   double totphys = 0.0;
@@ -5086,7 +5075,7 @@ system_process_attributes (Lisp_Object pid)
       && get_process_memory_info (h_proc, (PROCESS_MEMORY_COUNTERS *)&mem_ex,
 				  sizeof (mem_ex)))
     {
-      DWORD rss = mem_ex.WorkingSetSize / 1024;
+      SIZE_T rss = mem_ex.WorkingSetSize / 1024;
 
       attrs = Fcons (Fcons (Qmajflt,
 			    make_fixnum_or_float (mem_ex.PageFaultCount)),
@@ -5101,7 +5090,7 @@ system_process_attributes (Lisp_Object pid)
   else if (h_proc
 	   && get_process_memory_info (h_proc, &mem, sizeof (mem)))
     {
-      DWORD rss = mem_ex.WorkingSetSize / 1024;
+      SIZE_T rss = mem_ex.WorkingSetSize / 1024;
 
       attrs = Fcons (Fcons (Qmajflt,
 			    make_fixnum_or_float (mem.PageFaultCount)),

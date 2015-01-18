@@ -1,7 +1,34 @@
+* emacs-24.2.91-mac-3.91 [experimental/hackers-only] (2012-12-16)
+
+** Fixed bugs
+
+*** Disabling tool bar mode via the Preference system (X resources
+emulation) does not work.
+Reported by Leo.
+
+*** Tool bar visibility is not preserved when entering/exiting full
+screen on Mac OS X 10.7 and later (actually this is a bug in AppKit).
+
+*** Background color is not in sRGB color space for image types GIF,
+PNG, TIFF, and IMAGE-IO.
+
+** Improvements
+
+*** You can run the executable from the build directory (via `open
+mac/Emacs.app') without doing `make install'.  Forgot to mention in
+the previous release.
+
+*** Support alpha channel masks for image types GIF, PNG, TIFF, and
+IMAGE-IO with keeping the postprocessing functionality (`:conversion'
+and `:mask').  Not for SVG images rendered with WebKit because proper
+text smoothing requires opaque background.
+
+
 * emacs-24.2.90-mac-3.90 [experimental/hackers-only] (2012-11-25)
 Based on Emacs 24.2.90.  Remove mac-{get,set}-file-{creator,type} and
 mac-process-hi-command.  Move the "//#define PURE_SECTION" line from
 src/s/darwin.h to src/conf_post.h.
+http://lists.gnu.org/archive/html/emacs-devel/2012-11/msg00472.html
 
 
 * emacs-24.2-mac-3.3 (2012-10-27)

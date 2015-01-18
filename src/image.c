@@ -219,7 +219,7 @@ XDestroyImage (XImagePtr ximg)
 {
 }
 
-void
+static void
 mac_data_provider_release_data (void *info, const void *data, size_t size)
 {
   xfree ((void *)data);
@@ -235,21 +235,23 @@ mac_create_cg_image_from_image (struct frame *f, struct image *img)
   if (img->mask)
     {
       int x, y;
-      unsigned long color, alpha;
 
       for (y = 0; y < ximg->height; y++)
 	for (x = 0; x < ximg->width; x++)
 	  {
+	    unsigned long color, alpha;
+	    int dest_alpha, r, g, b;
+
 	    color = XGetPixel (ximg, x, y);
 	    alpha = XGetPixel (img->mask, x, y);
-	    XPutPixel (ximg, x, y,
-		       ARGB_TO_ULONG (alpha,
-				      RED_FROM_ULONG (color)
-				      * alpha / PIX_MASK_DRAW,
-				      GREEN_FROM_ULONG (color)
-				      * alpha / PIX_MASK_DRAW,
-				      BLUE_FROM_ULONG (color)
-				      * alpha / PIX_MASK_DRAW));
+	    dest_alpha = 0xff - alpha;
+	    r = RED_FROM_ULONG (color);
+	    r = (r < dest_alpha) ? 0 : r - dest_alpha;
+	    g = GREEN_FROM_ULONG (color);
+	    g = (g < dest_alpha) ? 0 : g - dest_alpha;
+	    b = BLUE_FROM_ULONG (color);
+	    b = (b < dest_alpha) ? 0 : b - dest_alpha;
+	    XPutPixel (ximg, x, y, ARGB_TO_ULONG (alpha, r, g, b));
 	  }
       xfree (img->mask->data);
       img->mask->data = NULL;
@@ -2501,11 +2503,14 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
   int loop_count = -1;
   double delay_time = -1.0;
   int width, height, scale_factor;
-  XImagePtr ximg = NULL;
+  XImagePtr ximg = NULL, mask_img;
   CGContextRef context;
   CGRect rectangle, clip_rectangle;
   CGAffineTransform transform;
   Boolean has_alpha_p, gif_p, tiff_p;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+  dispatch_group_t group;
+#endif
 
   keys[0] = kCGImageSourceShouldCache;
   values[0] = (CFTypeRef) kCFBooleanFalse;
@@ -2790,24 +2795,68 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
 				   mac_cg_color_space_rgb,
 				   kCGImageAlphaNoneSkipFirst
 				   | kCGBitmapByteOrder32Host);
+  mask_img = NULL;
   if (has_alpha_p || !CGAffineTransformIsIdentity (transform))
     {
       Lisp_Object specified_bg;
       XColor color;
+      CGFloat rgba[4];
+      CGColorRef cg_color;
 
       specified_bg = image_spec_value (img->spec, QCbackground, NULL);
       if (!STRINGP (specified_bg)
 	  || !mac_defined_color (f, SSDATA (specified_bg), &color, 0))
 	{
-	  color.pixel = FRAME_BACKGROUND_PIXEL (f);
-	  color.red = RED16_FROM_ULONG (color.pixel);
-	  color.green = GREEN16_FROM_ULONG (color.pixel);
-	  color.blue = BLUE16_FROM_ULONG (color.pixel);
+	  if (!x_create_x_image_and_pixmap (f, width, height, 1,
+					    &mask_img, &img->mask))
+	    {
+	      CGContextRelease (context);
+	      CGImageRelease (image);
+	      image_error ("Out of memory (%s)", img->spec, Qnil);
+	      return 0;
+	    }
+	  CGImageRetain (image);
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+	  group = dispatch_group_create ();
+	  dispatch_group_async
+	    (group, dispatch_get_global_queue (DISPATCH_QUEUE_PRIORITY_DEFAULT,
+					       0), ^
+#endif
+	     {
+	       CGContextRef mask_context =
+		 CGBitmapContextCreate (mask_img->data,
+					mask_img->width, mask_img->height,
+					8, mask_img->bytes_per_line,
+					NULL, kCGImageAlphaOnly);
+
+	       CGContextClearRect (mask_context,
+				   CGRectMake (0, 0, width, height));
+	       CGContextScaleCTM (mask_context, scale_factor, scale_factor);
+	       CGContextConcatCTM (mask_context, transform);
+	       CGContextClipToRect (mask_context, clip_rectangle);
+	       CGContextDrawImage (mask_context, rectangle, image);
+	       CGContextRelease (mask_context);
+	       CGImageRelease (image);
+	     }
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+	     );
+#endif
+	  rgba[0] = rgba[1] = rgba[2] = rgba[3] = 1.0;
 	}
-      CGContextSetRGBFillColor (context, color.red / 65535.0,
-				color.green / 65535.0,
-				color.blue / 65535.0, 1.0);
-      CGContextFillRect (context, CGRectMake (0, 0, width, height));
+      else
+	{
+	  rgba[0] = color.red / 65535.0;
+	  rgba[1] = color.green / 65535.0;
+	  rgba[2] = color.blue / 65535.0;
+	  rgba[3] = 1.0;
+	}
+      cg_color = CGColorCreate (mac_cg_color_space_rgb, rgba);
+      if (cg_color)
+	{
+	  CGContextSetFillColorWithColor (context, cg_color);
+	  CGContextFillRect (context, CGRectMake (0, 0, width, height));
+	  CGColorRelease (cg_color);
+	}
     }
   CGContextScaleCTM (context, scale_factor, scale_factor);
   CGContextConcatCTM (context, transform);
@@ -2876,6 +2925,21 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
   /* Put the image into the pixmap.  */
   x_put_x_image (f, ximg, img->pixmap, width, height);
   x_destroy_x_image (ximg);
+
+  if (mask_img)
+    {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      dispatch_group_wait (group, DISPATCH_TIME_FOREVER);
+      dispatch_release (group);
+#endif
+      /* Fill in the background_transparent field while we have the
+	 mask handy.  */
+      image_background_transparent (img, f, mask_img);
+
+      x_put_x_image (f, mask_img, img->mask, width, height);
+      x_destroy_x_image (mask_img);
+    }
+
   return 1;
 }
 
