@@ -2029,18 +2029,30 @@ non-nil, and the input device supports it."
 						(posn-at-x-y
 						 0 prev-first-vscrolled-y))))))
 			      (set-window-vscroll nil 0 t))))
-			(set-window-vscroll nil delta-y t)
-			(let* ((target-posn (posn-at-x-y 0 first-y))
-			       (target-row
-				(cdr (posn-actual-col-row target-posn)))
-			       (target-coord
-				(pos-visible-in-window-p
-				 (posn-point target-posn) nil t))
-			       (target-y
-				(- (+ delta-y (cadr target-coord))
-				   (or (car (cddr target-coord)) 0)))
-			       (scrolled-pixel-height (- target-y first-y)))
-			  (set-window-vscroll nil 0 t)
+			(let* ((target-posn (posn-at-x-y 0 (+ first-y delta-y)))
+			       (target-coord (pos-visible-in-window-p
+					      (posn-point target-posn) nil t))
+			       (target-row (cdr (posn-actual-col-row
+						 target-posn)))
+			       target-y scrolled-pixel-height)
+			  (if (and target-coord target-row)
+			      (setq target-y (cadr target-coord))
+			    ;; The target row is below the visible
+			    ;; area.  Temporarily set vscroll so the
+			    ;; target row comes at the top and
+			    ;; re-measure the position.
+			    (set-window-vscroll nil delta-y t)
+			    (setq target-posn (posn-at-x-y 0 first-y))
+			    (setq target-coord (pos-visible-in-window-p
+						(posn-point target-posn) nil t))
+			    (set-window-vscroll nil 0 t)
+			    (setq target-row (cdr (posn-actual-col-row
+						   target-posn)))
+			    (setq target-y (cadr target-coord))
+			    (if (= target-y 0)
+				(setq target-y (- (or (nth 2 target-coord)) 0)))
+			    (setq target-y (+ target-y delta-y)))
+			  (setq scrolled-pixel-height (- target-y first-y))
 			  ;; Cancel the last scroll.
 			  (goto-char prev-point)
 			  (set-window-start nil prev-first)
@@ -2135,7 +2147,7 @@ non-nil, and the input device supports it."
 		(scroll-down 1)
 		(set-window-vscroll nil delta-y t)
 		(setq redisplay-needed t))
-	      (if (> (count-screen-lines (window-start) (window-end)) 1)
+	      (if (> (count-screen-lines (window-start) (window-end nil t)) 1)
 		  ;; Make sure that the cursor is fully visible.
 		  (while (and (< (window-start) (point))
 			      (not (pos-visible-in-window-p)))

@@ -176,7 +176,7 @@ OPTION_DEFAULT_ON([m17n-flt],[don't use m17n-flt for text shaping])
 OPTION_DEFAULT_ON([toolkit-scroll-bars],[don't use Motif or Xaw3d scroll bars])
 OPTION_DEFAULT_ON([xaw3d],[don't use Xaw3d])
 OPTION_DEFAULT_ON([xim],[don't use X11 XIM])
-OPTION_DEFAULT_OFF([mac],[use GUI on Mac OS X.  This is experimental/hackers-only!])
+OPTION_DEFAULT_OFF([mac],[use GUI on Mac OS X])
 OPTION_DEFAULT_OFF([ns],[use NeXTstep (Cocoa or GNUstep) windowing system])
 OPTION_DEFAULT_OFF([w32], [use native MS Windows GUI])
 
@@ -1671,11 +1671,6 @@ dnl use the toolkit if we have gtk, or X11R5 or newer.
     term_header=w32term.h
   ;;
 esac
-
-if test -n "${term_header}"; then
-    AC_DEFINE_UNQUOTED(TERM_HEADER, "${term_header}",
-        [Define to the header for the built-in window system.])
-fi
 
 if test "$window_system" = none && test "X$with_x" != "Xno"; then
    AC_CHECK_PROG(HAVE_XSERVER, X, true, false)
@@ -4633,11 +4628,6 @@ fi
 echo
 
 if test "$HAVE_MACGUI" = "yes"; then
-   echo
-   echo "Warning: The Mac port 3.9X is experimental/hackers-only.
-It is not recommended for casual use
-or as a basis of (binary) distributions."
-   echo
    if test "$with_wide_int" = yes; then
       echo "Warning: \`--with-wide-int' is not eagerly tested on the Mac port.
 Use it at your own risk."

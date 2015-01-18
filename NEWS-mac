@@ -1,8 +1,17 @@
-* emacs-24.3-rc-mac-3.94 [experimental/hackers-only] (2013-03-05)
+* emacs-24.3-mac-4.0 (2013-03-11)
+Based on Emacs 24.3.
+
+** Fixed bugs
+
+*** Smooth scrolling down the fancy splash screen causes an error.
+
+
+* emacs-24.3-rc1-mac-3.94 [experimental/hackers-only] (2013-03-05)
 Based on Emacs 24.3 release candidate 1.  Remove mac-system-locale.
 When the locale setting is derived from the Preferences AppleLocale or
 AppleLanguages (i.e., none of "LC_ALL", "LC_CTYPE" or "LANG" is set),
 encoding is assumed to be UTF-8.
+http://lists.gnu.org/archive/html/emacs-devel/2013-03/msg00059.html
 
 ** Fixed bugs
 

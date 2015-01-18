@@ -2130,8 +2130,7 @@ Optional Packages:
                           don't use Motif or Xaw3d scroll bars
   --without-xaw3d         don't use Xaw3d
   --without-xim           don't use X11 XIM
-  --with-mac              use GUI on Mac OS X. This is
-                          experimental/hackers-only!
+  --with-mac              use GUI on Mac OS X
   --with-ns               use NeXTstep (Cocoa or GNUstep) windowing system
   --with-w32              use native MS Windows GUI
   --without-gpm           don't use -lgpm for mouse support on a GNU/Linux
@@ -9839,14 +9838,6 @@ case "${window_system}" in
     term_header=w32term.h
   ;;
 esac
-
-if test -n "${term_header}"; then
-
-cat >>confdefs.h <<_ACEOF
-#define TERM_HEADER "${term_header}"
-_ACEOF
-
-fi
 
 if test "$window_system" = none && test "X$with_x" != "Xno"; then
    # Extract the first word of "X", so it can be a program name with args.
@@ -25022,11 +25013,6 @@ fi
 echo
 
 if test "$HAVE_MACGUI" = "yes"; then
-   echo
-   echo "Warning: The Mac port 3.9X is experimental/hackers-only.
-It is not recommended for casual use
-or as a basis of (binary) distributions."
-   echo
    if test "$with_wide_int" = yes; then
       echo "Warning: \`--with-wide-int' is not eagerly tested on the Mac port.
 Use it at your own risk."
