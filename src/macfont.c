@@ -1,5 +1,5 @@
 /* Font driver on Mac OS.
-   Copyright (C) 2009-2012  YAMAMOTO Mitsuharu
+   Copyright (C) 2009-2013  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -313,7 +313,7 @@ macfont_store_descriptor_attributes (FontDescriptorRef desc,
 	  int spacing;
 
 	  cfnumber_get_font_symbolic_traits_value (num, &sym_traits);
-	  spacing = (sym_traits & MAC_FONT_MONO_SPACE_TRAIT
+	  spacing = (sym_traits & MAC_FONT_TRAIT_MONO_SPACE
 		     ? FONT_SPACING_MONO : FONT_SPACING_PROPORTIONAL);
 	  ASET (spec_or_entity, FONT_SPACING_INDEX, make_number (spacing));
 	}
@@ -360,13 +360,13 @@ macfont_descriptor_entity (FontDescriptorRef desc, Lisp_Object extra,
   name = mac_font_descriptor_copy_attribute (desc, MAC_FONT_NAME_ATTRIBUTE);
   font_put_extra (entity, QCfont_entity,
 		  make_save_value ((void *) name, sym_traits));
-  if (synth_sym_traits & MAC_FONT_ITALIC_TRAIT)
+  if (synth_sym_traits & MAC_FONT_TRAIT_ITALIC)
     FONT_SET_STYLE (entity, FONT_SLANT_INDEX,
 		    make_number (FONT_SLANT_SYNTHETIC_ITALIC));
-  if (synth_sym_traits & MAC_FONT_BOLD_TRAIT)
+  if (synth_sym_traits & MAC_FONT_TRAIT_BOLD)
     FONT_SET_STYLE (entity, FONT_WEIGHT_INDEX,
 		    make_number (FONT_WEIGHT_SYNTHETIC_BOLD));
-  if (synth_sym_traits & MAC_FONT_MONO_SPACE_TRAIT)
+  if (synth_sym_traits & MAC_FONT_TRAIT_MONO_SPACE)
     ASET (entity, FONT_SPACING_INDEX,
 	  make_number (FONT_SPACING_SYNTHETIC_MONO));
 
@@ -660,7 +660,7 @@ struct macfont_cache
     /* Character collection specifying the destination of the mapping
        provided by `table' above.  If `table' is obtained from the UVS
        subtable in the font cmap table, then the value of this member
-       should be MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION.  */
+       should be MAC_CHARACTER_COLLECTION_IDENTITY_MAPPING.  */
     CharacterCollection collection;
   } uvs;
 };
@@ -958,11 +958,11 @@ macfont_get_uvs_table (struct font *font, CharacterCollection *collection)
     {
       CFDataRef uvs_table = mac_font_copy_uvs_table (macfont);
       CharacterCollection uvs_collection =
-	MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION;
+	MAC_CHARACTER_COLLECTION_IDENTITY_MAPPING;
 
       if (uvs_table == NULL
 	  && mac_font_get_glyph_for_cid (macfont,
-					 MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION,
+					 MAC_CHARACTER_COLLECTION_ADOBE_JAPAN1,
 					 6480) != kCGFontIndexInvalid)
 	{
 	  /* If the glyph for U+4E55 is accessible via its CID 6480,
@@ -979,7 +979,7 @@ macfont_get_uvs_table (struct font *font, CharacterCollection *collection)
 	  if (mac_uvs_table_adobe_japan1)
 	    {
 	      uvs_table = CFRetain (mac_uvs_table_adobe_japan1);
-	      uvs_collection = MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION;
+	      uvs_collection = MAC_CHARACTER_COLLECTION_ADOBE_JAPAN1;
 	    }
 	}
       if (uvs_table == NULL)
@@ -1486,11 +1486,11 @@ macfont_closest_traits_index (CFArrayRef traits_array,
       /* We prefer synthetic bold of italic to synthetic italic of
 	 bold when both bold and italic are available but bold-italic
 	 is not available.  */
-      if (diff & MAC_FONT_BOLD_TRAIT)
+      if (diff & MAC_FONT_TRAIT_BOLD)
 	distance |= (1 << 0);
-      if (diff & MAC_FONT_ITALIC_TRAIT)
+      if (diff & MAC_FONT_TRAIT_ITALIC)
 	distance |= (1 << 1);
-      if (diff & MAC_FONT_MONO_SPACE_TRAIT)
+      if (diff & MAC_FONT_TRAIT_MONO_SPACE)
 	distance |= (1 << 2);
       if (distance < min_distance)
 	{
@@ -1568,7 +1568,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
   n = FONT_SLANT_NUMERIC (spec);
   if (n < 0 || n == FONT_SLANT_SYNTHETIC_ITALIC)
     {
-      synth_sym_traits |= MAC_FONT_ITALIC_TRAIT;
+      synth_sym_traits |= MAC_FONT_TRAIT_ITALIC;
       if (traits)
 	CFDictionaryRemoveValue (traits, MAC_FONT_SLANT_TRAIT);
     }
@@ -1576,7 +1576,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
   n = FONT_WEIGHT_NUMERIC (spec);
   if (n < 0 || n == FONT_WEIGHT_SYNTHETIC_BOLD)
     {
-      synth_sym_traits |= MAC_FONT_BOLD_TRAIT;
+      synth_sym_traits |= MAC_FONT_TRAIT_BOLD;
       if (traits)
 	CFDictionaryRemoveValue (traits, MAC_FONT_WEIGHT_TRAIT);
     }
@@ -1589,7 +1589,7 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
       if (CFStringHasPrefix (language, CFSTR ("ja"))
 	  || CFStringHasPrefix (language, CFSTR ("ko"))
 	  || CFStringHasPrefix (language, CFSTR ("zh")))
-	synth_sym_traits |= MAC_FONT_MONO_SPACE_TRAIT;
+	synth_sym_traits |= MAC_FONT_TRAIT_MONO_SPACE;
     }
 
   /* Create array of families.  */
@@ -1718,9 +1718,14 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
 	    continue;
 
 	  if (spacing >= 0
-	      && !(synth_sym_traits & MAC_FONT_MONO_SPACE_TRAIT)
-	      && (((sym_traits & MAC_FONT_MONO_SPACE_TRAIT) != 0)
+	      && !(synth_sym_traits & MAC_FONT_TRAIT_MONO_SPACE)
+	      && (((sym_traits & MAC_FONT_TRAIT_MONO_SPACE) != 0)
 		  != (spacing >= FONT_SPACING_MONO)))
+	    continue;
+
+	  /* Don't use a color bitmap font unless its family is
+	     explicitly specified.  */
+	  if ((sym_traits & MAC_FONT_TRAIT_COLOR_GLYPHS) && NILP (family))
 	    continue;
 
 	  if (j > 0
@@ -1746,16 +1751,16 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
 	  FontSymbolicTraits mask_min, mask_max, imask, bmask, mmask;
 
 	  mask_min = ((synth_sym_traits ^ sym_traits)
-		      & (MAC_FONT_ITALIC_TRAIT | MAC_FONT_BOLD_TRAIT));
+		      & (MAC_FONT_TRAIT_ITALIC | MAC_FONT_TRAIT_BOLD));
 	  if (FONT_SLANT_NUMERIC (spec) < 0)
-	    mask_min &= ~MAC_FONT_ITALIC_TRAIT;
+	    mask_min &= ~MAC_FONT_TRAIT_ITALIC;
 	  if (FONT_WEIGHT_NUMERIC (spec) < 0)
-	    mask_min &= ~MAC_FONT_BOLD_TRAIT;
+	    mask_min &= ~MAC_FONT_TRAIT_BOLD;
 
 	  mask_max = (synth_sym_traits & ~sym_traits);
 	  /* Synthetic bold does not work for bitmap-only fonts on Mac
 	     OS X 10.6.  */
-	  if ((mask_min ^ mask_max) & MAC_FONT_BOLD_TRAIT)
+	  if ((mask_min ^ mask_max) & MAC_FONT_TRAIT_BOLD)
 	    {
 	      CFNumberRef format =
 		mac_font_descriptor_copy_attribute (desc,
@@ -1768,21 +1773,21 @@ macfont_list (Lisp_Object frame, Lisp_Object spec)
 		  if (CFNumberGetValue (format, kCFNumberSInt32Type,
 					&format_val)
 		      && format_val == MAC_FONT_FORMAT_BITMAP)
-		    mask_max &= ~MAC_FONT_BOLD_TRAIT;
+		    mask_max &= ~MAC_FONT_TRAIT_BOLD;
 		}
 	    }
 	  if (spacing >= 0)
-	    mask_min |= (mask_max & MAC_FONT_MONO_SPACE_TRAIT);
+	    mask_min |= (mask_max & MAC_FONT_TRAIT_MONO_SPACE);
 
-	  for (mmask = (mask_min & MAC_FONT_MONO_SPACE_TRAIT);
-	       mmask <= (mask_max & MAC_FONT_MONO_SPACE_TRAIT);
-	       mmask += MAC_FONT_MONO_SPACE_TRAIT)
-	    for (bmask = (mask_min & MAC_FONT_BOLD_TRAIT);
-		 bmask <= (mask_max & MAC_FONT_BOLD_TRAIT);
-		 bmask += MAC_FONT_BOLD_TRAIT)
-	      for (imask = (mask_min & MAC_FONT_ITALIC_TRAIT);
-		   imask <= (mask_max & MAC_FONT_ITALIC_TRAIT);
-		   imask += MAC_FONT_ITALIC_TRAIT)
+	  for (mmask = (mask_min & MAC_FONT_TRAIT_MONO_SPACE);
+	       mmask <= (mask_max & MAC_FONT_TRAIT_MONO_SPACE);
+	       mmask += MAC_FONT_TRAIT_MONO_SPACE)
+	    for (bmask = (mask_min & MAC_FONT_TRAIT_BOLD);
+		 bmask <= (mask_max & MAC_FONT_TRAIT_BOLD);
+		 bmask += MAC_FONT_TRAIT_BOLD)
+	      for (imask = (mask_min & MAC_FONT_TRAIT_ITALIC);
+		   imask <= (mask_max & MAC_FONT_TRAIT_ITALIC);
+		   imask += MAC_FONT_TRAIT_ITALIC)
 		{
 		  FontSymbolicTraits synth = (imask | bmask | mmask);
 
@@ -1955,13 +1960,13 @@ macfont_open (FRAME_PTR f, Lisp_Object entity, int pixel_size)
   macfont_info->synthetic_bold_p = 0;
   macfont_info->spacing = MACFONT_SPACING_PROPORTIONAL;
   macfont_info->antialias = MACFONT_ANTIALIAS_DEFAULT;
-  if (!(sym_traits & MAC_FONT_ITALIC_TRAIT)
+  if (!(sym_traits & MAC_FONT_TRAIT_ITALIC)
       && FONT_SLANT_NUMERIC (entity) == FONT_SLANT_SYNTHETIC_ITALIC)
     macfont_info->synthetic_italic_p = 1;
-  if (!(sym_traits & MAC_FONT_BOLD_TRAIT)
+  if (!(sym_traits & MAC_FONT_TRAIT_BOLD)
       && FONT_WEIGHT_NUMERIC (entity) == FONT_WEIGHT_SYNTHETIC_BOLD)
     macfont_info->synthetic_bold_p = 1;
-  if (sym_traits & MAC_FONT_MONO_SPACE_TRAIT)
+  if (sym_traits & MAC_FONT_TRAIT_MONO_SPACE)
     macfont_info->spacing = MACFONT_SPACING_MONO;
   else if (INTEGERP (AREF (entity, FONT_SPACING_INDEX))
 	   && (XINT (AREF (entity, FONT_SPACING_INDEX))
@@ -1977,10 +1982,8 @@ macfont_open (FRAME_PTR f, Lisp_Object entity, int pixel_size)
 	  NILP (XCDR (val)) ? MACFONT_ANTIALIAS_OFF : MACFONT_ANTIALIAS_ON;
     }
   macfont_info->color_bitmap_p = 0;
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
-  if (sym_traits & kCTFontColorGlyphsTrait)
+  if (sym_traits & MAC_FONT_TRAIT_COLOR_GLYPHS)
     macfont_info->color_bitmap_p = 1;
-#endif
 
   glyph = macfont_get_glyph_for_character (font, ' ');
   if (glyph != kCGFontIndexInvalid)
@@ -2760,7 +2763,7 @@ macfont_variation_glyphs (struct font *font, int c, unsigned variations[256])
 	{
 	  CGGlyph glyph = glyphs[i];
 
-	  if (uvs_collection != MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION
+	  if (uvs_collection != MAC_CHARACTER_COLLECTION_IDENTITY_MAPPING
 	      && glyph != kCGFontIndexInvalid)
 	    glyph = macfont_get_glyph_for_cid (font, uvs_collection, glyph);
 	  if (glyph == kCGFontIndexInvalid)

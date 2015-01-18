@@ -1,4 +1,23 @@
+* emacs-24.2.92-mac-3.92 [experimental/hackers-only] (2013-01-11)
+Based on Emacs 24.2.92.
+
+** Fixed bugs
+
+*** Two-finger click with a trackpad on the mode-line causes errors on
+OS X 10.8.
+
+*** Key events are discarded while AppleScript is executed.
+
+** Improvements
+
+*** Add an info node for images and colors to the Mac port section.
+
+*** Support Variation Selectors 15 (text-style) and 16 (emoji-style).
+
+
 * emacs-24.2.91-mac-3.91 [experimental/hackers-only] (2012-12-16)
+Based on Emacs 24.2.91.
+http://lists.gnu.org/archive/html/emacs-devel/2012-12/msg00431.html
 
 ** Fixed bugs
 

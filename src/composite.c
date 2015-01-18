@@ -1,5 +1,5 @@
 /* Composite sequence support.
-   Copyright (C) 2001-2012 Free Software Foundation, Inc.
+   Copyright (C) 2001-2013 Free Software Foundation, Inc.
    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H14PRO021
@@ -898,11 +898,12 @@ fill_gstring_body (Lisp_Object gstring)
 
 
 /* Try to compose the characters at CHARPOS according to composition
-   rule RULE ([PATTERN PREV-CHARS FUNC]).  LIMIT limits the characters
-   to compose.  STRING, if not nil, is a target string.  WIN is a
-   window where the characters are being displayed.  If characters are
-   successfully composed, return the composition as a glyph-string
-   object.  Otherwise return nil.  */
+   rule RULE (either [PATTERN PREV-CHARS FUNC] or [PATTERN PREV-CHARS
+   FUNC FONT-POS]).  LIMIT limits the characters to compose.  STRING,
+   if not nil, is a target string.  WIN is a window where the
+   characters are being displayed.  If characters are successfully
+   composed, return the composition as a glyph-string object.
+   Otherwise return nil.  */
 
 static Lisp_Object
 autocmp_chars (Lisp_Object rule, ptrdiff_t charpos, ptrdiff_t bytepos, ptrdiff_t limit, struct window *win, struct face *face, Lisp_Object string)
@@ -935,12 +936,28 @@ autocmp_chars (Lisp_Object rule, ptrdiff_t charpos, ptrdiff_t bytepos, ptrdiff_t
 #ifdef HAVE_WINDOW_SYSTEM
   if (FRAME_WINDOW_P (f))
     {
+      bool use_font_pos = 0;
+
+      if (ASIZE (rule) == 4 && INTEGERP (AREF (rule, 3)))
+	{
+	  ptrdiff_t offset = XINT (AREF (rule, 1)) + XINT (AREF (rule, 3));
+
+	  if (offset >= 0 && offset < len)
+	    {
+	      charpos += offset;
+	      to = charpos + 1;
+	      use_font_pos = 1;
+	    }
+	}
       font_object = font_range (charpos, &to, win, face, string);
       if (! FONT_OBJECT_P (font_object)
-	  || (! NILP (re)
+	  || (! use_font_pos
+	      && ! NILP (re)
 	      && to < limit
 	      && (fast_looking_at (re, charpos, bytepos, to, -1, string) <= 0)))
 	return unbind_to (count, Qnil);
+      if (use_font_pos)
+	to = limit;
     }
   else
 #endif	/* not HAVE_WINDOW_SYSTEM */
@@ -1059,7 +1076,7 @@ composition_compute_stop_pos (struct composition_it *cmp_it, ptrdiff_t charpos, 
 	      for (ridx = 0; CONSP (val); val = XCDR (val), ridx++)
 		{
 		  elt = XCAR (val);
-		  if (VECTORP (elt) && ASIZE (elt) == 3
+		  if (VECTORP (elt) && ASIZE (elt) >= 3 && ASIZE (elt) <= 4
 		      && NATNUMP (AREF (elt, 1))
 		      && charpos - 1 - XFASTINT (AREF (elt, 1)) >= start)
 		    break;
@@ -1116,7 +1133,7 @@ composition_compute_stop_pos (struct composition_it *cmp_it, ptrdiff_t charpos, 
 	      for (ridx = 0; CONSP (val); val = XCDR (val), ridx++)
 		{
 		  elt = XCAR (val);
-		  if (VECTORP (elt) && ASIZE (elt) == 3
+		  if (VECTORP (elt) && ASIZE (elt) >= 3 && ASIZE (elt) <= 4
 		      && NATNUMP (AREF (elt, 1))
 		      && charpos - XFASTINT (AREF (elt, 1)) > endpos)
 		    {
@@ -1257,8 +1274,8 @@ composition_reseat_it (struct composition_it *cmp_it, ptrdiff_t charpos,
 	  for (; CONSP (val); val = XCDR (val))
 	    {
 	      elt = XCAR (val);
-	      if (! VECTORP (elt) || ASIZE (elt) != 3
-		  || ! INTEGERP (AREF (elt, 1)))
+	      if (! VECTORP (elt) || ASIZE (elt) < 3 || ASIZE (elt) > 4
+		  || ! NATNUMP (AREF (elt, 1)))
 		continue;
 	      if (XFASTINT (AREF (elt, 1)) != cmp_it->lookback)
 		goto no_composition;
@@ -1594,7 +1611,8 @@ find_automatic_composition (ptrdiff_t pos, ptrdiff_t limit,
 	    {
 	      Lisp_Object elt = XCAR (val);
 
-	      if (VECTORP (elt) && ASIZE (elt) == 3 && NATNUMP (AREF (elt, 1)))
+	      if (VECTORP (elt) && ASIZE (elt) >= 3 && ASIZE (elt) <= 4
+		  && NATNUMP (AREF (elt, 1)))
 		{
 		  EMACS_INT check_pos = cur.pos - XFASTINT (AREF (elt, 1));
 		  struct position_record check;
@@ -2010,7 +2028,8 @@ preceding and/or following characters, this char-table contains
 a function to call to compose that character.
 
 The element at index C in the table, if non-nil, is a list of
-composition rules of this form: ([PATTERN PREV-CHARS FUNC] ...)
+composition rules where each rule is a vector of the form [PATTERN
+PREV-CHARS FUNC] or [PATTERN PREV-CHARS FUNC FONT-POS].
 
 PATTERN is a regular expression which C and the surrounding
 characters must match.
@@ -2026,6 +2045,10 @@ single character C should be composed.
 FUNC is a function to return a glyph-string representing a
 composition of the characters that match PATTERN.  It is
 called with one argument GSTRING.
+
+FONT-POS is an integer specifying the position of the character from
+which the font object passed to FUNC as a part of GSTRING is obtained.
+The value is relative to the position of C.
 
 GSTRING is a template of a glyph-string to return.  It is already
 filled with a proper header for the characters to compose, and

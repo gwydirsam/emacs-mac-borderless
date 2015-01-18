@@ -1,6 +1,6 @@
 ;;; org-capture.el --- Fast note taking in Org-mode
 
-;; Copyright (C) 2010-2012  Free Software Foundation, Inc.
+;; Copyright (C) 2010-2013 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -979,7 +979,7 @@ it.  When it is a variable, retrieve the value.  Return whatever we get."
   (show-all)
   (goto-char (org-capture-get :pos))
   (org-set-local 'org-capture-target-marker
-		 (move-marker (make-marker) (point)))
+		 (point-marker))
   (org-set-local 'outline-level 'org-outline-level)
   (let* ((template (org-capture-get :template))
 	 (type (org-capture-get :type)))

@@ -1,6 +1,7 @@
 /* Buffer manipulation primitives for GNU Emacs.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2012 Free Software Foundation, Inc.
+Copyright (C) 1985-1989, 1993-1995, 1997-2013 Free Software Foundation,
+Inc.
 
 This file is part of GNU Emacs.
 
@@ -2043,7 +2044,7 @@ DEFUN ("bury-buffer-internal", Fbury_buffer_internal, Sbury_buffer_internal,
 DEFUN ("set-buffer-major-mode", Fset_buffer_major_mode, Sset_buffer_major_mode, 1, 1, 0,
        doc: /* Set an appropriate major mode for BUFFER.
 For the *scratch* buffer, use `initial-major-mode', otherwise choose a mode
-according to `default-major-mode'.
+according to the default value of `major-mode'.
 Use this function before selecting the buffer, since it may need to inspect
 the current buffer's major mode.  */)
   (Lisp_Object buffer)

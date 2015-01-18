@@ -1,6 +1,6 @@
 /* Fontset handler.
 
-Copyright (C) 2001-2012  Free Software Foundation, Inc.
+Copyright (C) 2001-2013 Free Software Foundation, Inc.
 Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
   2005, 2006, 2007, 2008, 2009, 2010, 2011
   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -725,6 +725,7 @@ fontset_find_font (Lisp_Object fontset, int c, struct face *face, int id,
   return Qnil;
 
  found:
+#ifndef HAVE_MACGUI
   if (fallback && found_index > 0)
     {
       /* The order of fonts in the fallback font-group is not that
@@ -735,6 +736,7 @@ fontset_find_font (Lisp_Object fontset, int c, struct face *face, int id,
 	ASET (vec, i, AREF (vec, i - 1));
       ASET (vec, 0, rfont_def);
     }
+#endif
   return rfont_def;
 }
 

@@ -1,6 +1,6 @@
 ;;; org-lparse.el --- Line-oriented parser-exporter for Org-mode
 
-;; Copyright (C) 2010-2012 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2013 Free Software Foundation, Inc.
 
 ;; Author: Jambunathan K <kjambunathan at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -1718,7 +1718,7 @@ information."
   (org-lparse-end-paragraph)
   (org-lparse-end-list-item (or type "u")))
 
-(define-obsolete-function-alias
+(org-define-obsolete-function-alias
   'org-lparse-preprocess-after-blockquote-hook
   'org-lparse-preprocess-after-blockquote
   "24.3")
@@ -1736,7 +1736,7 @@ information."
 	 (format "ORG-%s-END %s" (upcase (match-string 2))
 		 (match-string 3))) t t))))
 
-(define-obsolete-function-alias
+(org-define-obsolete-function-alias
   'org-lparse-strip-experimental-blocks-maybe-hook
   'org-lparse-strip-experimental-blocks-maybe
   "24.3")

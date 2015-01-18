@@ -1,5 +1,5 @@
 /* Interface definition for Mac font backend.
-   Copyright (C) 2009-2012  YAMAMOTO Mitsuharu
+   Copyright (C) 2009-2013  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -87,9 +87,14 @@ typedef CTCharacterCollection CharacterCollection;
 #define MAC_FONT_SLANT_TRAIT kCTFontSlantTrait
 
 enum {
-  MAC_FONT_ITALIC_TRAIT = kCTFontItalicTrait,
-  MAC_FONT_BOLD_TRAIT = kCTFontBoldTrait,
-  MAC_FONT_MONO_SPACE_TRAIT = kCTFontMonoSpaceTrait
+  MAC_FONT_TRAIT_ITALIC = kCTFontItalicTrait,
+  MAC_FONT_TRAIT_BOLD = kCTFontBoldTrait,
+  MAC_FONT_TRAIT_MONO_SPACE = kCTFontMonoSpaceTrait,
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+  MAC_FONT_TRAIT_COLOR_GLYPHS = kCTFontColorGlyphsTrait
+#else
+  MAC_FONT_TRAIT_COLOR_GLYPHS = (1 << 13)
+#endif
 };
 
 enum {
@@ -101,12 +106,8 @@ enum {
 };
 
 enum {
-  MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION = kCTIdentityMappingCharacterCollection,
-  MAC_ADOBE_CNS1_CHARACTER_COLLECTION = kCTAdobeCNS1CharacterCollection,
-  MAC_ADOBE_GB1_CHARACTER_COLLECTION = kCTAdobeGB1CharacterCollection,
-  MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION = kCTAdobeJapan1CharacterCollection,
-  MAC_ADOBE_JAPAN2_CHARACTER_COLLECTION = kCTAdobeJapan2CharacterCollection,
-  MAC_ADOBE_KOREA1_CHARACTER_COLLECTION = kCTAdobeKorea1CharacterCollection
+  MAC_CHARACTER_COLLECTION_IDENTITY_MAPPING = kCTIdentityMappingCharacterCollection,
+  MAC_CHARACTER_COLLECTION_ADOBE_JAPAN1 = kCTAdobeJapan1CharacterCollection
 };
 
 #define mac_font_descriptor_create_with_attributes \
@@ -178,9 +179,10 @@ extern const CFStringRef MAC_FONT_SLANT_TRAIT;
 #define kCFNumberCGFloatType kCFNumberFloatType
 
 enum {
-  MAC_FONT_ITALIC_TRAIT = (1 << 0),
-  MAC_FONT_BOLD_TRAIT = (1 << 1),
-  MAC_FONT_MONO_SPACE_TRAIT = (1 << 10)
+  MAC_FONT_TRAIT_ITALIC = (1 << 0),
+  MAC_FONT_TRAIT_BOLD = (1 << 1),
+  MAC_FONT_TRAIT_MONO_SPACE = (1 << 10),
+  MAC_FONT_TRAIT_COLOR_GLYPHS = (1 << 13)
 };
 
 enum {
@@ -188,12 +190,8 @@ enum {
 };
 
 enum {
-  MAC_IDENTITY_MAPPING_CHARACTER_COLLECTION = 0,
-  MAC_ADOBE_CNS1_CHARACTER_COLLECTION = 1,
-  MAC_ADOBE_GB1_CHARACTER_COLLECTION = 2,
-  MAC_ADOBE_JAPAN1_CHARACTER_COLLECTION = 3,
-  MAC_ADOBE_JAPAN2_CHARACTER_COLLECTION = 4,
-  MAC_ADOBE_KOREA1_CHARACTER_COLLECTION = 5
+  MAC_CHARACTER_COLLECTION_IDENTITY_MAPPING = 0,
+  MAC_CHARACTER_COLLECTION_ADOBE_JAPAN1 = 3
 };
 
 extern FontDescriptorRef mac_font_descriptor_create_with_attributes (CFDictionaryRef);

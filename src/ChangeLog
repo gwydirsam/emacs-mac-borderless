@@ -1,3 +1,82 @@
+2013-01-05  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (dump_glyph): Align glyph data better.  Use "pD" instead
+	of a non-portable "t" to print ptrdiff_t values.  Allow up to 9
+	digits for buffer positions, before misalignment starts.  Display
+	"0" for integer "object" field.
+	(dump_glyph_row): Adapt the header line to changes in dump_glyph.
+	Display the newline glyph more unambiguously.
+
+2013-01-04  YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
+
+	* nsterm.m (ns_draw_underwave):
+	* w32term.c (w32_draw_underwave):
+	* xterm.c (x_draw_underwave): Make underwave look more triangular
+	and also degrade gracefully for small fonts.  (Bug#13000)
+
+	* nsterm.m (ns_draw_text_decoration):
+	* w32term.c (x_draw_glyph_string):
+	* xterm.c (x_draw_glyph_string): Don't use previous underline
+	thickness and position if previous underline type is underwave.
+
+2012-12-31  Glenn Morris  <rgm@gnu.org>
+
+	* keymap.c (Fkey_description): Doc fix.  (Bug#13323)
+
+2012-12-29  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* src/Makefile.in (TEMACS_LDFLAGS2): Remove.
+	(LIBS_GNUSTEP): Define.
+	(LIBES): Add $(LIBS_GNUSTEP).
+	(temacs$(EXEEXT)): Use $(LDFLAGS) instead of $(TEMACS_LDFLAGS2).
+
+2012-12-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (set_cursor_from_row): Don't confuse a truncation or
+	continuation glyph on a TTY with an indication of an empty line.
+	(Bug#13277)
+
+2012-12-27  Glenn Morris  <rgm@gnu.org>
+
+	* cygw32.c (Fcygwin_convert_file_name_to_windows)
+	(Fcygwin_convert_file_name_from_windows): Doc fixes.
+
+2012-12-24  Eli Zaretskii  <eliz@gnu.org>
+
+	* fileio.c (file_name_as_directory, directory_file_name): Accept
+	an additional argument MULTIBYTE to indicate whether the input C
+	came from a multibyte or a unibyte Lisp string; all callers
+	adjusted.  Don't assume the input string is always multibyte.
+	(Bug#13262)
+	(Ffile_name_directory) [DOS_NT]: Handle unibyte strings correctly:
+	don't ENCODE_FILE them, and return a unibyte string if the input
+	was unibyte.
+	(Fexpand_file_name): Don't mix unibyte with multibyte strings, and
+	don't assume the input strings will always be multibyte.  If the
+	input strings are multibyte, decode strings obtained from C
+	library functions.
+
+2012-12-22  Martin Rudalics  <rudalics@gmx.at>
+
+	* window.c (Fselect_window): Reword doc-string (Bug#13248).
+
+2012-12-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* fileio.c (Finsert_file_contents): Doc fix.
+
+	* w32proc.c (new_child, delete_child, find_child_pid): For a
+	subprocess, consider its slot being in use as long as its process
+	handle (procinfo.hProcess) is not NULL.  This avoids reusing the
+	slot when a new process is started immediately after killing
+	another one, without waiting enough time for the first process to
+	be reaped and resources allocated for it be orderly freed.
+	(Bug#13086)
+	Suggested by Fabrice Popineau <fabrice.popineau@supelec.fr>.
+
+2012-12-21  Chong Yidong  <cyd@gnu.org>
+
+	* buffer.c (Fset_buffer_major_mode): Doc fix (Bug#13231).
+
 2012-12-15  Chong Yidong  <cyd@gnu.org>
 
 	* fns.c (Fcompare_strings): Doc fix (Bug#13081).
@@ -19630,7 +19709,7 @@ See ChangeLog.11 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2012 Free Software Foundation, Inc.
+  Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

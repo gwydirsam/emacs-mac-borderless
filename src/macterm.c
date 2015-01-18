@@ -1,6 +1,6 @@
 /* Implementation of GUI terminal on the Mac OS.
    Copyright (C) 2000-2008  Free Software Foundation, Inc.
-   Copyright (C) 2009-2012  YAMAMOTO Mitsuharu
+   Copyright (C) 2009-2013  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -611,7 +611,7 @@ mac_draw_horizontal_wave (struct frame *f, GC gc, int x, int y,
 
   gperiod = period;
   wave_clip = mac_rect_make (f, x, y, width, height);
-  gx1 = (ceil (CGRectGetMinX (wave_clip) / gperiod) - 1) * gperiod;
+  gx1 = (ceil (CGRectGetMinX (wave_clip) / gperiod) - 1) * gperiod + 0.5;
   gxmax = CGRectGetMaxX (wave_clip);
   gy1 = y + 0.5;
   gy2 = y + height - 0.5;
@@ -2449,9 +2449,9 @@ x_draw_stretch_glyph_string (struct glyph_string *s)
 static void
 x_draw_underwave (struct glyph_string *s)
 {
-  int wave_height = 2, wave_length = 3;
+  int wave_height = 3, wave_length = 2;
 
-  mac_draw_horizontal_wave (s->f, s->gc, s->x, s->ybase + 1,
+  mac_draw_horizontal_wave (s->f, s->gc, s->x, s->ybase - wave_height + 3,
 			    s->width, wave_height, wave_length * 2);
 }
 
@@ -2576,7 +2576,8 @@ x_draw_glyph_string (struct glyph_string *s)
 	      unsigned long thickness, position;
 	      int y;
 
-	      if (s->prev && s->prev->face->underline_p)
+	      if (s->prev && s->prev->face->underline_p
+		  && s->prev->face->underline_type == FACE_UNDER_LINE)
 		{
 		  /* We use the same underline style as the previous one.  */
 		  thickness = s->prev->underline_thickness;

@@ -4,7 +4,7 @@ dnl 	autoconf
 dnl in the directory containing this script.
 dnl If you changed any AC_DEFINES, also run autoheader.
 dnl
-dnl Copyright (C) 1994-1996, 1999-2012 Free Software Foundation, Inc.
+dnl Copyright (C) 1994-1996, 1999-2013 Free Software Foundation, Inc.
 dnl
 dnl  This file is part of GNU Emacs.
 dnl
@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.2.91)
+AC_INIT(emacs, 24.2.92)
 AC_CONFIG_HEADER(src/config.h:src/config.in)
 AC_CONFIG_SRCDIR(src/lisp.h)
 AC_CONFIG_AUX_DIR(build-aux)
@@ -1473,8 +1473,8 @@ tmp_CPPFLAGS="$CPPFLAGS"
 tmp_CFLAGS="$CFLAGS"
 CPPFLAGS="$CPPFLAGS -x objective-c"
 CFLAGS="$CFLAGS -x objective-c"
-TEMACS_LDFLAGS2="\${LDFLAGS}"
 GNU_OBJC_CFLAGS=
+LIBS_GNUSTEP=
 if test "${with_ns}" != no; then
   if test "${opsys}" = darwin; then
      NS_IMPL_COCOA=yes
@@ -1501,9 +1501,9 @@ if test "${with_ns}" != no; then
      CPPFLAGS="$CPPFLAGS -I${GNUSTEP_SYSTEM_HEADERS} ${GNUSTEP_LOCAL_HEADERS}"
      CFLAGS="$CFLAGS -I${GNUSTEP_SYSTEM_HEADERS} ${GNUSTEP_LOCAL_HEADERS}"
      LDFLAGS="$LDFLAGS -L${GNUSTEP_SYSTEM_LIBRARIES} ${GNUSTEP_LOCAL_LIBRARIES}"
+     LIBS_GNUSTEP="-lgnustep-gui -lgnustep-base -lobjc -lpthread"
      LIB_STANDARD=
      START_FILES=
-     TEMACS_LDFLAGS2=
      dnl GNUstep defines BASE_NATIVE_OBJC_EXCEPTIONS to 0 or 1.
      dnl If they had chosen to either define it or not, we could have
      dnl just used AC_CHECK_DECL here.
@@ -1554,7 +1554,7 @@ fail;
   fi
 fi
 
-AC_SUBST(TEMACS_LDFLAGS2)
+AC_SUBST(LIBS_GNUSTEP)
 
 MAC_OBJ=
 MAC_OBJC_OBJ=
@@ -3683,7 +3683,7 @@ AH_TEMPLATE(SIGNALS_VIA_CHARACTERS, [Make process_send_signal work by
 case $opsys in
   dnl Perry Smith <pedz@ddivt1.austin.ibm.com> says this is correct for AIX.
   dnl thomas@mathematik.uni-bremen.de says this is needed for IRIX.
-  aix4-2 | cygwin | gnu | irix6-5 | freebsd | netbsd | openbsd )
+  aix4-2 | cygwin | gnu | irix6-5 | freebsd | netbsd | openbsd | darwin )
     AC_DEFINE(SIGNALS_VIA_CHARACTERS, 1)
     ;;
 
@@ -4137,7 +4137,7 @@ fi
 
 version=$PACKAGE_VERSION
 
-copyright="Copyright (C) 2012 Free Software Foundation, Inc."
+copyright="Copyright (C) 2013 Free Software Foundation, Inc."
 AC_DEFINE_UNQUOTED(COPYRIGHT, ["$copyright"],
   [Short copyright string for this version of Emacs.])
 AC_SUBST(copyright)
@@ -4431,10 +4431,6 @@ fail;
   *) LD_SWITCH_SYSTEM_TEMACS= ;;
 esac
 
-if test "$NS_IMPL_GNUSTEP" = "yes"; then
-  LD_SWITCH_SYSTEM_TEMACS="${LD_SWITCH_SYSTEM_TEMACS} -L${GNUSTEP_SYSTEM_LIBRARIES} ${GNUSTEP_LOCAL_LIBRARIES} -lgnustep-gui -lgnustep-base -lobjc -lpthread"
-fi
-
 AC_SUBST(LD_SWITCH_SYSTEM_TEMACS)
 
 
@@ -4530,7 +4526,7 @@ AC_SUBST(WINDOW_SYSTEM_OBJ)
 
 AH_TOP([/* GNU Emacs site configuration template file.
 
-Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2012
+Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2013
   Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.

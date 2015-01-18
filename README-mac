@@ -191,7 +191,10 @@ the following Mac-specific ones:
     view for Emacs frames.  It is required to support "Text to Speech"
     on Mac OS X 10.7.  Still there are several glitches.
   * Can display color bitmap fonts such as Apple Color Emoji, if
-    compiled and executed on Mac OS X 10.7 or later.
+    compiled and executed on Mac OS X 10.7 or later.  Also supports
+    display of some combinations of regional indicator symbols, such
+    as U+1F1EF followed by U+1F1F5, as national flags.  Variation
+    Selectors 15 (text-style) and 16 (emoji-style) are also supported.
   * New function `mac-start-animation', which provides animation
     effects on Mac OS 10.5 and later via Core Animation.  You can see
     the default animations with buffer switching by horizontal

@@ -1,6 +1,6 @@
 /* font.c -- "Font" primitives.
 
-Copyright (C) 2006-2012  Free Software Foundation, Inc.
+Copyright (C) 2006-2013 Free Software Foundation, Inc.
 Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
   National Institute of Advanced Industrial Science and Technology (AIST)
   Registration Number H13PRO009
@@ -3745,7 +3745,7 @@ font_range (ptrdiff_t pos, ptrdiff_t *limit, struct window *w, struct face *face
       category = CHAR_TABLE_REF (Vunicode_category_table, c);
       if (INTEGERP (category)
 	  && (XINT (category) == UNICODE_CATEGORY_Cf
-	      || CHAR_VARIATION_SELECTOR_P (c)))
+	      || (! NILP (font_object) && CHAR_VARIATION_SELECTOR_P (c))))
 	continue;
       if (NILP (font_object))
 	{

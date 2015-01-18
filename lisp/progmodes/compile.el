@@ -1,7 +1,7 @@
 ;;; compile.el --- run compiler as inferior of Emacs, parse error messages
 
-;; Copyright (C) 1985-1987, 1993-1999, 2001-2012
-;;   Free Software Foundation, Inc.
+;; Copyright (C) 1985-1987, 1993-1999, 2001-2013 Free Software
+;; Foundation, Inc.
 
 ;; Authors: Roland McGrath <roland@gnu.org>,
 ;;	    Daniel Pfeiffer <occitan@esperanto.org>
@@ -1280,7 +1280,7 @@ to `compilation-error-regexp-alist' if RULES is nil."
       ;; whether or not omake's own error messages are recognized.
       (cond
        ((not (memq 'omake compilation-error-regexp-alist)) nil)
-       ((string-match "\\`\\([^^]\\|^\\( \\*\\|\\[\\)\\)" pat)
+       ((string-match "\\`\\([^^]\\|\\^\\( \\*\\|\\[\\)\\)" pat)
         nil) ;; Not anchored or anchored but already allows empty spaces.
        (t (setq pat (concat "^ *" (substring pat 1)))))
 

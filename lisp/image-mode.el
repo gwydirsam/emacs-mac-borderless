@@ -1,6 +1,6 @@
 ;;; image-mode.el --- support for visiting image files  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2005-2012 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2013 Free Software Foundation, Inc.
 ;;
 ;; Author: Richard Stallman <rms@gnu.org>
 ;; Keywords: multimedia
@@ -63,8 +63,9 @@ otherwise it defaults to t, used for times when the buffer is not displayed."
   (when cleanup
     (setq image-mode-winprops-alist
   	  (delq nil (mapcar (lambda (winprop)
-  			      (if (window-live-p (car-safe winprop))
-  				  winprop))
+			      (let ((w (car-safe winprop)))
+				(if (or (not (windowp w)) (window-live-p w))
+				    winprop)))
   			    image-mode-winprops-alist))))
   (let ((winprops (assq window image-mode-winprops-alist)))
     ;; For new windows, set defaults from the latest.

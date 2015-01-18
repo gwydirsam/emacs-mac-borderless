@@ -1,3 +1,177 @@
+2013-01-10  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-lisp/authors.el (authors-ignored-files)
+	(authors-valid-file-names, authors-renamed-files-alist):
+	Add some more entries.
+
+2013-01-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* image-mode.el (image-mode-winprops): Don't throw away the fallback
+	`t' pseudo-window entry.
+
+2013-01-09  Alan Mackenzie  <acm@muc.de>
+
+	Fix bugs in the c-parse-state mechanism.  Reuse some markers
+	instead of continually generating new ones.
+
+	* progmodes/cc-engine.el (c-state-old-cpp-beg-marker)
+	(c-state-old-cpp-end-marker): New variables.
+	(c-append-lower-brace-pair-to-state-cache): Start a backward
+	search for "}" definitively outside CPP constructs.
+	(c-remove-stale-state-cache): Inform the caller of a need to
+	search back for a brace pair in certain circumstances.
+	(c-state-maybe-marker): New macro.
+	(c-parse-state): Reuse markers when appropriate.
+
+2013-01-09  Glenn Morris  <rgm@gnu.org>
+
+	* simple.el (execute-extended-command): Doc fix.
+	Bind prefix-arg around read-extended-command, for prompt.  (Bug#13395)
+
+2013-01-09  Chong Yidong  <cyd@gnu.org>
+
+	* faces.el (read-face-name): Doc fix.
+
+2013-01-09  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-lisp/trace.el (trace-function, trace-function-background):
+	Doc fix.
+
+2013-01-09  Juri Linkov  <juri@jurta.org>
+
+	* international/mule-cmds.el (read-char-by-name): Move let-binding
+	of completion-ignore-case around completing-read to fix regression
+	exhibited by the test case `C-x 8 RET *acc TAB' and caused by
+	`string-match-p' using the nil value of `case-fold-search' and
+	`completion-ignore-case' in `completion-pcm--all-completions'.
+	(Bug#12615).
+
+2013-01-07  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/compile.el (compilation-parse-errors):
+	Fix typo.  (Bug#13369)
+
+2013-01-07  Vitalie Spinu  <spinuvit@gmail.com>  (tiny change)
+
+	* comint.el (comint-send-input): Check size of buffer before
+	waiting for process output, in case already accepted.  (Bug#13290)
+
+2013-01-04  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp-sh.el (tramp-set-file-uid-gid): UID and GID must be
+	non-negative integers.  Otherwise, the default values are used.
+	(tramp-convert-file-attributes): Convert uid and gid to integers.
+
+2013-01-03  Glenn Morris  <rgm@gnu.org>
+
+	* term.el (term-handle-colors-array): Ensure face attributes
+	are fully specified, not nil.  (Bug#13337)
+
+	* term.el (term-default-fg-color, term-default-bg-color):
+	Fix custom type.
+
+	* progmodes/etags.el (tags-compression-info-list): Doc fix.
+	(tag-find-file-of-tag-noselect): Check auto-compression-mode
+	rather than 'jka-compr being loaded.  (Bug#13338)
+
+	* subr.el (eval-after-load): Don't purecopy the form, so that it
+	can be nconc'd later on; reverts 2009-11-11 change.  (Bug#13331)
+
+	* emacs-lisp/byte-run.el (defun): Place cl declarations
+	after any interactive spec.  (Bug#13265)
+
+2012-12-31  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* emacs-lisp/byte-run.el (defmacro): Use same argument parsing as
+	defun.  Don't check for DECL if DOCSTRING isn't a string.
+	(defun): Likewise.
+
+2012-12-31  Glenn Morris  <rgm@gnu.org>
+
+	* eshell/em-cmpl.el (eshell-pcomplete):
+	More thoroughly imitate pcomplete.  (Bug#13293)
+
+	* files.el (parse-colon-path): Doc fix.  (Bug#12351)
+	Return nil for empty path elements.  (Bug#13296)
+
+2012-12-31  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-nav-end-of-statement): Rewrite in
+	order to improve efficiency (Based on Daniel Colascione's
+	<dancol@dancol.org> patch).  (Bug#13182)
+
+2012-12-31  Glenn Morris  <rgm@gnu.org>
+
+	* vc/log-edit.el (log-edit-header-contents-regexp): Add doc string.
+
+2012-12-31  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el: Support other commands triggering
+	python-indent-line so indentation cycling continues to work.
+	(python-indent-trigger-commands): New defcustom.
+	(python-indent-line): Use it.
+
+2012-12-31  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-shell-send-region): Add blank lines
+	for non sent code so backtraces remain correct.
+
+2012-12-31  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* emacs-lisp/byte-run.el (defmacro): Don't lose final nil if
+	neither DOCSTRING nor DECL was given.  (Bug#13316)
+
+2012-12-30  Glenn Morris  <rgm@gnu.org>
+
+	* net/mairix.el (rmail, rmail-summary-displayed, rmail-summary):
+	Remove unnecessary/buggy autoloads (missing interactive).  (Bug#13294)
+	(rmail-summary-displayed, rmail-summary): Declare.
+	(mairix-rmail-display): Just require rmail.
+
+2012-12-29  Chong Yidong  <cyd@gnu.org>
+
+	* emacs-lisp/package.el (package-untar-buffer): Improve integrity
+	check for the tarball contents.
+
+2012-12-29  Matt Fidler  <matt.fidler@alcon.com>  (tiny change)
+
+	* emacs-lisp/package.el (package-untar-buffer): Handle problematic
+	tarfile content listings (Bug#13136).
+
+2012-12-29  Mark Lillibridge  <mark.lillibridge@hp.com>
+
+	* mail/rmailmm.el (rmail-insert-mime-forwarded-message): Insert
+	the undecoded text of the message being forwarded.  (Bug#9521)
+
+2012-12-28  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp-sh.el (tramp-set-file-uid-gid): Convert UID and GID to
+	integers, if they are real numbers.  (Bug#13282)
+
+2012-12-26  Dmitry Gutov  <dgutov@yandex.ru>
+
+	* progmodes/ruby-mode.el (ruby-indent-beg-re): Only allow "class",
+	"module" and "def" to have indentation before them.  Regression
+	from 109911 (see the new test).
+
+2012-12-24  Dmitry Gutov  <dgutov@yandex.ru>
+
+	* progmodes/ruby-mode.el: Bump the version to 1.2 (Bug#13200).
+
+2012-12-23  Alan Mackenzie  <acm@muc.de>
+
+	Speed up fontification where there's large brace blocks.
+	* progmodes/cc-fonts.el (c-font-lock-enclosing-decls): Add a limit
+	to a call of c-beginning-of-decl-1.
+
+2012-12-21  Chong Yidong  <cyd@gnu.org>
+
+	* sort.el (sort-subr): Doc fix (Bug#13056).
+
+2012-12-20  Bastien Guerry  <bzg@gnu.org>
+
+	* progmodes/etags.el (tags-search): Fix typo.  Bug #13232.
+
 2012-12-11  Alan Mackenzie  <acm@muc.de>
 
 	Make CC Mode not hang when _some_ lines end in CRLF.  Bug #11841.
@@ -4018,7 +4192,7 @@
 
 2012-08-08  Fabián Ezequiel Gallina  <fgallina@cuca>
 
-	* progmodes/python.el Fixed defsubst warning.
+	* progmodes/python.el: Fix defsubst warning.
 	(python-syntax-context) Rename from python-info-ppss-context.
 	(python-syntax-context-type): Rename from
 	python-info-ppss-context-type.
@@ -21302,7 +21476,7 @@ See ChangeLog.15 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2012  Free Software Foundation, Inc.
+  Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

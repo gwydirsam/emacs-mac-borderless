@@ -1,6 +1,6 @@
 ;;; comint.el --- general command interpreter in a window stuff -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1990, 1992-2012  Free Software Foundation, Inc.
+;; Copyright (C) 1988, 1990, 1992-2013 Free Software Foundation, Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
 ;;	Simon Marshall <simon@gnu.org>
@@ -1847,9 +1847,9 @@ Similarly for Soar, Scheme, etc."
           (let ((echo-len (- comint-last-input-end
                              comint-last-input-start)))
             ;; Wait for all input to be echoed:
-            (while (and (accept-process-output proc)
-                        (> (+ comint-last-input-end echo-len)
+            (while (and (> (+ comint-last-input-end echo-len)
                            (point-max))
+                        (accept-process-output proc)
                         (zerop
                          (compare-buffer-substrings
                           nil comint-last-input-start

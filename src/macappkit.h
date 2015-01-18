@@ -1,5 +1,5 @@
 /* Definitions and headers for AppKit framework on the Mac OS.
-   Copyright (C) 2008-2012  YAMAMOTO Mitsuharu
+   Copyright (C) 2008-2013  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -129,8 +129,9 @@ typedef unsigned int NSUInteger;
 @end
 
 /* Class for delegate for NSApplication.  It also becomes the target
-   of several actions such as those from EmacsView, menus, dialogs,
-   and actions/services bound in the mac-apple-event keymap.  */
+   of several actions such as those from EmacsMainView, menus,
+   dialogs, and actions/services bound in the mac-apple-event
+   keymap.  */
 
 @interface EmacsController : NSObject <NSApplicationDelegate>
 {
@@ -326,19 +327,21 @@ typedef unsigned int NSUInteger;
    directly by tooltip frames, and indirectly by ordinary frames via
    inheritance.  */
 
-@interface EmacsTipView : NSView
+@interface EmacsView : NSView
 - (struct frame *)emacsFrame;
 @end
 
 /* Class for Emacs view that also handles input events.  Used by
    ordinary frames.  */
 
-@interface EmacsView : EmacsTipView <NSTextInput, NSTextInputClient>
+@interface EmacsMainView : EmacsView <NSTextInput, NSTextInputClient>
 {
-  /* Target object to which the EmacsView object sends actions.  */
+  /* Target object to which the EmacsMainView object sends
+     actions.  */
   __unsafe_unretained id target;
 
-  /* Message selector of the action the EmacsView object sends.  */
+  /* Message selector of the action the EmacsMainView object
+     sends.  */
   SEL action;
 
   /* Stores the Emacs input event that the action method is expected
@@ -843,6 +846,10 @@ typedef NSUInteger NSEventPhase;
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1080
 enum {
     NSEventTypeSmartMagnify = 32
+};
+
+enum {
+    NSEventPhaseMayBegin    = 0x1 << 5
 };
 #endif
 

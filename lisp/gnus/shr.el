@@ -1,6 +1,6 @@
 ;;; shr.el --- Simple HTML Renderer
 
-;; Copyright (C) 2010-2012 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2013 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: html
@@ -894,7 +894,7 @@ ones, in case fg and bg are nil."
   (shr-fontize-cont cont 'italic))
 
 (defun shr-tag-em (cont)
-  (shr-fontize-cont cont 'bold))
+  (shr-fontize-cont cont 'italic))
 
 (defun shr-tag-strong (cont)
   (shr-fontize-cont cont 'bold))
