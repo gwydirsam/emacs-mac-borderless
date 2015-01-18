@@ -1,4 +1,26 @@
+* emacs-24.3-mac-4.7 (2014-02-27)
+
+** Fixed bugs
+
+*** Crash if a fullscreen frame is closed by C-x 5 0.
+This is a regression introduced in 4.5 as the fix for invisible
+animation effects on OS X 10.9.
+
+*** M-x menu-bar-open RET always activates the menu bar in the primary
+monitor on OS X 10.9 where a non-primary monitor can also have a menu
+bar.
+
+*** Command-Shift-/ does not activate the help menu for a fullscreen
+frame on OS X 10.8 and later.
+
+** Improvements
+
+*** Moving focus to the menu bar by Control-F2 behaves much like other
+applications.
+
+
 * emacs-24.3-mac-4.6 (2013-12-27)
+http://lists.gnu.org/archive/html/emacs-devel/2013-12/msg00952.html
 
 ** Fixed bugs
 
