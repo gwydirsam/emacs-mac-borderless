@@ -1,3 +1,166 @@
+2013-03-05  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix a build failure on OpenBSD 4.x and MirBSD.
+	* sysdep.c (KERN_PROC, kinfo_proc)
+	[BSD_SYSTEM && (!KERN_PROC || __MirBSD__)]:
+	Define to KERN_PROC2 and kinfo_proc2, for OpenBSD 4.9 and MirBSD.
+	list-system-processes still returns nil, but at least it doesn't crash.
+	Problem reported by Nelson H. F. Beebe in
+	<http://lists.gnu.org/archive/html/emacs-devel/2013-03/msg00021.html>.
+
+2013-03-02  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* lisp.h (XPNTR) [!USE_LSB_TAG]: Remove extra paren.  (Bug#13734)
+
+2013-02-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (sys_open): Don't reset the flags for FD in fd_info[].
+	(Bug#13546).
+
+2013-02-24  Andreas Schwab  <schwab@linux-m68k.org>
+
+	* xdisp.c (set_message): Only check for debug-on-message if STRING
+	is a string.  (Bug#13797)
+
+2013-02-24  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix regression introduced by July 10 filelock.c patch.
+	* filelock.c (fill_in_lock_file_name): Fix crash caused by the
+	2012-07-10 patch to this file.  Reported by Eli Zaretskii in
+	<http://lists.gnu.org/archive/html/emacs-devel/2013-02/msg00533.html>
+	and diagnosed by Andreas Schwab in
+	<http://lists.gnu.org/archive/html/emacs-devel/2013-02/msg00534.html>.
+
+2013-02-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32proc.c (new_child): Avoid leaking handles if the subprocess
+	resources were not orderly released.
+
+2013-02-17  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32proc.c (new_child): Remove the loop that attempted to salvage
+	slots of dead processes.
+	(new_child, delete_child, find_child_pid): Don't insist on
+	procinfo.hProcess be NULL for a process slot to be considered
+	inactive, or be non-NULL to be considered active.
+	(reader_thread): Don't set the FILE_AT_EOF flag of a file
+	descriptor if the corresponding child was deleted and its
+	char_avail handle is NULL.
+	(reap_subprocess): Don't reset the FILE_AT_EOF flag.  (Bug#13546)
+	(sys_select): Don't pass a NULL process handle to
+	WaitForMultipleObjects.  (Bug#13735)
+
+	* xdisp.c (x_draw_vertical_border): For a window that is neither
+	the leftmost nor the rightmost, redraw both the left and the right
+	vertical borders.  (Bug#13723)
+
+2013-02-15  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32proc.c (new_child): Free up to 2 slots of dead processes at a
+	time.  Improve diagnostics in DebPrint.
+	(reader_thread): If cp->char_avail is NULL, set the FILE_AT_EOF
+	flag, so that sys_select could have a chance of noticing that this
+	process is dead, and call a SIGCHLD handler for it.  Improve
+	diagnostics in DebPrint.
+	(reap_subprocess): Reset the FILE_AT_EOF flag set by
+	reader_thread.
+	(sys_select): Watch a process whose procinfo.hProcess is non-NULL
+	even if its char_avail is NULL.  Allows to reap subprocesses that
+	were forcibly deleted by delete-process.  (Bug#13546)
+
+	* w32.c (sys_socket, sys_bind, sys_connect, sys_gethostname)
+	(sys_gethostbyname, sys_getservbyname, sys_getpeername)
+	(sys_shutdown, sys_setsockopt, sys_listen, sys_getsockname)
+	(sys_accept, sys_recvfrom, sys_sendto, fcntl): In case of failure,
+	make sure errno is set to an appropriate value.  (Bug#13546)
+	(socket_to_fd): Add assertion against indexing fd_info[] with a
+	value that is out of bounds.
+	(sys_accept): If fd is negative, do not set up the child_process
+	structure for reading.
+
+2013-02-14  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Backport GCPRO fix from trunk (Bug#13650).
+	The bug was reported for AIX before today's changes.
+	I reproduced the problem on Fedora 17 x86-64 when setting
+	GC_MARK_STACK by hand, and I presume it occurs with default
+	configurations on HP-UX and Unixware.
+	Trunk fix on 2013-01-14 by Dmitry Antipov <dmantipov@yandex.ru>:
+	Fix compilation with GC_MARK_STACK == GC_USE_GCPROS_AS_BEFORE.
+	* eval.c (eval_sub): Protect `form' from being GCed before its
+	car and cdr becomes protected with the backtrace entry.
+
+	Fix AIX port (Bug#13650).
+	* lisp.h (XPNTR) [!USE_LSB_TAG && DATA_SEG_BITS]:
+	Fix bug introduced in 2012-07-27 change.  DATA_SEG_BITS, if set,
+	was #undeffed earlier, so it cannot be used as a macro here.
+	Use the constant and not the macro.
+	* unexaix.c: Revert 2013-02-11 and 2013-02-12 changes to this
+	file.  They're almost surely OK but we're just before a release so
+	we should avoid changes unless they're clearly needed.  Instead,
+	make the following minor change:
+	(ADDR_CORRECT): New macro.
+
+2013-02-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32proc.c (new_child): If no vacant slots are found in
+	child_procs[], make another pass looking for slots whose process
+	has exited or died.  (Bug#13546)
+
+	* w32.c (sys_pipe): When failing due to file descriptors above
+	MAXDESC, set errno to EMFILE.
+	(_sys_read_ahead): Update cp->status when failing to read serial
+	communications input, so that the status doesn't stay at
+	STATUS_READ_IN_PROGRESS.  (Bug#13546)
+
+2013-02-13  Glenn Morris  <rgm@gnu.org>
+
+	* keyboard.c (input-decode-map, key-translation-map): Doc fixes.
+
+2013-02-12  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Improve AIX port some more (Bug#13650).
+	With this, it should be as good as it was in 23.3, though it's
+	still pretty bad: the dumped emacs does not run.  See Mark Fleishman in
+	http://lists.gnu.org/archive/html/help-gnu-emacs/2011-04/msg00287.html
+	* unexaix.c (start_of_text): Remove.
+	(_data, _text): Declare as char[], not int, as AIX manual suggests.
+	(bias, lnnoptr, text_scnptr, data_scnptr, load_scnptr)
+	(orig_load_scnptr, orig_data_scnptr):
+	Now off_t, not long, since they are file offsets.
+	(make_hdr): Use _data, not start_of_data ().
+	This is the key part of the fix.
+	(make_hdr, unrelocate_symbols): Use off_t for file offsets.
+	(unrelocate_symbols): Cast pointers to intptr_t, not to ulong.
+
+	* pre-crt0.c (data_start): Initialize to 1.
+	This ports to compilers that optimize the external declaration
+	'int x = 0;' as if it were 'int x;' to shrink the executable.
+
+2013-02-11  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Improve AIX port (Bug#13650).
+	This doesn't fix the bug, but it makes progress: Emacs builds now.
+	* unexaix.c: Include inttypes.h, stdarg.h.
+	(report_error, report_error_1): Mark as _Noreturn.
+	(report_error): Don't report the wrong errno.
+	(report_error_1): Now varargs.  All callers changed.
+	(make_hdr): Use uintptr_t, not unsigned, when converting pointers
+	to unsigned.  Don't use ADDR_CORRECT, as it no longer exists.
+	(write_ptr): Use %p to print address rather than %lx and a cast
+	to unsigned long.  Grow buffer a bit, to be safer.
+
+2013-02-11  Eli Zaretskii  <eliz@gnu.org>
+
+	* bidi.c (bidi_resolve_neutral): After finding the next
+	non-neutral character, accept NEUTRAL_ON type as well, because
+	directional control characters, such as LRE and RLE, have their
+	type converted to that by bidi_resolve_weak.  This avoids aborts
+	when LRE/RLE follows a run of neutrals.
+	(bidi_move_to_visually_next): Assert that return value of
+	bidi_peek_at_next_level is non-negative.  Negative values will
+	cause an infloop.
+
 2013-02-05  Daniel Colascione  <dancol@dancol.org>
 
 	* emacs.c: Use execvp, not execv, when DAEMON_MUST_EXEC, so that

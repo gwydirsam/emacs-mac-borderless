@@ -154,7 +154,7 @@ long-lived shared key will decrease security (especially since
 the key is transmitted as plain-text).
 
 In some situations however, it can be difficult to share randomly
-generated passwords with remote hosts (eg. no shared directory),
+generated passwords with remote hosts (e.g., no shared directory),
 so you can set the key with this variable and then copy the
 server file to the remote host (with possible changes to IP
 address and/or port if that applies).
@@ -851,7 +851,7 @@ This handles splitting the command if it would be bigger than
     ;; can not make X frames.
     (cond ((featurep 'ns-win)
 	   (setq w 'ns display "ns"))
-	  ((featurep 'mac-win)
+	  ((eq window-system 'mac)
 	   (setq w 'mac display "Mac")))
 
     (cond (w
@@ -1143,8 +1143,9 @@ The following commands are accepted by the client:
                  ;; type to GUI.  (Cygwin is perfectly happy with
                  ;; multi-tty support, so don't override the user's
                  ;; choice there.)
-                 (when (and (eq system-type 'windows-nt)
-                            (eq window-system 'w32))
+                 (when (or (and (eq system-type 'windows-nt)
+				(eq window-system 'w32))
+			   (eq window-system 'mac))
                    (push "-window-system" args-left)))
 
                 ;; -position LINE[:COLUMN]:  Set point to the given

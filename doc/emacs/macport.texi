@@ -148,10 +148,6 @@ and later.
 @item
 Preference @code{AppleLanguages} that is set by default on Mac OS X
 10.1 and later.
-
-@item
-(32-bit only) Variable @code{mac-system-locale} that is derived from
-the system language and region codes.
 @end enumerate
 
   The default values of almost all variables about coding systems are

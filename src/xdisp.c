@@ -10648,6 +10648,7 @@ set_message (const char *s, Lisp_Object string,
   help_echo_showing_p = 0;
 
   if (STRINGP (Vdebug_on_message)
+      && STRINGP (string)
       && fast_string_match (Vdebug_on_message, string) >= 0)
     call_debugger (list2 (Qerror, string));
 }
@@ -21855,11 +21856,15 @@ decode_mode_spec (struct window *w, register int c, int field_width,
 }
 
 
-/* Count up to COUNT lines starting from START_BYTE.
-   But don't go beyond LIMIT_BYTE.
-   Return the number of lines thus found (always nonnegative).
+/* Count up to COUNT lines starting from START_BYTE.  COUNT negative
+   means count lines back from START_BYTE.  But don't go beyond
+   LIMIT_BYTE.  Return the number of lines thus found (always
+   nonnegative).
 
-   Set *BYTE_POS_PTR to 1 if we found COUNT lines, 0 if we hit LIMIT.  */
+   Set *BYTE_POS_PTR to the byte position where we stopped.  This is
+   either the position COUNT lines after/before START_BYTE, if we
+   found COUNT lines, or LIMIT_BYTE if we hit the limit before finding
+   COUNT lines.  */
 
 static ptrdiff_t
 display_count_lines (ptrdiff_t start_byte,
@@ -28460,6 +28465,9 @@ x_draw_vertical_border (struct window *w)
   if (FRAME_HAS_VERTICAL_SCROLL_BARS (XFRAME (w->frame)))
     return;
 
+  /* Note: It is necessary to redraw both the left and the right
+     borders, for when only this single window W is being
+     redisplayed.  */
   if (!WINDOW_RIGHTMOST_P (w)
       && !WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_RIGHT (w))
     {
@@ -28473,8 +28481,8 @@ x_draw_vertical_border (struct window *w)
 
       FRAME_RIF (f)->draw_vertical_window_border (w, x1, y0, y1);
     }
-  else if (!WINDOW_LEFTMOST_P (w)
-	   && !WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_LEFT (w))
+  if (!WINDOW_LEFTMOST_P (w)
+      && !WINDOW_HAS_VERTICAL_SCROLL_BAR_ON_LEFT (w))
     {
       int x0, x1, y0, y1;
 

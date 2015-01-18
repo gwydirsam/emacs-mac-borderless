@@ -795,13 +795,19 @@ new_child (void)
   DWORD id;
 
   for (cp = child_procs + (child_proc_count-1); cp >= child_procs; cp--)
-    if (!CHILD_ACTIVE (cp) && cp->procinfo.hProcess == NULL)
+    if (!CHILD_ACTIVE (cp))
       goto Initialize;
   if (child_proc_count == MAX_CHILDREN)
     return NULL;
   cp = &child_procs[child_proc_count++];
 
  Initialize:
+  /* Last opportunity to avoid leaking handles before we forget them
+     for good.  */
+  if (cp->procinfo.hProcess)
+    CloseHandle (cp->procinfo.hProcess);
+  if (cp->procinfo.hThread)
+    CloseHandle (cp->procinfo.hThread);
   memset (cp, 0, sizeof (*cp));
   cp->fd = -1;
   cp->pid = -1;
@@ -852,7 +858,7 @@ delete_child (child_process *cp)
     if (fd_info[i].cp == cp)
       emacs_abort ();
 
-  if (!CHILD_ACTIVE (cp) && cp->procinfo.hProcess == NULL)
+  if (!CHILD_ACTIVE (cp))
     return;
 
   /* reap thread if necessary */
@@ -896,8 +902,7 @@ delete_child (child_process *cp)
   if (cp == child_procs + child_proc_count - 1)
     {
       for (i = child_proc_count-1; i >= 0; i--)
-	if (CHILD_ACTIVE (&child_procs[i])
-	    || child_procs[i].procinfo.hProcess != NULL)
+	if (CHILD_ACTIVE (&child_procs[i]))
 	  {
 	    child_proc_count = i + 1;
 	    break;
@@ -914,8 +919,7 @@ find_child_pid (DWORD pid)
   child_process *cp;
 
   for (cp = child_procs + (child_proc_count-1); cp >= child_procs; cp--)
-    if ((CHILD_ACTIVE (cp) || cp->procinfo.hProcess != NULL)
-	&& pid == cp->pid)
+    if (CHILD_ACTIVE (cp) && pid == cp->pid)
       return cp;
   return NULL;
 }
@@ -952,8 +956,9 @@ reader_thread (void *arg)
 	 read-ahead has completed, whether successfully or not. */
       if (!SetEvent (cp->char_avail))
         {
-	  DebPrint (("reader_thread.SetEvent failed with %lu for fd %ld\n",
-		     GetLastError (), cp->fd));
+	  DebPrint (("reader_thread.SetEvent(0x%x) failed with %lu for fd %ld (PID %d)\n",
+		     (DWORD_PTR)cp->char_avail, GetLastError (),
+		     cp->fd, cp->pid));
 	  return 1;
 	}
 

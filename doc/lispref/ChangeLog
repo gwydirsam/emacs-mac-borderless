@@ -1,3 +1,49 @@
+2013-03-03  Glenn Morris  <rgm@gnu.org>
+
+	* objects.texi (Symbol Type): Fix typo.
+
+2013-02-27  Bastien Guerry  <bzg@gnu.org>
+
+	* variables.texi (File Local Variables): Fix reference.
+
+2013-02-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* files.texi (Magic File Names): Improve wording and indexing.
+
+2013-02-19  Glenn Morris  <rgm@gnu.org>
+
+	* text.texi (Change Hooks): Fix typo.
+
+2013-02-14  Glenn Morris  <rgm@gnu.org>
+
+	* modes.texi (Basic Major Modes): 'z' no longer bound in special-mode.
+
+2013-02-13  Glenn Morris  <rgm@gnu.org>
+
+	* objects.texi (Char-Table Type): Add footnote about #^^.
+
+	* modes.texi (Minor Mode Conventions): Fix typo.
+
+2013-02-12  Glenn Morris  <rgm@gnu.org>
+
+	* keymaps.texi (Scanning Keymaps): Remove obsolete sentence about
+	meta characters; this changed in 22.1.  (Bug#13684)
+
+2013-02-11  Glenn Morris  <rgm@gnu.org>
+
+	* objects.texi (Char-Table Type): Add cindex.
+
+	* keymaps.texi (Key Binding Commands): Trivial rephrasing.
+
+2013-02-09  Glenn Morris  <rgm@gnu.org>
+
+	* keymaps.texi (Creating Keymaps): Update make-keymap result.
+
+2013-02-08  Glenn Morris  <rgm@gnu.org>
+
+	* keymaps.texi (Active Keymaps, Searching Keymaps):
+	Remove confusing mention of "symbolic prefix".  (Bug#13643)
+
 2013-01-16  Glenn Morris  <rgm@gnu.org>
 
 	* macros.texi (Indenting Macros): Fix order of an indent

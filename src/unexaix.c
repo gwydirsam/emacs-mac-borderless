@@ -104,6 +104,9 @@ report_error (const char *file, int fd)
 #define ERROR1(msg,x) report_error_1 (new, msg, x, 0); return -1
 #define ERROR2(msg,x,y) report_error_1 (new, msg, x, y); return -1
 
+#undef ADDR_CORRECT
+#define ADDR_CORRECT(x) ((int)(x))
+
 static void
 report_error_1 (int fd, const char *msg, int a1, int a2)
 {

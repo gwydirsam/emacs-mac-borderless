@@ -1463,7 +1463,7 @@ emacs_windows_need_display_p (void)
 	{
 	  EmacsWindow *window = FRAME_MAC_WINDOW_OBJECT (f);
 
-	  if ([window viewsNeedDisplay])
+	  if ([window isVisible] && [window viewsNeedDisplay])
 	    return YES;
 	}
     }
@@ -2832,6 +2832,20 @@ extern void mac_save_keyboard_input_source (void);
   mac_handle_origin_change (f);
   if (overlayView)
     [overlayView adjustWindowFrame];
+}
+
+- (void)windowDidMiniaturize:(NSNotification *)notification
+{
+  struct frame *f = emacsFrame;
+
+  mac_handle_visibility_change (f);
+}
+
+- (void)windowDidDeminiaturize:(NSNotification *)notification
+{
+  struct frame *f = emacsFrame;
+
+  mac_handle_visibility_change (f);
 }
 
 - (void)windowDidChangeScreen:(NSNotification *)notification

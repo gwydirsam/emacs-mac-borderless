@@ -164,6 +164,11 @@ The PCL-CVS commands are still available via the keyboard.
 ** Using "unibyte: t" in Lisp source files is obsolete.
 Use "coding: raw-text" instead.
 
+** In the buffer made by `M-x report-emacs-bug', the `C-c m' binding
+has been changed to `C-c M-i' (`report-emacs-bug-insert-to-mailer').
+The previous binding, introduced in Emacs 24.1, was a mistake, because
+`C-c LETTER' bindings are reserved for user customizations.
+
 ** Internationalization
 
 *** New language environment: Persian.
@@ -428,6 +433,29 @@ Sphinx support has been improved.
 
 *** The constant `rst-version' describes the rst.el package version.
 
+** Ruby mode
+
+*** Support for percent literals and recognition of regular expressions
+in method calls without parentheses with more methods, including Cucumber
+steps definitions.
+
+*** Improved syntax highlighting and indentation.
+
+*** New command `ruby-toggle-block', bound to `C-c {'.
+
+*** Some non-standard keybindings/commands have been removed:
+
+**** `ruby-electric-brace'; use `electric-indent-mode' instead.
+
+**** `ruby-mark-defun'; use `mark-defun'.
+
+**** `ruby-beginning-of-defun' and `ruby-end-of-defun' are replaced by
+appropriate settings for the variables `beginning-of-defun-function'
+and `end-of-defun-function'.
+
+**** Non-standard keybindings for `backward-kill-word', `comment-region',
+`reindent-then-newline-and-indent' and `newline' have been removed.
+
 ** Shell Script mode
 
 *** Pairing of parens/quotes uses `electric-pair-mode' instead of skeleton-pair.
@@ -471,6 +499,63 @@ See the variable `calendar-month-header'.
 
 *** The calendars produced by cal-html include holidays.
 Customize `cal-html-holidays' to change this.
+
+** CEDET
+
+*** The major modes from the parser generators "Bovine" and "Wisent"
+are now properly integrated in Emacs.  The file suffixes ".by" and ".wy"
+are in `auto-mode-alist', and the corresponding manuals are included.
+
+*** EDE
+
+**** Menu support for the "Configuration" feature.  This allows users to
+choose the active configuration (such as debug or install) from the menu.
+
+**** New command `ede-set' to interactively set project-local variables.
+
+**** Support for compiling, debugging, and running in "generic" projects.
+
+**** Autoconf editing support for M4 macros with complex arguments.
+
+**** Compilation support for the "linux" project type.
+
+**** "simple" projects have been removed; use "generic" projects instead.
+
+*** Semantic
+
+**** Support for parsing #include statements inside a namespace in C/C++.
+
+**** Improved support for 'extern "C"' declarations in C/C++.
+
+**** The ability to ignore more common special C/C++ preprocessor symbols,
+such as '__nonnull' and '__asm'.  Add '__cplusplus' macro when parsing C++.
+If available, include cdefs.h as an additional source of preprocessor symbols.
+
+**** Improved C/C++ function pointer parsing.
+
+**** In Python, support for converting imports to include file names.
+
+**** Ability to dynamically determine the Python load path.
+
+**** Support for the Python 'WITH' and 'AT' keywords.
+
+**** Improved tooltip completion.
+
+*** SRecode
+
+**** The SRecode manual is now included.
+
+**** Tag generation supports constructor/destructor settings and system
+include differentiation.
+
+**** Addition of 'Framework' support: Frameworks are specified when a
+particular kind of library (such as Android) is needed in a common language
+mode (like Java).
+
+**** Support for nested templates and let variables override based on priority.
+
+**** Support for merging tables from multiple related modes, such as
+default -> c++ -> arduino.
 
 ** Compile has a new option `compilation-always-kill'.
 
@@ -685,7 +770,7 @@ are deprecated and will be removed eventually.
 *** `vc-checkout-carefully'
 
 
-* Lisp changes in Emacs 24.3
+* Lisp Changes in Emacs 24.3
 
 ** CL-style generalized variables are now in core Elisp.
 `setf' is autoloaded; `push' and `pop' accept generalized variables.
@@ -811,6 +896,25 @@ accessed via the new `timer--psecs' accessor.
 *** Last-modified time stamps in undo lists now are of the form
 (t HI-SECS LO-SECS USECS PSECS) instead of (t HI-SECS . LO-SECS).
 
+** EIEIO
+
+*** Improved security when handling persistent objects:
+
+**** `eieio-persistent-read' now features optional arguments for specifying
+the class to load, as well as a flag stating whether subclasses are allowed;
+if provided, other classes will be rejected by the reader.  For
+compatibility with existing code, if the class is omitted only a
+warning is issued.
+
+**** New specialized reader for pulling in classes and signaling errors
+without evaluation of suspicious code.
+
+**** All slots that contain objects must have a :type.  Slots with lists
+of objects must use a new type predicate for a list of an object type.
+
+*** Support for `find-function' and similar utilities, through the addition
+of filename support to generated symbols.
+
 ** Floating point functions now always return special values like NaN,
 instead of signaling errors, if given invalid args; e.g., (log -1.0).
 Previously, they returned NaNs on some platforms but signaled errors
@@ -858,7 +962,7 @@ takes precedence over most other maps for a short while (normally one key).
 *** `font-list-limit' (has had no effect since Emacs < 23)
 
 
-* Changes in Emacs 24.3 on non-free operating systems
+* Changes in Emacs 24.3 on Non-Free Operating Systems
 
 ** Cygwin builds can use the native MS Windows user interface.
 Pass `--with-w32' to configure.  The default remains the X11 interface.
@@ -984,9 +1088,10 @@ to use the old defaults relying on external mail facilities
 (`sendmail-send-it' on GNU/Linux and other Unix-like systems, and
 `mailclient-send-it' on Windows).
 
-*** Typing C-c m in the buffer made by M-x report-emacs-bug transfers
-the report to your desktop's preferred mail client, if there is one.
-This uses either the "xdg-email" utility, or Mac OS's "open" command.
+*** Typing `C-c m' in the buffer made by `M-x report-emacs-bug'
+transfers the report to your desktop's preferred mail client, if there
+is one.  This uses either the "xdg-email" utility, or Mac OS's "open"
+command.
 
 *** See Changes in Specialized Modes and Packages for SMTPmail changes
 and Mail mode changes
@@ -1912,7 +2017,7 @@ assumes every inspected file is in your `load-path'.  It instead
 generates relative names according to the current `load-path'.
 
 
-* Lisp changes in Emacs 24.1
+* Lisp Changes in Emacs 24.1
 
 ** Code can now use lexical scoping by default instead of dynamic scoping.
 The `lexical-binding' variable enables lexical scoping for local
@@ -2299,7 +2404,7 @@ Use `post-command-hook' instead.
 *** `font-lock-maximum-size' is obsolete.
 
 
-* Changes in Emacs 24.1 on non-free operating systems
+* Changes in Emacs 24.1 on Non-Free Operating Systems
 
 ** On MS Windows, Emacs warns when using the obsolete init file _emacs,
 and also when HOME is set to C:\ by default.

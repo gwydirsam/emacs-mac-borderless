@@ -2940,31 +2940,6 @@ mac_get_system_script_code (void)
   return result;
 }
 
-static Lisp_Object
-mac_get_system_locale (void)
-{
-#if !__LP64__
-  OSStatus err;
-  LangCode lang;
-  RegionCode region;
-  LocaleRef locale;
-  Str255 str;
-
-  lang = GetScriptVariable (smSystemScript, smScriptLang);
-  region = GetScriptManagerVariable (smRegionCode);
-  err = LocaleRefFromLangOrRegionCode (lang, region, &locale);
-  if (err == noErr)
-    err = LocaleRefGetPartString (locale, kLocaleAllPartsMask,
-				  sizeof (str), str);
-  if (err == noErr)
-    return build_string (str);
-  else
-    return Qnil;
-#else
-  return Qnil;
-#endif
-}
-
 
 /* Unlike in X11, window events in Carbon or Cocoa, whose event system
    is implemented on top of Carbon, do not come from sockets.  So we
@@ -3498,7 +3473,6 @@ init_mac_osx_environment (void)
 
   /* Initialize locale related variables.  */
   mac_system_script_code = mac_get_system_script_code ();
-  Vmac_system_locale = IS_DAEMON ? Qnil : mac_get_system_locale ();
 
   /* Fetch the pathname of the application bundle as a C string into
      app_bundle_pathname.  */
@@ -3655,12 +3629,6 @@ syms_of_mac (void)
   DEFVAR_INT ("mac-system-script-code", mac_system_script_code,
     doc: /* The system script code.  */);
   mac_system_script_code = mac_get_system_script_code ();
-
-  DEFVAR_LISP ("mac-system-locale", Vmac_system_locale,
-    doc: /* The system locale identifier string.
-This is not a POSIX locale ID, but an ICU locale ID.  So encoding
-information is not included.  */);
-  Vmac_system_locale = mac_get_system_locale ();
 
   DEFVAR_BOOL ("mac-system-move-file-to-trash-use-finder",
 	       mac_system_move_file_to_trash_use_finder,

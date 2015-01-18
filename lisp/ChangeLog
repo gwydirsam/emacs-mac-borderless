@@ -1,3 +1,98 @@
+2013-02-25  Glenn Morris  <rgm@gnu.org>
+
+	* textmodes/paragraphs.el (mark-paragraph): Doc fix.
+
+2013-02-21  Juri Linkov  <juri@jurta.org>
+
+	* isearch.el (isearch-lazy-highlight-new-loop):
+	Set `isearch-lazy-highlight-start' and `isearch-lazy-highlight-end'
+	to `isearch-other-end' if it is not nil.  (Bug#13402)
+
+	* replace.el (replace-highlight): Let-bind `isearch-other-end'
+	to `match-beg'.
+
+	* textmodes/ispell.el (ispell-highlight-spelling-error-overlay):
+	Let-bind `isearch-other-end' to `start', `isearch-forward' to t
+	and `isearch-error' to nil.
+
+2013-02-20  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-info-current-defun): Enhance
+	match-data cluttering prevention.
+
+2013-02-19  Glenn Morris  <rgm@gnu.org>
+
+	* net/tramp.el (tramp-get-debug-buffer): Ensure outline.el is not
+	loaded while outline-regexp is let bound.  (Bug#9584)
+
+2013-02-19  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-info-current-defun): Fix failed
+	defun name retrieval because of unwanted match-data cluttering.
+
+2013-02-19  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-indent-context): Fix
+	python-info-line-ends-backslash-p call.
+	(python-info-line-ends-backslash-p)
+	(python-info-beginning-of-backslash): Respect line-number
+	argument.
+	(python-info-current-line-comment-p): Fix behavior when not at
+	beginning-of-line.
+	(python-util-position): Remove function.
+	(python-util-goto-line): New function.
+
+2013-02-18  Michael Albinus  <michael.albinus@gmx.de>
+
+	* eshell/em-unix.el (eshell/su): Require tramp.
+	(eshell/sudo): Require tramp.  Remove now unnecessary check.
+
+	* net/tramp-sh.el (tramp-sh-handle-start-file-process): Let-bind
+	`tramp-current-connection' in order to avoid an error when several
+	commands are invoked in a short time in eshell and friends.
+
+2013-02-16  Didier Verna  <didier@didierverna.net>
+
+	* net/network-stream.el (network-stream-open-starttls):
+	Check that response to the starttls-command is non-nil.  (Bug#13706)
+
+2013-02-14  Glenn Morris  <rgm@gnu.org>
+
+	* emacs-lisp/easy-mmode.el (define-minor-mode): Doc fix.
+
+2013-02-14  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* net/goto-addr.el (goto-address-fontify): Add start and end args.
+	(goto-address-fontify-region): Use them instead of narrowing, so
+	syntax-ppss has access to the whole buffer.
+
+2013-02-14  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el: Explain how to restore "cc-mode"-like
+	forward-sexp movement in header documentation (Bug#13642).
+	(python-nav--forward-sexp): Behave like emacs-lisp-mode in
+	comments and strings (GH bug 114).
+
+2013-02-13  Fabián Ezequiel Gallina  <fgallina@cuca>
+
+	* progmodes/python.el (python-info-current-defun): Fix current
+	defun detection (Bug#13618).
+
+2013-02-13  Chong Yidong  <cyd@gnu.org>
+
+	* xml.el (xml-parse-string): Fix typo in handling of bad character
+	references.
+
+2013-02-10  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/ange-ftp.el (ange-ftp-make-directory): Don't raise an error,
+	if DIR exists and PARENTS is non-nil.
+
+2013-02-09  Chong Yidong  <cyd@gnu.org>
+
+	* mail/emacsbug.el (report-emacs-bug): Change binding of
+	report-emacs-bug-insert-to-mailer to C-c M-i (Bug#13510).
+
 2013-02-02  Alan Mackenzie  <acm@muc.de>
 
 	Fix bug in the state cache mechanism.  Remove 'BOD "strategy".  Refactor.

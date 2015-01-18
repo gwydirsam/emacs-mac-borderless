@@ -910,7 +910,7 @@ outline hot-spot navigation (see `allout-mode').
 ;;;***
 
 ;;;### (autoloads (ange-ftp-hook-function ange-ftp-reread-dir) "ange-ftp"
-;;;;;;  "net/ange-ftp.el" (20707 18685 911514 0))
+;;;;;;  "net/ange-ftp.el" (20760 17829 498761 0))
 ;;; Generated autoloads from net/ange-ftp.el
 
 (defalias 'ange-ftp-re-read-dir 'ange-ftp-reread-dir)
@@ -4363,8 +4363,8 @@ on third call it again advances points to the next difference and so on.
 ;;;;;;  compilation-shell-minor-mode compilation-mode compilation-start
 ;;;;;;  compile compilation-disable-input compile-command compilation-search-path
 ;;;;;;  compilation-ask-about-save compilation-window-height compilation-start-hook
-;;;;;;  compilation-mode-hook) "compile" "progmodes/compile.el" (20718
-;;;;;;  7971 773710 0))
+;;;;;;  compilation-mode-hook) "compile" "progmodes/compile.el" (20763
+;;;;;;  5110 492774 0))
 ;;; Generated autoloads from progmodes/compile.el
 
 (defvar compilation-mode-hook nil "\
@@ -4799,7 +4799,7 @@ If FIX is non-nil, run `copyright-fix-years' instead.
 ;;;***
 
 ;;;### (autoloads (cperl-perldoc-at-point cperl-perldoc cperl-mode)
-;;;;;;  "cperl-mode" "progmodes/cperl-mode.el" (20707 18685 911514
+;;;;;;  "cperl-mode" "progmodes/cperl-mode.el" (20763 5110 492774
 ;;;;;;  0))
 ;;; Generated autoloads from progmodes/cperl-mode.el
 (put 'cperl-indent-level 'safe-local-variable 'integerp)
@@ -4839,7 +4839,7 @@ and POD directives (Disabled by default, see `cperl-electric-keywords'.)
 
 The user types the keyword immediately followed by a space, which
 causes the construct to be expanded, and the point is positioned where
-she is most likely to want to be.  eg. when the user types a space
+she is most likely to want to be.  E.g., when the user types a space
 following \"if\" the following appears in the buffer: if () { or if ()
 } { } and the cursor is between the parentheses.  The user can then
 type some boolean expression within the parens.  Having done that,
@@ -5654,8 +5654,8 @@ If the HANDLER returns a `dbus-error', it is propagated as return message.
 
 ;;;***
 
-;;;### (autoloads (dcl-mode) "dcl-mode" "progmodes/dcl-mode.el" (20707
-;;;;;;  18685 911514 0))
+;;;### (autoloads (dcl-mode) "dcl-mode" "progmodes/dcl-mode.el" (20763
+;;;;;;  5110 492774 0))
 ;;; Generated autoloads from progmodes/dcl-mode.el
 
 (autoload 'dcl-mode "dcl-mode" "\
@@ -6870,7 +6870,7 @@ Switch to *dungeon* buffer and start game.
 
 ;;;### (autoloads (easy-mmode-defsyntax easy-mmode-defmap easy-mmode-define-keymap
 ;;;;;;  define-globalized-minor-mode define-minor-mode) "easy-mmode"
-;;;;;;  "emacs-lisp/easy-mmode.el" (20707 18685 911514 0))
+;;;;;;  "emacs-lisp/easy-mmode.el" (20765 7114 233956 846000))
 ;;; Generated autoloads from emacs-lisp/easy-mmode.el
 
 (defalias 'easy-mmode-define-minor-mode 'define-minor-mode)
@@ -6924,13 +6924,14 @@ BODY contains code to execute each time the mode is enabled or disabled.
 :require SYM	Same as in `defcustom'.
 :variable PLACE	The location to use instead of the variable MODE to store
 		the state of the mode.	This can be simply a different
-		named variable, or more generally anything that can be used
-		with the CL macro `setf'.  PLACE can also be of the form
-		(GET . SET), where GET is an expression that returns the
-		current state, and SET is a function that takes one argument,
-		the new state, and sets it.  If you specify a :variable,
-		this function does not define a MODE variable (nor any of
-		the terms used in :variable).
+		named variable, or a generalized variable.
+		PLACE can also be of the form (GET . SET), where GET is
+		an expression that returns the current state, and SET is
+		a function that takes one argument, the new state, and
+		sets it.  If you specify a :variable, this function does
+		not define a MODE variable (nor any of the terms used
+		in :variable).
+
 :after-hook     A single lisp form which is evaluated after the mode hooks
                 have been run.  It should not be quoted.
 
@@ -8395,7 +8396,7 @@ Other values are interpreted as usual.
 ;;;***
 
 ;;;### (autoloads (report-emacs-bug) "emacsbug" "mail/emacsbug.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20758 63604 302072 0))
 ;;; Generated autoloads from mail/emacsbug.el
 
 (autoload 'report-emacs-bug "emacsbug" "\
@@ -12059,7 +12060,7 @@ If gravatars are already displayed, remove them.
 ;;;***
 
 ;;;### (autoloads (gnus-fetch-group-other-frame gnus-fetch-group)
-;;;;;;  "gnus-group" "gnus/gnus-group.el" (20707 18685 911514 0))
+;;;;;;  "gnus-group" "gnus/gnus-group.el" (20763 5110 492774 0))
 ;;; Generated autoloads from gnus/gnus-group.el
 
 (autoload 'gnus-fetch-group "gnus-group" "\
@@ -12431,7 +12432,7 @@ Update the format specification near point.
 ;;;***
 
 ;;;### (autoloads (gnus-declare-backend) "gnus-start" "gnus/gnus-start.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20763 5110 492774 0))
 ;;; Generated autoloads from gnus/gnus-start.el
 
 (autoload 'gnus-declare-backend "gnus-start" "\
@@ -12525,8 +12526,8 @@ Use \\[describe-mode] for more info.
 ;;;***
 
 ;;;### (autoloads (goto-address-prog-mode goto-address-mode goto-address
-;;;;;;  goto-address-at-point) "goto-addr" "net/goto-addr.el" (20707
-;;;;;;  18685 911514 0))
+;;;;;;  goto-address-at-point) "goto-addr" "net/goto-addr.el" (20765
+;;;;;;  6822 917289 0))
 ;;; Generated autoloads from net/goto-addr.el
 
 (define-obsolete-function-alias 'goto-address-at-mouse 'goto-address-at-point "22.1")
@@ -13386,7 +13387,7 @@ Provide help for current mode.
 ;;;***
 
 ;;;### (autoloads (hexlify-buffer hexl-find-file hexl-mode) "hexl"
-;;;;;;  "hexl.el" (20707 18685 911514 0))
+;;;;;;  "hexl.el" (20763 5110 492774 0))
 ;;; Generated autoloads from hexl.el
 
 (autoload 'hexl-mode "hexl" "\
@@ -13429,8 +13430,8 @@ A sample format:
   000000c0: 7265 6769 6f6e 2e0a                      region..
 
 Movement is as simple as movement in a normal Emacs text buffer.  Most
-cursor movement bindings are the same (ie. Use \\[hexl-backward-char], \\[hexl-forward-char], \\[hexl-next-line], and \\[hexl-previous-line]
-to move the cursor left, right, down, and up).
+cursor movement bindings are the same: use \\[hexl-backward-char], \\[hexl-forward-char], \\[hexl-next-line], and \\[hexl-previous-line]
+to move the cursor left, right, down, and up.
 
 Advanced cursor movement commands (ala \\[hexl-beginning-of-line], \\[hexl-end-of-line], \\[hexl-beginning-of-buffer], and \\[hexl-end-of-buffer]) are
 also supported.
@@ -15705,7 +15706,7 @@ Go to Info buffer that displays MANUAL, creating it if none already exists.
 
 ;;;### (autoloads (info-complete-file info-complete-symbol info-lookup-file
 ;;;;;;  info-lookup-symbol info-lookup-reset) "info-look" "info-look.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20770 60415 653135 179000))
 ;;; Generated autoloads from info-look.el
 
 (autoload 'info-lookup-reset "info-look" "\
@@ -16036,7 +16037,7 @@ Add submenus to the File menu, to convert to and from various formats.
 ;;;;;;  ispell-complete-word ispell-continue ispell-buffer ispell-comments-and-strings
 ;;;;;;  ispell-region ispell-change-dictionary ispell-kill-ispell
 ;;;;;;  ispell-help ispell-pdict-save ispell-word ispell-personal-dictionary)
-;;;;;;  "ispell" "textmodes/ispell.el" (20707 18685 911514 0))
+;;;;;;  "ispell" "textmodes/ispell.el" (20775 13766 532814 0))
 ;;; Generated autoloads from textmodes/ispell.el
 
 (put 'ispell-check-comments 'safe-local-variable (lambda (a) (memq a '(nil t exclusive))))
@@ -19035,7 +19036,7 @@ listed in the PORTS list.
 ;;;***
 
 ;;;### (autoloads (open-network-stream) "network-stream" "net/network-stream.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20766 62090 677076 128000))
 ;;; Generated autoloads from net/network-stream.el
 
 (autoload 'open-network-stream "network-stream" "\
@@ -19312,8 +19313,8 @@ Return nil if the face cannot display a glyph for N.
 
 ;;;***
 
-;;;### (autoloads (nxml-mode) "nxml-mode" "nxml/nxml-mode.el" (20707
-;;;;;;  18685 911514 0))
+;;;### (autoloads (nxml-mode) "nxml-mode" "nxml/nxml-mode.el" (20763
+;;;;;;  5110 492774 0))
 ;;; Generated autoloads from nxml/nxml-mode.el
 
 (autoload 'nxml-mode "nxml-mode" "\
@@ -19499,7 +19500,7 @@ including a reproducible test case and send the message.
 ;;;;;;  org-run-like-in-org-mode turn-on-orgstruct++ turn-on-orgstruct
 ;;;;;;  orgstruct-mode org-global-cycle org-cycle org-mode org-clock-persistence-insinuate
 ;;;;;;  turn-on-orgtbl org-version org-babel-do-load-languages) "org"
-;;;;;;  "org/org.el" (20755 21797 420152 0))
+;;;;;;  "org/org.el" (20782 62165 534425 0))
 ;;; Generated autoloads from org/org.el
 
 (autoload 'org-babel-do-load-languages "org" "\
@@ -19725,7 +19726,7 @@ Call the customize function with org as argument.
 ;;;;;;  org-search-view org-agenda-list org-batch-store-agenda-views
 ;;;;;;  org-store-agenda-views org-batch-agenda-csv org-batch-agenda
 ;;;;;;  org-agenda org-toggle-sticky-agenda) "org-agenda" "org/org-agenda.el"
-;;;;;;  (20755 21797 420152 0))
+;;;;;;  (20782 62165 534425 0))
 ;;; Generated autoloads from org/org-agenda.el
 
 (autoload 'org-toggle-sticky-agenda "org-agenda" "\
@@ -19974,7 +19975,7 @@ By default `org-agenda-to-appt' will use :deadline, :scheduled
 and :timestamp entries.  See the docstring of `org-diary' for
 details and examples.
 
-If an entry as a APPT_WARNTIME property, its value will be used
+If an entry has a APPT_WARNTIME property, its value will be used
 to override `appt-message-warning-time'.
 
 \(fn &optional REFRESH FILTER &rest ARGS)" t nil)
@@ -20102,7 +20103,7 @@ Try very hard to provide sensible version strings.
 ;;;***
 
 ;;;### (autoloads (org-git-version org-release) "org-version" "org/org-version.el"
-;;;;;;  (20755 21797 420152 0))
+;;;;;;  (20782 62165 534425 0))
 ;;; Generated autoloads from org/org-version.el
 
 (autoload 'org-release "org-version" "\
@@ -21915,7 +21916,7 @@ If EXTENSION is any other symbol, it is ignored.
 ;;;***
 
 ;;;### (autoloads (python-mode run-python) "python" "progmodes/python.el"
-;;;;;;  (20745 21595 25221 0))
+;;;;;;  (20773 47373 975742 0))
 ;;; Generated autoloads from progmodes/python.el
 
 (add-to-list 'auto-mode-alist (cons (purecopy "\\.py\\'") 'python-mode))
@@ -24244,8 +24245,8 @@ Like `mail' command, but display mail buffer in another frame.
 ;;;***
 
 ;;;### (autoloads (server-save-buffers-kill-terminal server-mode
-;;;;;;  server-force-delete server-start) "server" "server.el" (20707
-;;;;;;  18685 911514 0))
+;;;;;;  server-force-delete server-start) "server" "server.el" (20763
+;;;;;;  5110 492774 0))
 ;;; Generated autoloads from server.el
 
 (put 'server-host 'risky-local-variable t)
@@ -28237,7 +28238,7 @@ To untrace a function, use `untrace-function' or `untrace-all'.
 ;;;### (autoloads (tramp-unload-tramp tramp-completion-handle-file-name-completion
 ;;;;;;  tramp-completion-handle-file-name-all-completions tramp-unload-file-name-handlers
 ;;;;;;  tramp-file-name-handler tramp-syntax tramp-mode) "tramp"
-;;;;;;  "net/tramp.el" (20748 34276 6200 0))
+;;;;;;  "net/tramp.el" (20773 47373 975742 0))
 ;;; Generated autoloads from net/tramp.el
 
 (defvar tramp-mode t "\
@@ -28417,7 +28418,7 @@ resumed later.
 ;;;***
 
 ;;;### (autoloads (2C-split 2C-associate-buffer 2C-two-columns) "two-column"
-;;;;;;  "textmodes/two-column.el" (20707 18685 911514 0))
+;;;;;;  "textmodes/two-column.el" (20763 5110 492774 0))
 ;;; Generated autoloads from textmodes/two-column.el
  (autoload '2C-command "two-column" () t 'keymap)
  (global-set-key "\C-x6" '2C-command)
@@ -30033,7 +30034,7 @@ Key bindings:
 ;;;***
 
 ;;;### (autoloads (verilog-mode) "verilog-mode" "progmodes/verilog-mode.el"
-;;;;;;  (20707 18685 911514 0))
+;;;;;;  (20763 5110 492774 0))
 ;;; Generated autoloads from progmodes/verilog-mode.el
 
 (autoload 'verilog-mode "verilog-mode" "\
@@ -32013,7 +32014,7 @@ Example:
 ;;;***
 
 ;;;### (autoloads (xml-parse-region xml-parse-file) "xml" "xml.el"
-;;;;;;  (20738 3139 627868 0))
+;;;;;;  (20764 37850 245357 0))
 ;;; Generated autoloads from xml.el
 
 (autoload 'xml-parse-file "xml" "\
@@ -32380,8 +32381,8 @@ Zone out, completely.
 ;;;;;;  "vc/ediff-ptch.el" "vc/ediff-vers.el" "vc/ediff-wind.el"
 ;;;;;;  "vc/pcvs-info.el" "vc/pcvs-parse.el" "vc/pcvs-util.el" "vc/vc-dav.el"
 ;;;;;;  "vcursor.el" "vt-control.el" "vt100-led.el" "w32-common-fns.el"
-;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (20755 24213 662096
-;;;;;;  604000))
+;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (20789 27603 535991
+;;;;;;  386000))
 
 ;;;***
 

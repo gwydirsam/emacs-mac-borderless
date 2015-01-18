@@ -1898,7 +1898,7 @@ non-nil, and the input device supports it."
 		     (+ (car first-height) (nth 3 first-height)))
 		    (t	  ; might be partly hidden by the header line.
 		     (+ (- (car first-height)
-			   (- (car header-line-height) (nth 2 first-height)))
+			   (- first-y (max (nth 2 first-height) 0)))
 			(nth 3 first-height)))))
 	     (scroll-amount (nth 3 event))
 	     (delta-y (- (round (nth 1 (nth 2 scroll-amount)))))
@@ -1947,7 +1947,10 @@ non-nil, and the input device supports it."
 			 (= (nth 2 first-height) (nth 2 last-height)))))
 		      (t
 		       t))
-		(set-window-vscroll nil (+ (window-vscroll nil t) delta-y) t)
+		(if (zerop (set-window-vscroll nil (+ (window-vscroll nil t)
+						      delta-y) t))
+		    ;; XXX: Why is this necessary?
+		    (set-window-start nil (window-start)))
 	      (when (> (window-vscroll nil t) 0)
 		(setq delta-y (- delta-y first-height-sans-hidden-top))
 		(condition-case nil
@@ -1963,8 +1966,8 @@ non-nil, and the input device supports it."
 	      (condition-case nil
 		  (if (< delta-y 0)
 		      ;; Scroll down
-		      (let (prev-first prev-point prev-first-y)
-			(while (< delta-y 0)
+		      (let (prev-first prev-point prev-first-y prev-first-row)
+			(while (null prev-first-row)
 			  ;; It might be the case that `point-min' is
 			  ;; visible but `window-start' < `point-min'.
 			  (if (pos-visible-in-window-p (point-min) nil t)
@@ -1975,14 +1978,28 @@ non-nil, and the input device supports it."
 				 (cadr (pos-visible-in-window-p prev-first
 								nil t))))
 			    (scroll-down)
+			    ;; Sometimes the point gets invisible.
+			    (if (< (point) (window-start))
+				(goto-char (window-start))
+			      (while (not (pos-visible-in-window-p nil nil t))
+				(vertical-motion -1)))
 			    (while (null (setq prev-first-y
 					       (cadr (pos-visible-in-window-p
 						      prev-first nil t))))
-			      ;; If the previous last position gets
+			      ;; If the previous first position gets
 			      ;; invisible after scroll down, scroll
 			      ;; up by line and try again.
 			      (scroll-up 1))
-			    (when (= prev-first-y prev-first-prev-y)
+			    (if (/= prev-first-y prev-first-prev-y)
+				(progn
+				  (setq delta-y
+					(+ delta-y
+					   (- prev-first-y prev-first-prev-y)))
+				  (if (>= delta-y 0)
+				      (setq prev-first-row
+					    (cdr
+					     (posn-actual-col-row
+					      (posn-at-x-y 0 prev-first-y))))))
 			      ;; It might be the case that `point-min'
 			      ;; is visible but `window-start' <
 			      ;; `point-min'.
@@ -1993,50 +2010,50 @@ non-nil, and the input device supports it."
 			      ;; taller than the window height before
 			      ;; the last scroll up.
 			      (scroll-down 1)
-			      (while (not (pos-visible-in-window-p
-					   prev-first nil t))
-				(set-window-vscroll
-				 nil (+ (window-vscroll nil t)
-					window-inside-pixel-height) t))
-			      (setq prev-first-y
-				    (+ (window-vscroll nil t)
-				       (cadr (pos-visible-in-window-p
-					      prev-first nil t))))
-			      (set-window-vscroll nil 0 t))
-			    (setq delta-y
-				  (+ delta-y
-				     (- prev-first-y prev-first-prev-y)))))
-			(if (>= delta-y window-inside-pixel-height)
-			    (progn
-			      ;; Cancel the last scroll.
-			      (goto-char prev-point)
-			      (set-window-start nil prev-first))
-			  (let* ((target-posn
-				  (posn-at-x-y 0 (+ first-y delta-y)))
-				 (target-row
-				  (cdr (posn-actual-col-row target-posn)))
-				 (target-y
-				  (cadr (pos-visible-in-window-p
-					 (posn-point target-posn) nil t)))
-				 (scrolled-pixel-height (- target-y first-y))
-				 (prev-first-row
-				  (cdr (posn-actual-col-row
-					(posn-at-x-y 0 prev-first-y)))))
-			    ;; Cancel the last scroll.
-			    (goto-char prev-point)
-			    (set-window-start nil prev-first)
-			    (scroll-down (- prev-first-row target-row
-					    (if (= delta-y
-						   scrolled-pixel-height)
-						0 1)))
-			    (setq delta-y (- delta-y scrolled-pixel-height)))))
+			      (let (prev-first-vscrolled-y)
+				(while (not (setq prev-first-vscrolled-y
+						  (cadr (pos-visible-in-window-p
+							 prev-first nil t))))
+				  (set-window-vscroll
+				   nil (+ (window-vscroll nil t)
+					  window-inside-pixel-height) t))
+				(setq prev-first-y
+				      (+ (window-vscroll nil t)
+					 prev-first-vscrolled-y))
+				(setq delta-y
+				      (+ delta-y
+					 (- prev-first-y prev-first-prev-y)))
+				(if (>= delta-y 0)
+				    (setq prev-first-row
+					  (cdr (posn-actual-col-row
+						(posn-at-x-y
+						 0 prev-first-vscrolled-y))))))
+			      (set-window-vscroll nil 0 t))))
+			(set-window-vscroll nil delta-y t)
+			(let* ((target-posn (posn-at-x-y 0 first-y))
+			       (target-row
+				(cdr (posn-actual-col-row target-posn)))
+			       (target-coord
+				(pos-visible-in-window-p
+				 (posn-point target-posn) nil t))
+			       (target-y
+				(- (+ delta-y (cadr target-coord))
+				   (or (car (cddr target-coord)) 0)))
+			       (scrolled-pixel-height (- target-y first-y)))
+			  (set-window-vscroll nil 0 t)
+			  ;; Cancel the last scroll.
+			  (goto-char prev-point)
+			  (set-window-start nil prev-first)
+			  (scroll-down (- prev-first-row target-row
+					  (if (= delta-y
+						 scrolled-pixel-height)
+					      0 1)))
+			  (setq delta-y (- delta-y scrolled-pixel-height))))
 		    ;; Scroll up
 		    (let (found)
 		      (while (and (not found)
 				  (>= delta-y window-inside-pixel-height))
-			(let* ((prev-first-prev-coord
-				(pos-visible-in-window-p (window-start) nil t))
-			       (prev-last-prev-coord
+			(let* ((prev-last-prev-coord
 				(pos-visible-in-window-p t nil t))
 			       (prev-last-prev-posn
 				(posn-at-x-y (car prev-last-prev-coord)
@@ -2498,9 +2515,9 @@ standard ones in `x-handle-args'."
       (global-set-key [C-down-mouse-1] 'mac-mouse-buffer-menu))
 
   (x-apply-session-resources)
+  (add-to-list 'display-format-alist '("\\`Mac\\'" . mac))
   (setq mac-initialized t))
 
-(add-to-list 'display-format-alist '("\\`Mac\\'" . mac))
 (add-to-list 'handle-args-function-alist '(mac . mac-handle-args))
 (add-to-list 'frame-creation-function-alist '(mac . x-create-frame-with-faces))
 (add-to-list 'window-system-initialization-alist '(mac . mac-initialize-window-system))
