@@ -1,4 +1,21 @@
+* emacs-24.3-mac-4.8 (2014-04-01)
+
+** Fixed bugs
+
+*** Fringe does not get correctly updated under very specific
+circumstances (Bug#16932).
+
+*** In full screen mode, clicking the menu bar hides it on OS X 10.7.
+
+*** Image background is not correctly drawn when it has a box
+(Bug#17115).
+
+*** While resizing a frame with mouse dragging, display is updated
+only on pauses in motion.
+
+
 * emacs-24.3-mac-4.7 (2014-02-27)
+http://lists.gnu.org/archive/html/emacs-devel/2014-02/msg00592.html
 
 ** Fixed bugs
 
