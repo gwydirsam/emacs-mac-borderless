@@ -1,4 +1,18 @@
+* emacs-24.3-mac-4.2 (2013-05-11)
+
+** Fixed bugs
+
+*** Cursor in the echo area is sometimes partially unerased on OS X
+10.7 and later, notably on isearch in a large buffer.
+
+** Improvements
+
+*** Add multi-monitor support functions `frame-monitor-attributes' and
+`display-monitor-attributes-list' (to appear in Emacs 24.4).
+
+
 * emacs-24.3-mac-4.1 (2013-04-11)
+http://lists.gnu.org/archive/html/emacs-devel/2013-04/msg00328.html
 
 ** Fixed bugs
 
