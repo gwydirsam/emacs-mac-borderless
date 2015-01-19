@@ -316,7 +316,11 @@ static Lisp_Object Qutf_16, Qshift_jis, Qbig5;
 static Lisp_Object Qbig, Qlittle;
 static Lisp_Object Qcoding_system_history;
 static Lisp_Object Qvalid_codes;
-static Lisp_Object QCcategory, QCmnemonic, QCdefault_char;
+#ifndef HAVE_MACGUI
+static
+#endif
+Lisp_Object QCcategory;
+static Lisp_Object QCmnemonic, QCdefault_char;
 static Lisp_Object QCdecode_translation_table, QCencode_translation_table;
 static Lisp_Object QCpost_read_conversion, QCpre_write_conversion;
 static Lisp_Object QCascii_compatible_p;

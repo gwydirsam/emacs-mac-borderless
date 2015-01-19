@@ -4482,6 +4482,7 @@ bool mac_screen_config_changed = 0;
 /* Apple Events */
 Lisp_Object Qtext_input;
 Lisp_Object Qinsert_text, Qset_marked_text;
+Lisp_Object Qnotification;
 Lisp_Object Qaction, Qmac_action_key_paths;
 Lisp_Object Qaccessibility;
 Lisp_Object Qservice, Qpaste, Qperform;
@@ -5473,6 +5474,50 @@ init_dm_notification_handler (void)
   return noErr;
 }
 
+static void
+mac_handle_tis_notification (CFNotificationCenterRef center, void *observer,
+			     CFStringRef name, const void *object,
+			     CFDictionaryRef userInfo)
+{
+  struct input_event buf;
+  Lisp_Object arg;
+
+  EVENT_INIT (buf);
+
+  buf.kind = MAC_APPLE_EVENT;
+  buf.x = Qtext_input;
+  buf.y = Qnotification;
+  XSETFRAME (buf.frame_or_window, mac_focus_frame (&one_mac_display_info));
+  arg = list1 (Fcons (Qname, (Fcons (build_string ("Lisp"),
+				     cfstring_to_lisp_nodecode (name)))));
+  buf.arg = Fcons (build_string ("aevt"), arg);
+  kbd_buffer_store_event (&buf);
+}
+
+static void
+init_tis_notification_handler (void)
+{
+  CFNotificationCenterRef center = CFNotificationCenterGetDistributedCenter ();
+
+  CFNotificationCenterAddObserver (center, NULL, mac_handle_tis_notification,
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+				   kTISNotifySelectedKeyboardInputSourceChanged,
+#else
+				   CFSTR ("com.apple.Carbon.TISNotify"
+					  "SelectedKeyboardInputSourceChanged"),
+#endif
+				   NULL, CFNotificationSuspensionBehaviorDrop);
+  CFNotificationCenterAddObserver (center, NULL, mac_handle_tis_notification,
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+				   kTISNotifyEnabledKeyboardInputSourcesChanged,
+#else
+				   CFSTR ("com.apple.Carbon.TISNotify"
+					  "EnabledKeyboardInputSourcesChanged"),
+#endif
+				   NULL,
+				   CFNotificationSuspensionBehaviorCoalesce);
+}
+
 
 /***********************************************************************
 			    Initialization
@@ -5730,6 +5775,8 @@ mac_initialize (void)
 
   init_dm_notification_handler ();
 
+  init_tis_notification_handler ();
+
   install_application_handler ();
 
   init_cg_color ();
@@ -5769,6 +5816,7 @@ syms_of_macterm (void)
   DEFSYM (Qtext_input, "text-input");
   DEFSYM (Qinsert_text, "insert-text");
   DEFSYM (Qset_marked_text, "set-marked-text");
+  DEFSYM (Qnotification, "notification");
 
   DEFSYM (Qaction, "action");
   DEFSYM (Qmac_action_key_paths, "mac-action-key-paths");

@@ -171,9 +171,6 @@ struct mac_display_info
   EventRef saved_menu_event;
 };
 
-/* This checks to make sure we have a display.  */
-extern void check_mac (void);
-
 #define x_display_info mac_display_info
 
 /* This is a chain of structures for all the X displays currently in use.  */
@@ -677,8 +674,12 @@ extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
 extern void mac_invalidate_rectangles (struct frame *, NativeRectangle *, int);
 extern long mac_appkit_do_applescript (Lisp_Object, Lisp_Object *);
-extern Lisp_Object mac_osa_language_list (Lisp_Object);
-extern Lisp_Object mac_osa_script (ptrdiff_t, Lisp_Object *);
+extern Lisp_Object mac_osa_language_list (bool);
+extern Lisp_Object mac_osa_compile (Lisp_Object, Lisp_Object, bool,
+				    Lisp_Object *);
+extern Lisp_Object mac_osa_script (Lisp_Object, Lisp_Object, bool, Lisp_Object,
+				   Lisp_Object, ptrdiff_t, Lisp_Object *,
+				   Lisp_Object *);
 extern bool mac_webkit_supports_svg_p (void);
 extern CFArrayRef mac_document_copy_type_identifiers (void);
 extern EmacsDocumentRef mac_document_create_with_url (CFURLRef,
@@ -744,3 +745,6 @@ extern void rows_from_pos_range (struct window *, ptrdiff_t , ptrdiff_t,
 
 /* Defined in keyboard.c */
 extern Lisp_Object Qundefined;
+
+/* Defined in coding.c */
+extern Lisp_Object QCcategory;

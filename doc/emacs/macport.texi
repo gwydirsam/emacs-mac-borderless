@@ -520,3 +520,14 @@ representation).
 @findex mac-start-animation
   The function @code{mac-start-animation} starts animation effect
 using Core Animation on Mac OS X 10.5 and later.
+
+@findex mac-input-source
+@findex mac-input-source-list
+@findex mac-select-input-source
+@findex mac-deselect-input-source
+There are some functions and hooks for interaction with Text Input
+Source Services on Mac OS X 10.5 and later: @code{mac-input-source},
+@code{mac-input-source-list}, @code{mac-select-input-source},
+@code{mac-deselect-input-source},
+@code{mac-selected-keyboard-input-source-change-hook}, and
+@code{mac-enabled-keyboard-input-sources-change-hook}.

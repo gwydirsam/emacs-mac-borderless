@@ -5165,7 +5165,7 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
     {
       keyEventsInterpreted = YES;
       rawKeyEvent = theEvent;
-      rawKeyEventHasMappedFlags = !!(mapped_flags & ~kCGEventFlagMaskControl);
+      rawKeyEventHasMappedFlags = (mapped_flags != 0);
       [self interpretKeyEvents:[NSArray arrayWithObject:theEvent]];
       rawKeyEvent = nil;
       rawKeyEventHasMappedFlags = NO;
@@ -5236,30 +5236,23 @@ get_text_input_script_language (ScriptLanguageRecord *slrec)
 
   if (rawKeyEvent && ![self hasMarkedText])
     {
-      if (rawKeyEventHasMappedFlags || [rawKeyEvent type] == NSKeyUp)
-	keyEventsInterpreted = NO;
-      else if ([aString isKindOfClass:[NSString class]])
-	{
-	  if ([aString isEqualToString:[rawKeyEvent characters]])
-	    {
-	      unichar character;
+      unichar character;
 
-	      if ([(NSString *)aString length] == 1
-		  && ((character = [aString characterAtIndex:0]) < 0x80
-		      /* NSEvent reserves the following Unicode
-			 characters for function keys on the
-			 keyboard.  */
-		      || (character >= 0xf700 && character <= 0xf74f)))
-		keyEventsInterpreted = NO;
-	    }
-	  else if ([rawKeyEvent keyCode] == 0x5E /* kVK_JIS_Underscore */
-		   /* "C-_" on JIS keyboard is recognized as "_".  */
-		   && [aString isEqualToString:@"_"])
-	    keyEventsInterpreted = NO;
+      if (rawKeyEventHasMappedFlags
+	  || [rawKeyEvent type] == NSKeyUp
+	  || ([aString isKindOfClass:[NSString class]]
+	      && [aString isEqualToString:[rawKeyEvent characters]]
+	      && [(NSString *)aString length] == 1
+	      && ((character = [aString characterAtIndex:0]) < 0x80
+		  /* NSEvent reserves the following Unicode characters
+		     for function keys on the keyboard.  */
+		  || (character >= 0xf700 && character <= 0xf74f))))
+	{
+	  /* Process it in keyDown:.  */
+	  keyEventsInterpreted = NO;
+
+	  return;
 	}
-      if (!keyEventsInterpreted)
-	/* Process it in keyDown:.  */
-	return;
     }
 
   [self setMarkedText:nil];
@@ -10744,7 +10737,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
 - (NSAppleEventDescriptor *)executeAndReturnError:(NSDictionary **)errorInfo
 {
-  if ([NSApp isRunning])
+  if (inhibit_window_system || [NSApp isRunning])
     return [super executeAndReturnError:errorInfo];
   else
     {
@@ -10754,10 +10747,11 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
       [NSApp runTemporarilyWithBlock:^{
 	  result = [self executeAndReturnError:&errorInfo1];
+#if !USE_ARC
 	  if (result == nil)
-	    MRC_RETAIN (errorInfo1);
-
-	  MRC_RETAIN (result);
+	    [errorInfo1 retain];
+	  [result retain];
+#endif
 	}];
 
       if (result == nil)
@@ -10789,7 +10783,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
 - (NSAppleEventDescriptor *)executeAndReturnDisplayValue:(NSAttributedString **)displayValue error:(NSDictionary **)errorInfo
 {
-  if ([NSApp isRunning])
+  if (inhibit_window_system || [NSApp isRunning])
     return [super executeAndReturnDisplayValue:displayValue error:errorInfo];
   else
     {
@@ -10801,12 +10795,13 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
       [NSApp runTemporarilyWithBlock:^{
 	  result = [self executeAndReturnDisplayValue:&displayValue1
 						error:&errorInfo1];
+#if !USE_ARC
 	  if (result)
-	    MRC_RETAIN (displayValue1);
+	    [displayValue1 retain];
 	  else
-	    MRC_RETAIN (errorInfo1);
-
-	  MRC_RETAIN (result);
+	    [errorInfo1 retain];
+	  [result retain];
+#endif
 	}];
 
       if (result)
@@ -10843,7 +10838,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
 - (NSAppleEventDescriptor *)executeAppleEvent:(NSAppleEventDescriptor *)event error:(NSDictionary **)errorInfo;
 {
-  if ([NSApp isRunning])
+  if (inhibit_window_system || [NSApp isRunning])
     return [super executeAppleEvent:event error:errorInfo];
   else
     {
@@ -10853,10 +10848,11 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
       [NSApp runTemporarilyWithBlock:^{
 	  result = [self executeAppleEvent:event error:&errorInfo1];
+#if !USE_ARC
 	  if (result == nil)
-	    MRC_RETAIN (errorInfo1);
-
-	  MRC_RETAIN (result);
+	    [errorInfo1 retain];
+	  [result retain];
+#endif
 	}];
 
       if (result == nil)
@@ -10936,20 +10932,18 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 @end				// EmacsOSAScript
 
 Lisp_Object
-mac_osa_language_list (Lisp_Object long_format_p)
+mac_osa_language_list (bool long_format_p)
 {
   Lisp_Object result = Qnil, default_language_props = Qnil;
+  OSALanguage *defaultLanguage = [OSALanguage defaultLanguage], *language;
   NSEnumerator *enumerator;
-  OSALanguage *defaultLanguage, *language;
 
-  block_input ();
-  defaultLanguage = [OSALanguage defaultLanguage];
   enumerator = [[OSALanguage availableLanguages] objectEnumerator];
   while ((language = [enumerator nextObject]) != nil)
     {
       Lisp_Object language_props = [[language name] lispString];
 
-      if (!NILP (long_format_p))
+      if (long_format_p)
 	{
 	  Lisp_Object tmp = list2 (QCfeatures,
 				   make_number ([language features]));
@@ -10975,7 +10969,234 @@ mac_osa_language_list (Lisp_Object long_format_p)
     }
   if (!NILP (default_language_props))
     result = Fcons (default_language_props, result);
-  unblock_input ();
+
+  return result;
+}
+
+static Lisp_Object
+mac_osa_error_info_to_lisp (NSDictionary *errorInfo)
+{
+  Lisp_Object result = Qnil;
+  NSString *errorMessage = [errorInfo objectForKey:OSAScriptErrorMessage];
+  NSNumber *errorNumber = [errorInfo objectForKey:OSAScriptErrorNumber];
+  NSString *errorAppName = [errorInfo objectForKey:OSAScriptErrorAppName];
+  NSValue *errorRange = [errorInfo objectForKey:OSAScriptErrorRange];
+
+  if (errorRange)
+    {
+      NSRange range = [errorRange rangeValue];
+
+      result = Fcons (Fcons (Qrange, Fcons (make_number (range.location),
+					    make_number (range.length))),
+		      result);
+    }
+  if (errorAppName)
+    result = Fcons (Fcons (Qapp_name, [errorAppName lispString]), result);
+  if (errorNumber)
+    result = Fcons (Fcons (Qnumber, make_number ([errorNumber intValue])),
+		    result);
+  result = Fcons ((errorMessage ? [errorMessage lispString]
+		   : build_string ("OSA script error")), result);
+
+  return result;
+}
+
+static OSALanguage *
+mac_osa_language_from_lisp (Lisp_Object language)
+{
+  OSALanguage *result;
+
+  if (NILP (language))
+    result = [OSALanguage defaultLanguage];
+  else
+    {
+      NSString *name = [NSString stringWithLispString:language];
+      result = [OSALanguage languageForName:name];
+    }
+
+  return result;
+}
+
+static EmacsOSAScript *
+mac_osa_create_script_from_file (Lisp_Object filename,
+				 Lisp_Object compiled_p_or_language,
+				 Lisp_Object *error_data)
+{
+  EmacsOSAScript *result;
+  Lisp_Object encoded;
+  NSURL *url;
+  NSDictionary *errorInfo = nil;
+  OSALanguage *language;
+
+  filename = Fexpand_file_name (filename, Qnil);
+  encoded = ENCODE_FILE (filename);
+  url = [NSURL fileURLWithPath:[NSString stringWithLispString:encoded]];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+  {
+    NSAppleEventDescriptor *dataDescriptor =
+      [OSAScript scriptDataDescriptorWithContentsOfURL:url];
+
+    if (dataDescriptor == nil)
+      result = nil;
+    else
+      {
+	NSError *error;
+
+	language = [OSALanguage languageForScriptDataDescriptor:dataDescriptor];
+	if (language == nil)
+	  {
+	    if (EQ (compiled_p_or_language, Qt))
+	      {
+		*error_data =
+		  list2 (build_string ("Can't obtain OSA language from file"),
+			 filename);
+
+		return nil;
+	      }
+	    language = mac_osa_language_from_lisp (compiled_p_or_language);
+	    if (language == nil)
+	      {
+		*error_data =
+		  list2 (build_string ("OSA language not available"),
+			 compiled_p_or_language);
+
+		return nil;
+	      }
+	  }
+	result = [[EmacsOSAScript alloc]
+		   initWithScriptDataDescriptor:dataDescriptor fromURL:url
+			       languageInstance:[language
+						  sharedLanguageInstance]
+			    usingStorageOptions:OSANull error:&error];
+	if (result == nil)
+	  errorInfo = [error userInfo];
+      }
+  }
+#else
+  language = mac_osa_language_from_lisp (compiled_p_or_language);
+  if (language == nil)
+    {
+      *error_data = list2 (build_string ("OSA language not available"),
+			   compiled_p_or_language);
+      return nil;
+    }
+  result = [[EmacsOSAScript alloc] initWithContentsOfURL:url language:language
+						   error:&errorInfo];
+#endif
+  if (result == nil)
+    {
+      if (errorInfo)
+	*error_data = mac_osa_error_info_to_lisp (errorInfo);
+      else
+	*error_data =
+	  list2 (build_string ("Can't create OSA script from file"),
+		 filename);
+    }
+
+  return result;
+}
+
+static EmacsOSAScript *
+mac_osa_create_script_from_code (Lisp_Object code,
+				 Lisp_Object compiled_p_or_language,
+				 Lisp_Object *error_data)
+{
+  EmacsOSAScript *result;
+
+  if (!EQ (compiled_p_or_language, Qt))
+    {
+      OSALanguage *language =
+	mac_osa_language_from_lisp (compiled_p_or_language);
+
+      if (language == nil)
+	{
+	  *error_data = list2 (build_string ("OSA language not available"),
+			       compiled_p_or_language);
+
+	  return nil;
+	}
+      result = [[EmacsOSAScript alloc]
+		 initWithSource:[NSString stringWithLispString:code]
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+			fromURL:nil
+		 languageInstance:[language sharedLanguageInstance]
+		 usingStorageOptions:OSANull
+#else
+		       language:language
+#endif
+		];
+      if (result == nil)
+	*error_data =
+	  list2 (build_string ("Can't create OSA script from source"),
+		 code);
+    }
+  else
+    {
+      NSData *data = [NSData dataWithBytes:(SDATA (code))
+				    length:(SBYTES (code))];
+      NSDictionary *errorInfo = nil;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      NSError *error;
+
+      result = [[EmacsOSAScript alloc] initWithCompiledData:data fromURL:nil
+					usingStorageOptions:OSANull
+						      error:&error];
+      if (result == nil)
+	errorInfo = [error userInfo];
+#else
+      result = [[EmacsOSAScript alloc] initWithCompiledData:data
+						      error:&errorInfo];
+#endif
+      if (result == nil)
+	{
+	  if (errorInfo)
+	    *error_data = mac_osa_error_info_to_lisp (errorInfo);
+	  else
+	    *error_data =
+	      list2 (build_string ("Can't create OSA script from data"),
+		     code);
+	}
+    }
+
+  return result;
+}
+
+static EmacsOSAScript *
+mac_osa_create_script (Lisp_Object code_or_file,
+		       Lisp_Object compiled_p_or_language,
+		       bool file_p, Lisp_Object *error_data)
+{
+  if (file_p)
+    return mac_osa_create_script_from_file (code_or_file,
+					    compiled_p_or_language, error_data);
+  else
+    return mac_osa_create_script_from_code (code_or_file,
+					    compiled_p_or_language, error_data);
+}
+
+Lisp_Object
+mac_osa_compile (Lisp_Object code_or_file, Lisp_Object compiled_p_or_language,
+		 bool file_p, Lisp_Object *error_data)
+{
+  Lisp_Object result = Qnil;
+  EmacsOSAScript *script;
+
+  *error_data = Qnil;
+  script = mac_osa_create_script (code_or_file, compiled_p_or_language, file_p,
+				  error_data);
+  if (script)
+    {
+      NSDictionary *errorInfo;
+      NSData *compiledData = [script compiledDataForType:nil
+				     usingStorageOptions:OSANull
+						   error:&errorInfo];
+
+      if (compiledData == nil)
+	*error_data = mac_osa_error_info_to_lisp (errorInfo);
+      else
+	result = [compiledData lispString];
+      MRC_RELEASE (script);
+    }
 
   return result;
 }
@@ -10998,7 +11219,7 @@ mac_apple_event_descriptor_with_handler_call (Lisp_Object handler_call,
 	  NSString *handlerName;
 
 	  for (i = 0; i < nargs; i++)
-	    mac_ae_put_lisp (&param_list, i, args[i]);
+	    mac_ae_put_lisp (&param_list, 0, args[i]);
 
 	  target = [NSAppleEventDescriptor nullDescriptor];
 	  result = [NSAppleEventDescriptor
@@ -11029,145 +11250,61 @@ mac_apple_event_descriptor_with_handler_call (Lisp_Object handler_call,
 }
 
 Lisp_Object
-mac_osa_script (ptrdiff_t nargs, Lisp_Object *args)
+mac_osa_script (Lisp_Object code_or_file, Lisp_Object compiled_p_or_language,
+		bool file_p, Lisp_Object value_form, Lisp_Object handler_call,
+		ptrdiff_t nargs, Lisp_Object *args, Lisp_Object *error_data)
 {
-  Lisp_Object result, script, language, script_type, value_form, handler_call;
-  OSALanguage *osaLanguage = nil;
-  OSAScript *osaScript;
-  NSDictionary *errorInfo;
-  NSAppleEventDescriptor *event = nil, *desc = nil;
+  Lisp_Object result;
+  EmacsOSAScript *script;
+  NSAppleEventDescriptor *desc = nil;
   NSAttributedString *displayValue;
 
-  nargs--;
-  script = *args++;
-  CHECK_STRING (script);
-  if (nargs <= 0)
-    language = Qnil;
-  else
+  *error_data = Qnil;
+  script = mac_osa_create_script (code_or_file, compiled_p_or_language, file_p,
+				  error_data);
+  if (script)
     {
-      nargs--;
-      language = *args++;
-      if (!NILP (language))
-	CHECK_STRING (language);
-    }
-  if (nargs <= 0)
-    script_type = Qnil;
-  else
-    {
-      nargs--;
-      script_type = *args++;
-      if (!NILP (script_type))
-	signal_error ("Non-nil SCRIPT-TYPE is reserved for future use",
-		      script_type);
-    }
-  if (nargs <= 0)
-    value_form = Qnil;
-  else
-    {
-      nargs--;
-      value_form = *args++;
-      if (!NILP (value_form) && !EQ (value_form, Qt))
-	signal_error ("VALUE-FORM should be nil or t", value_form);
-    }
-  if (nargs <= 0)
-    handler_call = Qnil;
-  else
-    {
-      nargs--;
-      handler_call = *args++;
-    }
+      NSDictionary *errorInfo;
+      NSAppleEventDescriptor *event = nil;
 
-  block_input ();
-
-  if (!NILP (language))
-    {
-      osaLanguage = [OSALanguage
-		      languageForName:[NSString stringWithLispString:language]];
-      if (osaLanguage == nil)
+      if (![script compileAndReturnError:&errorInfo])
+	*error_data = mac_osa_error_info_to_lisp (errorInfo);
+      else if (!NILP (handler_call))
 	{
-	  unblock_input ();
-	  error ("OSA language `%s' not available", SDATA (language));
+	  event = mac_apple_event_descriptor_with_handler_call (handler_call,
+								nargs, args);
+	  if (event == nil)
+	    *error_data = Fcons (build_string ("Can't create Apple event"),
+				Fcons (handler_call, Flist (nargs, args)));
 	}
-    }
-
-  if (!inhibit_window_system)
-    osaScript = [[EmacsOSAScript alloc]
-		  initWithSource:[NSString stringWithLispString:script]];
-  else
-    osaScript = [[OSAScript alloc]
-		  initWithSource:[NSString stringWithLispString:script]];
-
-  if (osaScript == nil)
-    {
-      unblock_input ();
-      error ("Can't create OSA script from source `%s'", SDATA (script));
-    }
-  if (osaLanguage)
-    [osaScript setLanguage:osaLanguage];
-
-  if (!NILP (handler_call))
-    {
-      event = mac_apple_event_descriptor_with_handler_call (handler_call,
-							    nargs, args);
-      if (event == nil)
+      if (NILP (*error_data))
 	{
-	  unblock_input ();
-	  signal_error ("Can't create Apple event from handler call",
-			handler_call);
+	  mac_begin_defer_key_events ();
+	  if (event)
+	    {
+	      desc = [script executeAppleEvent:event error:&errorInfo];
+	      if (desc && NILP (value_form))
+		displayValue = [script richTextFromDescriptor:desc];
+	    }
+	  else if (NILP (value_form))
+	    desc = [script executeAndReturnDisplayValue:&displayValue
+						  error:&errorInfo];
+	  else
+	    desc = [script executeAndReturnError:&errorInfo];
+	  if (desc == nil)
+	    *error_data = mac_osa_error_info_to_lisp (errorInfo);
+	  mac_end_defer_key_events ();
 	}
+      MRC_RELEASE (script);
     }
 
-  if ([osaScript compileAndReturnError:&errorInfo])
+  if (desc)
     {
-      mac_begin_defer_key_events ();
-      if (event)
-	{
-	  desc = [osaScript executeAppleEvent:event error:&errorInfo];
-	  if (desc && NILP (value_form))
-	    displayValue = [osaScript richTextFromDescriptor:desc];
-	}
-      else if (NILP (value_form))
-	desc = [osaScript executeAndReturnDisplayValue:&displayValue
-						 error:&errorInfo];
+      if (NILP (value_form))
+	result = [[displayValue string] lispString];
       else
-	desc = [osaScript executeAndReturnError:&errorInfo];
-      MRC_RELEASE (osaScript);
-      mac_end_defer_key_events ();
+	result = mac_aedesc_to_lisp ([desc aeDesc]);
     }
-
-  if (desc == nil)
-    {
-      NSString *errorMessage = [errorInfo objectForKey:OSAScriptErrorMessage];
-      NSNumber *errorNumber = [errorInfo objectForKey:OSAScriptErrorNumber];
-      NSString *errorAppName = [errorInfo objectForKey:OSAScriptErrorAppName];
-      NSValue *errorRange = [errorInfo objectForKey:OSAScriptErrorRange];
-      Lisp_Object data = Qnil;
-
-      if (errorRange)
-	{
-	  NSRange range = [errorRange rangeValue];
-
-	  data = Fcons (Fcons (Qrange, Fcons (make_number (range.location),
-					      make_number (range.length))),
-			data);
-	}
-      if (errorAppName)
-	data = Fcons (Fcons (Qapp_name, [errorAppName lispString]), data);
-      if (errorNumber)
-	data = Fcons (Fcons (Qnumber, make_number ([errorNumber intValue])),
-		      data);
-      data = Fcons (errorMessage ? [errorMessage lispString]
-		    : build_string ("OSA script error"), data);
-      unblock_input ();
-      Fsignal (Qerror, data);
-    }
-
-  if (NILP (value_form))
-    result = [[displayValue string] lispString];
-  else
-    result = mac_aedesc_to_lisp ([desc aeDesc]);
-
-  unblock_input ();
 
   return result;
 }

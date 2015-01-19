@@ -1198,6 +1198,58 @@ Currently the `mailto' scheme is supported."
       (if mac-odb-received-apple-events
 	  (mac-odb-send-closed-file-events)))))
 
+;;; AppleScript
+(declare-function mac-osa-script "mac.c"
+		  (code-or-file &optional compiled-p-or-language file-p
+				value-form handler-call &rest args))
+
+(defvar mac-do-applescript-use-legacy-encoding nil
+  "Non-nil means `mac-do-applescript' uses legacy encoding for unibyte scripts.
+If this value is nil or the script given to `mac-do-applescript'
+is a multibyte string, it is regarded as a Unicode text.
+Otherwise, the script is regarded as a byte sequence in a Mac
+traditional encoding specified by `mac-system-script-code', just
+as in the Carbon(+AppKit) ports of Emacs 22 or the Mac port of
+Emacs 23-24.  In the latter case, the return value or the error
+message of `mac-do-applescript' is also a unibyte string in the
+Mac traditional encoding.
+
+Note that if this value is non-nil, a unibyte ASCII-only script
+does not always have the same meaning as the multibyte
+counterpart.  For example, `\\x5c' in a unibyte script is
+interpreted as a yen sign when the value of
+`mac-system-script-code' is 1 (smJapanese), but the same
+character in a multibyte script is interpreted as a reverse
+solidus.  You may want to apply `string-to-multibyte' to the
+script if it is given as an ASCII-only string literal.")
+
+(defun mac-do-applescript (script)
+  "Compile and execute AppleScript SCRIPT and return the result.
+If compilation and execution are successful, the resulting script
+value is returned as a string.  Otherwise the function aborts and
+displays the error message returned by the AppleScript scripting
+component.
+
+Set `mac-do-applescript-use-legacy-encoding' to t if you want
+strict compatibility with the Carbon(+AppKit) ports of Emacs 22
+or the Mac port of Emacs 23-24 about encoding of SCRIPT."
+  (let ((use-legacy-encoding (and mac-do-applescript-use-legacy-encoding
+				  (not (multibyte-string-p script)))))
+    (condition-case err
+	(if (not use-legacy-encoding)
+	    (mac-osa-script script)
+	  (setq script (decode-coding-string
+			(mac-coerce-ae-data "TEXT" script "utf8") 'utf-8))
+	  (mac-coerce-ae-data "utf8" (encode-coding-string
+				      (mac-osa-script script) 'utf-8) "TEXT"))
+      (error
+       (if (equal (cadr err) "OSA script error")
+	   (error "AppleScript error %d" (cdr (assq 'number (cddr err))))
+	 (error "%s" (if use-legacy-encoding
+			 (mac-coerce-ae-data "utf8" (encode-coding-string
+						     (cadr err) 'utf-8) "TEXT")
+		       (cadr err))))))))
+
 ;;; Font panel
 (declare-function mac-set-font-panel-visible-p "macfns.c" (flag))
 
@@ -1238,6 +1290,9 @@ the mode if ARG is omitted or nil."
   'showhide-speedbar)
 
 ;;; Text Services
+(declare-function mac-select-input-source "macfns.c"
+		  (source &optional set-keyboard-layout-override-p))
+
 (setq mac-ts-active-input-overlay (make-overlay 1 1))
 (overlay-put mac-ts-active-input-overlay 'display "")
 
@@ -1451,10 +1506,101 @@ sensitive to the variation selector.")
 	  (setq string (mac-complement-emoji-by-variation-selector string)))
       (mac-unread-string string))))
 
+(defcustom mac-selected-keyboard-input-source-change-hook nil
+  "Hook run for a change to the selected keyboard input source.
+The hook functions are not called when Emacs is in the background
+even if the selected keyboard input source is changed outside
+Emacs.
+This hook is not used on Mac OS X 10.4."
+  :package-version '(Mac\ port . "5.2")
+  :type 'hook
+  :group 'mac)
+
+(defcustom mac-enabled-keyboard-input-sources-change-hook nil
+  "Hook run for a change to the set of enabled keyboard input sources.
+This hook is not used on Mac OS X 10.4."
+  :package-version '(Mac\ port . "5.2")
+  :type 'hook
+  :group 'mac)
+
+(defun mac-text-input-handle-notification (event)
+  (interactive "e")
+  (let ((ae (mac-event-ae event)))
+    (let ((name (cdr (mac-ae-parameter ae 'name))))
+      (cond ((string= name (concat "com.apple.Carbon.TISNotify"
+				   "SelectedKeyboardInputSourceChanged"))
+	     (run-hooks 'mac-selected-keyboard-input-source-change-hook))
+	    ((string= name (concat "com.apple.Carbon.TISNotify"
+				   "EnabledKeyboardInputSourcesChanged"))
+	     (run-hooks 'mac-enabled-keyboard-input-sources-change-hook))))))
+
 (define-key mac-apple-event-map [text-input set-marked-text]
   'mac-text-input-set-marked-text)
 (define-key mac-apple-event-map [text-input insert-text]
   'mac-text-input-insert-text)
+(define-key mac-apple-event-map [text-input notification]
+  'mac-text-input-handle-notification)
+
+(defun mac-auto-ascii-select-input-source ()
+  "Select the most-recently-used ASCII-capable keyboard input source.
+Expects to be added to normal hooks."
+  (if (eq (terminal-live-p (frame-terminal)) 'mac)
+      (mac-select-input-source 'ascii-capable-keyboard)))
+
+(defun mac-auto-ascii-setup-input-source (&optional _prompt)
+  "Set up the most-recently-used ASCII-capable keyboard input source.
+Expects to be bound to global keymap's prefix keys in
+`input-decode-map'."
+  (mac-auto-ascii-select-input-source)
+  (vector last-input-event))
+
+(define-minor-mode mac-auto-ascii-mode
+  "Toggle Mac Auto ASCII mode.
+With a prefix argument ARG, enable Mac Auto ASCII mode if ARG is
+positive, and disable it otherwise.  If called from Lisp, enable
+the mode if ARG is omitted or nil.
+
+Mac Auto ASCII mode automatically selects the most-recently-used
+ASCII-capable keyboard input source on some occasions: after
+prefix key (bound in the global keymap) press such as C-x and
+M-g, and at the start of minibuffer input.  This mode has no
+effect on Mac OS X 10.4.
+
+Strictly speaking, its implementation has a timing issue: the
+Lisp event queue may already have some input events that have
+been processed by some previous keyboard input source but yet to
+be processed by the Lisp interpreter."
+  :init-value nil
+  :global t
+  :group 'mac
+  :package-version '(Mac\ port . "5.2")
+  (if mac-auto-ascii-mode
+      (progn
+	(map-keymap (lambda (event definition)
+		      (if (and (keymapp definition) (integerp event)
+			       (not (eq event ?\e)))
+			  (define-key input-decode-map (vector event)
+			    'mac-auto-ascii-setup-input-source)))
+		    global-map)
+	(map-keymap (lambda (event definition)
+		      (if (and (keymapp definition) (integerp event)
+			       (not (eq event ?\e)))
+			  (define-key input-decode-map (vector ?\e event)
+			    'mac-auto-ascii-setup-input-source)))
+		    esc-map)
+	(add-hook 'minibuffer-setup-hook 'mac-auto-ascii-select-input-source))
+    (map-keymap (lambda (event definition)
+		  (if (eq definition 'mac-auto-ascii-setup-input-source)
+		      (define-key input-decode-map (vector event) nil)))
+		input-decode-map)
+    (let ((input-decode-esc-map (lookup-key input-decode-map "\e")))
+      (if (keymapp input-decode-esc-map)
+	  (map-keymap
+	   (lambda (event definition)
+	     (if (eq definition 'mac-auto-ascii-setup-input-source)
+		 (define-key input-decode-map (vector ?\e event) nil)))
+	   input-decode-esc-map)))
+    (remove-hook 'minibuffer-setup-hook 'mac-auto-ascii-select-input-source)))
 
 ;;; Converted Actions
 (defun mac-handle-about (event)
