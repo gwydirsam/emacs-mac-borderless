@@ -1,8 +1,8 @@
 COPYRIGHT AND LICENSE INFORMATION FOR HIGH RESOLUTION IMAGE FILES
 
 * The following multirepresentaion TIFF icons for multiple resolutions
-are coverted from GNOME icon theme 3.4.0 using `tiffutil' on Mac OS X
-10.7.4.  The original data are licensed under the terms of either GNU
+are coverted from GNOME icon theme 3.12.0 using `tiffutil' on Mac OS X
+10.9.2.  The original data are licensed under the terms of either GNU
 LGPL v.3 or Creative Commons BY-SA 3.0 license.  See the source of the
 gnome-icons-theme package for more information.
 
@@ -43,8 +43,9 @@ gnome-icons-theme package for more information.
   zoom-in.tiff		    actions/zoom-in.png
   zoom-out.tiff		    actions/zoom-out.png
 
-The mapping is mostly derived from x-gtk-stock-map in term/x-win.el.
+The mapping is mostly derived from x-gtk-stock-map in
+lisp/term/x-win.el.
 
 * The file splash@2x.png is generated from splash.svg in GNU Emacs
 24.3 using `rsvg-convert'.  The original data is licensed under the
-GNU General Public License version 3 (see COPYING) or later.
+GNU General Public License version 3 or later.
