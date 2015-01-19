@@ -433,6 +433,27 @@ images or reload files automatically.
 interpreted as those in the sRGB color space.  This may give a
 different look from other ports of GNU Emacs.
 
+  On OS X 10.10, one can blend and blur background colors of the
+focused frame with the contents behind it.  This can be customized per
+face by a special background stipple name @samp{alpha:@var{alpha}},
+where @var{alpha} is a decimal representation of a floating-point
+number from 0.0 (maximum transparency) to 1.0 (completely opaque).
+The number @var{alpha} may be followed by @samp{%} and in this case it
+should be from 0.0 to 100.0.  It can be specified as a ``File'' value
+for the Stipple attribute in @pxref{Face Customization}.
+Alternatively, it may be specified via either Lisp evaluation:
+
+@example
+(set-face-stipple 'fringe "alpha:50%")
+@end example
+
+@noindent
+or X resources emulation by the Preferences system:
+
+@smallexample
+defaults write org.gnu.Emacs Emacs.fringe.attributeStipple alpha:.5
+@end smallexample
+
 @node Mac Fullscreen
 @section Fullscreen support on the Mac Port
 @cindex fullscreen support (Mac port)

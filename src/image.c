@@ -383,7 +383,9 @@ x_create_bitmap_from_data (struct frame *f, char *bits, unsigned int width, unsi
   dpyinfo->bitmaps[id - 1].depth = 1;
 #endif
 
+#ifndef HAVE_MACGUI
   dpyinfo->bitmaps[id - 1].file = NULL;
+#endif
   dpyinfo->bitmaps[id - 1].height = height;
   dpyinfo->bitmaps[id - 1].width = width;
   dpyinfo->bitmaps[id - 1].refcount = 1;
@@ -506,11 +508,13 @@ free_bitmap_record (Display_Info *dpyinfo, Bitmap_Record *bm)
   ns_release_object (bm->img);
 #endif
 
+#ifndef HAVE_MACGUI
   if (bm->file)
     {
       xfree (bm->file);
       bm->file = NULL;
     }
+#endif
 }
 
 /* Remove reference to bitmap with id number ID.  */

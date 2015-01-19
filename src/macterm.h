@@ -45,7 +45,6 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 struct mac_bitmap_record
 {
   char *bitmap_data;
-  char *file;
   int refcount;
   int height, width;
 };
@@ -520,8 +519,10 @@ extern Lisp_Object x_get_focus_frame (struct frame *);
 
 /* Defined in mac.c.  */
 
-extern Lisp_Object Qstring, Qarray, Qdictionary;
+extern Lisp_Object Qstring, Qnumber, Qarray, Qdictionary;
 extern Lisp_Object Qrange, Qpoint;
+extern Lisp_Object Qapp_name;
+extern Lisp_Object QCinfo, QCversion, QCsub_type, QCmanufacturer, QCfeatures;
 extern struct mac_operating_system_version
 {
   CFIndex major, minor, patch;
@@ -567,6 +568,12 @@ extern Lisp_Object mac_carbon_version_string (void);
 
 /* Defined in macappkit.m.  */
 
+extern struct mac_accessibility_display_options
+{
+  bool increase_contrast_p;
+  bool differentiate_without_color_p;
+  bool reduce_transparency_p;
+} mac_accessibility_display_options;
 extern Lisp_Object mac_nsobject_to_lisp (CFTypeRef);
 extern void mac_alert_sound_play (void);
 extern double mac_appkit_version (void);
@@ -670,6 +677,8 @@ extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
 extern void mac_invalidate_rectangles (struct frame *, NativeRectangle *, int);
 extern long mac_appkit_do_applescript (Lisp_Object, Lisp_Object *);
+extern Lisp_Object mac_osa_language_list (Lisp_Object);
+extern Lisp_Object mac_osa_script (ptrdiff_t, Lisp_Object *);
 extern bool mac_webkit_supports_svg_p (void);
 extern CFArrayRef mac_document_copy_type_identifiers (void);
 extern EmacsDocumentRef mac_document_create_with_url (CFURLRef,
@@ -700,11 +709,23 @@ extern void mac_sound_play (CFTypeRef, Lisp_Object, Lisp_Object);
   mac_end_cg_clip (f);} while (0)
 #endif
 
-#define CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND(context, rect, gc)	\
+#define CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND(f, context, rect, gc)	\
   do {									\
-    if (CGColorGetAlpha ((gc)->cg_back_color) != 1)			\
-      CGContextClearRect (context, rect);				\
-    CGContextSetFillColorWithColor (context, (gc)->cg_back_color);	\
+    if ((gc)->xgcv.background_transparency == 0)			\
+      CGContextSetFillColorWithColor (context, (gc)->cg_back_color);	\
+    else if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f)			\
+	     && !mac_accessibility_display_options.reduce_transparency_p) \
+      {									\
+	CGContextClearRect (context, rect);				\
+	CGContextSetFillColorWithColor (context, (gc)->cg_back_color);	\
+      }									\
+    else								\
+      {									\
+	CGColorRef color =						\
+	  CGColorCreateCopyWithAlpha ((gc)->cg_back_color, 1.0f);	\
+	CGContextSetFillColorWithColor (context, color);		\
+	CGColorRelease (color);						\
+      }									\
     CGContextFillRects (context, &(rect), 1);				\
   } while (0)
 

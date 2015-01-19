@@ -93,6 +93,9 @@ static void x_update_window_begin (struct window *);
 static void x_check_fullscreen (struct frame *);
 static void mac_initialize (void);
 
+static void mac_set_background_and_transparency (GC, unsigned long,
+						 unsigned char);
+
 /* Fringe bitmaps.  */
 
 static int max_fringe_bmp = 0;
@@ -245,7 +248,7 @@ mac_erase_rectangle (struct frame *f, GC gc, int x, int y,
   {
     CGRect rect = mac_rect_make (f, x, y, width, height);
 
-    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, rect, gc);
+    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (f, context, rect, gc);
   }
   MAC_END_DRAW_TO_FRAME (f);
 }
@@ -293,7 +296,7 @@ mac_draw_cg_image (CGImageRef image, struct frame *f, GC gc,
 			      CGImageGetWidth (image) / 2,
 			      CGImageGetHeight (image) / 2);
     if (!(flags & MAC_DRAW_CG_IMAGE_OVERLAY))
-      CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, dest_rect, gc);
+      CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (f, context, dest_rect, gc);
     CGContextClipToRects (context, &dest_rect, 1);
     CGContextTranslateCTM (context,
 			   CGRectGetMinX (bounds), CGRectGetMaxY (bounds));
@@ -536,7 +539,7 @@ mac_erase_corners_for_relief (struct frame *f, GC gc, int x, int y,
 	}
     CGContextClosePath (context);
     CGContextClip (context);
-    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, rect, gc);
+    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (f, context, rect, gc);
   }
   MAC_END_DRAW_TO_FRAME (f);
 }
@@ -626,9 +629,16 @@ static void
 mac_change_gc (GC gc, unsigned long mask, XGCValues *xgcv)
 {
   if (mask & GCForeground)
-    XSetForeground (display, gc, xgcv->foreground);
+    mac_set_foreground (gc, xgcv->foreground);
   if (mask & GCBackground)
-    XSetBackground (display, gc, xgcv->background);
+    mac_set_background_and_transparency (gc, xgcv->background,
+					 ((mask & GCBackgroundTransparency)
+					  ? xgcv->background_transparency
+					  : gc->xgcv.background_transparency));
+  else if (mask & GCBackgroundTransparency)
+    /* This case does not happen in the current code.  */
+    mac_set_background_and_transparency (gc, gc->xgcv.background,
+					 xgcv->background_transparency);
 }
 
 
@@ -691,8 +701,27 @@ mac_get_gc_values (GC gc, unsigned long mask, XGCValues *xgcv)
     xgcv->foreground = gc->xgcv.foreground;
   if (mask & GCBackground)
     xgcv->background = gc->xgcv.background;
+  if (mask & GCBackgroundTransparency)
+    xgcv->background_transparency = gc->xgcv.background_transparency;
 }
 
+static CGColorRef
+mac_cg_color_create (unsigned long color, unsigned char transparency)
+{
+  if (color == 0 && transparency == 0)
+    return CGColorRetain (mac_cg_color_black);
+  else
+    {
+      CGFloat rgba[4];
+
+      rgba[0] = (CGFloat) RED_FROM_ULONG (color) / 255.0f;
+      rgba[1] = (CGFloat) GREEN_FROM_ULONG (color) / 255.0f;
+      rgba[2] = (CGFloat) BLUE_FROM_ULONG (color) / 255.0f;
+      rgba[3] = (CGFloat) (255 - transparency) / 255.0f;
+
+      return CGColorCreate (mac_cg_color_space_rgb, rgba);
+    }
+}
 
 /* Mac replacement for XSetForeground.  */
 
@@ -703,54 +732,32 @@ mac_set_foreground (GC gc, unsigned long color)
     {
       gc->xgcv.foreground = color;
       CGColorRelease (gc->cg_fore_color);
-      if (color == 0)
-	{
-	  gc->cg_fore_color = mac_cg_color_black;
-	  CGColorRetain (gc->cg_fore_color);
-	}
-      else
-	{
-	  CGFloat rgba[4];
-
-	  rgba[0] = (CGFloat) RED_FROM_ULONG (color) / 255.0f;
-	  rgba[1] = (CGFloat) GREEN_FROM_ULONG (color) / 255.0f;
-	  rgba[2] = (CGFloat) BLUE_FROM_ULONG (color) / 255.0f;
-	  rgba[3] = 1.0f;
-	  gc->cg_fore_color = CGColorCreate (mac_cg_color_space_rgb, rgba);
-	}
+      gc->cg_fore_color = mac_cg_color_create (color, 0);
     }
 }
 
+static void
+mac_set_background_and_transparency (GC gc, unsigned long color,
+				     unsigned char transparency)
+{
+  if (gc->xgcv.background != color
+      || gc->xgcv.background_transparency != transparency)
+    {
+      gc->xgcv.background = color;
+      gc->xgcv.background_transparency = transparency;
+      CGColorRelease (gc->cg_back_color);
+      gc->cg_back_color = mac_cg_color_create (color, transparency);
+    }
+}
 
 /* Mac replacement for XSetBackground.  */
 
 void
 mac_set_background (GC gc, unsigned long color)
 {
-  if (gc->xgcv.background != color)
-    {
-      CGFloat alpha = CGColorGetAlpha (gc->cg_back_color);
-
-      gc->xgcv.background = color;
-      CGColorRelease (gc->cg_back_color);
-      if (color == 0 && alpha == 1)
-	{
-	  gc->cg_back_color = mac_cg_color_black;
-	  CGColorRetain (gc->cg_back_color);
-	}
-      else
-	{
-	  CGFloat rgba[4];
-
-	  rgba[0] = (CGFloat) RED_FROM_ULONG (color) / 255.0f;
-	  rgba[1] = (CGFloat) GREEN_FROM_ULONG (color) / 255.0f;
-	  rgba[2] = (CGFloat) BLUE_FROM_ULONG (color) / 255.0f;
-	  rgba[3] = alpha;
-	  gc->cg_back_color = CGColorCreate (mac_cg_color_space_rgb, rgba);
-	}
-    }
+  mac_set_background_and_transparency (gc, color,
+				       gc->xgcv.background_transparency);
 }
-
 
 /* Mac replacement for XSetClipRectangles.  */
 
@@ -785,18 +792,6 @@ mac_reset_clip_rectangles (struct frame *f, GC gc)
     {
       CFRelease (gc->clip_rects_data);
       gc->clip_rects_data = NULL;
-    }
-}
-
-static void
-mac_set_background_alpha (GC gc, CGFloat alpha)
-{
-  if (CGColorGetAlpha (gc->cg_back_color) != alpha)
-    {
-      CGColorRef color = CGColorCreateCopyWithAlpha (gc->cg_back_color, alpha);
-
-      CGColorRelease (gc->cg_back_color);
-      gc->cg_back_color = color;
     }
 }
 
@@ -1072,8 +1067,6 @@ x_after_update_window_line (struct window *w, struct glyph_row *desired_row)
   }
 }
 
-#define MAC_FRINGE_BACKGROUND_ALPHA (0.5f)
-
 static void
 x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fringe_bitmap_params *p)
 {
@@ -1084,8 +1077,6 @@ x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fring
 
   /* Must clip because of partially visible lines.  */
   x_clip_to_row (w, row, ANY_AREA, face->gc);
-  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f))
-    mac_set_background_alpha (face->gc, MAC_FRINGE_BACKGROUND_ALPHA);
 
   if (p->bx >= 0 && !overlay_p)
     {
@@ -1130,8 +1121,6 @@ x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fring
     }
 
   mac_reset_clip_rectangles (f, face->gc);
-  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f))
-    mac_set_background_alpha (face->gc, 1);
 }
 
 static void
@@ -2805,7 +2794,8 @@ mac_flash (struct frame *f)
   }
 
   mac_invert_rectangles (f, rects, nrects);
-  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f))
+  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f)
+      && !mac_accessibility_display_options.reduce_transparency_p)
     mac_invalidate_rectangles (f, rects, nrects);
   else
     mac_mask_rounded_bottom_corners (f, clip_rect, false);

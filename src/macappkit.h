@@ -24,6 +24,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #import <QuartzCore/QuartzCore.h>
 #endif
 #import <IOKit/graphics/IOGraphicsLib.h>
+#import <OSAKit/OSAKit.h>
 #define Z (current_buffer->text->z)
 
 #ifndef NSFoundationVersionNumber10_8_3
@@ -131,6 +132,12 @@ typedef id instancetype;
 - (void)runTemporarilyWithInvocation:(NSInvocation *)invocation;
 #endif
 @end
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+@interface NSObject (Emacs)
+- (void)didRunTemporarilyWithInvocation:(NSInvocation *)invocation;
+@end
+#endif
 
 @interface NSScreen (Emacs)
 + (NSScreen *)screenContainingPoint:(NSPoint)aPoint;
@@ -644,6 +651,9 @@ typedef id instancetype;
 - (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
 @end
 
+@interface EmacsOSAScript : OSAScript
+@end
+
 @interface DOMSVGRect : DOMObject
 - (float)x;
 - (float)y;
@@ -1040,6 +1050,14 @@ enum {
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
 @interface NSFileHandle (AvailableOn1060AndLater)
 + (id)fileHandleForReadingFromURL:(NSURL *)url error:(NSError **)error;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 101000
+@interface NSWorkspace (AvailableOn101000AndLater)
+- (BOOL)accessibilityDisplayShouldIncreaseContrast;
+- (BOOL)accessibilityDisplayShouldDifferentiateWithoutColor;
+- (BOOL)accessibilityDisplayShouldReduceTransparency;
 @end
 #endif
 

@@ -2831,7 +2831,7 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
   MAC_BEGIN_DRAW_TO_FRAME (f, gc, context);
 
   if (!CGRectIsNull (background_rect))
-    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, background_rect, gc);
+    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (f, context, background_rect, gc);
 
   if (macfont_info->cgfont)
     {

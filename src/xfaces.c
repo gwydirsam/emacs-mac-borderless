@@ -878,6 +878,9 @@ static ptrdiff_t
 load_pixmap (struct frame *f, Lisp_Object name)
 {
   ptrdiff_t bitmap_id;
+#ifdef HAVE_MACGUI
+  double alpha = -1;
+#endif
 
   if (NILP (name))
     return 0;
@@ -901,10 +904,34 @@ load_pixmap (struct frame *f, Lisp_Object name)
     }
   else
     {
+#ifdef HAVE_MACGUI
+      int nconsumed;
+
+      if (sscanf (SSDATA (name), "alpha : %lf%n", &alpha, &nconsumed) == 1)
+	{
+	  if (nconsumed + 1 == SBYTES (name))
+	    {
+	      if (SREF (name, nconsumed) == '%')
+		alpha /= 100;
+	      else
+		alpha = -1;
+	    }
+	  else if (nconsumed != SBYTES (name))
+	    alpha = -1;
+	  if (alpha > 1)
+	    alpha = -1;
+	}
+      if (alpha < 0)
+#endif
       /* It must be a string -- a file name.  */
       bitmap_id = x_create_bitmap_from_file (f, name);
     }
   unblock_input ();
+
+#ifdef HAVE_MACGUI
+  if (alpha >= 0)
+    return ~((ptrdiff_t) (alpha * 255.0 + 0.5));
+#endif
 
   if (bitmap_id < 0)
     {
@@ -2097,13 +2124,7 @@ lface_fully_specified_p (Lisp_Object attrs[LFACE_VECTOR_SIZE])
   for (i = 1; i < LFACE_VECTOR_SIZE; ++i)
     if (i != LFACE_FONT_INDEX && i != LFACE_INHERIT_INDEX
         && i != LFACE_DISTANT_FOREGROUND_INDEX)
-      if ((UNSPECIFIEDP (attrs[i]) || IGNORE_DEFFACE_P (attrs[i]))
-#ifdef HAVE_MACGUI
-	  /* MAC_TODO: No stipple support on Mac OS yet, this index is
-	     always unspecified.  */
-          && i != LFACE_STIPPLE_INDEX
-#endif
-	  )
+      if ((UNSPECIFIEDP (attrs[i]) || IGNORE_DEFFACE_P (attrs[i])))
 	break;
 
   return i == LFACE_VECTOR_SIZE;
@@ -4168,6 +4189,12 @@ prepare_face_for_display (struct frame *f, struct face *face)
 	  xgcv.fill_style = FillOpaqueStippled;
 	  xgcv.stipple = x_bitmap_pixmap (f, face->stipple);
 	  mask |= GCFillStyle | GCStipple;
+	}
+#elif HAVE_MACGUI
+      if (face->stipple < 0)
+	{
+	  xgcv.background_transparency = face->stipple;
+	  mask |= GCBackgroundTransparency;
 	}
 #endif
       face->gc = x_create_gc (f, mask, &xgcv);

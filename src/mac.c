@@ -2569,6 +2569,61 @@ ASCII-only string literal.  */)
 }
 
 
+Lisp_Object Qapp_name;
+Lisp_Object QCinfo, QCversion, QCsub_type, QCmanufacturer, QCfeatures;
+
+DEFUN ("mac-osa-language-list", Fmac_osa_language_list, Smac_osa_language_list, 0, 1, 0,
+       doc: /* Return a list of available OSA languages.
+If optional arg LONG-FORMAT-P is nil, then each element is a language
+name string.  Otherwise, each element is a cons of a language name and
+a property list of information about the language.
+
+The first element of the result corresponds the default language.  */)
+  (Lisp_Object long_format_p)
+{
+  return mac_osa_language_list (long_format_p);
+}
+
+DEFUN ("mac-osa-script", Fmac_osa_script, Smac_osa_script, 1, MANY, 0,
+       doc: /* Execute SCRIPT as an OSA script.
+SCRIPT is a string specifying an OSA script source code.
+
+Optional 2nd arg LANGUAGE is a string specifying the OSA language in
+which SCRIPT is written.  It should be an element of the result of
+`(mac-osa-language-list)'.  A value of nil means the default language.
+
+Optional 3rd arg SCRIPT-TYPE is currently unused, but reserved for
+future use.  Don't specify any values other than nil for now.
+
+If optional 4th arg VALUE-FORM is nil, then the return value is a
+string in the LANGUAGE source form.  If it is t, then the return value
+is a Lisp representation of the resulting Apple event descriptor (see
+`mac-ae-set-reply-parameter').  The other values are reserved for
+future use.
+
+Optional 5th arg HANDLER-CALL specifies a handler to be called in the
+context of SCRIPT.  If it is a string, then a handler named
+HANDLER-CALL is called together with the arguments ARGS.  Each element
+of ARGS should be a Lisp representation of an Apple event descriptor
+(see `mac-ae-set-reply-parameter').
+
+HANDLER-CALL can be a Lisp representation of an Apple event, packing a
+handler name and arguments as follows:
+
+(let ((script "on show_message(user_message)
+tell application \\"Finder\\" to display dialog user_message
+end show_message")
+      (ae (mac-create-apple-event "ascr" "psbr" '("null"))))
+  (mac-ae-set-parameter ae "snam" '("utf8" . "show_message"))
+  (mac-ae-set-parameter ae "----" '("list" ("utf8" . "Message from my app.")))
+  (mac-osa-script script nil nil nil ae))
+
+usage: (mac-osa-script SCRIPT &optional LANGUAGE SCRIPT-TYPE VALUE-FORM HANDLER-CALL &rest ARGS)  */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  return mac_osa_script (nargs, args);
+}
+
 DEFUN ("mac-coerce-ae-data", Fmac_coerce_ae_data, Smac_coerce_ae_data, 3, 3, 0,
        doc: /* Coerce Apple event data SRC-DATA of type SRC-TYPE to DST-TYPE.
 Each type should be a string of length 4 or the symbol
@@ -3774,6 +3829,13 @@ syms_of_mac (void)
 
   DEFSYM (Qmac_file_alias_p, "mac-file-alias-p");
 
+  DEFSYM (Qapp_name, "app-name");
+  DEFSYM (QCinfo, ":info");
+  DEFSYM (QCversion, ":version");
+  DEFSYM (QCsub_type, ":sub-type");
+  DEFSYM (QCmanufacturer, ":manufacturer");
+  DEFSYM (QCfeatures, ":features");
+
   DEFSYM (Qxml, "xml");
   DEFSYM (Qxml1, "xml1");
   DEFSYM (Qbinary1, "binary1");
@@ -3794,6 +3856,8 @@ syms_of_mac (void)
       DEFSYM (ae_attr_table[i].symbol, ae_attr_table[i].name);
   }
 
+  defsubr (&Smac_osa_language_list);
+  defsubr (&Smac_osa_script);
   defsubr (&Smac_coerce_ae_data);
   defsubr (&Smac_get_preference);
   defsubr (&Smac_convert_property_list);

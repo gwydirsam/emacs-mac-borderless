@@ -1,5 +1,36 @@
+* emacs-24.4-mac-5.1 (2014-11-03)
+
+** Fixed bugs
+
+*** "C-_" on JIS keyboard is recognized as "_".
+Reported by OHKAWA Yuichi.
+
+*** Checking "Reduce translucency" in the Accessibility pane in the
+System Preferences on OS X 10.10 makes fringe areas translucent.
+Reported by Nicholas Riley.
+
+** Improvements
+
+*** Blend-and-blur of fringe background on OS X 10.10 is no longer
+hard-coded.  It can be customized per face by specifying a special
+name `alpha:ALPHA' as a value of the background stipple attribute.
+For example,
+  (set-face-stipple 'fringe "alpha:50%")
+or
+  defaults write org.gnu.Emacs Emacs.fringe.attributeStipple alpha:.5
+will (mostly) recover the appearance of the previous release.
+Note: Setting stipple for the default face may not work as you expect.
+This is the same limitation as the standard stipple feature on X11.
+Also, blend-and-blur is temporarily turned off during animations.
+
+*** New experimental functions `mac-osa-language-list' and
+`mac-osa-script'.  The latter is like `do-applescript', but can
+execute JavaScript as well as AppleScript on OS X 10.10.
+
+
 * emacs-24.4-mac-5.0 (2014-10-21)
 Based on Emacs 24.4.
+http://lists.gnu.org/archive/html/emacs-devel/2014-10/msg00725.html
 
 ** Fixed bugs
 

@@ -101,11 +101,14 @@ typedef CGGlyph XChar2b;
 #endif
 #endif
 
-/* Emulate X GC's by keeping color and font info in a structure.  */
+/* Emulate X GC's by keeping color info in a structure.  */
 typedef struct _XGCValues
 {
-  unsigned long foreground;
-  unsigned long background;
+  unsigned foreground : 32;
+  unsigned background : 24;
+
+  /* Background transparency: 0 = opaque, 255 = transparent.  */
+  unsigned background_transparency : 8;
 } XGCValues;
 
 typedef struct _XGC
@@ -129,6 +132,7 @@ typedef struct _XGC
 #define GCForeground            (1L<<2)
 #define GCBackground            (1L<<3)
 #define GCGraphicsExposures	0
+#define GCBackgroundTransparency (1L<<16)
 
 /* Bit Gravity */
 

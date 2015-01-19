@@ -643,6 +643,9 @@ get_srgb_color_space (void)
 - (void)stopAfterInvocation:(NSInvocation *)invocation
 {
   [invocation invoke];
+  if ([[invocation target]
+	respondsToSelector:@selector(didRunTemporarilyWithInvocation:)])
+    [[invocation target] didRunTemporarilyWithInvocation:invocation];
   [self stop:nil];
   [self postDummyEvent];
 }
@@ -1389,6 +1392,8 @@ static NSMethodSignature *services_handler_signature (void);
 static void handle_action_invocation (NSInvocation *);
 static void handle_services_invocation (NSInvocation *);
 
+static void mac_update_accessibility_display_options (void);
+
 @implementation EmacsApplication
 
 /* Don't use the "applicationShouldTerminate: - NSTerminateLater -
@@ -1597,6 +1602,20 @@ static void handle_services_invocation (NSInvocation *);
        selector:@selector(antialiasThresholdDidChange:)
 	   name:NSAntialiasThresholdChangedNotification
 	 object:nil];
+
+  if ([NSWorkspace instancesRespondToSelector:@selector(accessibilityDisplayShouldIncreaseContrast)])
+    {
+      mac_update_accessibility_display_options ();
+      [[[NSWorkspace sharedWorkspace] notificationCenter]
+	addObserver:self
+	   selector:@selector(accessibilityDisplayOptionsDidChange:)
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101000
+	       name:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+#else
+	       name:@"NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification"
+#endif
+	     object:nil];
+    }
 
   if ([NSApp respondsToSelector:@selector(registerUserInterfaceItemSearchHandler:)])
     {
@@ -5217,23 +5236,30 @@ get_text_input_script_language (ScriptLanguageRecord *slrec)
 
   if (rawKeyEvent && ![self hasMarkedText])
     {
-      unichar character;
-
-      if (rawKeyEventHasMappedFlags
-	  || [rawKeyEvent type] == NSKeyUp
-	  || ([aString isKindOfClass:[NSString class]]
-	      && [aString isEqualToString:[rawKeyEvent characters]]
-	      && [(NSString *)aString length] == 1
-	      && ((character = [aString characterAtIndex:0]) < 0x80
-		  /* NSEvent reserves the following Unicode characters
-		     for function keys on the keyboard.  */
-		  || (character >= 0xf700 && character <= 0xf74f))))
+      if (rawKeyEventHasMappedFlags || [rawKeyEvent type] == NSKeyUp)
+	keyEventsInterpreted = NO;
+      else if ([aString isKindOfClass:[NSString class]])
 	{
-	  /* Process it in keyDown:.  */
-	  keyEventsInterpreted = NO;
+	  if ([aString isEqualToString:[rawKeyEvent characters]])
+	    {
+	      unichar character;
 
-	  return;
+	      if ([(NSString *)aString length] == 1
+		  && ((character = [aString characterAtIndex:0]) < 0x80
+		      /* NSEvent reserves the following Unicode
+			 characters for function keys on the
+			 keyboard.  */
+		      || (character >= 0xf700 && character <= 0xf74f)))
+		keyEventsInterpreted = NO;
+	    }
+	  else if ([rawKeyEvent keyCode] == 0x5E /* kVK_JIS_Underscore */
+		   /* "C-_" on JIS keyboard is recognized as "_".  */
+		   && [aString isEqualToString:@"_"])
+	    keyEventsInterpreted = NO;
 	}
+      if (!keyEventsInterpreted)
+	/* Process it in keyDown:.  */
+	return;
     }
 
   [self setMarkedText:nil];
@@ -10673,18 +10699,19 @@ static const CFArrayCallBacks
 cfarray_event_ref_callbacks = {0, cfarray_event_ref_retain,
 			       cfarray_event_ref_release, NULL, NULL};
 
-long
-mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
+static void
+mac_begin_defer_key_events (void)
 {
-  long retval;
-  EventQueueRef queue;
-  CFIndex index, count;
-
   deferred_key_events = CFArrayCreateMutable (NULL, 0,
 					      &cfarray_event_ref_callbacks);
-  retval = [emacsController doAppleScript:script result:result];
-  queue = GetMainEventQueue ();
-  count = CFArrayGetCount (deferred_key_events);
+}
+
+static void
+mac_end_defer_key_events (void)
+{
+  EventQueueRef queue = GetMainEventQueue ();
+  CFIndex index, count = CFArrayGetCount (deferred_key_events);
+
   for (index = 0; index < count; index++)
     {
       EventRef event = (EventRef) CFArrayGetValueAtIndex (deferred_key_events,
@@ -10694,8 +10721,455 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
     }
   CFRelease (deferred_key_events);
   deferred_key_events = NULL;
+}
+
+long
+mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
+{
+  long retval;
+
+  mac_begin_defer_key_events ();
+  retval = [emacsController doAppleScript:script result:result];
+  mac_end_defer_key_events ();
 
   return retval;
+}
+
+
+/***********************************************************************
+		 Open Scripting Architecture support
+***********************************************************************/
+
+@implementation EmacsOSAScript
+
+- (NSAppleEventDescriptor *)executeAndReturnError:(NSDictionary **)errorInfo
+{
+  if ([NSApp isRunning])
+    return [super executeAndReturnError:errorInfo];
+  else
+    {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      NSAppleEventDescriptor * __block result;
+      NSDictionary * __block errorInfo1;
+
+      [NSApp runTemporarilyWithBlock:^{
+	  result = [self executeAndReturnError:&errorInfo1];
+	  if (result == nil)
+	    MRC_RETAIN (errorInfo1);
+
+	  MRC_RETAIN (result);
+	}];
+
+      if (result == nil)
+	*errorInfo = MRC_AUTORELEASE (errorInfo1);
+
+      return MRC_AUTORELEASE (result);
+#else
+      NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
+      NSInvocation *invocation =
+	[NSInvocation invocationWithMethodSignature:signature];
+      NSAppleEventDescriptor *result;
+
+      [invocation setTarget:self];
+      [invocation setSelector:_cmd];
+      [invocation setArgument:&errorInfo atIndex:2];
+
+      [NSApp runTemporarilyWithInvocation:invocation];
+
+      [invocation getReturnValue:&result];
+
+      /* It is retained in didRunTemporarilyWithInvocation:. */
+      if (result == nil)
+	[*errorInfo autorelease];
+
+      return [result autorelease];
+#endif
+    }
+}
+
+- (NSAppleEventDescriptor *)executeAndReturnDisplayValue:(NSAttributedString **)displayValue error:(NSDictionary **)errorInfo
+{
+  if ([NSApp isRunning])
+    return [super executeAndReturnDisplayValue:displayValue error:errorInfo];
+  else
+    {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      NSAppleEventDescriptor * __block result;
+      NSAttributedString * __block displayValue1;
+      NSDictionary * __block errorInfo1;
+
+      [NSApp runTemporarilyWithBlock:^{
+	  result = [self executeAndReturnDisplayValue:&displayValue1
+						error:&errorInfo1];
+	  if (result)
+	    MRC_RETAIN (displayValue1);
+	  else
+	    MRC_RETAIN (errorInfo1);
+
+	  MRC_RETAIN (result);
+	}];
+
+      if (result)
+	*displayValue = MRC_AUTORELEASE (displayValue1);
+      else
+	*errorInfo = MRC_AUTORELEASE (errorInfo1);
+
+      return MRC_AUTORELEASE (result);
+#else
+      NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
+      NSInvocation *invocation =
+	[NSInvocation invocationWithMethodSignature:signature];
+      NSAppleEventDescriptor *result;
+
+      [invocation setTarget:self];
+      [invocation setSelector:_cmd];
+      [invocation setArgument:&displayValue atIndex:2];
+      [invocation setArgument:&errorInfo atIndex:3];
+
+      [NSApp runTemporarilyWithInvocation:invocation];
+
+      [invocation getReturnValue:&result];
+
+      /* They are retained in didRunTemporarilyWithInvocation:. */
+      if (result)
+	[*displayValue autorelease];
+      else
+	[*errorInfo autorelease];
+
+      return [result autorelease];
+#endif
+    }
+}
+
+- (NSAppleEventDescriptor *)executeAppleEvent:(NSAppleEventDescriptor *)event error:(NSDictionary **)errorInfo;
+{
+  if ([NSApp isRunning])
+    return [super executeAppleEvent:event error:errorInfo];
+  else
+    {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+      NSAppleEventDescriptor * __block result;
+      NSDictionary * __block errorInfo1;
+
+      [NSApp runTemporarilyWithBlock:^{
+	  result = [self executeAppleEvent:event error:&errorInfo1];
+	  if (result == nil)
+	    MRC_RETAIN (errorInfo1);
+
+	  MRC_RETAIN (result);
+	}];
+
+      if (result == nil)
+	*errorInfo = MRC_AUTORELEASE (errorInfo1);
+
+      return MRC_AUTORELEASE (result);
+#else
+      NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
+      NSInvocation *invocation =
+	[NSInvocation invocationWithMethodSignature:signature];
+      NSAppleEventDescriptor *result;
+
+      [invocation setTarget:self];
+      [invocation setSelector:_cmd];
+      [invocation setArgument:&event atIndex:2];
+      [invocation setArgument:&errorInfo atIndex:3];
+
+      [NSApp runTemporarilyWithInvocation:invocation];
+
+      [invocation getReturnValue:&result];
+
+      /* It is retained in didRunTemporarilyWithInvocation:. */
+      if (result == nil)
+	[*errorInfo autorelease];
+
+      return [result autorelease];
+#endif
+    }
+}
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1060
+- (void)didRunTemporarilyWithInvocation:(NSInvocation *)invocation
+{
+  NSAppleEventDescriptor *result;
+  NSAttributedString **displayValue;
+  NSDictionary **errorInfo;
+  SEL selector = [invocation selector];
+
+  if (selector == @selector(executeAndReturnError:))
+    {
+      [invocation getReturnValue:&result];
+      if (result == nil)
+	{
+	  [invocation getArgument:&errorInfo atIndex:2];
+	  [*errorInfo retain];
+	}
+      [result retain];
+    }
+  else if (selector == @selector(executeAndReturnDisplayValue:error:))
+    {
+      [invocation getReturnValue:&result];
+      if (result)
+	{
+	  [invocation getArgument:&displayValue atIndex:2];
+	  [*displayValue retain];
+	}
+      else
+	{
+	  [invocation getArgument:&errorInfo atIndex:3];
+	  [*errorInfo retain];
+	}
+      [result retain];
+    }
+  else if (selector == @selector(executeAppleEvent:error:))
+    {
+      [invocation getReturnValue:&result];
+      if (result == nil)
+	{
+	  [invocation getArgument:&errorInfo atIndex:3];
+	  [*errorInfo retain];
+	}
+      [result retain];
+    }
+}
+#endif
+
+@end				// EmacsOSAScript
+
+Lisp_Object
+mac_osa_language_list (Lisp_Object long_format_p)
+{
+  Lisp_Object result = Qnil, default_language_props = Qnil;
+  NSEnumerator *enumerator;
+  OSALanguage *defaultLanguage, *language;
+
+  block_input ();
+  defaultLanguage = [OSALanguage defaultLanguage];
+  enumerator = [[OSALanguage availableLanguages] objectEnumerator];
+  while ((language = [enumerator nextObject]) != nil)
+    {
+      Lisp_Object language_props = [[language name] lispString];
+
+      if (!NILP (long_format_p))
+	{
+	  Lisp_Object tmp = list2 (QCfeatures,
+				   make_number ([language features]));
+
+	  tmp = Fcons (QCmanufacturer,
+		       Fcons (mac_four_char_code_to_string ([language
+							      manufacturer]),
+			      tmp));
+	  tmp = Fcons (QCsub_type,
+		       Fcons (mac_four_char_code_to_string ([language subType]),
+			      tmp));
+	  tmp = Fcons (QCtype,
+		       Fcons (mac_four_char_code_to_string ([language type]),
+			      tmp));
+	  tmp = Fcons (QCversion, Fcons ([[language version] lispString], tmp));
+	  tmp = Fcons (QCinfo, Fcons ([[language info] lispString], tmp));
+	  language_props = Fcons (language_props, tmp);
+	}
+      if (![language isEqual:defaultLanguage])
+	result = Fcons (language_props, result);
+      else
+	default_language_props = language_props;
+    }
+  if (!NILP (default_language_props))
+    result = Fcons (default_language_props, result);
+  unblock_input ();
+
+  return result;
+}
+
+static NSAppleEventDescriptor *
+mac_apple_event_descriptor_with_handler_call (Lisp_Object handler_call,
+					      ptrdiff_t nargs,
+					      Lisp_Object *args)
+{
+  NSAppleEventDescriptor *result = nil;
+
+  if (STRINGP (handler_call))
+    {
+      AEDescList param_list;
+
+      if (AECreateList (NULL, 0, false, &param_list) == noErr)
+	{
+	  ptrdiff_t i;
+	  NSAppleEventDescriptor *parameters, *target, *handler;
+	  NSString *handlerName;
+
+	  for (i = 0; i < nargs; i++)
+	    mac_ae_put_lisp (&param_list, i, args[i]);
+
+	  target = [NSAppleEventDescriptor nullDescriptor];
+	  result = [NSAppleEventDescriptor
+		     appleEventWithEventClass:kASAppleScriptSuite
+				      eventID:kASSubroutineEvent
+			     targetDescriptor:target
+				     returnID:kAutoGenerateReturnID
+				transactionID:kAnyTransactionID];
+	  handlerName = [NSString stringWithLispString:handler_call];
+	  handler = [NSAppleEventDescriptor descriptorWithString:handlerName];
+	  [result setDescriptor:handler forKeyword:keyASSubroutineName];
+	  parameters = [[NSAppleEventDescriptor alloc]
+			 initWithAEDescNoCopy:&param_list];
+	  [result setDescriptor:parameters forKeyword:keyDirectObject];
+	  MRC_RELEASE (parameters);
+	}
+    }
+  else
+    {
+      AppleEvent apple_event;
+
+      if (create_apple_event_from_lisp (handler_call, &apple_event) == noErr)
+	result = MRC_AUTORELEASE ([[NSAppleEventDescriptor alloc]
+				    initWithAEDescNoCopy:&apple_event]);
+    }
+
+  return result;
+}
+
+Lisp_Object
+mac_osa_script (ptrdiff_t nargs, Lisp_Object *args)
+{
+  Lisp_Object result, script, language, script_type, value_form, handler_call;
+  OSALanguage *osaLanguage = nil;
+  OSAScript *osaScript;
+  NSDictionary *errorInfo;
+  NSAppleEventDescriptor *event = nil, *desc = nil;
+  NSAttributedString *displayValue;
+
+  nargs--;
+  script = *args++;
+  CHECK_STRING (script);
+  if (nargs <= 0)
+    language = Qnil;
+  else
+    {
+      nargs--;
+      language = *args++;
+      if (!NILP (language))
+	CHECK_STRING (language);
+    }
+  if (nargs <= 0)
+    script_type = Qnil;
+  else
+    {
+      nargs--;
+      script_type = *args++;
+      if (!NILP (script_type))
+	signal_error ("Non-nil SCRIPT-TYPE is reserved for future use",
+		      script_type);
+    }
+  if (nargs <= 0)
+    value_form = Qnil;
+  else
+    {
+      nargs--;
+      value_form = *args++;
+      if (!NILP (value_form) && !EQ (value_form, Qt))
+	signal_error ("VALUE-FORM should be nil or t", value_form);
+    }
+  if (nargs <= 0)
+    handler_call = Qnil;
+  else
+    {
+      nargs--;
+      handler_call = *args++;
+    }
+
+  block_input ();
+
+  if (!NILP (language))
+    {
+      osaLanguage = [OSALanguage
+		      languageForName:[NSString stringWithLispString:language]];
+      if (osaLanguage == nil)
+	{
+	  unblock_input ();
+	  error ("OSA language `%s' not available", SDATA (language));
+	}
+    }
+
+  if (!inhibit_window_system)
+    osaScript = [[EmacsOSAScript alloc]
+		  initWithSource:[NSString stringWithLispString:script]];
+  else
+    osaScript = [[OSAScript alloc]
+		  initWithSource:[NSString stringWithLispString:script]];
+
+  if (osaScript == nil)
+    {
+      unblock_input ();
+      error ("Can't create OSA script from source `%s'", SDATA (script));
+    }
+  if (osaLanguage)
+    [osaScript setLanguage:osaLanguage];
+
+  if (!NILP (handler_call))
+    {
+      event = mac_apple_event_descriptor_with_handler_call (handler_call,
+							    nargs, args);
+      if (event == nil)
+	{
+	  unblock_input ();
+	  signal_error ("Can't create Apple event from handler call",
+			handler_call);
+	}
+    }
+
+  if ([osaScript compileAndReturnError:&errorInfo])
+    {
+      mac_begin_defer_key_events ();
+      if (event)
+	{
+	  desc = [osaScript executeAppleEvent:event error:&errorInfo];
+	  if (desc && NILP (value_form))
+	    displayValue = [osaScript richTextFromDescriptor:desc];
+	}
+      else if (NILP (value_form))
+	desc = [osaScript executeAndReturnDisplayValue:&displayValue
+						 error:&errorInfo];
+      else
+	desc = [osaScript executeAndReturnError:&errorInfo];
+      MRC_RELEASE (osaScript);
+      mac_end_defer_key_events ();
+    }
+
+  if (desc == nil)
+    {
+      NSString *errorMessage = [errorInfo objectForKey:OSAScriptErrorMessage];
+      NSNumber *errorNumber = [errorInfo objectForKey:OSAScriptErrorNumber];
+      NSString *errorAppName = [errorInfo objectForKey:OSAScriptErrorAppName];
+      NSValue *errorRange = [errorInfo objectForKey:OSAScriptErrorRange];
+      Lisp_Object data = Qnil;
+
+      if (errorRange)
+	{
+	  NSRange range = [errorRange rangeValue];
+
+	  data = Fcons (Fcons (Qrange, Fcons (make_number (range.location),
+					      make_number (range.length))),
+			data);
+	}
+      if (errorAppName)
+	data = Fcons (Fcons (Qapp_name, [errorAppName lispString]), data);
+      if (errorNumber)
+	data = Fcons (Fcons (Qnumber, make_number ([errorNumber intValue])),
+		      data);
+      data = Fcons (errorMessage ? [errorMessage lispString]
+		    : build_string ("OSA script error"), data);
+      unblock_input ();
+      Fsignal (Qerror, data);
+    }
+
+  if (NILP (value_form))
+    result = [[displayValue string] lispString];
+  else
+    result = mac_aedesc_to_lisp ([desc aeDesc]);
+
+  unblock_input ();
+
+  return result;
 }
 
 
@@ -11951,6 +12425,30 @@ init_accessibility (void)
   ax_selected_text_changed_notification =
     NSAccessibilitySelectedTextChangedNotification;
 }
+
+@implementation EmacsController (Accessibility)
+
+- (void)accessibilityDisplayOptionsDidChange:(NSNotification *)notification
+{
+  mac_update_accessibility_display_options ();
+}
+
+struct mac_accessibility_display_options mac_accessibility_display_options;
+
+static void
+mac_update_accessibility_display_options (void)
+{
+  NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+
+  mac_accessibility_display_options.increase_contrast_p =
+    [workspace accessibilityDisplayShouldIncreaseContrast];
+  mac_accessibility_display_options.differentiate_without_color_p =
+    [workspace accessibilityDisplayShouldDifferentiateWithoutColor];
+  mac_accessibility_display_options.reduce_transparency_p =
+    [workspace accessibilityDisplayShouldReduceTransparency];
+}
+
+@end				// EmacsController (Accessibility)
 
 @implementation EmacsMainView (Accessibility)
 
