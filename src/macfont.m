@@ -2771,7 +2771,7 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
   text_position = CGPointMake (x, -y);
   glyphs = xmalloc (sizeof (CGGlyph) * len);
   {
-    CGFloat advance_delta;
+    CGFloat advance_delta = 0;
     int i;
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     CGFloat total_width = 0;
@@ -2792,7 +2792,6 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
       }
 #else
     advances = alloca (sizeof (CGSize) * len);
-    advance_delta = 0;
     for (i = len - 1; i >= 0; i--)
       {
 	int width;

@@ -1117,7 +1117,7 @@ pixels.  POSITION should be a list of the form returned by
   "Return the nominal column and row in POSITION, measured in characters.
 The column and row values are approximations calculated from the x
 and y coordinates in POSITION and the frame's default character width
-and height.
+and default line height, including spacing.
 For a scroll-bar event, the result column is 0, and the row
 corresponds to the vertical position of the click in the scroll bar.
 POSITION should be a list of the form returned by the `event-start'
@@ -2006,6 +2006,7 @@ If optional CONFIRM is non-nil, read the password twice to make sure.
 Optional DEFAULT is a default password to use instead of empty input.
 
 This function echoes `.' for each character that the user types.
+Note that in batch mode, the input is not hidden!
 
 Once the caller uses the password, it can erase the password
 by doing (clear-string STRING)."
@@ -2045,7 +2046,11 @@ by doing (clear-string STRING)."
             (add-hook 'after-change-functions hide-chars-fun nil 'local))
         (unwind-protect
             (let ((enable-recursive-minibuffers t))
-              (read-string prompt nil t default)) ; t = "no history"
+              (read-string
+               (if noninteractive
+                   (format "%s[INPUT WILL NOT BE HIDDEN!] " prompt) ; bug#17839
+                 prompt)
+               nil t default)) ; t = "no history"
           (when (buffer-live-p minibuf)
             (with-current-buffer minibuf
               ;; Not sure why but it seems that there might be cases where the
@@ -2151,6 +2156,10 @@ where the optional arg MILLISECONDS specifies an additional wait period,
 in milliseconds; this was useful when Emacs was built without
 floating point support."
   (declare (advertised-calling-convention (seconds &optional nodisp) "22.1"))
+  ;; This used to be implemented in C until the following discussion:
+  ;; http://lists.gnu.org/archive/html/emacs-devel/2006-07/msg00401.html
+  ;; Then it was moved to C using an implementation based on an idle timer,
+  ;; which was then replaced by the use of read-event.
   (if (numberp nodisp)
       (setq seconds (+ seconds (* 1e-3 nodisp))
             nodisp obsolete)
@@ -2168,7 +2177,12 @@ floating point support."
     ;; FIXME: we should not read-event here at all, because it's much too
     ;; difficult to reliably "undo" a read-event by pushing it onto
     ;; unread-command-events.
-    (let ((read (read-event nil t seconds)))
+    ;; For bug#14782, we need read-event to do the keyboard-coding-system
+    ;; decoding (hence non-nil as second arg under POSIX ttys).
+    ;; For bug#15614, we need read-event not to inherit-input-method.
+    ;; So we temporarily suspend input-method-function.
+    (let ((read (let ((input-method-function nil))
+                  (read-event nil t seconds))))
       (or (null read)
 	  (progn
 	    ;; If last command was a prefix arg, e.g. C-u, push this event onto
@@ -4301,6 +4315,7 @@ lookup sequence then continues."
           (lambda ()
             (with-demoted-errors "set-transient-map PCH: %S"
               (unless (cond
+                       ((null keep-pred) nil)
                        ((not (eq map (cadr overriding-terminal-local-map)))
                         ;; There's presumably some other transient-map in
                         ;; effect.  Wait for that one to terminate before we
@@ -4313,7 +4328,6 @@ lookup sequence then continues."
                         ;; C-u and that 1 exits isearch whereas it doesn't
                         ;; exit C-u.
                         t)
-                       ((null keep-pred) nil)
                        ((eq t keep-pred)
                         (eq this-command
                             (lookup-key map (this-command-keys-vector))))

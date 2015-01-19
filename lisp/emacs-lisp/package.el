@@ -113,8 +113,6 @@
 
 ;;; ToDo:
 
-;; - a trust mechanism, since compiling a package can run arbitrary code.
-;;   For example, download package signatures and check that they match.
 ;; - putting info dirs at the start of the info path means
 ;;   users see a weird ordering of categories.  OTOH we want to
 ;;   override later entries.  maybe emacs needs to enforce
@@ -229,18 +227,25 @@ a package can run arbitrary code."
   :version "24.1")
 
 (defcustom package-pinned-packages nil
-  "An alist of packages that are pinned to a specific archive
+  "An alist of packages that are pinned to specific archives.
+This can be useful if you have multiple package archives enabled,
+and want to control which archive a given package gets installed from.
 
-Each element has the form (SYM . ID).
- SYM is a package, as a symbol.
- ID is an archive name. This should correspond to an
- entry in `package-archives'.
+Each element of the alist has the form (PACKAGE . ARCHIVE), where:
+ PACKAGE is a symbol representing a package
+ ARCHIVE is a string representing an archive (it should be the car of
+an element in `package-archives', e.g. \"gnu\").
 
-If the archive of name ID does not contain the package SYM, no
-other location will be considered, which will make the
-package unavailable."
+Adding an entry to this variable means that only ARCHIVE will be
+considered as a source for PACKAGE.  If other archives provide PACKAGE,
+they are ignored (for this package).  If ARCHIVE does not contain PACKAGE,
+the package will be unavailable."
   :type '(alist :key-type (symbol :tag "Package")
                 :value-type (string :tag "Archive name"))
+  ;; I don't really see why this is risky...
+  ;; I suppose it could prevent you receiving updates for a package,
+  ;; via an entry (PACKAGE . NON-EXISTING).  Which could be an issue
+  ;; if PACKAGE has a known vulnerability that is fixed in newer versions.
   :risky t
   :group 'package
   :version "24.4")
@@ -285,20 +290,25 @@ contrast, `package-user-dir' contains packages for personal use."
   :version "24.1")
 
 (defcustom package-check-signature 'allow-unsigned
-  "Whether to check package signatures when installing."
+  "Non-nil means to check package signatures when installing.
+The value `allow-unsigned' means to still install a package even if
+it is unsigned.
+
+This also applies to the \"archive-contents\" file that lists the
+contents of the archive."
   :type '(choice (const nil :tag "Never")
 		 (const allow-unsigned :tag "Allow unsigned")
 		 (const t :tag "Check always"))
   :risky t
   :group 'package
-  :version "24.1")
+  :version "24.4")
 
 (defcustom package-unsigned-archives nil
-  "A list of archives which do not use package signature."
+  "List of archives where we do not check for package signatures."
   :type '(repeat (string :tag "Archive name"))
   :risky t
   :group 'package
-  :version "24.1")
+  :version "24.4")
 
 (defvar package--default-summary "No description available.")
 
@@ -805,14 +815,20 @@ GnuPG keyring is located under \"gnupg\" in `package-user-dir'."
 			(buffer-string))))
     (epg-context-set-home-directory context homedir)
     (epg-verify-string context sig-content (buffer-string))
-    ;; The .sig file may contain multiple signatures.  Success if one
-    ;; of the signatures is good.
-    (let ((good-signatures
-           (delq nil (mapcar (lambda (sig)
-                               (if (eq (epg-signature-status sig) 'good)
-                                   sig))
-                             (epg-context-result-for context 'verify)))))
-      (if (null good-signatures)
+    (let (good-signatures had-fatal-error)
+      ;; The .sig file may contain multiple signatures.  Success if one
+      ;; of the signatures is good.
+      (dolist (sig (epg-context-result-for context 'verify))
+	(if (eq (epg-signature-status sig) 'good)
+	    (push sig good-signatures)
+	  ;; If package-check-signature is allow-unsigned, don't
+	  ;; signal error when we can't verify signature because of
+	  ;; missing public key.  Other errors are still treated as
+	  ;; fatal (bug#17625).
+	  (unless (and (eq package-check-signature 'allow-unsigned)
+		       (eq (epg-signature-status sig) 'no-pubkey))
+	    (setq had-fatal-error t))))
+      (if (and (null good-signatures) had-fatal-error)
           (error "Failed to verify signature %s: %S"
                  sig-file
                  (mapcar #'epg-signature-to-string
@@ -1254,10 +1270,7 @@ similar to an entry in `package-alist'.  Save the cached copy to
       ;; may fetch a URL redirect page).
       (when (listp (read (current-buffer)))
 	(make-directory dir t)
-	(setq buffer-file-name (expand-file-name file dir))
-	(let ((version-control 'never)
-              (require-final-newline nil))
-	  (save-buffer))))
+        (write-region nil nil (expand-file-name file dir) nil 'silent)))
     (when good-signatures
       ;; Write out good signatures into archive-contents.signed file.
       (write-region (mapconcat #'epg-signature-to-string good-signatures "\n")
@@ -1503,11 +1516,13 @@ If optional arg NO-ACTIVATE is non-nil, don't activate packages."
                      (package--with-work-buffer
                          (package-archive-base desc)
                          (format "%s-readme.txt" name)
-                       (setq buffer-file-name
-                             (expand-file-name readme package-user-dir))
-                       (let ((version-control 'never)
-                             (require-final-newline t))
-                         (save-buffer))
+                       (save-excursion
+                         (goto-char (point-max))
+                         (unless (bolp)
+                           (insert ?\n)))
+                       (write-region nil nil
+                                     (expand-file-name readme package-user-dir)
+                                     nil 'silent)
                        (setq readme-string (buffer-string))
                        t))
 		 (error nil))
@@ -1642,6 +1657,9 @@ package PKG-DESC, add one.  The alist is keyed with PKG-DESC."
 (defvar package-list-unversioned nil
   "If non-nil include packages that don't have a version in `list-package'.")
 
+(defvar package-list-unsigned nil
+  "If non-nil, mention in the list which packages were installed w/o signature.")
+
 (defun package-desc-status (pkg-desc)
   (let* ((name (package-desc-name pkg-desc))
          (dir (package-desc-dir pkg-desc))
@@ -1662,9 +1680,8 @@ package PKG-DESC, add one.  The alist is keyed with PKG-DESC."
      (dir                               ;One of the installed packages.
       (cond
        ((not (file-exists-p (package-desc-dir pkg-desc))) "deleted")
-       ((eq pkg-desc (cadr (assq name package-alist))) (if signed
-							   "installed"
-							 "unsigned"))
+       ((eq pkg-desc (cadr (assq name package-alist)))
+        (if (or (not package-list-unsigned) signed) "installed" "unsigned"))
        (t "obsolete")))
      (t
       (let* ((ins (cadr (assq name package-alist)))
@@ -1674,9 +1691,9 @@ package PKG-DESC, add one.  The alist is keyed with PKG-DESC."
           (if (memq name package-menu--new-package-list)
               "new" "available"))
          ((version-list-< version ins-v) "obsolete")
-         ((version-list-= version ins-v) (if signed
-					     "installed"
-					   "unsigned"))))))))
+         ((version-list-= version ins-v)
+          (if (or (not package-list-unsigned) signed)
+              "installed" "unsigned"))))))))
 
 (defun package-menu--refresh (&optional packages keywords)
   "Re-populate the `tabulated-list-entries'.

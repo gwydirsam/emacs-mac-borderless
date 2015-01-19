@@ -2931,9 +2931,16 @@ cleanup_vector (struct Lisp_Vector *vector)
       && ((vector->header.size & PSEUDOVECTOR_SIZE_MASK)
 	  == FONT_OBJECT_MAX))
     {
-      /* Attempt to catch subtle bugs like Bug#16140.  */
-      eassert (valid_font_driver (((struct font *) vector)->driver));
-      ((struct font *) vector)->driver->close ((struct font *) vector);
+      struct font_driver *drv = ((struct font *) vector)->driver;
+
+      /* The font driver might sometimes be NULL, e.g. if Emacs was
+	 interrupted before it had time to set it up.  */
+      if (drv)
+	{
+	  /* Attempt to catch subtle bugs like Bug#16140.  */
+	  eassert (valid_font_driver (drv));
+	  drv->close ((struct font *) vector);
+	}
     }
 }
 
@@ -7011,7 +7018,6 @@ union
   enum CHECK_LISP_OBJECT_TYPE CHECK_LISP_OBJECT_TYPE;
   enum DEFAULT_HASH_SIZE DEFAULT_HASH_SIZE;
   enum enum_USE_LSB_TAG enum_USE_LSB_TAG;
-  enum FLOAT_TO_STRING_BUFSIZE FLOAT_TO_STRING_BUFSIZE;
   enum Lisp_Bits Lisp_Bits;
   enum Lisp_Compiled Lisp_Compiled;
   enum maxargs maxargs;

@@ -81,8 +81,6 @@ CF_AUTORELEASE (CFTypeRef X)
 			       General
  ************************************************************************/
 
-extern Lisp_Object Qdictionary;
-
 enum {
   ANY_MOUSE_EVENT_MASK = (NSLeftMouseDownMask | NSLeftMouseUpMask
 			  | NSRightMouseDownMask | NSRightMouseUpMask
@@ -117,6 +115,8 @@ enum {
 #define CA_TRANSITION	CATransition
 #define CA_MEDIA_TIMING_FUNCTION CAMediaTimingFunction
 #define NS_ANIMATION_CONTEXT NSAnimationContext
+#define CA_CONSTRAINT	CAConstraint
+#define CA_CONSTRAINT_LAYOUT_MANAGER	CAConstraintLayoutManager
 #else
 #define CA_LAYER	(NSClassFromString (@"CALayer"))
 #define CA_TRANSACTION	(NSClassFromString (@"CATransaction"))
@@ -124,6 +124,8 @@ enum {
 #define CA_TRANSITION	(NSClassFromString (@"CATransition"))
 #define CA_MEDIA_TIMING_FUNCTION (NSClassFromString (@"CAMediaTimingFunction"))
 #define NS_ANIMATION_CONTEXT (NSClassFromString (@"NSAnimationContext"))
+#define CA_CONSTRAINT	(NSClassFromString (@"CAConstraint"))
+#define CA_CONSTRAINT_LAYOUT_MANAGER (NSClassFromString (@"CAConstraintLayoutManager"))
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
@@ -191,14 +193,14 @@ NSSizeToCGSize (NSSize nssize)
 
 /* Return a string created from the Lisp string.  May cause GC.  */
 
-+ (id)stringWithLispString:(Lisp_Object)lispString
++ (instancetype)stringWithLispString:(Lisp_Object)lispString
 {
   return CF_BRIDGING_RELEASE (cfstring_create_with_string (lispString));
 }
 
 /* Return a string created from the unibyte Lisp string in UTF 8.  */
 
-+ (id)stringWithUTF8LispString:(Lisp_Object)lispString
++ (instancetype)stringWithUTF8LispString:(Lisp_Object)lispString
 {
   return CF_BRIDGING_RELEASE (cfstring_create_with_string_noencode
 			      (lispString));
@@ -207,7 +209,7 @@ NSSizeToCGSize (NSSize nssize)
 /* Like -[NSString stringWithUTF8String:], but fall back on Mac-Roman
    if BYTES cannot be interpreted as UTF-8 bytes and FLAG is YES. */
 
-+ (id)stringWithUTF8String:(const char *)bytes fallback:(BOOL)flag
++ (instancetype)stringWithUTF8String:(const char *)bytes fallback:(BOOL)flag
 {
   id string = [self stringWithUTF8String:bytes];
 
@@ -462,7 +464,6 @@ get_srgb_color_space (void)
 #endif
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050 || MAC_OS_X_VERSION_MIN_REQUIRED < 1050
 	{
-	  extern CMProfileRef mac_open_srgb_profile (void);
 	  CMProfileRef profile = mac_open_srgb_profile ();
 
 	  if (profile)
@@ -543,7 +544,7 @@ get_srgb_color_space (void)
 
 /* Create an image object from a Quartz 2D image.  */
 
-+ (id)imageWithCGImage:(CGImageRef)cgImage exclusive:(BOOL)flag
++ (NSImage *)imageWithCGImage:(CGImageRef)cgImage exclusive:(BOOL)flag
 {
   NSImage *image;
 
@@ -932,8 +933,6 @@ install_dispatch_handler (void)
   return err;
 }
 
-extern Lisp_Object Qrange, Qpoint;
-
 /* Return a pair of a type tag and a Lisp object converted form the
    NSValue object OBJ.  If the object is not an NSValue object or not
    created from NSRange, NSPoint, NSSize, or NSRect, then return
@@ -1018,7 +1017,7 @@ mac_nsobject_to_lisp (CFTypeRef obj)
   return result;
 }
 
-static int
+static bool
 has_resize_indicator_at_bottom_right_p (void)
 {
   return floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6;
@@ -1026,14 +1025,15 @@ has_resize_indicator_at_bottom_right_p (void)
 
 /* Whether NSTrackingArea works with -[NSWindow
    invalidateCursorRectsForView:].  */
-int
+
+bool
 mac_tracking_area_works_with_cursor_rects_invalidation_p (void)
 {
   return !(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_5);
 }
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-static int
+static bool
 has_full_screen_with_dedicated_desktop (void)
 {
   return !(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6);
@@ -1176,6 +1176,112 @@ mac_bring_current_process_to_front (Boolean front_window_only_p)
 #endif
 }
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+
+/* Move FILENAME to the trash without using the Finder and return
+   whether it succeeded.  If CFERROR is non-NULL, *CFERROR is set on
+   failure.  If trashing functionality is not available, return false
+   and set *CFERROR to NULL.  */
+
+bool
+mac_trash_file (const char *filename, CFErrorRef *cferror)
+{
+  bool result;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+  /* -[NSFileManager trashItemAtURL:resultingItemURL:error:] trashes
+     the destination of the specified symbolic link instead of the
+     symbolic link itself on OS X 10.8 - 10.8.2.  */
+  if (NSFoundationVersionNumber >= NSFoundationVersionNumber10_8_3)
+#endif
+    {
+      NSError * __autoreleasing error;
+      NSURL *url =
+	(CF_BRIDGING_RELEASE
+	 (CFURLCreateFromFileSystemRepresentation (NULL,
+						   (const UInt8 *) filename,
+						   strlen (filename), false)));
+
+      result = [[NSFileManager defaultManager] trashItemAtURL:url
+					     resultingItemURL:NULL
+							error:&error];
+      if (!result && cferror)
+	*cferror = (CFErrorRef) CF_BRIDGING_RETAIN (error);
+    }
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+  else
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+    if (FSMoveObjectToTrashSync != NULL)
+#endif
+      {
+	OSStatus err;
+	FSRef fref;
+
+	err = FSPathMakeRefWithOptions ((const UInt8 *) filename,
+					kFSPathMakeRefDoNotFollowLeafSymlink,
+					&fref, NULL);
+	if (err == noErr)
+	  /* FSPathMoveObjectToTrashSync tries to delete the
+	     destination of the specified symbolic link.  So we use
+	     FSMoveObjectToTrashSync for an FSRef created with
+	     kFSPathMakeRefDoNotFollowLeafSymlink.  */
+	  err = FSMoveObjectToTrashSync (&fref, NULL,
+					 kFSFileOperationDefaultOptions);
+	if (err == noErr)
+	  result = true;
+	else
+	  {
+	    result = false;
+	    if (cferror)
+	      *cferror = CFErrorCreate (NULL, kCFErrorDomainOSStatus, err,
+					NULL);
+	  }
+      }
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+    else
+      {
+	result = false;
+	if (cferror)
+	  *cferror = NULL;
+      }
+#endif
+#endif
+
+  return result;
+}
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+static int
+mac_foreach_window_1 (struct window *w, int (^block) (struct window *))
+{
+  int cont;
+
+  for (cont = 1; w && cont;)
+    {
+      if (WINDOWP (w->contents))
+ 	cont = mac_foreach_window_1 (XWINDOW (w->contents), block);
+      else
+	cont = block (w);
+
+      w = NILP (w->next) ? 0 : XWINDOW (w->next);
+    }
+
+  return cont;
+}
+
+/* Like foreach_window in window.c, but takes BLOCK rather than FN and
+   USER_DATA.  Stops when BLOCK returns 0.  */
+
+static void
+mac_foreach_window (struct frame *f, int (^block) (struct window *))
+{
+  /* delete_frame may set FRAME_ROOT_WINDOW (f) to Qnil.  */
+  if (WINDOWP (FRAME_ROOT_WINDOW (f)))
+    mac_foreach_window_1 (XWINDOW (FRAME_ROOT_WINDOW (f)), block);
+}
+#endif
+
 
 /************************************************************************
 			     Application
@@ -1197,8 +1303,6 @@ static NSMethodSignature *action_signature (void);
 static NSMethodSignature *services_handler_signature (void);
 static void handle_action_invocation (NSInvocation *);
 static void handle_services_invocation (NSInvocation *);
-
-extern struct frame *mac_focus_frame (struct mac_display_info *);
 
 @implementation EmacsApplication
 
@@ -1459,7 +1563,6 @@ extern struct frame *mac_focus_frame (struct mac_display_info *);
 
 /* Event handling  */
 
-extern EventRef mac_peek_next_event (void);
 static EventRef peek_if_next_event_activates_menu_bar (void);
 
 /* Store BUFP to kbd_buffer.  */
@@ -2110,25 +2213,16 @@ install_application_handler (void)
 static void set_global_focus_view_frame (struct frame *);
 static CGRect unset_global_focus_view_frame (void);
 
-extern void mac_handle_visibility_change (struct frame *);
-extern void mac_handle_origin_change (struct frame *);
-extern void mac_handle_size_change (struct frame *, int, int);
-
-extern void mac_focus_changed (int, struct mac_display_info *,
-			       struct frame *, struct input_event *);
-extern OSStatus mac_restore_keyboard_input_source (void);
-extern void mac_save_keyboard_input_source (void);
-
 #define DEFAULT_NUM_COLS (80)
 #define RESIZE_CONTROL_WIDTH (15)
 #define RESIZE_CONTROL_HEIGHT (15)
 
 @implementation EmacsWindow
 
-- (id)initWithContentRect:(NSRect)contentRect
-		styleMask:(NSUInteger)windowStyle
-		  backing:(NSBackingStoreType)bufferingType
-		    defer:(BOOL)deferCreation
+- (instancetype)initWithContentRect:(NSRect)contentRect
+			  styleMask:(NSUInteger)windowStyle
+			    backing:(NSBackingStoreType)bufferingType
+			      defer:(BOOL)deferCreation
 {
   self = [super initWithContentRect:contentRect styleMask:windowStyle
 			    backing:bufferingType defer:deferCreation];
@@ -2371,9 +2465,20 @@ extern void mac_save_keyboard_input_source (void);
 
 @end				// EmacsFullscreenWindow
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+@implementation EmacsFullscreenTransitionView
+
+- (BOOL)isFlipped
+{
+  return YES;
+}
+
+@end				// EmacsFullscreenTransitionView
+#endif
+
 @implementation EmacsFrameController
 
-- (id)initWithEmacsFrame:(struct frame *)f
+- (instancetype)initWithEmacsFrame:(struct frame *)f
 {
   self = [self init];
   if (self == nil)
@@ -2504,7 +2609,11 @@ extern void mac_save_keyboard_input_source (void);
       contentRect = [contentView frame];
       contentRect.origin = [[contentView superview]
 			     convertPoint:contentRect.origin toView:nil];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+      contentRect.origin = [oldWindow convertRectToScreen:contentRect].origin;
+#else
       contentRect.origin = [oldWindow convertBaseToScreen:contentRect.origin];
+#endif
     }
 
   window = [[windowClass alloc] initWithContentRect:contentRect
@@ -2961,12 +3070,16 @@ extern void mac_save_keyboard_input_source (void);
   struct frame *f = emacsFrame;
   int backingScaleFactor;
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+  backingScaleFactor = [emacsWindow backingScaleFactor];
+#else
   if ([emacsWindow respondsToSelector:@selector(backingScaleFactor)])
     backingScaleFactor = [emacsWindow backingScaleFactor];
   else if ([emacsWindow userSpaceScaleFactor] > 1)
     backingScaleFactor = 2;
   else
     backingScaleFactor = 1;
+#endif
 
   FRAME_BACKING_SCALE_FACTOR (f) = backingScaleFactor;
 }
@@ -2995,12 +3108,22 @@ extern void mac_save_keyboard_input_source (void);
 {
   point = [emacsView convertPoint:point toView:nil];
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+  return [[emacsView window]
+	   convertRectToScreen:(NSMakeRect (point.x, point.y, 0, 0))].origin;
+#else
   return [[emacsView window] convertBaseToScreen:point];
+#endif
 }
 
 - (NSPoint)convertEmacsViewPointFromScreen:(NSPoint)point
 {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+  point = [[emacsView window]
+	    convertRectFromScreen:(NSMakeRect (point.x, point.y, 0, 0))].origin;
+#else
   point = [[emacsView window] convertScreenToBase:point];
+#endif
 
   return [emacsView convertPoint:point fromView:nil];
 }
@@ -3008,7 +3131,11 @@ extern void mac_save_keyboard_input_source (void);
 - (NSRect)convertEmacsViewRectToScreen:(NSRect)rect
 {
   rect = [emacsView convertRect:rect toView:nil];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+  rect.origin = [[emacsView window] convertRectToScreen:rect].origin;
+#else
   rect.origin = [[emacsView window] convertBaseToScreen:rect.origin];
+#endif
 
   return rect;
 }
@@ -3313,29 +3440,182 @@ extern void mac_save_keyboard_input_source (void);
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
 - (void)setupFullScreenTransitionView
 {
-  NSView *contentView, *transitionView;
+  struct frame *f = emacsFrame;
+  struct window *root_window = XWINDOW (FRAME_ROOT_WINDOW (f));
+  NSView *contentView, *view;
   NSRect contentViewRect;
   NSBitmapImageRep *bitmap;
-  CALayer *layer;
+  id image;
+  CGFloat rootWindowMaxY;
+  CALayer *rootLayer;
 
   contentView = [emacsWindow contentView];
   contentViewRect = [contentView visibleRect];
   bitmap = [contentView bitmapImageRepForCachingDisplayInRect:contentViewRect];
   [contentView cacheDisplayInRect:contentViewRect toBitmapImageRep:bitmap];
+  image = (id) [bitmap CGImage];
 
-  layer = [CA_LAYER layer];
+  rootLayer = [CA_LAYER layer];
   contentViewRect.origin = NSZeroPoint;
-  layer.bounds = NSRectToCGRect (contentViewRect);
-  layer.contents = (id) [bitmap CGImage];
-  layer.contentsScale = [emacsWindow backingScaleFactor];
-  layer.contentsGravity = kCAGravityTopLeft;
+  rootLayer.bounds = NSRectToCGRect (contentViewRect);
+  rootLayer.contentsScale = [emacsWindow backingScaleFactor];
+  rootLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1080
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_7)
+#endif
+    rootLayer.geometryFlipped = YES;
+  rootLayer.layoutManager = [CA_CONSTRAINT_LAYOUT_MANAGER layoutManager];
 
-  transitionView = [[NSView alloc] initWithFrame:contentViewRect];
-  [transitionView setLayer:layer];
-  [transitionView setWantsLayer:YES];
-  [transitionView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin)];
+  rootWindowMaxY = (WINDOW_TOP_EDGE_Y (root_window) +
+		    WINDOW_PIXEL_HEIGHT (root_window));
 
-  fullScreenTransitionView = transitionView;
+  mac_foreach_window (f, ^(struct window *w) {
+      enum {MIN_X_SCALE = 1 << 0, MAX_X_SCALE = 1 << 1,
+	    MIN_Y_SCALE = 1 << 2, MAX_Y_SCALE = 1 << 3,  MAX_Y_OFFSET = 1 << 4};
+      NSRect rects[3];
+      int constraints[3];
+      int i, nrects = 1;
+
+      rects[0] = NSMakeRect (WINDOW_LEFT_EDGE_X (w), WINDOW_TOP_EDGE_Y (w),
+			     WINDOW_PIXEL_WIDTH (w), WINDOW_PIXEL_HEIGHT (w));
+      constraints[0] = MIN_X_SCALE | MIN_Y_SCALE;
+      if (!w->pseudo_window_p)
+	{
+	  int x, y, width, height;
+	  int bottom_idx = 0, right_idx = 0, constraint_y = MIN_Y_SCALE;
+	  CGFloat right_width, bottom_height;
+
+	  window_box (w, TEXT_AREA, &x, &y, &width, &height);
+	  right_width = NSMaxX (rects[0]) - (x + width);
+	  bottom_height = NSMaxY (rects[0]) - (y + height);
+	  /* Make right_idx come earlier than bottom_idx for priority,
+	     though we divide the right part later than the bottom
+	     part.  */
+	  if (right_width > 0)
+	    right_idx = nrects++;
+	  if (bottom_height > 0)
+	    bottom_idx = nrects++;
+	  else
+	    {
+	      if (NSMinY (rects[0]) >= rootWindowMaxY)
+		/* Bottommost (minibuffer) window.  */
+		{
+		  constraints[0] = MIN_X_SCALE | MAX_Y_OFFSET;
+		  constraint_y = MAX_Y_OFFSET;
+		}
+	    }
+
+	  if (bottom_idx)
+	    {
+	      NSDivideRect (rects[0], &rects[bottom_idx], &rects[0],
+			    bottom_height, NSMaxYEdge);
+	      if (NSMaxY (rects[bottom_idx]) == rootWindowMaxY)
+		/* Bottommost mode-line.  */
+		constraints[bottom_idx] = MIN_X_SCALE | MAX_Y_OFFSET;
+	      else
+		constraints[bottom_idx] = MIN_X_SCALE | MAX_Y_SCALE;
+	    }
+	  if (right_idx)
+	    {
+	      NSDivideRect (rects[0], &rects[right_idx], &rects[0],
+			    right_width, NSMaxXEdge);
+	      constraints[right_idx] = MAX_X_SCALE | constraint_y;
+	    }
+	}
+      for (i = 0; i < nrects; i++)
+	{
+	  CALayer *layer = [CA_LAYER layer];
+	  NSMutableDictionary *actions;
+	  CAConstraintAttribute attribute;
+	  CGFloat scale;
+	  NSRect rect =
+	    NSMakeRect (NSMinX (rects[i]) / NSWidth (contentViewRect),
+			NSMinY (rects[i]) / NSHeight (contentViewRect),
+			NSWidth (rects[i]) / NSWidth (contentViewRect),
+			NSHeight (rects[i]) / NSHeight (contentViewRect));
+
+	  layer.frame = NSRectToCGRect (rects[i]);
+	  layer.contents = image;
+	  layer.contentsRect = NSRectToCGRect (rect);
+
+	  /* Suppress animations triggered by a size change in the
+	     superlayer.  Actually not needed on OS X 10.9.  */
+	  actions = [NSMutableDictionary
+		      dictionaryWithDictionary:layer.actions];
+	  [actions setObject:[NSNull null] forKey:@"position"];
+	  [actions setObject:[NSNull null] forKey:@"bounds"];
+	  layer.actions = actions;
+
+	  if (constraints[i] & (MIN_X_SCALE | MAX_X_SCALE))
+	    {
+	      if (constraints[i] & MIN_X_SCALE)
+		{
+		  attribute = kCAConstraintMinX;
+		  scale = NSMinX (rect);
+		}
+	      else
+		{
+		  attribute = kCAConstraintMaxX;
+		  scale = NSMaxX (rect);
+		}
+	      [layer addConstraint:[CA_CONSTRAINT
+				     constraintWithAttribute:attribute
+						  relativeTo:@"superlayer"
+						   attribute:kCAConstraintWidth
+						       scale:scale
+						      offset:0]];
+	    }
+	  if (constraints[i] & (MIN_Y_SCALE | MAX_Y_SCALE | MAX_Y_OFFSET))
+	    {
+	      CAConstraintAttribute srcAttr;
+	      CGFloat offset;
+
+	      if (constraints[i] & MAX_Y_OFFSET)
+		{
+		  srcAttr = kCAConstraintMaxY;
+		  offset = NSMaxY (rects[i]) - NSHeight (contentViewRect);
+		  attribute = kCAConstraintMaxY;
+		  scale = 1;
+		}
+	      else
+		{
+		  srcAttr = kCAConstraintHeight;
+		  offset = 0;
+		  if (constraints[i] & MIN_Y_SCALE)
+		    {
+		      attribute = kCAConstraintMinY;
+		      scale = NSMinY (rect);
+		    }
+		  else
+		    {
+		      attribute = kCAConstraintMaxY;
+		      scale = NSMaxY (rect);
+		    }
+		}
+	      [layer addConstraint:[CA_CONSTRAINT
+				     constraintWithAttribute:attribute
+						  relativeTo:@"superlayer"
+						   attribute:srcAttr
+						       scale:scale
+						      offset:offset]];
+	    }
+	  [rootLayer addSublayer:layer];
+	}
+
+      return 1;
+    });
+
+  view = [[EmacsFullscreenTransitionView alloc] initWithFrame:contentViewRect];
+  [view setLayer:rootLayer];
+  [view setWantsLayer:YES];
+  [view setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
+  /* Actually we don't use any Core Image filters in full screen
+     transitions, but this works as a workaround for the strange
+     problem of image color alteration on OS X 10.9.  */
+  if ([view respondsToSelector:@selector(setLayerUsesCoreImageFilters:)])
+    [view setLayerUsesCoreImageFilters:YES];
+
+  fullScreenTransitionView = view;
 }
 
 - (NSApplicationPresentationOptions)window:(NSWindow *)window
@@ -3444,12 +3724,18 @@ extern void mac_save_keyboard_input_source (void);
   NSEnableScreenUpdates ();
 
   [NS_ANIMATION_CONTEXT runAnimationGroup:^(NSAnimationContext *context) {
+      CALayer *layer = [fullScreenTransitionView layer];
+
       [context setDuration:duration];
       [context
 	setTimingFunction:[CA_MEDIA_TIMING_FUNCTION
 			    functionWithName:kCAMediaTimingFunctionDefault]];
       [[window animator] setFrame:destRect display:YES];
-      [fullScreenTransitionView layer].opacity = 0;
+      layer.beginTime = [layer convertTime:(CACurrentMediaTime ())
+				 fromLayer:nil] + duration * (1 - 1.0 / 5);
+      layer.speed = 5;
+      layer.fillMode = kCAFillModeBackwards;
+      layer.opacity = 0;
     } completionHandler:^{
       [fullScreenTransitionView removeFromSuperview];
       MRC_RELEASE (fullScreenTransitionView);
@@ -3515,12 +3801,18 @@ extern void mac_save_keyboard_input_source (void);
   NSEnableScreenUpdates ();
 
   [NS_ANIMATION_CONTEXT runAnimationGroup:^(NSAnimationContext *context) {
+      CALayer *layer = [fullScreenTransitionView layer];
+
       [context setDuration:duration];
       [context
 	setTimingFunction:[CA_MEDIA_TIMING_FUNCTION
 			    functionWithName:kCAMediaTimingFunctionDefault]];
       [[window animator] setFrame:destRect display:YES];
-      [fullScreenTransitionView layer].opacity = 0;
+      layer.beginTime = [layer convertTime:(CACurrentMediaTime ())
+      				 fromLayer:nil] + duration * (1 - 1.0 / 5);
+      layer.speed = 5;
+      layer.fillMode = kCAFillModeBackwards;
+      layer.opacity = 0;
     } completionHandler:^{
       [fullScreenTransitionView removeFromSuperview];
       MRC_RELEASE (fullScreenTransitionView);
@@ -4013,17 +4305,9 @@ mac_mask_rounded_bottom_corners (struct frame *f, CGRect clip_rect,
 			   View and Drawing
  ************************************************************************/
 
-extern Lisp_Object Qbefore_string;
-extern Lisp_Object Qtext_input, Qinsert_text, Qset_marked_text;
-
-extern bool mac_screen_config_changed;
-
 /* Array of Carbon key events that are deferred during the execution
    of AppleScript.  NULL if not executing AppleScript.  */
 static CFMutableArrayRef deferred_key_events;
-
-extern CGRect mac_get_first_rect_for_range (struct window *, const CFRange *,
-					    CFRange *);
 
 static int mac_event_to_emacs_modifiers (NSEvent *);
 
@@ -4031,37 +4315,9 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 
 @implementation EmacsView
 
-- (struct frame *)emacsFrame
-{
-  EmacsFrameController *frameController = ((EmacsFrameController *)
-					   [[self window] delegate]);
-
-  return [frameController emacsFrame];
-}
-
 - (void)drawRect:(NSRect)aRect
 {
-  struct frame *f = [self emacsFrame];
-  int x = NSMinX (aRect), y = NSMinY (aRect);
-  int width = NSWidth (aRect), height = NSHeight (aRect);
-  BOOL detect_scale_mismatch_p =
-    ([NSWindow instancesRespondToSelector:@selector(backingScaleFactor)]
-     && !FRAME_TOOLTIP_P (f));
-
-  set_global_focus_view_frame (f);
-  mac_clear_area (f, x, y, width, height);
-  if (detect_scale_mismatch_p)
-    mac_scale_mismatch_detection = (FRAME_BACKING_SCALE_FACTOR (f) == 1
-				    ? SCALE_MISMATCH_DETECT_NOT_1X
-				    : SCALE_MISMATCH_DETECT_NOT_2X);
-  expose_frame (f, x, y, width, height);
-  if (detect_scale_mismatch_p)
-    {
-      if (mac_scale_mismatch_detection == SCALE_MISMATCH_DETECTED)
-	SET_FRAME_GARBAGED (f);
-      mac_scale_mismatch_detection = SCALE_MISMATCH_DONT_DETECT;
-    }
-  unset_global_focus_view_frame ();
+  eassert (false);
 }
 
 - (BOOL)isFlipped
@@ -4091,7 +4347,7 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
     }
 }
 
-- (id)initWithFrame:(NSRect)frameRect
+- (instancetype)initWithFrame:(NSRect)frameRect
 {
   self = [super initWithFrame:frameRect];
   if (self == nil)
@@ -4135,9 +4391,29 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 #endif
 }
 
+- (struct frame *)emacsFrame
+{
+  EmacsFrameController *frameController = ((EmacsFrameController *)
+					   [[self window] delegate]);
+
+  return [frameController emacsFrame];
+}
+
 - (void)drawRect:(NSRect)aRect
 {
-  [super drawRect:aRect];
+  struct frame *f = [self emacsFrame];
+  int x = NSMinX (aRect), y = NSMinY (aRect);
+  int width = NSWidth (aRect), height = NSHeight (aRect);
+
+  set_global_focus_view_frame (f);
+  mac_clear_area (f, x, y, width, height);
+  mac_begin_scale_mismatch_detection (f);
+  expose_frame (f, x, y, width, height);
+  if (mac_end_scale_mismatch_detection (f)
+      && [NSWindow instancesRespondToSelector:@selector(backingScaleFactor)])
+    SET_FRAME_GARBAGED (f);
+  unset_global_focus_view_frame ();
+
   roundedBottomCornersCopied = NO;
 }
 
@@ -4216,7 +4492,8 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
   struct frame *f = [self emacsFrame];
   struct mac_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   NSPoint point = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-  int tool_bar_p = 0, down_p;
+  bool tool_bar_p = false;
+  NSUInteger down_p;
 
   down_p = (NSEventMaskFromType ([theEvent type]) & ANY_MOUSE_DOWN_EVENT_MASK);
 
@@ -4244,7 +4521,7 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 	  handle_tool_bar_click (f, x, y, 1, 0);
 	else
 	  handle_tool_bar_click (f, x, y, 0, inputEvent.modifiers);
-	tool_bar_p = 1;
+	tool_bar_p = true;
       }
     else
       {
@@ -4889,11 +5166,6 @@ get_text_input_script_language (ScriptLanguageRecord *slrec)
   return (long) NSApp;
 }
 
-extern void mac_ax_selected_text_range (struct frame *, CFRange *);
-extern EMACS_INT mac_ax_number_of_characters (struct frame *);
-extern CFStringRef mac_ax_string_for_range (struct frame *,
-					    const CFRange *, CFRange *);
-
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)aRange
 						actualRange:(NSRangePointer)actualRange
 {
@@ -4930,8 +5202,9 @@ extern CFStringRef mac_ax_string_for_range (struct frame *,
       if (w->window_end_valid && !window_outdated (w))
 	{
 	  NSRange range;
-	  CFStringRef string = mac_ax_string_for_range (f, (CFRange *) &aRange,
-							(CFRange *) &range);
+	  CFStringRef string =
+	    mac_ax_create_string_for_range (f, (CFRange *) &aRange,
+					    (CFRange *) &range);
 
 	  if (string)
 	    {
@@ -5055,7 +5328,6 @@ extern CFStringRef mac_ax_string_for_range (struct frame *,
   struct window *w;
   struct glyph *glyph;
   struct glyph_row *row;
-  int hpos, vpos, x, y, h;
   NSRange markedRange = [self markedRange];
 
   if (aRange.location >= NSNotFound
@@ -5092,6 +5364,8 @@ extern CFStringRef mac_ax_string_for_range (struct frame *,
 	}
       if (glyph)
 	{
+	  int x, y, h;
+
 	  row = MATRIX_ROW (w->current_matrix, w->phys_cursor.vpos);
 	  get_phys_cursor_geometry (w, row, glyph, &x, &y, &h);
 
@@ -5198,7 +5472,7 @@ extern CFStringRef mac_ax_string_for_range (struct frame *,
     return nil;
 
   range = CFRangeMake (0, mac_ax_number_of_characters (f));
-  string = mac_ax_string_for_range (f, &range, NULL);
+  string = mac_ax_create_string_for_range (f, &range, NULL);
 
   return CF_BRIDGING_RELEASE (string);
 }
@@ -5330,6 +5604,9 @@ mac_accumulate_global_focus_view_clip_rect (const CGRect *clip_rects,
     global_focus_view_accumulated_clip_rect = CGRectInfinite;
 }
 
+#if DRAWING_USE_GCD
+static
+#endif
 CGContextRef
 mac_begin_cg_clip (struct frame *f, GC gc)
 {
@@ -5343,7 +5620,10 @@ mac_begin_cg_clip (struct frame *f, GC gc)
       n_clip_rects = CFDataGetLength (gc->clip_rects_data) / sizeof (CGRect);
     }
   else
-    n_clip_rects = 0;
+    {
+      clip_rects = NULL;       /* Just to avoid uninitialized use.  */
+      n_clip_rects = 0;
+    }
 
   if (global_focus_view_frame != f)
     {
@@ -5366,6 +5646,9 @@ mac_begin_cg_clip (struct frame *f, GC gc)
   return context;
 }
 
+#if DRAWING_USE_GCD
+static
+#endif
 void
 mac_end_cg_clip (struct frame *f)
 {
@@ -5403,7 +5686,10 @@ mac_draw_to_frame (struct frame *f, GC gc, void (^block) (CGContextRef, GC))
 			  / sizeof (CGRect));
 	}
       else
-	n_clip_rects = 0;
+	{
+	  clip_rects = NULL;   /* Just to avoid uninitialized use.  */
+	  n_clip_rects = 0;
+	}
 
       context = FRAME_CG_CONTEXT (f);
       gc = mac_duplicate_gc (gc);
@@ -5536,7 +5822,78 @@ create_resize_indicator_image (void)
  ************************************************************************/
 
 extern Lisp_Object Qgeometry, Qworkarea, Qmm_size, Qframes;
-extern Lisp_Object Qbacking_scale_factor;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+static NSArray *
+mac_display_get_info_dictionaries (IOOptionBits options)
+{
+  NSMutableArray *result = [NSMutableArray arrayWithCapacity:0];
+  CFDictionaryRef matching = IOServiceMatching ("IODisplayConnect");
+
+  if (matching)
+    {
+      io_iterator_t existing;
+      kern_return_t kr = IOServiceGetMatchingServices (kIOMasterPortDefault,
+						       matching, &existing);
+
+      if (kr == KERN_SUCCESS)
+	{
+	  io_object_t service;
+
+	  while ((service = IOIteratorNext (existing)) != 0)
+	    {
+	      CFDictionaryRef dictionary =
+		IODisplayCreateInfoDictionary (service, options);
+
+	      if (dictionary)
+		[result addObject:(CF_BRIDGING_RELEASE (dictionary))];
+	    }
+	  IOObjectRelease (existing);
+	}
+    }
+
+  return result;
+}
+
+static CFDictionaryRef
+mac_display_copy_info_dictionary_for_cgdisplay (CGDirectDisplayID displayID,
+						NSArray *infoDictionaries)
+{
+  CFDictionaryRef __block result = NULL;
+  NSMutableDictionary *info = [NSMutableDictionary dictionaryWithCapacity:3];
+  uint32_t val;
+
+  val = CGDisplayVendorNumber (displayID);
+  if (val != kDisplayVendorIDUnknown && val != 0xFFFFFFFF)
+    /* We could simply write `info[@kDisplayVendorID] = @(val)' here
+       if we could restrict ourselves to 64-bit executables.  */
+    [info setObject:[NSNumber numberWithUnsignedInt:val]
+	     forKey:@kDisplayVendorID];
+
+  val = CGDisplayModelNumber (displayID);
+  if (val != kDisplayProductIDGeneric && val != 0xFFFFFFFF)
+    [info setObject:[NSNumber numberWithUnsignedInt:val]
+	     forKey:@kDisplayProductID];
+
+  val = CGDisplaySerialNumber (displayID);
+  if (val != 0x00000000 && val != 0xFFFFFFFF)
+    [info setObject:[NSNumber numberWithUnsignedInt:val]
+	     forKey:@kDisplaySerialNumber];
+
+  [infoDictionaries enumerateObjectsUsingBlock:
+		      ^(NSDictionary *dictionary, NSUInteger idx, BOOL *stop) {
+      if (IODisplayMatchDictionaries ((__bridge CFDictionaryRef) dictionary,
+				      (__bridge CFDictionaryRef) info,
+				      kNilOptions))
+	{
+	  result = CF_BRIDGING_RETAIN (dictionary);
+	  *stop = YES;
+	}
+    }];
+
+  return result;
+}
+#endif
 
 Lisp_Object
 mac_display_monitor_attributes_list (struct mac_display_info *dpyinfo)
@@ -5548,6 +5905,10 @@ mac_display_monitor_attributes_list (struct mac_display_info *dpyinfo)
   NSArray *screens = [NSScreen screens];
   NSUInteger i, count = [screens count];
   Lisp_Object monitor_frames = Fmake_vector (make_number (count), Qnil);
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+  NSArray *infoDictionaries =
+    mac_display_get_info_dictionaries (kIODisplayOnlyPreferredName);
+#endif
   struct gcpro gcpro1, gcpro2;
 
   GCPRO2 (attributes_list, monitor_frames);
@@ -5592,9 +5953,15 @@ mac_display_monitor_attributes_list (struct mac_display_info *dpyinfo)
       displayID = (CGDirectDisplayID) [[[screen deviceDescription]
 					 objectForKey:@"NSScreenNumber"]
 					unsignedIntValue];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+      displayInfo =
+	mac_display_copy_info_dictionary_for_cgdisplay (displayID,
+							infoDictionaries);
+#else
       displayInfo =
 	IODisplayCreateInfoDictionary (CGDisplayIOServicePort (displayID),
 				       kIODisplayOnlyPreferredName);
+#endif
       if (displayInfo)
 	{
 	  CFDictionaryRef localizedNames =
@@ -6068,7 +6435,7 @@ static BOOL NonmodalScrollerPagingBehavior;
     }
 }
 
-- (id)initWithFrame:(NSRect)frameRect
+- (instancetype)initWithFrame:(NSRect)frameRect
 {
   self = [super initWithFrame:frameRect];
   if (self == nil)
@@ -6457,11 +6824,6 @@ mac_get_default_scroll_bar_width (struct frame *f)
 
 #define TOOLBAR_ICON_ITEM_IDENTIFIER (@"org.gnu.Emacs.toolbar.icon")
 
-extern void mac_move_window_to_gravity_reference_point (struct frame *,
-							int, short, short);
-extern void mac_get_window_gravity_reference_point (struct frame *, int,
-						    short *, short *);
-
 @implementation EmacsToolbarItem
 
 - (BOOL)allowsDuplicatesInToolbar
@@ -6707,16 +7069,18 @@ update_frame_tool_bar (struct frame *f)
   NSArray *items;
   NSUInteger count;
   int i, pos, win_gravity = f->output_data.mac->toolbar_win_gravity;
-  int use_multiimage_icons_p;
+  bool use_multiimage_icons_p = true;
 
   block_input ();
 
   if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
     mac_get_window_gravity_reference_point (f, win_gravity, &rx, &ry);
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
   use_multiimage_icons_p =
     ([window respondsToSelector:@selector(backingScaleFactor)]
      || [window userSpaceScaleFactor] > 1);
+#endif
 
   toolbar = [window toolbar];
   items = [toolbar items];
@@ -6725,8 +7089,8 @@ update_frame_tool_bar (struct frame *f)
   for (i = 0; i < f->n_tool_bar_items; ++i)
     {
 #define PROP(IDX) AREF (f->tool_bar_items, i * TOOL_BAR_ITEM_NSLOTS + (IDX))
-      int enabled_p = !NILP (PROP (TOOL_BAR_ITEM_ENABLED_P));
-      int selected_p = !NILP (PROP (TOOL_BAR_ITEM_SELECTED_P));
+      bool enabled_p = !NILP (PROP (TOOL_BAR_ITEM_ENABLED_P));
+      bool selected_p = !NILP (PROP (TOOL_BAR_ITEM_SELECTED_P));
       int idx;
       ptrdiff_t img_id;
       struct image *img;
@@ -6857,7 +7221,6 @@ update_frame_tool_bar (struct frame *f)
       /* It could be confusing if a real alarm arrives while
 	 processing the fake one.  Turn it off and let the handler
 	 reset it.  */
-      extern void poll_for_input_1 (void);
       int old_poll_suppress_count = poll_suppress_count;
       poll_suppress_count = 1;
       poll_for_input_1 ();
@@ -6913,16 +7276,6 @@ free_frame_tool_bar (struct frame *f)
 /***********************************************************************
 			      Font Panel
  ***********************************************************************/
-
-extern Lisp_Object Qpanel_closed, Qselection;
-extern Lisp_Object Qfont_spec;
-
-extern OSStatus mac_store_event_ref_as_apple_event (AEEventClass, AEEventID,
-						    Lisp_Object,
-						    Lisp_Object,
-						    EventRef, UInt32,
-						    const EventParamName *,
-						    const EventParamType *);
 
 @implementation EmacsFontPanel
 
@@ -7083,7 +7436,7 @@ extern OSStatus mac_store_event_ref_as_apple_event (AEEventClass, AEEventID,
 
 /* Whether the font panel is currently visible.  */
 
-int
+bool
 mac_font_panel_visible_p (void)
 {
   NSFontPanel *fontPanel = [[NSFontManager sharedFontManager] fontPanel:NO];
@@ -7937,7 +8290,7 @@ mac_font_dialog (struct frame *f)
   [fontPanel makeFirstResponder:accessoryView];
 
   response = [fontPanel runModal];
-  if (response != NSRunAbortedResponse)
+  if (response != NSModalResponseAbort)
     {
       selectedFont = [fontManager convertFont:[fontManager selectedFont]];
       result = macfont_nsctfont_to_spec ((__bridge void *) selectedFont);
@@ -7957,9 +8310,6 @@ mac_font_dialog (struct frame *f)
 /************************************************************************
 				 Menu
  ************************************************************************/
-
-extern int popup_activated_flag;
-extern int name_is_separator (const char *);
 
 static void update_services_menu_types (void);
 static void mac_fake_menu_bar_click (EventPriority);
@@ -8496,11 +8846,11 @@ init_menu_bar (void)
    names.  */
 
 void
-mac_fill_menubar (widget_value *wv, int deep_p)
+mac_fill_menubar (widget_value *wv, bool deep_p)
 {
   NSMenu *newMenu, *mainMenu = [NSApp mainMenu], *helpMenu = nil;
   NSInteger index, nitems = [mainMenu numberOfItems];
-  int needs_update_p = deep_p;
+  bool needs_update_p = deep_p;
 
   newMenu = [[EmacsMenu alloc] init];
   [newMenu setAutoenablesItems:NO];
@@ -8519,12 +8869,12 @@ mac_fill_menubar (widget_value *wv, int deep_p)
       if (!needs_update_p)
 	{
 	  if (index >= nitems)
-	    needs_update_p = 1;
+	    needs_update_p = true;
 	  else
 	    {
 	      submenu = [[mainMenu itemAtIndex:index] submenu];
 	      if (!(submenu && [title isEqualToString:[submenu title]]))
-		needs_update_p = 1;
+		needs_update_p = true;
 	    }
 	}
 
@@ -8549,7 +8899,7 @@ mac_fill_menubar (widget_value *wv, int deep_p)
     }
 
   if (!needs_update_p && index != nitems)
-    needs_update_p = 1;
+    needs_update_p = true;
 
   if (needs_update_p)
     {
@@ -8669,7 +9019,7 @@ create_and_show_popup_menu (struct frame *f, widget_value *first_wv, int x, int 
   return YES;
 }
 
-- (id)initWithWidgetValue:(widget_value *)wv
+- (instancetype)initWithWidgetValue:(widget_value *)wv
 {
   const char *dialog_name;
   int nb_buttons, first_group_count, i;
@@ -8983,7 +9333,7 @@ create_and_show_dialog (struct frame *f, widget_value *first_wv)
 	if (response >= 0)
 	  result = response;
       }
-    while (response == NSRunContinuesResponse);
+    while (response == NSModalResponseContinue);
 
     unbind_to (specpdl_count, Qnil);
   }
@@ -8995,9 +9345,6 @@ create_and_show_dialog (struct frame *f, widget_value *first_wv)
 /***********************************************************************
 			  Selection support
 ***********************************************************************/
-
-extern Lisp_Object Qmac_pasteboard_name, Qmac_pasteboard_data_type;
-extern Lisp_Object Qstring, Qarray;
 
 @implementation NSPasteboard (Emacs)
 
@@ -9097,10 +9444,10 @@ extern Lisp_Object Qstring, Qarray;
 /* Get a reference to the selection corresponding to the symbol SYM.
    The reference is set to *SEL, and it becomes NULL if there's no
    corresponding selection.  Clear the selection if CLEAR_P is
-   non-zero.  */
+   true.  */
 
 OSStatus
-mac_get_selection_from_symbol (Lisp_Object sym, int clear_p, Selection *sel)
+mac_get_selection_from_symbol (Lisp_Object sym, bool clear_p, Selection *sel)
 {
   Lisp_Object str = Fget (sym, Qmac_pasteboard_name);
 
@@ -9145,7 +9492,7 @@ get_pasteboard_data_type_from_symbol (Lisp_Object sym, Selection sel)
 
 /* Check if the symbol SYM has a corresponding selection target type.  */
 
-int
+bool
 mac_valid_selection_target_p (Lisp_Object sym)
 {
   return STRINGP (Fget (sym, Qmac_pasteboard_data_type));
@@ -9171,16 +9518,16 @@ mac_get_selection_ownership_info (Selection sel)
   return INTEGER_TO_CONS ([(__bridge NSPasteboard *)sel changeCount]);
 }
 
-/* Return non-zero if VALUE is a valid selection value for TARGET.  */
+/* Return true if VALUE is a valid selection value for TARGET.  */
 
-int
+bool
 mac_valid_selection_value_p (Lisp_Object value, Lisp_Object target)
 {
   NSString *dataType;
 
   dataType = get_pasteboard_data_type_from_symbol (target, nil);
   if (dataType == nil)
-    return 0;
+    return false;
 
   if ([dataType isEqualToString:NSFilenamesPboardType])
     {
@@ -9205,7 +9552,7 @@ mac_valid_selection_value_p (Lisp_Object value, Lisp_Object target)
   else
     return STRINGP (value);
 
-  return 0;
+  return false;
 }
 
 /* Put Lisp object VALUE to the selection SEL.  The target type is
@@ -9227,7 +9574,7 @@ mac_put_selection_value (Selection sel, Lisp_Object target, Lisp_Object value)
 
 /* Check if data for the target type TARGET is available in SEL.  */
 
-int
+bool
 mac_selection_has_target_p (Selection sel, Lisp_Object target)
 {
   return get_pasteboard_data_type_from_symbol (target, sel) != nil;
@@ -9285,13 +9632,6 @@ mac_get_selection_target_list (Selection sel)
 /***********************************************************************
 			 Apple event support
 ***********************************************************************/
-
-extern Lisp_Object Qmac_apple_event_class, Qmac_apple_event_id;
-extern Lisp_Object Qundefined;
-
-extern pascal OSErr mac_handle_apple_event (const AppleEvent *,
-					    AppleEvent *, SInt32);
-extern void cleanup_all_suspended_apple_events (void);
 
 static NSMutableSet *registered_apple_event_specs;
 
@@ -9405,9 +9745,6 @@ init_apple_event_handler (void)
 /***********************************************************************
                       Drag and drop support
 ***********************************************************************/
-
-extern Lisp_Object QCdata, QCtype;
-extern Lisp_Object QCactions, Qcopy, Qlink, Qgeneric, Qprivate, Qmove, Qdelete;
 
 static NSMutableArray *registered_dragged_types;
 
@@ -9565,8 +9902,6 @@ mac_dnd_default_known_types (void)
 			Services menu support
 ***********************************************************************/
 
-extern Lisp_Object Qservice, Qpaste, Qperform;
-
 @implementation EmacsMainView (Services)
 
 - (id)validRequestorForSendType:(NSString *)sendType
@@ -9577,7 +9912,7 @@ extern Lisp_Object Qservice, Qpaste, Qperform;
 
   if ([sendType length] == 0
       || (!NILP (Fx_selection_owner_p (Vmac_service_selection, Qnil))
-	  && mac_get_selection_from_symbol (Vmac_service_selection, 0,
+	  && mac_get_selection_from_symbol (Vmac_service_selection, false,
 					    &sel) == noErr
 	  && sel
 	  && (array = [NSArray arrayWithObject:sendType],
@@ -9611,7 +9946,7 @@ extern Lisp_Object Qservice, Qpaste, Qperform;
   NSString *type;
   BOOL result = NO;
 
-  err = mac_get_selection_from_symbol (Vmac_service_selection, 0, &sel);
+  err = mac_get_selection_from_symbol (Vmac_service_selection, false, &sel);
   if (err != noErr || sel == NULL)
     return NO;
 
@@ -9647,7 +9982,7 @@ copy_pasteboard_to_service_selection (NSPasteboard *pboard)
   NSString *type;
   BOOL result = NO;
 
-  err = mac_get_selection_from_symbol (Vmac_service_selection, 1, &sel);
+  err = mac_get_selection_from_symbol (Vmac_service_selection, true, &sel);
   if (err != noErr || sel == NULL)
     return NO;
 
@@ -9830,7 +10165,6 @@ update_services_menu_types (void)
 /***********************************************************************
 			    Action support
 ***********************************************************************/
-extern Lisp_Object Qaction, Qmac_action_key_paths;
 
 static BOOL
 is_action_selector (SEL selector)
@@ -9956,8 +10290,6 @@ handle_action_invocation (NSInvocation *invocation)
 /***********************************************************************
 			 AppleScript support
 ***********************************************************************/
-
-extern long do_applescript (Lisp_Object, Lisp_Object *);
 
 @implementation EmacsController (AppleScript)
 
@@ -10154,9 +10486,9 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
 @implementation EmacsSVGLoader
 
-- (id)initWithEmacsFrame:(struct frame *)f emacsImage:(struct image *)img
-      checkImageSizeFunc:(bool (*)(struct frame *, int, int))checkImageSize
-	  imageErrorFunc:(void (*)(const char *, Lisp_Object, Lisp_Object))imageError
+- (instancetype)initWithEmacsFrame:(struct frame *)f emacsImage:(struct image *)img
+		checkImageSizeFunc:(bool (*)(struct frame *, int, int))checkImageSize
+		    imageErrorFunc:(void (*)(const char *, Lisp_Object, Lisp_Object))imageError
 {
   self = [super init];
 
@@ -10171,7 +10503,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
   return self;
 }
 
-- (int)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor
+- (bool)loadData:(NSData *)data backgroundColor:(NSColor *)backgroundColor
 {
   if ([NSApp isRunning])
     {
@@ -10291,7 +10623,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
   else
     {
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-      int __block result;
+      bool __block result;
 
       [NSApp runTemporarilyWithBlock:^{
 	  result = [self loadData:data backgroundColor:backgroundColor];
@@ -10302,7 +10634,7 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
       NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
       NSInvocation *invocation =
 	[NSInvocation invocationWithMethodSignature:signature];
-      int result;
+      bool result;
 
       [invocation setTarget:self];
       [invocation setSelector:_cmd];
@@ -10325,10 +10657,10 @@ mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
 
 @end				// EmacsSVGLoader
 
-int
+bool
 mac_webkit_supports_svg_p (void)
 {
-  int result;
+  bool result;
 
   block_input ();
   result = [WebView canShowMIMEType:@"image/svg+xml"];
@@ -10337,7 +10669,7 @@ mac_webkit_supports_svg_p (void)
   return result;
 }
 
-int
+bool
 mac_svg_load_image (struct frame *f, struct image *img, unsigned char *contents,
 		    ptrdiff_t size, XColor *color,
 		    bool (*check_image_size_func) (struct frame *, int, int),
@@ -10356,7 +10688,7 @@ mac_svg_load_image (struct frame *f, struct image *img, unsigned char *contents,
      initialization.  So we need to avoid calling wait3 for an
      arbitrary child process in our own SIGCHLD handler.  */
   int mask = sigblock (sigmask (SIGCHLD));
-  int result = [loader loadData:data backgroundColor:backgroundColor];
+  bool result = [loader loadData:data backgroundColor:backgroundColor];
 
   sigsetmask (mask);
   MRC_RELEASE (loader);
@@ -10378,7 +10710,7 @@ static NSDate *documentRasterizerCacheOldestTimestamp;
 /* Like -[PDFDocument initWithURL:], but suppress warnings if not
    loading a PDF file.  */
 
-- (id)initWithURL:(NSURL *)url options:(NSDictionary *)options
+- (instancetype)initWithURL:(NSURL *)url options:(NSDictionary *)options
 {
   NSFileHandle *fileHandle;
   NSData *data;
@@ -10414,7 +10746,7 @@ static NSDate *documentRasterizerCacheOldestTimestamp;
 /* Like -[PDFDocument initWithData:], but suppress warnings if not
    loading a PDF data.  */
 
-- (id)initWithData:(NSData *)data options:(NSDictionary *)options
+- (instancetype)initWithData:(NSData *)data options:(NSDictionary *)options
 {
   NSString *type = [options objectForKey:@"UTI"]; /* NSFileTypeDocumentOption */
 
@@ -10490,13 +10822,12 @@ static NSDate *documentRasterizerCacheOldestTimestamp;
 @end				// EmacsPDFDocument
 
 @implementation EmacsDocumentRasterizer
-- (id)initWithAttributedString:(NSAttributedString *)anAttributedString
-	    documentAttributes:(NSDictionary *)docAttributes
+- (instancetype)initWithAttributedString:(NSAttributedString *)anAttributedString
+		      documentAttributes:(NSDictionary *)docAttributes
 {
   NSLayoutManager *layoutManager;
   NSTextContainer *textContainer;
   int viewMode;
-  NSSize containerSize;
   NSRange glyphRange;
 
   self = [super init];
@@ -10642,7 +10973,7 @@ static NSDate *documentRasterizerCacheOldestTimestamp;
 }
 #endif
 
-- (id)initWithURL:(NSURL *)url options:(NSDictionary *)options
+- (instancetype)initWithURL:(NSURL *)url options:(NSDictionary *)options
 {
   NSAttributedString *attrString;
   NSDictionary *docAttributes;
@@ -10671,7 +11002,7 @@ static NSDate *documentRasterizerCacheOldestTimestamp;
   return self;
 }
 
-- (id)initWithData:(NSData *)data options:(NSDictionary *)options
+- (instancetype)initWithData:(NSData *)data options:(NSDictionary *)options
 {
   NSAttributedString *attrString;
   NSDictionary *docAttributes;
@@ -11119,12 +11450,6 @@ mac_document_draw_page (CGContextRef c, CGRect rect, EmacsDocumentRef document,
 			Accessibility Support
 ***********************************************************************/
 
-extern Lisp_Object Qaccessibility, Qwindow;
-
-extern EMACS_INT mac_ax_line_for_index (struct frame *, EMACS_INT);
-extern int mac_ax_range_for_line (struct frame *, EMACS_INT, CFRange *);
-extern void mac_ax_visible_character_range (struct frame *, CFRange *);
-
 static id ax_get_value (EmacsMainView *);
 static id ax_get_selected_text (EmacsMainView *);
 static id ax_get_selected_text_range (EmacsMainView *);
@@ -11336,7 +11661,7 @@ ax_get_selected_text (EmacsMainView *emacsView)
     return nil;
 
   mac_ax_selected_text_range (f, &selectedRange);
-  string = mac_ax_string_for_range (f, &selectedRange, NULL);
+  string = mac_ax_create_string_for_range (f, &selectedRange, NULL);
 
   return CF_BRIDGING_RELEASE (string);
 }
@@ -11511,7 +11836,7 @@ ax_get_string_for_range (EmacsMainView *emacsView, id parameter)
        altered. */
     return nil;
 
-  string = mac_ax_string_for_range (f, (CFRange *) &range, NULL);
+  string = mac_ax_create_string_for_range (f, (CFRange *) &range, NULL);
 
   return CF_BRIDGING_RELEASE (string);
 }
@@ -11638,7 +11963,6 @@ ax_get_attributed_string_for_range (EmacsMainView *emacsView, id parameter)
       struct frame *f = [self emacsFrame];
       struct input_event inev;
       Lisp_Object arg = Qnil;
-      extern Lisp_Object Qwindow;
 
       arg = Fcons (Fcons (Qwindow,
 			  Fcons (build_string ("Lisp"),
@@ -11683,10 +12007,6 @@ mac_update_accessibility_status (struct frame *f)
 ***********************************************************************/
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
-extern Lisp_Object QCdirection, QCduration;
-extern Lisp_Object Qnone, Qfade_in, Qmove_in;
-extern Lisp_Object Qbars_swipe, Qcopy_machine, Qdissolve, Qflash, Qmod;
-extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
 
 @implementation EmacsFrameController (Animation)
 
@@ -11698,6 +12018,7 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
   [layerHostingView setAutoresizingMask:(NSViewWidthSizable
 					 | NSViewHeightSizable)];
   rootLayer.anchorPoint = CGPointZero;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
   if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6)
     {
       CGFloat scaleFactor = [overlayWindow userSpaceScaleFactor];
@@ -11705,6 +12026,7 @@ extern Lisp_Object Qpage_curl, Qpage_curl_with_shadow, Qripple, Qswipe;
       rootLayer.sublayerTransform =
 	CATransform3DMakeScale (scaleFactor, scaleFactor, 1.0);
     }
+#endif
   [layerHostingView setLayer:rootLayer];
   [layerHostingView setWantsLayer:YES];
   /* OS X 10.9 needs this.  */
@@ -11929,9 +12251,11 @@ get_symbol_from_filter_input_key (NSString *key)
   NSDictionary *attributes = [filter attributes];
   CGFloat scaleFactor;
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
   if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6)
     scaleFactor = [overlayWindow userSpaceScaleFactor];
   else
+#endif
     scaleFactor = 1.0;
 
   if ([[[attributes objectForKey:kCIInputCenterKey]
@@ -12066,10 +12390,8 @@ mac_start_animation (Lisp_Object frame_or_window, Lisp_Object properties)
       struct window *w = XWINDOW (frame_or_window);
 
       f = XFRAME (WINDOW_FRAME (w));
-      rect = mac_rect_make (f, WINDOW_TO_FRAME_PIXEL_X (w, 0),
-			    WINDOW_TO_FRAME_PIXEL_Y (w, 0),
-			    WINDOW_PIXEL_WIDTH (w),
-			    WINDOW_PIXEL_HEIGHT (w));
+      rect = mac_rect_make (f, WINDOW_LEFT_EDGE_X (w), WINDOW_TOP_EDGE_Y (w),
+			    WINDOW_PIXEL_WIDTH (w), WINDOW_PIXEL_HEIGHT (w));
     }
   frameController = FRAME_CONTROLLER (f);
 

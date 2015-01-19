@@ -3013,6 +3013,9 @@ was unable to determine the ACL entries.  */)
   acl_t acl;
   Lisp_Object acl_string;
   char *str;
+# ifndef HAVE_ACL_TYPE_EXTENDED
+  acl_type_t ACL_TYPE_EXTENDED = ACL_TYPE_ACCESS;
+# endif
 #endif
 
   absname = expand_and_dir_to_file (filename,
@@ -3027,7 +3030,7 @@ was unable to determine the ACL entries.  */)
 #ifdef HAVE_ACL_SET_FILE
   absname = ENCODE_FILE (absname);
 
-  acl = acl_get_file (SSDATA (absname), ACL_TYPE_ACCESS);
+  acl = acl_get_file (SSDATA (absname), ACL_TYPE_EXTENDED);
   if (acl == NULL)
     return Qnil;
 
@@ -4087,7 +4090,7 @@ by calling `format-decode', which see.  */)
 	  && SAVE_MODIFF >= MODIFF)
 	we_locked_file = 1;
 #endif /* CLASH_DETECTION */
-      prepare_to_modify_buffer (GPT, GPT, NULL);
+      prepare_to_modify_buffer (PT, PT, NULL);
     }
 
   move_gap_both (PT, PT_BYTE);
@@ -6043,7 +6046,7 @@ file is usually more useful if it contains the deleted text.  */);
 	       doc: /* Non-nil means don't call fsync in `write-region'.
 This variable affects calls to `write-region' as well as save commands.
 Setting this to nil may avoid data loss if the system loses power or
-the operating system crashes.  */);
+the operating system crashes.  By default, it is non-nil in batch mode.  */);
   write_region_inhibit_fsync = 0; /* See also `init_fileio' above.  */
 
   DEFVAR_BOOL ("delete-by-moving-to-trash", delete_by_moving_to_trash,

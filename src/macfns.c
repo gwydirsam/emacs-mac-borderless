@@ -1704,7 +1704,7 @@ void
 mac_update_title_bar (struct frame *f, int save_match_data)
 {
   struct window *w;
-  int modified_p;
+  bool modified_p;
 
   if (!FRAME_MAC_P (f))
     return;
@@ -2493,24 +2493,9 @@ TERMINAL should be a terminal object, a frame or a display name (a string).
 If omitted or nil, that stands for the selected frame's display.  */)
   (Lisp_Object terminal)
 {
-  SInt32 major, minor, bugfix;
-  OSErr err;
-
-  block_input ();
-  err = Gestalt (gestaltSystemVersionMajor, &major);
-  if (err == noErr)
-    err = Gestalt (gestaltSystemVersionMinor, &minor);
-  if (err == noErr)
-    err = Gestalt (gestaltSystemVersionBugFix, &bugfix);
-  unblock_input ();
-
-  if (err != noErr)
-    error ("Cannot get Mac OS version");
-
-  return Fcons (make_number (major),
-		Fcons (make_number (minor),
-		       Fcons (make_number (bugfix),
-			      Qnil)));
+  return list3i (mac_operating_system_version.major,
+		 mac_operating_system_version.minor,
+		 mac_operating_system_version.patch);
 }
 
 DEFUN ("x-display-screens", Fx_display_screens, Sx_display_screens, 0, 1, 0,
@@ -3750,7 +3735,6 @@ usage: (mac-start-animation FRAME-OR-WINDOW &rest PROPERTIES) */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
-  extern void mac_start_animation (Lisp_Object, Lisp_Object);
   Lisp_Object frame_or_window, properties;
   struct frame *f;
   CGFloat alpha;
@@ -3957,20 +3941,14 @@ Chinese, Japanese, and Korean.  */);
   DEFVAR_LISP ("mac-carbon-version-string", Vmac_carbon_version_string,
     doc: /* Version info for Carbon API.  */);
   {
-    OSErr err;
-    SInt32 response;
-    char carbon_version[sizeof ".." + 3 * INT_STRLEN_BOUND (unsigned int)] = "Unknown";
+    Lisp_Object args[3];
 
-    err = Gestalt (gestaltCarbonVersion, &response);
-    if (err == noErr)
-      snprintf (carbon_version, sizeof (carbon_version), "%u.%u.%u",
-		(response >> 8) & 0xf, (response >> 4) & 0xf, response & 0xf);
-    snprintf (carbon_version + strlen (carbon_version),
-	      sizeof (carbon_version) - strlen (carbon_version),
-	      " AppKit %g", mac_appkit_version ());
-    Vmac_carbon_version_string =
-      make_pure_string (carbon_version, strlen (carbon_version),
-			strlen (carbon_version), 0);
+    args[0] = build_string ("%s AppKit %g");
+    args[1] = mac_carbon_version_string ();
+    if (!STRINGP (args[1]))
+      args[1] = build_string ("Unknown");
+    args[2] = make_float (mac_appkit_version ());
+    Vmac_carbon_version_string = Fpurecopy (Fformat (3, args));
   }
 
   /* X window properties.  */

@@ -53,7 +53,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 
 static Lisp_Object Qdebug_on_next_call;
 
-extern void mac_fill_menubar (widget_value *, int);
+extern void mac_fill_menubar (widget_value *, bool);
 extern int create_and_show_popup_menu (struct frame *, widget_value *,
 				       int, int, bool);
 extern int create_and_show_dialog (struct frame *, widget_value *);
@@ -887,7 +887,7 @@ mac_popup_dialog (struct frame *f, Lisp_Object header, Lisp_Object contents)
 
 
 /* Is this item a separator? */
-int
+bool
 name_is_separator (const char *name)
 {
   const char *start = name;

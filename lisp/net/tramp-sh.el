@@ -2906,13 +2906,13 @@ the result will be a local, non-Tramp, filename."
 				   command)
 			 t t)
 			0 1))
-	    ;; We should show the output anyway.
+	    ;; We should add the output anyway.
 	    (when outbuf
 	      (with-current-buffer outbuf
                 (insert
                  (with-current-buffer (tramp-get-connection-buffer v)
                    (buffer-string))))
-	      (when display (display-buffer outbuf))))
+	      (when (and display (get-buffer-window outbuf t)) (redisplay))))
 	;; When the user did interrupt, we should do it also.  We use
 	;; return code -1 as marker.
 	(quit
@@ -4137,7 +4137,7 @@ Goes through the list `tramp-local-coding-commands' and
 			  tmpfile)
 		      (while (string-match (regexp-quote "-") name)
 			(setq name (replace-match "_" nil t name)))
-		      (when (string-match "%t" value)
+		      (when (string-match "\\(^\\|[^%]\\)%t" value)
 			(setq tmpfile
 			      (make-temp-name
 			       (expand-file-name

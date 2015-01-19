@@ -42,22 +42,22 @@ static Lisp_Object Qx_lost_selection_functions;
 Lisp_Object Qmac_pasteboard_name, Qmac_pasteboard_data_type;
 
 
-static int
+static bool
 x_selection_owner_p (Lisp_Object selection, struct mac_display_info *dpyinfo)
 {
   OSStatus err;
   Selection sel;
   Lisp_Object local_selection_data;
-  int result = 0;
+  bool result = false;
 
   local_selection_data = LOCAL_SELECTION (selection, dpyinfo);
 
   if (NILP (local_selection_data))
-    return 0;
+    return false;
 
   block_input ();
 
-  err = mac_get_selection_from_symbol (selection, 0, &sel);
+  err = mac_get_selection_from_symbol (selection, false, &sel);
   if (err == noErr && sel)
     {
       Lisp_Object ownership_info;
@@ -65,10 +65,10 @@ x_selection_owner_p (Lisp_Object selection, struct mac_display_info *dpyinfo)
       ownership_info = XCAR (XCDR (XCDR (XCDR (XCDR (local_selection_data)))));
       if (!NILP (Fequal (ownership_info,
 			 mac_get_selection_ownership_info (sel))))
-	result = 1;
+	result = true;
     }
   else
-    result = 1;
+    result = true;
 
   unblock_input ();
 
@@ -96,7 +96,7 @@ x_own_selection (Lisp_Object selection_name, Lisp_Object selection_value,
 
   block_input ();
 
-  err = mac_get_selection_from_symbol (selection_name, 1, &sel);
+  err = mac_get_selection_from_symbol (selection_name, true, &sel);
   if (err == noErr && sel)
     {
       /* Don't allow a quit within the converter.
@@ -309,7 +309,7 @@ x_get_foreign_selection (Lisp_Object selection_symbol, Lisp_Object target_type,
 
   block_input ();
 
-  err = mac_get_selection_from_symbol (selection_symbol, 0, &sel);
+  err = mac_get_selection_from_symbol (selection_symbol, false, &sel);
   if (err == noErr && sel)
     {
       if (EQ (target_type, QTARGETS))
@@ -511,7 +511,7 @@ On Mac, the TIME-OBJECT and TERMINAL arguments are unused.  */)
 
   block_input ();
 
-  err = mac_get_selection_from_symbol (selection, 0, &sel);
+  err = mac_get_selection_from_symbol (selection, false, &sel);
   if (err == noErr && sel)
     mac_clear_selection (&sel);
 
@@ -579,7 +579,7 @@ frame's display, or the first available display.  */)
 
   block_input ();
 
-  err = mac_get_selection_from_symbol (selection, 0, &sel);
+  err = mac_get_selection_from_symbol (selection, false, &sel);
   if (err == noErr && sel)
     for (rest = Vselection_converter_alist; CONSP (rest); rest = XCDR (rest))
       {
@@ -600,12 +600,9 @@ frame's display, or the first available display.  */)
 /***********************************************************************
 			 Apple event support
 ***********************************************************************/
-int mac_ready_for_apple_events = 0;
+static bool mac_ready_for_apple_events = false;
 Lisp_Object Qmac_apple_event_class, Qmac_apple_event_id;
 static Lisp_Object Qemacs_suspension_id;
-extern Lisp_Object Qundefined;
-extern void mac_store_apple_event (Lisp_Object, Lisp_Object,
-				   const AEDesc *);
 
 #if __LP64__ && MAC_OS_X_VERSION_MIN_REQUIRED < 1060
 static AEEventHandlerUPP AE_USE_STANDARD_DISPATCH;
@@ -653,51 +650,42 @@ find_event_binding_fun (Lisp_Object key, Lisp_Object binding, Lisp_Object args,
     }
 }
 
-static void
-find_event_binding (Lisp_Object keymap,
-		    struct apple_event_binding *event_binding, int class_p)
+static Lisp_Object
+find_event_binding (Lisp_Object keymap, Lisp_Object propname,
+		    UInt32 code, Lisp_Object *key)
 {
-  if (event_binding->code == 0)
-    event_binding->binding =
-      access_keymap (keymap, event_binding->key, 0, 1, 0);
+  if (code == 0)
+    return access_keymap (keymap, *key, 0, 1, 0);
   else
     {
-      event_binding->binding = Qnil;
-      map_keymap (keymap, find_event_binding_fun,
-		  class_p ? Qmac_apple_event_class : Qmac_apple_event_id,
-		  event_binding, 0);
+      struct apple_event_binding event_binding;
+
+      event_binding.code = code;
+      event_binding.binding = Qnil;
+      map_keymap (keymap, find_event_binding_fun, propname, &event_binding, 0);
+      *key = event_binding.key;
+
+      return event_binding.binding;
     }
 }
 
-void
+Lisp_Object
 mac_find_apple_event_spec (AEEventClass class, AEEventID id,
-			   Lisp_Object *class_key, Lisp_Object *id_key,
-			   Lisp_Object *binding)
+			   Lisp_Object *class_key, Lisp_Object *id_key)
 {
-  struct apple_event_binding event_binding;
-  Lisp_Object keymap;
-
-  *binding = Qnil;
+  Lisp_Object keymap, binding;
 
   keymap = get_keymap (Vmac_apple_event_map, 0, 0);
   if (NILP (keymap))
-    return;
+    return Qnil;
 
-  event_binding.code = class;
-  event_binding.key = *class_key;
-  event_binding.binding = Qnil;
-  find_event_binding (keymap, &event_binding, 1);
-  *class_key = event_binding.key;
-  keymap = get_keymap (event_binding.binding, 0, 0);
+  binding = find_event_binding (keymap, Qmac_apple_event_class,
+				class, class_key);
+  keymap = get_keymap (binding, 0, 0);
   if (NILP (keymap))
-    return;
+    return Qnil;
 
-  event_binding.code = id;
-  event_binding.key = *id_key;
-  event_binding.binding = Qnil;
-  find_event_binding (keymap, &event_binding, 0);
-  *id_key = event_binding.key;
-  *binding = event_binding.binding;
+  return find_event_binding (keymap, Qmac_apple_event_id, id, id_key);
 }
 
 static OSErr
@@ -809,7 +797,6 @@ mac_handle_apple_event (const AppleEvent *apple_event, AppleEvent *reply,
   UInt32 suspension_id;
   AEEventClass event_class;
   AEEventID event_id;
-  Lisp_Object class_key, id_key, binding;
 
   if (!mac_ready_for_apple_events)
     {
@@ -833,17 +820,24 @@ mac_handle_apple_event (const AppleEvent *apple_event, AppleEvent *reply,
 			     &event_id, sizeof (AEEventID), NULL);
   if (err == noErr)
     {
-      mac_find_apple_event_spec (event_class, event_id,
-				 &class_key, &id_key, &binding);
-      if (!NILP (binding) && !EQ (binding, Qundefined))
-	{
-	  if (INTEGERP (binding))
-	    return XINT (binding);
-	  err = mac_handle_apple_event_1 (class_key, id_key,
-					  apple_event, reply);
-	}
-      else
+      if (event_class == 0 || event_id == 0)
 	err = errAEEventNotHandled;
+      else
+	{
+	  Lisp_Object class_key, id_key, binding;
+
+	  binding = mac_find_apple_event_spec (event_class, event_id,
+					       &class_key, &id_key);
+	  if (!NILP (binding) && !EQ (binding, Qundefined))
+	    {
+	      if (INTEGERP (binding))
+		return XINT (binding);
+	      err = mac_handle_apple_event_1 (class_key, id_key,
+					      apple_event, reply);
+	    }
+	  else
+	    err = errAEEventNotHandled;
+	}
     }
   if (err == noErr)
     return noErr;
@@ -852,7 +846,7 @@ mac_handle_apple_event (const AppleEvent *apple_event, AppleEvent *reply,
 }
 
 static int
-cleanup_suspended_apple_events (struct suspended_ae_info **head, int all_p)
+cleanup_suspended_apple_events (struct suspended_ae_info **head, bool all_p)
 {
   double current_uptime = mac_system_uptime ();
   UInt32 nresumed = 0;
@@ -879,8 +873,8 @@ cleanup_suspended_apple_events (struct suspended_ae_info **head, int all_p)
 void
 cleanup_all_suspended_apple_events (void)
 {
-  cleanup_suspended_apple_events (&deferred_apple_events, 1);
-  cleanup_suspended_apple_events (&suspended_apple_events, 1);
+  cleanup_suspended_apple_events (&deferred_apple_events, true);
+  cleanup_suspended_apple_events (&suspended_apple_events, true);
 }
 
 static UInt32
@@ -917,7 +911,7 @@ DEFUN ("mac-process-deferred-apple-events", Fmac_process_deferred_apple_events, 
     return Qnil;
 
   block_input ();
-  mac_ready_for_apple_events = 1;
+  mac_ready_for_apple_events = true;
 #if __LP64__ && MAC_OS_X_VERSION_MIN_REQUIRED < 1060
   {
     SInt32 response;
@@ -969,7 +963,7 @@ Return the number of expired events.   */)
   int nexpired;
 
   block_input ();
-  nexpired = cleanup_suspended_apple_events (&suspended_apple_events, 0);
+  nexpired = cleanup_suspended_apple_events (&suspended_apple_events, false);
   unblock_input ();
 
   return make_number (nexpired);

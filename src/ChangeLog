@@ -1,3 +1,220 @@
+2014-06-25  Glenn Morris  <rgm@gnu.org>
+
+	* puresize.h (BASE_PURESIZE): Increase a bit.  (Bug#17846)
+
+2014-06-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* indent.c (Fvertical_motion): Doc fix.
+	Move to the goal column, if any, with a single call to
+	move_it_in_display_line, not in two calls.  Doing this with two
+	calls causes move_it_in_display_line apply the line-prefix
+	handling twice instead of just once.  (Bug#17823)
+
+2014-06-21  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Port to OS X ACLs (Bug#17810).
+	* fileio.c (Ffile_acl): Port to OS X, where acl_get_file (...,
+	ACL_TYPE_ACCESS) doesn't work.
+
+2014-06-19  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* keyboard.c (read_key_sequence): Don't invoke Vprefix_help_command
+	before checking key-translation-map (bug#17659).
+
+2014-06-19  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* font.c (font_make_object): Avoid dangling pointer which may
+	crash GC (Bug#17771).
+
+2014-06-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* image.c [5 < GIFLIB_MAJOR + (1 <= GIFLIB_MINOR)]: Declare the
+	prototype of DGifCloseFile as appropriate for older and newer
+	versions of giflib.
+	(gif_close): New function, encapsulates the differences in the
+	calling sequence of DGifCloseFile before v5.1.0 and after it.
+	(gif_load): Call gif_close instead of DGifCloseFile.  Divulge the
+	error string where appropriate.  (Bug#17790)
+
+2014-06-16  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (Fmove_point_visually): Instead of testing for keyboard
+	macro execution, make sure point didn't move since last complete
+	redisplay, as the condition for using the glyph matrix
+	information.  (Bug#17777)
+
+2014-06-14  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (Fmove_point_visually): Don't use the glyph matrix
+	information if we are in the middle of executing a keyboard macro,
+	since redisplay doesn't update the screen until the macro is
+	finished.  (Bug#17777)
+
+2014-06-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* alloc.c (cleanup_vector): Don't dereference a font driver
+	pointer if it is NULL.  (Bug#17771)
+
+2014-06-11  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (set_cursor_from_row): Fix an off-by-one error when
+	matching overlay strings with 'cursor' property against buffer
+	positions traversed in the glyph row.  (Bug#17744)
+
+2014-06-08  Glenn Morris  <rgm@gnu.org>
+
+	* fileio.c (write-region-inhibit-fsync): Doc tweak.
+
+	* data.c (Flss, Fgtr, Fleq, Fgeq): Doc tweaks.
+
+2014-06-04  Eli Zaretskii  <eliz@gnu.org>
+
+	* sysdep.c (reset_sys_modes): Use cursorX, not curX, as the latter
+	contains garbage on WINDOWSNT (which could potentially infloop at
+	exit).
+
+	Minimize cursor motion during TTY menu updates.
+	* term.c (tty_menu_display): Don't position cursor here.  Instead,
+	pass the cursor coordinates to update_frame_with_menu.
+	(tty_menu_activate): Send the hide cursor command only once in an
+	iteration through the outer 'while' loop.
+
+	* dispnew.c (update_frame_1): Accept an additional argument
+	SET_CURSOR_P, and position the cursor at the end of the frame
+	update only if that argument is non-zero.  All callers changed to
+	provide the additional argument as non-zero, except for
+	update_frame_with_menu.
+	(update_frame_with_menu): Accept 2 additional arguments ROW and
+	COL; if they are non-negative, instruct update_frame_1 not to
+	position the cursor, and instead position it according to ROW and
+	COL.
+
+	* dispextern.h (update_frame_with_menu): Update prototype.
+
+2014-06-02  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* callproc.c (call_process): Don't check read-only if we don't insert
+	anything (bug#17666).
+
+2014-06-02  Eli Zaretskii  <eliz@gnu.org>
+
+	* dispnew.c (update_frame_with_menu): Set display_completed.
+
+2014-06-01  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* frame.c (x_set_frame_parameters): Don't read uninitialized storage.
+
+2014-06-01  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* xterm.c (xg_scroll_callback): Remove position, for jump set portion
+	to min(value, whole).
+
+2014-06-01  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Bring back the changes to GDB-visible symbols, but only on AIX.
+	And only if it's not pre-4.2 GCC.
+	* lisp.h (ENUMABLE, DEFINE_GDB_SYMBOL_ENUM): New macros.
+	(ARRAY_MARK_FLAG, PSEUDOVECTOR_FLAG, VALMASK): Use them.
+	(ARRAY_MARK_FLAG_val, PSEUDOVECTOR_FLAG_val, VALMASK_val):
+	New macros.
+
+2014-05-31  Eli Zaretskii  <eliz@gnu.org>
+
+	* fileio.c (Finsert_file_contents): Call prepare_to_modify_buffer
+	with PT, not GPT.  (Bug#16433)
+
+	Revert last changes to GDB-visible symbols.
+	* lisp.h (ENUMABLE, DEFINE_GDB_SYMBOL_ENUM): Delete macros.
+	(ARRAY_MARK_FLAG, PSEUDOVECTOR_FLAG, VALMASK): Don't use them.
+	(ARRAY_MARK_FLAG_val, PSEUDOVECTOR_FLAG_val, VALMASK_val):
+	Delete macros.
+
+2014-05-31  Glenn Morris  <rgm@gnu.org>
+
+	* cmds.c (Fself_insert_command): Allow zero repeat count.  (Bug#17649)
+
+2014-05-30  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix port to 32-bit AIX with xlc (Bug#17598).
+	* alloc.c (gdb_make_enums_visible): Remove FLOAT_TO_STRING_BUFSIZE.
+	* conf_post.h (FLEXIBLE_ARRAY_MEMBER) [__IBMC__]: Don't define to empty.
+	* lisp.h (FLOAT_TO_STRING_BUFSIZE): Make it a macro, instead of an enum,
+	to work around a compiler bug in IBM xlc 12.1.
+
+2014-05-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* xterm.c (x_update_window_end): Don't invalidate the entire
+	mouse-highlight info, just signal frame_up_to_date_hook that mouse
+	highlight needs to be redisplayed.  (Bug#17588)
+
+2014-05-29  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Port the GDB-visible symbols to AIX.
+	Without them, GDB doesn't work to debug Emacs, since the AIX linker
+	optimizes away the relevant external symbols.  Use enums instead;
+	this suffices for the AIX port, which is 32-bit-only anyway.
+	* lisp.h (ENUMABLE, DEFINE_GDB_SYMBOL_ENUM): New macros.
+	(ARRAY_MARK_FLAG, PSEUDOVECTOR_FLAG, VALMASK): Use them.
+	(ARRAY_MARK_FLAG_val, PSEUDOVECTOR_FLAG_val, VALMASK_val):
+	New macros.
+
+2014-05-26  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Include sources used to create macuvs.h.
+	* Makefile.in ($(srcdir)/macuvs.h): New rule.
+	* macuvs.h: Use automatically-generated header.
+
+2014-05-25  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_in_display_line_to): Don't record wrap position
+	if we are iterating over an object that generates glyphs for
+	marginal areas.  (Bug#17585)
+
+2014-05-24  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* xdisp.c (safe__call1, safe__eval): Now static.
+
+2014-05-24  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (safe__call): Accept va_list argument instead of '...'.
+	(safe_call, safe__call1): Construct a va_list argument for safe_call.
+	(safe_call1): Call safe_call instead of safe__call directly.
+
+2014-05-24  Ken Brown  <kbrown@cornell.edu>
+
+	* w32term.c (x_delete_display) [CYGWIN]: Don't free
+	dpyinfo->w32_id_name, to make sure it doesn't get freed more than
+	once.  (Bug#17510)
+
+2014-05-24  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* xdisp.c: Bind inhibit-quit during pre-redisplay-function.
+	(safe__call, safe__call1, safe__eval): New functions.
+	(safe_call): Use it.
+	(prepare_menu_bars): Use it for pre-redisplay-function (bug#17577).
+	(display_mode_element): Same for `:eval'.
+
+2014-05-22  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix port to 32-bit AIX (Bug#17540).
+	* unexaix.c (copy_text_and_data): Don't add text_scnptr to ptr
+	twice.  _text already includes this offset.
+	(unrelocate_symbols): Don't cast 64-bit integer to pointer.
+
+2014-05-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_in_display_line_to): Avoid infinite recursion:
+	when closest_pos is identical to to_charpos, don't recurse, since
+	we already tried that, and failed.  (Bug#17539)
+
+2014-05-20  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32fns.c (unwind_create_frame) [GLYPH_DEBUG]: If we are
+	unwinding when frame's faces were not initialized yet, increment
+	the frame's image-cache reference count before calling
+	x_free_frame_resources.  Don't dereference
+	dpyinfo->terminal->image_cache if it is NULL.  (Bug#17524)
+
 2014-05-11  Glenn Morris  <rgm@gnu.org>
 
 	* fileio.c (Ffile_executable_p): Doc tweak.

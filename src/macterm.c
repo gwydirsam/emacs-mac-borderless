@@ -93,9 +93,6 @@ static void x_update_window_begin (struct window *);
 static void x_check_fullscreen (struct frame *);
 static void mac_initialize (void);
 
-/* State for image vs. backing scaling factor mismatch detection.  */
-int mac_scale_mismatch_detection;
-
 /* Fringe bitmaps.  */
 
 static int max_fringe_bmp = 0;
@@ -176,6 +173,24 @@ init_cg_color (void)
 
     mac_cg_color_black = CGColorCreate (mac_cg_color_space_rgb, rgba);
   }
+}
+
+void
+mac_begin_scale_mismatch_detection (struct frame *f)
+{
+  FRAME_SCALE_MISMATCH_STATE (f) = FRAME_BACKING_SCALE_FACTOR (f);
+}
+
+static void
+mac_detect_scale_mismatch (struct frame *f, int target_backing_scale)
+{
+  FRAME_SCALE_MISMATCH_STATE (f) |= target_backing_scale;
+}
+
+bool
+mac_end_scale_mismatch_detection (struct frame *f)
+{
+  return FRAME_SCALE_MISMATCH_STATE (f) == (1|2);
 }
 
 /* X display function emulation */
@@ -610,12 +625,6 @@ mac_invert_rectangles (struct frame *f, NativeRectangle *rectangles, int n)
 }
 
 
-/* Mac replacement for XCopyArea: used only for scrolling.  */
-
-/* Defined in macappkit.m.  */
-extern void mac_scroll_area (struct frame *, GC, int, int, int, int, int, int);
-
-
 /* Mac replacement for XChangeGC.  */
 
 static void
@@ -974,7 +983,13 @@ x_update_window_end (struct window *w, bool cursor_on_p,
   /* If a row with mouse-face was overwritten, arrange for
      mac_frame_up_to_date to redisplay the mouse highlight.  */
   if (mouse_face_overwritten_p)
-    reset_mouse_highlight (MOUSE_HL_INFO (XFRAME (w->frame)));
+    {
+      Mouse_HLInfo *hlinfo = MOUSE_HL_INFO (XFRAME (w->frame));
+
+      hlinfo->mouse_face_beg_row = hlinfo->mouse_face_beg_col = -1;
+      hlinfo->mouse_face_end_row = hlinfo->mouse_face_end_col = -1;
+      hlinfo->mouse_face_window = Qnil;
+    }
 
   w->being_updated_p = false;
 }
@@ -2074,11 +2089,7 @@ x_draw_image_foreground (struct glyph_string *s)
 
       x_set_glyph_string_clipping (s);
 
-      if ((mac_scale_mismatch_detection == SCALE_MISMATCH_DETECT_NOT_1X
-	   && s->img->target_backing_scale == 2)
-	  || (mac_scale_mismatch_detection == SCALE_MISMATCH_DETECT_NOT_2X
-	      && s->img->target_backing_scale == 1))
-	mac_scale_mismatch_detection = SCALE_MISMATCH_DETECTED;
+      mac_detect_scale_mismatch (s->f, s->img->target_backing_scale);
       if (s->img->target_backing_scale == 2)
 	flags |= MAC_DRAW_CG_IMAGE_2X;
       mac_draw_cg_image (s->img->cg_image,
@@ -4441,13 +4452,6 @@ Lisp_Object Qaction, Qmac_action_key_paths;
 Lisp_Object Qaccessibility;
 Lisp_Object Qservice, Qpaste, Qperform;
 
-extern Lisp_Object Qundefined;
-extern int mac_read_socket (struct terminal *, struct input_event *);
-extern void mac_find_apple_event_spec (AEEventClass, AEEventID,
-				       Lisp_Object *, Lisp_Object *,
-				       Lisp_Object *);
-extern OSErr init_coercion_handler (void);
-
 /* Table for translating Mac keycode to X keysym values.  Contributed
    by Sudhir Shenoy.
    Mapping for special keys is now identical to that in Apple X11
@@ -4792,7 +4796,7 @@ mac_cgevent_to_input_event (CGEventRef cgevent, struct input_event *buf)
 	  modifier_symbols[n++] =
 	    mac_modifier_map_lookup (*modifier_maps[i][LEFT], kind);
 
-	flags &= ~(mask_table[i].device_indep);
+	flags &= ~mask_table[i].device_indep;
 	do
 	  {
 	    Lisp_Object modifier_symbol = modifier_symbols[--n];
@@ -4921,9 +4925,9 @@ mac_get_selected_range (struct window *w, CFRange *range)
 }
 
 /* Store the text of the buffer BUF from START to END as Unicode
-   characters in CHARACTERS.  Return non-zero if successful.  */
+   characters in CHARACTERS.  Return true if successful.  */
 
-static int
+static bool
 mac_store_buffer_text_to_unicode_chars (struct buffer *buf, EMACS_INT start,
 					EMACS_INT end, UniChar *characters)
 {
@@ -4957,7 +4961,7 @@ mac_store_buffer_text_to_unicode_chars (struct buffer *buf, EMACS_INT start,
       *characters++ = (c < 0xD800 || (c > 0xDFFF && c < 0x10000)) ? c : 0xfffd;
     }
 
-  return 1;
+  return true;
 }
 
 CGRect
@@ -5272,7 +5276,6 @@ mac_ax_range_for_line (struct frame *f, EMACS_INT line, CFRange *range)
   struct buffer *b = XBUFFER (XWINDOW (f->selected_window)->contents);
   const unsigned char *begv, *zv, *p;
   EMACS_INT start, end;
-  int i;
 
   if (line < 0)
     return 0;
@@ -5298,8 +5301,8 @@ mac_ax_range_for_line (struct frame *f, EMACS_INT line, CFRange *range)
 }
 
 CFStringRef
-mac_ax_string_for_range (struct frame *f, const CFRange *range,
-			 CFRange *actual_range)
+mac_ax_create_string_for_range (struct frame *f, const CFRange *range,
+				CFRange *actual_range)
 {
   struct buffer *b = XBUFFER (XWINDOW (f->selected_window)->contents);
   CFStringRef result = NULL;
@@ -5461,7 +5464,7 @@ mac_store_event_ref_as_apple_event (AEEventClass class, AEEventID id,
   OSStatus err = eventNotHandledErr;
   Lisp_Object binding;
 
-  mac_find_apple_event_spec (class, id, &class_key, &id_key, &binding);
+  binding = mac_find_apple_event_spec (class, id, &class_key, &id_key);
   if (!NILP (binding) && !EQ (binding, Qundefined))
     {
       if (INTEGERP (binding))
@@ -5514,7 +5517,6 @@ init_dm_notification_handler (void)
  ***********************************************************************/
 
 static int mac_initialized = 0;
-extern void mac_get_screen_info (struct mac_display_info *);
 
 static XrmDatabase
 mac_make_rdb (const char *xrm_option)
@@ -5639,8 +5641,6 @@ x_delete_display (struct mac_display_info *dpyinfo)
 static void
 mac_handle_user_signal (int sig)
 {
-  extern void mac_wakeup_from_run_loop_run_once (void);
-
   mac_wakeup_from_run_loop_run_once ();
 }
 

@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.3.91)
+AC_INIT(emacs, 24.3.92)
 
 dnl We get MINGW64 with MSYS2
 if test "x$MSYSTEM" = "xMINGW32" -o "x$MSYSTEM" = "xMINGW64"
@@ -242,6 +242,7 @@ fi
 
 dnl _ON results in a '--without' option in the --help output, so
 dnl the help text should refer to "don't compile", etc.
+with_xpm_set=${with_xpm+set}
 OPTION_DEFAULT_ON([xpm],[don't compile with XPM image support])
 OPTION_DEFAULT_ON([jpeg],[don't compile with JPEG image support])
 OPTION_DEFAULT_ON([tiff],[don't compile with TIFF image support])
@@ -557,7 +558,7 @@ case "${canonical}" in
   rs6000-ibm-aix[56]* )
     opsys=aix4-2
   ;;
-  powerpc-ibm-aix[56]*  )
+  powerpc-ibm-aix[5-9]* | powerpc-ibm-aix[1-9][0-9]* )
     opsys=aix4-2
   ;;
 
@@ -763,7 +764,10 @@ AC_ARG_ENABLE([gcc-warnings],
 AC_ARG_ENABLE(link-time-optimization,
 [AS_HELP_STRING([--enable-link-time-optimization],
                 [build emacs with link-time optimization.
-                 This is supported only for GCC since 4.5.0.])],
+		 This requires GCC 4.5.0 or later.
+		 It also makes Emacs harder to debug, and when we tried it
+		 with GCC 4.9.0 x86-64 it made Emacs slower, so it's not
+		 recommended for typical use.])],
 if test "${enableval}" != "no"; then
    AC_MSG_CHECKING([whether link-time optimization is supported])
    ac_lto_supported=no
@@ -783,6 +787,12 @@ if test "${enableval}" != "no"; then
    AC_MSG_RESULT([$ac_lto_supported])
    if test "$ac_lto_supported" = "yes"; then
       CFLAGS="$CFLAGS $LTO"
+      dnl The following is needed for GCC 4.9.0.  The GCC 4.9.0 release notes
+      dnl suggest that instead of -ffat-lto-objects we should use gcc-ar and
+      dnl gcc-ranlib in place of ar and ranlib, but gcc-ar makes /usr/bin/ar
+      dnl dump core on Fedora 20, so play it safe for now.
+      gl_COMPILER_OPTION_IF([-ffat-lto-objects],
+	[CFLAGS="$CFLAGS -ffat-lto-objects"])
    fi
 fi)
 
@@ -971,6 +981,15 @@ dnl for more details.
 if test "$opsys" = "mingw32"; then
   LN_S="/bin/ln"
 fi
+
+dnl On some Debian versions, "install-info" prints irritating messages
+dnl "This is not dpkg install-info anymore, but GNU install-info"
+dnl if called via an absolute file name.
+dnl Use the entirely-identical-but-quieter ginstall-info instead if present.
+dnl Sadly some people may have an old ginstall-info installed on
+dnl non-Debian systems, so we can't use this.
+dnl AC_PATH_PROGS(INSTALL_INFO, [ginstall-info install-info], :,
+dnl   $PATH$PATH_SEPARATOR/usr/sbin$PATH_SEPARATOR/sbin)
 
 AC_PATH_PROG(INSTALL_INFO, install-info, :,
   $PATH$PATH_SEPARATOR/usr/sbin$PATH_SEPARATOR/sbin)
@@ -2091,6 +2110,18 @@ if test "$HAVE_PTHREAD" = yes; then
        LIBS="$LIB_PTHREAD $LIBS" ;;
   esac
   AC_DEFINE(HAVE_PTHREAD, 1, [Define to 1 if you have pthread (-lpthread).])
+
+  # Some systems optimize for single-threaded programs by default, and
+  # need special flags to disable these optimizations. For example, the
+  # definition of 'errno' in <errno.h>.
+  case $opsys in
+    sol*)
+      AC_DEFINE([_REENTRANT], 1,
+	[Define to 1 if your system requires this in multithreaded code.]);;
+    aix4-2)
+      AC_DEFINE([_THREAD_SAFE], 1,
+	[Define to 1 if your system requires this in multithreaded code.]);;
+  esac
 fi
 AC_SUBST([LIB_PTHREAD])
 
@@ -3004,6 +3035,9 @@ no_return_alloc_pixels
 fi
 
 if test "${HAVE_X11}" = "yes"; then
+  dnl Avoid Xpm on AIX unless requested, as it crashes; see Bug#17598.
+  test "$opsys$with_xpm_set" = aix4-2 && with_xpm=no
+
   if test "${with_xpm}" != "no"; then
     AC_CHECK_HEADER(X11/xpm.h,
       [AC_CHECK_LIB(Xpm, XpmReadFileToPixmap, HAVE_XPM=yes, , -lX11)])
@@ -3026,6 +3060,9 @@ no_return_alloc_pixels
 
   if test "${HAVE_XPM}" = "yes"; then
     AC_DEFINE(HAVE_XPM, 1, [Define to 1 if you have the Xpm library (-lXpm).])
+    LIBXPM=-lXpm
+  elif test "$opsys,$LUCID_LIBW" = aix4-2,-lXaw; then
+    dnl AIX -lXaw needs -lXpm linked too; see Bug#17598 Message#152.
     LIBXPM=-lXpm
   fi
 fi
@@ -4409,7 +4446,7 @@ if test x$GCC = xyes; then
 else
   case $opsys in
     dnl irix: Tested on Irix 6.5.  SCM worked on earlier versions.
-    dragonfly | freebsd | netbsd | openbsd | irix6-5 | sol2* )
+    aix* | dragonfly | freebsd | netbsd | openbsd | irix6-5 | sol2* )
       AC_DEFINE(GC_SETJMP_WORKS, 1)
       ;;
   esac
