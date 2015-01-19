@@ -65,6 +65,17 @@ CF_BRIDGING_RELEASE (CFTypeRef X)
   return [(id)(X) autorelease];
 }
 #endif
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+#define CF_AUTORELEASE	CFAutorelease
+#else
+static inline CFTypeRef
+CF_AUTORELEASE (CFTypeRef X)
+{
+    id __autoreleasing result = CF_BRIDGING_RELEASE (X);
+
+    return (__bridge CFTypeRef) result;
+}
+#endif
 
 /************************************************************************
 			       General
@@ -82,7 +93,9 @@ enum {
 			  | NSOtherMouseDownMask | NSOtherMouseUpMask
 			  | NSOtherMouseDraggedMask),
   ANY_MOUSE_DOWN_EVENT_MASK = (NSLeftMouseDownMask | NSRightMouseDownMask
-			       | NSOtherMouseDownMask)
+			       | NSOtherMouseDownMask),
+  ANY_MOUSE_UP_EVENT_MASK = (NSLeftMouseUpMask | NSRightMouseUpMask
+			     | NSOtherMouseUpMask)
 };
 
 enum {
@@ -301,6 +314,91 @@ NSSizeToCGSize (NSSize nssize)
 		  windowNumber:[self windowNumber] context:[self context]
 		  eventNumber:[self eventNumber] clickCount:[self clickCount]
 		  pressure:[self pressure]];
+}
+
+- (CGEventRef)coreGraphicsEvent
+{
+  CGEventRef event;
+  NSEventType type;
+  static BOOL defaultEventSourceInitialized = NO;
+
+  if ([self respondsToSelector:@selector(CGEvent)])
+    {
+      event = [self CGEvent];
+      if (event)
+	return event;
+    }
+
+  /* Workaround for a bug on Mac OS X 10.4.  */
+  if (!defaultEventSourceInitialized)
+    {
+      CFRelease (CGEventCreate (NULL));
+      defaultEventSourceInitialized = YES;
+    }
+
+  event = NULL;
+  type = [self type];
+  if (NSEventMaskFromType (type) & ANY_MOUSE_EVENT_MASK)
+    {
+      CGPoint position = CGPointZero;
+
+      GetEventParameter ([self _eventRef], kEventParamMouseLocation,
+			 typeHIPoint, NULL, sizeof (CGPoint), NULL, &position);
+      event = CGEventCreateMouseEvent (NULL, type, position,
+				       [self buttonNumber]);
+      /* CGEventCreateMouseEvent on Mac OS X 10.4 does not set
+	 type.  */
+      CGEventSetType (event, type);
+      if (NSEventMaskFromType (type)
+	  & (ANY_MOUSE_DOWN_EVENT_MASK | ANY_MOUSE_UP_EVENT_MASK))
+	{
+	  CGEventSetIntegerValueField (event, kCGMouseEventClickState,
+				       [self clickCount]);
+	  CGEventSetDoubleValueField (event, kCGMouseEventPressure,
+				      [self pressure]);
+	}
+    }
+  else if (NSEventMaskFromType (type) & (NSKeyDownMask | NSKeyUpMask))
+    {
+      event = CGEventCreateKeyboardEvent (NULL, [self keyCode],
+					  type == NSKeyDown);
+      CGEventSetIntegerValueField (event, kCGKeyboardEventAutorepeat,
+				   [self isARepeat]);
+#if __LP64__
+      /* This seems to be unnecessary for 32-bit executables.  */
+      {
+	ByteCount size;
+	UInt32 keyboard_type;
+	EventRef eventRef = (EventRef) [self eventRef];
+
+	if (GetEventParameter (eventRef, kEventParamKeyUnicodes,
+			       typeUnicodeText, NULL, 0, &size, NULL) == noErr)
+	  {
+	    UniChar *text = alloca (size);
+
+	    if (GetEventParameter (eventRef, kEventParamKeyUnicodes,
+				   typeUnicodeText, NULL, size, NULL,
+				   text) == noErr)
+	      CGEventKeyboardSetUnicodeString (event, size / sizeof (UniChar),
+					       text);
+	  }
+	if (GetEventParameter (eventRef, kEventParamKeyboardType,
+			       typeUInt32, NULL, sizeof (UInt32), NULL,
+			       &keyboard_type) == noErr)
+	  CGEventSetIntegerValueField (event, kCGKeyboardEventKeyboardType,
+				       keyboard_type);
+      }
+#endif
+    }
+  if (event == NULL)
+    {
+      event = CGEventCreate (NULL);
+      CGEventSetType (event, type);
+    }
+  CGEventSetFlags (event, [self modifierFlags]);
+  CGEventSetTimestamp (event, [self timestamp] * kSecondScale);
+
+  return (CGEventRef) CF_AUTORELEASE (event);
 }
 
 @end				// NSEvent (Emacs)
@@ -1092,7 +1190,6 @@ static EmacsController *emacsController;
 static void init_menu_bar (void);
 static void init_apple_event_handler (void);
 static void init_accessibility (void);
-static UInt32 mac_modifier_flags_to_modifiers (NSUInteger);
 
 static BOOL is_action_selector (SEL);
 static BOOL is_services_handler_selector (SEL);
@@ -1102,9 +1199,6 @@ static void handle_action_invocation (NSInvocation *);
 static void handle_services_invocation (NSInvocation *);
 
 extern struct frame *mac_focus_frame (struct mac_display_info *);
-extern void do_keystroke (EventKind, unsigned char, UInt32, UInt32,
-			  unsigned long, struct input_event *);
-extern UInt32 mac_mapped_modifiers (UInt32, UInt32);
 
 @implementation EmacsApplication
 
@@ -1451,15 +1545,13 @@ static EventRef peek_if_next_event_activates_menu_bar (void);
     {
     case NSKeyDown:
       {
+	CGEventRef cgevent = [event coreGraphicsEvent];
 	NSUInteger flags = [event modifierFlags];
-	UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
 	unsigned short key_code = [event keyCode];
-	NSString *characters;
-	unsigned char char_code;
 
-	if (!(mac_mapped_modifiers (modifiers, key_code)
-	      & ~(mac_pass_command_to_system ? cmdKey : 0)
-	      & ~(mac_pass_control_to_system ? controlKey : 0))
+	if (!(mac_cgevent_to_input_event (cgevent, NULL)
+	      & ~(mac_pass_command_to_system ? kCGEventFlagMaskCommand : 0)
+	      & ~(mac_pass_control_to_system ? kCGEventFlagMaskControl : 0))
 	    && ([NSApp keyWindow] || (flags & NSCommandKeyMask))
 	    /* Avoid activating context help mode with `help' key.  */
 	    && !([[[NSApp keyWindow] firstResponder]
@@ -1483,15 +1575,7 @@ static EventRef peek_if_next_event_activates_menu_bar (void);
 	    goto OTHER;
 	  }
 
-	characters = [event characters];
-	if ([characters length] == 1 && [characters characterAtIndex:0] < 0x80)
-	  char_code = [characters characterAtIndex:0];
-	else
-	  char_code = 0;
-
-	do_keystroke (([event isARepeat] ? autoKey : keyDown),
-		      char_code, key_code, modifiers,
-		      [event timestamp] * 1000, &inev);
+	mac_cgevent_to_input_event (cgevent, &inev);
 
 	[self storeEvent:&inev];
       }
@@ -3938,13 +4022,9 @@ extern bool mac_screen_config_changed;
    of AppleScript.  NULL if not executing AppleScript.  */
 static CFMutableArrayRef deferred_key_events;
 
-extern int mac_get_emulated_btn (UInt32);
-extern int mac_to_emacs_modifiers (UInt32, UInt32);
-
 extern CGRect mac_get_first_rect_for_range (struct window *, const CFRange *,
 					    CFRange *);
 
-static int mac_get_mouse_btn (NSEvent *);
 static int mac_event_to_emacs_modifiers (NSEvent *);
 
 /* View for Emacs frame.  */
@@ -4147,9 +4227,7 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 
   EVENT_INIT (inputEvent);
   inputEvent.arg = Qnil;
-  inputEvent.timestamp = [theEvent timestamp] * 1000;
-  inputEvent.code = mac_get_mouse_btn (theEvent);
-  inputEvent.modifiers = mac_event_to_emacs_modifiers (theEvent);
+  mac_cgevent_to_input_event ([theEvent coreGraphicsEvent], &inputEvent);
 
   {
     Lisp_Object window;
@@ -4506,9 +4584,8 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
   struct frame *f = [self emacsFrame];
   struct mac_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   Mouse_HLInfo *hlinfo = &dpyinfo->mouse_highlight;
-  UInt32 modifiers, mapped_modifiers;
-  NSString *characters;
-  unsigned char char_code;
+  CGEventRef cgevent = [theEvent coreGraphicsEvent];
+  CGEventFlags mapped_flags;
 
   [NSCursor setHiddenUntilMouseMoves:YES];
 
@@ -4521,16 +4598,17 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
       hlinfo->mouse_face_hidden = 1;
     }
 
-  modifiers = mac_modifier_flags_to_modifiers ([theEvent modifierFlags]);
-  mapped_modifiers = mac_mapped_modifiers (modifiers, [theEvent keyCode]);
+  mapped_flags = mac_cgevent_to_input_event (cgevent, NULL);
 
-  if (!(mapped_modifiers
-	& ~(mac_pass_control_to_system ? controlKey : 0)))
+  if (!(mapped_flags
+	& ~(mac_pass_control_to_system ? kCGEventFlagMaskControl : 0)))
     {
       keyEventsInterpreted = YES;
       rawKeyEvent = theEvent;
+      rawKeyEventHasMappedFlags = !!(mapped_flags & ~kCGEventFlagMaskControl);
       [self interpretKeyEvents:[NSArray arrayWithObject:theEvent]];
       rawKeyEvent = nil;
+      rawKeyEventHasMappedFlags = NO;
       if (keyEventsInterpreted)
 	return;
     }
@@ -4538,20 +4616,10 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
   if ([theEvent type] == NSKeyUp)
     return;
 
-  characters = [theEvent characters];
-  if ([characters length] == 1 && [characters characterAtIndex:0] < 0x80)
-    char_code = [characters characterAtIndex:0];
-  else
-    char_code = 0;
-
   EVENT_INIT (inputEvent);
   inputEvent.arg = Qnil;
-  inputEvent.timestamp = [theEvent timestamp] * 1000;
   XSETFRAME (inputEvent.frame_or_window, f);
-
-  do_keystroke (([theEvent isARepeat] ? autoKey : keyDown),
-		char_code, [theEvent keyCode], modifiers,
-		[theEvent timestamp] * 1000, &inputEvent);
+  mac_cgevent_to_input_event (cgevent, &inputEvent);
 
   [self sendAction:action to:target];
 }
@@ -4608,11 +4676,9 @@ get_text_input_script_language (ScriptLanguageRecord *slrec)
 
   if (rawKeyEvent && ![self hasMarkedText])
     {
-      NSUInteger flags = [rawKeyEvent modifierFlags];
-      UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
       unichar character;
 
-      if (mac_mapped_modifiers (modifiers, [rawKeyEvent keyCode])
+      if (rawKeyEventHasMappedFlags
 	  || [rawKeyEvent type] == NSKeyUp
 	  || ([aString isKindOfClass:[NSString class]]
 	      && [aString isEqualToString:[rawKeyEvent characters]]
@@ -5706,25 +5772,8 @@ static BOOL NonmodalScrollerPagingBehavior;
   if ([NSEvent respondsToSelector:@selector(modifierFlags)])
     flags = [NSEvent modifierFlags];
   else
-    {
-      UInt32 modifiers = GetCurrentKeyModifiers ();
+    flags = CGEventSourceFlagsState (kCGEventSourceStateCombinedSessionState);
 
-      flags = 0;
-      if (modifiers & alphaLock)
-	flags |= NSAlphaShiftKeyMask;
-      if (modifiers & shiftKey)
-	flags |= NSShiftKeyMask;
-      if (modifiers & controlKey)
-	flags |= NSControlKeyMask;
-      if (modifiers & optionKey)
-	flags |= NSAlternateKeyMask;
-      if (modifiers & cmdKey)
-	flags |= NSCommandKeyMask;
-      if (modifiers & kEventKeyModifierNumLockMask)
-	flags |= NSNumericPadKeyMask;
-      if (modifiers & kEventKeyModifierFnMask)
-	flags |= NSFunctionKeyMask;
-    }
   event = [NSEvent mouseEventWithType:NSLeftMouseDragged
 			     location:[[self window]
 					mouseLocationOutsideOfEventStream]
@@ -6124,12 +6173,12 @@ static BOOL NonmodalScrollerPagingBehavior;
 
 - (int)inputEventModifiers
 {
-  return inputEventModifiers;
+  return inputEvent.modifiers;
 }
 
-- (int)inputEventCode
+- (ptrdiff_t)inputEventCode
 {
-  return inputEventCode;
+  return inputEvent.code;
 }
 
 - (void)mouseClick:(NSEvent *)theEvent
@@ -6149,43 +6198,41 @@ static BOOL NonmodalScrollerPagingBehavior;
       frameSpan = NSWidth (bounds);
       clickPositionInFrame = point.x;
     }
-  inputEventCode = mac_get_mouse_btn (theEvent);
   [self sendAction:[self action] to:[self target]];
 }
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
-  int modifiers = mac_event_to_emacs_modifiers (theEvent);
   struct mac_display_info *dpyinfo = &one_mac_display_info;
 
   dpyinfo->last_mouse_glyph_frame = NULL;
 
+  mac_cgevent_to_input_event ([theEvent coreGraphicsEvent], &inputEvent);
   /* Make the "Ctrl-Mouse-2 splits window" work for toolkit scroll bars.  */
-  if (modifiers & ctrl_modifier)
+  if (inputEvent.modifiers & ctrl_modifier)
     {
-      inputEventModifiers = modifiers | down_modifier;
+      inputEvent.modifiers |= down_modifier;
       [self mouseClick:theEvent];
     }
   else
     {
-      inputEventModifiers = 0;
+      inputEvent.modifiers = 0;
       [super mouseDown:theEvent];
     }
 }
 
 - (void)mouseDragged:(NSEvent *)theEvent
 {
-  if (inputEventModifiers == 0)
+  if (inputEvent.modifiers == 0)
     [super mouseDragged:theEvent];
 }
 
 - (void)mouseUp:(NSEvent *)theEvent
 {
-  if (inputEventModifiers != 0)
+  if (inputEvent.modifiers != 0)
     {
-      int modifiers = mac_event_to_emacs_modifiers (theEvent);
-
-      inputEventModifiers = modifiers | up_modifier;
+      mac_cgevent_to_input_event ([theEvent coreGraphicsEvent], &inputEvent);
+      inputEvent.modifiers |= up_modifier;
       [self mouseClick:theEvent];
     }
   else
@@ -6240,7 +6287,7 @@ scroller_part_to_scroll_bar_part (NSScrollerPart part, NSUInteger flags)
     {
       CGFloat clickPositionInFrame = [sender clickPositionInFrame];
       CGFloat frameSpan = [sender frameSpan];
-      int inputEventCode = [sender inputEventCode];
+      ptrdiff_t inputEventCode = [sender inputEventCode];
 
       if (clickPositionInFrame < 0)
 	clickPositionInFrame = 0;
@@ -7220,77 +7267,16 @@ static void update_dragged_types (void);
 
 @end				// EmacsFrameController (EventHandling)
 
-/* Convert Cocoa modifier key masks to Carbon key modifiers.  */
-
-static UInt32
-mac_modifier_flags_to_modifiers (NSUInteger flags)
-{
-  UInt32 modifiers = 0;
-
-  if (flags & NSAlphaShiftKeyMask)
-    modifiers |= alphaLock;
-  if (flags & NSShiftKeyMask)
-    modifiers |= shiftKey;
-  if (flags & NSControlKeyMask)
-    modifiers |= controlKey;
-  if (flags & NSAlternateKeyMask)
-    modifiers |= optionKey;
-  if (flags & NSCommandKeyMask)
-    modifiers |= cmdKey;
-  if (flags & NSNumericPadKeyMask)
-    modifiers |= kEventKeyModifierNumLockMask;
-  /* if (flags & NSHelpKeyMask); */
-  if (flags & NSFunctionKeyMask)
-    modifiers |= kEventKeyModifierFnMask;
-
-  return modifiers;
-}
-
-/* Given an EVENT, return the code to use for the mouse button code in
-   the emacs input_event.  */
-
-static int
-mac_get_mouse_btn (NSEvent *event)
-{
-  NSInteger button_number = [event buttonNumber];
-
-  switch (button_number)
-    {
-    case 0:
-      if (NILP (Vmac_emulate_three_button_mouse))
-	return 0;
-      else
-	{
-	  NSUInteger flags = [event modifierFlags];
-	  UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
-
-	  return mac_get_emulated_btn (modifiers);
-	}
-    case 1:
-      return mac_wheel_button_is_mouse_2 ? 2 : 1;
-    case 2:
-      return mac_wheel_button_is_mouse_2 ? 1 : 2;
-    default:
-      return button_number;
-    }
-}
-
-/* Obtains the event modifiers from the event EVENT and then calls
-   mac_to_emacs_modifiers.  */
+/* Obtains the emacs modifiers from the event EVENT.  */
 
 static int
 mac_event_to_emacs_modifiers (NSEvent *event)
 {
-  NSUInteger flags = [event modifierFlags];
-  UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
+  struct input_event buf;
 
-  int mouse_event_p = (NSEventMaskFromType ([event type])
-		       & ANY_MOUSE_EVENT_MASK);
+  mac_cgevent_to_input_event ([event coreGraphicsEvent], &buf);
 
-  if (!NILP (Vmac_emulate_three_button_mouse) && mouse_event_p)
-    modifiers &= ~(optionKey | cmdKey);
-
-  return mac_to_emacs_modifiers (modifiers, 0);
+  return buf.modifiers;
 }
 
 void
@@ -8150,7 +8136,6 @@ static NSString *localizedMenuTitleForEdit, *localizedMenuTitleForHelp;
   else if ([theEvent type] == NSKeyDown)
     {
       NSUInteger flags = [theEvent modifierFlags];
-      UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
 
       flags &= ANY_KEY_MODIFIER_FLAGS_MASK;
 
@@ -8171,7 +8156,7 @@ static NSString *localizedMenuTitleForEdit, *localizedMenuTitleForHelp;
 	}
 
       if ([[theEvent charactersIgnoringModifiers] length] == 1
-	  && mac_quit_char_key_p (modifiers, [theEvent keyCode]))
+	  && mac_keydown_cgevent_quit_p ([theEvent coreGraphicsEvent]))
 	return [NSApp sendAction:@selector(cancel:) to:nil from:nil];
     }
 
@@ -8881,19 +8866,10 @@ create_and_show_popup_menu (struct frame *f, widget_value *first_wv, int x, int 
     {
       NSString *characters = [theEvent characters];
 
-      if ([characters length] == 1)
-	{
-	  if ([characters characterAtIndex:0] == '\033')
-	    quit = YES;
-	  else
-	    {
-	      NSUInteger flags = [theEvent modifierFlags];
-	      UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
-
-	      if (mac_quit_char_key_p (modifiers, [theEvent keyCode]))
-		quit = YES;
-	    }
-	}
+      if ([characters length] == 1
+	  && ([characters characterAtIndex:0] == '\033'
+	      || mac_keydown_cgevent_quit_p ([theEvent coreGraphicsEvent])))
+	quit = YES;
     }
 
   if (quit)
@@ -9909,7 +9885,7 @@ handle_action_invocation (NSInvocation *invocation)
     intern (SSDATA ([[name substringToIndex:([name length] - 1)]
 		      UTF8LispString]));
   NSUInteger flags = [[NSApp currentEvent] modifierFlags];
-  UInt32 modifiers = mac_modifier_flags_to_modifiers (flags);
+  UInt32 modifiers = mac_cgevent_flags_to_modifiers (flags);
 
   arg = Fcons (Fcons (build_string ("kmod"), /* kEventParamKeyModifiers */
 		      Fcons (build_string ("magn"), /* typeUInt32 */

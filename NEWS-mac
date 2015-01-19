@@ -1,3 +1,32 @@
+* emacs-24.3.91-mac-4.91 [experimental/hackers-only] (2014-05-12)
+Based on Emacs 24.3.91.
+
+** Fixed bugs
+
+*** Wrong return value of display-monitor-attributes-list.
+Reported by Leo.
+
+*** If you point to the left "%", which has both left and right
+overhangs for Monaco 12pt, of "%%" in the mode line, then the right
+one is also drawn with upper and lower box.
+
+** Improvements
+
+*** New variables mac-right-control-modifier,
+mac-right-command-modifier, and mac-right-option-modifier.
+Note: the left and right versions cannot be distinguished on some
+environments such as Screen Sharing.  Also, certain combinations of a
+key with both versions of the same modifier do not emit events at the
+system level.
+
+*** A single physical modifier key can be mapped to different Emacs
+modifiers depending on its input type (ordinary keys, function keys,
+or mouse operations) using the property list format `(:ordinary SYMBOL
+:function SYMBOL :mouse SYMBOL)'.  By default, the option key works as
+the normal Mac option key for the ordinary keys, and as the Alt
+modifier for the function keys and the mouse operations.
+
+
 * emacs-24.3.90-mac-4.90 [experimental/hackers-only] (2014-04-14)
 Based on Emacs 24.3.90.
 High-resolution icons are now distributed as a separate package.
@@ -18,6 +47,7 @@ and `F'), you can browse multi-page documents in several formats that
 Note: if you have ImageMagick installed, you need to build the Mac
 port executable without the genuine ImageMagick support so `image-io'
 can be used as a fallback of `imagemagick'.
+http://lists.gnu.org/archive/html/emacs-devel/2014-04/msg00176.html
 
 ** Improvements
 

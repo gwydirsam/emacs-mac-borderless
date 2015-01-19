@@ -1832,9 +1832,10 @@ Does not preserve point."
 
 (defun sh-smie--sh-keyword-p (tok)
   "Non-nil if TOK (at which we're looking) really is a keyword."
-  (if (equal tok "in")
-      (sh-smie--sh-keyword-in-p)
-    (sh-smie--keyword-p)))
+  (cond
+   ((looking-at "[[:alnum:]_]+=") nil)
+   ((equal tok "in") (sh-smie--sh-keyword-in-p))
+   (t (sh-smie--keyword-p))))
 
 (defun sh-smie-sh-forward-token ()
   (if (and (looking-at "[ \t]*\\(?:#\\|\\(\\s|\\)\\|$\\)")
@@ -2360,7 +2361,7 @@ the value thus obtained, and the result is used instead."
 
 ;; I commented this out because nobody calls it -- rms.
 ;;(defun sh-abbrevs (ancestor &rest list)
-;;  "Iff it isn't, define the current shell as abbrev table and fill that.
+;;  "If it isn't, define the current shell as abbrev table and fill that.
 ;;Abbrev table will inherit all abbrevs from ANCESTOR, which is either an abbrev
 ;;table or a list of (NAME1 EXPANSION1 ...).  In addition it will define abbrevs
 ;;according to the remaining arguments NAMEi EXPANSIONi ...

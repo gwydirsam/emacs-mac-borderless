@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.3.90)
+AC_INIT(emacs, 24.3.91)
 
 dnl We get MINGW64 with MSYS2
 if test "x$MSYSTEM" = "xMINGW32" -o "x$MSYSTEM" = "xMINGW64"
@@ -512,7 +512,7 @@ case "${canonical}" in
   ;;
 
   ## OpenBSD ports
-  *-*-openbsd* )
+  *-*-openbsd* | *-*-mirbsd* )
     opsys=openbsd
   ;;
 
@@ -786,30 +786,12 @@ if test "${enableval}" != "no"; then
    fi
 fi)
 
-# gl_GCC_VERSION_IFELSE([major], [minor], [run-if-found], [run-if-not-found])
-# ------------------------------------------------
-# If $CPP is gcc-MAJOR.MINOR or newer, then run RUN-IF-FOUND.
-# Otherwise, run RUN-IF-NOT-FOUND.
-AC_DEFUN([gl_GCC_VERSION_IFELSE],
-  [AC_PREPROC_IFELSE(
-    [AC_LANG_PROGRAM(
-      [[
-#if ($1) < __GNUC__ || (($1) == __GNUC__ && ($2) <= __GNUC_MINOR__)
-/* ok */
-#else
-# error "your version of gcc is older than $1.$2"
-#endif
-      ]]),
-    ], [$3], [$4])
-  ]
-)
-
 # clang is unduly picky about some things.
 AC_CACHE_CHECK([whether the compiler is clang], [emacs_cv_clang],
   [AC_COMPILE_IFELSE(
      [AC_LANG_PROGRAM([[
 	  #ifndef __clang__
-	    #error "not clang"
+	    error "not clang";
 	  #endif
         ]])],
      [emacs_cv_clang=yes],
@@ -922,6 +904,12 @@ else
   AC_SUBST([GNULIB_WARN_CFLAGS])
 fi
 
+edit_cflags="
+  s,///*,/,g
+  s/^/ /
+  s/ -I/ $isystem/g
+  s/^ //
+"
 
 
 dnl Some other nice autoconf tests.
@@ -945,11 +933,21 @@ rm -f conf$$ conf$$.file
 
 LN_S_FILEONLY='cp -p'
 
+dnl On MinGW, ensure we will call the MSYS /bin/ln.exe, not some
+dnl random program in the current directory.
 if (echo >conf$$.file) 2>/dev/null; then
   if ln -s conf$$.file conf$$ 2>/dev/null; then
-    LN_S_FILEONLY='ln -s'
+    if test "$opsys" = "mingw32"; then
+      LN_S_FILEONLY='/bin/ln -s'
+    else
+      LN_S_FILEONLY='ln -s'
+    fi
   elif ln conf$$.file conf$$ 2>/dev/null; then
-    LN_S_FILEONLY=ln
+    if test "$opsys" = "mingw32"; then
+      LN_S_FILEONLY=/bin/ln
+    else
+      LN_S_FILEONLY=ln
+    fi
   fi
 fi
 
@@ -971,7 +969,7 @@ dnl executables at "make install" time.
 dnl See http://lists.gnu.org/archive/html/emacs-devel/2013-04/msg00475.html
 dnl for more details.
 if test "$opsys" = "mingw32"; then
-  LN_S="ln"
+  LN_S="/bin/ln"
 fi
 
 AC_PATH_PROG(INSTALL_INFO, install-info, :,
@@ -1111,7 +1109,7 @@ AC_CACHE_CHECK([whether addresses are sanitized],
 	  #endif
 	  #if defined __SANITIZE_ADDRESS__ || __has_feature (address_sanitizer)
 	  #else
-	   #error "Addresses are not sanitized."
+	   error "Addresses are not sanitized.";
 	  #endif
 	]])],
      [emacs_cv_sanitize_address=yes],
@@ -1355,12 +1353,6 @@ AC_DEFUN([PKG_CHECK_MODULES], [
         if "$PKG_CONFIG" --exists "$2" 2>&AS_MESSAGE_LOG_FD &&
 	   $1_CFLAGS=`"$PKG_CONFIG" --cflags "$2" 2>&AS_MESSAGE_LOG_FD` &&
 	   $1_LIBS=`"$PKG_CONFIG" --libs "$2" 2>&AS_MESSAGE_LOG_FD`; then
-	    edit_cflags="
-	      s,///*,/,g
-	      s/^/ /
-	      s/ -I/ $isystem/g
-	      s/^ //
-	    "
 	    $1_CFLAGS=`AS_ECHO(["$$1_CFLAGS"]) | sed -e "$edit_cflags"`
 	    $1_LIBS=`AS_ECHO(["$$1_LIBS"]) | sed -e 's,///*,/,g'`
             AC_MSG_RESULT([yes CFLAGS='$$1_CFLAGS' LIBS='$$1_LIBS'])
@@ -1715,7 +1707,7 @@ fail;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1040
  ; /* OK */
 #else
-#error "OSX 10.4 or newer required"
+ error "OSX 10.4 or newer required";
 #endif
 #endif
 		    ])],
@@ -1733,7 +1725,7 @@ fail;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
  ; /* OK */
 #else
-#error "OSX 10.5 not found"
+ error "OSX 10.5 not found";
 #endif
 #endif
 		    ])],
@@ -2259,11 +2251,9 @@ fi
 HAVE_IMAGEMAGICK=no
 if test "${HAVE_X11}" = "yes" || test "${HAVE_MACGUI}" = "yes" || test "${HAVE_NS}" = "yes" || test "${HAVE_W32}" = "yes"; then
   if test "${with_imagemagick}" != "no"; then
-    ## 6.2.8 is the earliest version known to work, but earlier versions
-    ## might work - let us know if you find one.
-    ## 6.0.7 does not work.  See bug#7955.
+    ## 6.3.5 is the earliest version known to work; see Bug#17339.
     ## 6.8.2 makes Emacs crash; see Bug#13867.
-    IMAGEMAGICK_MODULE="Wand >= 6.2.8 Wand != 6.8.2"
+    IMAGEMAGICK_MODULE="Wand >= 6.3.5 Wand != 6.8.2"
     PKG_CHECK_MODULES(IMAGEMAGICK, $IMAGEMAGICK_MODULE, HAVE_IMAGEMAGICK=yes, :)
     AC_SUBST(IMAGEMAGICK_CFLAGS)
     AC_SUBST(IMAGEMAGICK_LIBS)
@@ -2545,9 +2535,6 @@ if test "${with_gnutls}" = "yes" ; then
   # Windows loads GnuTLS dynamically
   if test "${opsys}" = "mingw32"; then
     LIBGNUTLS_LIBS=
-  else
-    CFLAGS="$CFLAGS $LIBGNUTLS_CFLAGS"
-    LIBS="$LIBGNUTLS_LIBS $LIBS"
   fi
 fi
 
@@ -3141,8 +3128,15 @@ elif test "${HAVE_X11}" = "yes" || test "${HAVE_W32}" = "yes"; then
   fi
 
   if test "${HAVE_PNG}" = "yes"; then
-    AC_DEFINE(HAVE_PNG, 1, [Define to 1 if you have the png library (-lpng).])
-    LIBPNG="-lpng -lz -lm"
+    AC_DEFINE(HAVE_PNG, 1, [Define to 1 if you have the png library.])
+
+    dnl Some systems, eg NetBSD 6, only provide eg "libpng16", not "libpng".
+    lpng=`libpng-config --libs 2> /dev/null`
+    case $lpng in
+      -l*) : ;;
+      *) lpng="-lpng" ;;
+    esac
+    LIBPNG="$lpng -lz -lm"
 
     AC_CHECK_DECL(png_longjmp,
       [],
@@ -5050,7 +5044,7 @@ echo "  Does Emacs use -lXpm?                                   ${HAVE_XPM}"
 echo "  Does Emacs use -ljpeg?                                  ${HAVE_JPEG}"
 echo "  Does Emacs use -ltiff?                                  ${HAVE_TIFF}"
 echo "  Does Emacs use a gif library?                           ${HAVE_GIF} $LIBGIF"
-echo "  Does Emacs use -lpng?                                   ${HAVE_PNG}"
+echo "  Does Emacs use a png library?                           ${HAVE_PNG} $LIBPNG"
 echo "  Does Emacs use -lrsvg-2?                                ${HAVE_RSVG}"
 echo "  Does Emacs use imagemagick?                             ${HAVE_IMAGEMAGICK}"
 

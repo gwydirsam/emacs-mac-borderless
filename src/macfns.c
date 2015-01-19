@@ -3850,6 +3850,10 @@ syms_of_macfns (void)
   DEFSYM (Qsuppress_icon, "suppress-icon");
   DEFSYM (Qundefined_color, "undefined-color");
   DEFSYM (Qcancel_timer, "cancel-timer");
+  DEFSYM (Qgeometry, "geometry");
+  DEFSYM (Qworkarea, "workarea");
+  DEFSYM (Qmm_size, "mm-size");
+  DEFSYM (Qframes, "frames");
   DEFSYM (Qbacking_scale_factor, "backing-scale-factor");
   DEFSYM (Qfont_param, "font-parameter");
   DEFSYM (QCdirection, ":direction");

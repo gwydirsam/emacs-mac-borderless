@@ -302,38 +302,123 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     ;; macselect.c
 	     (mac-dnd-known-types mac (repeat string) "22.1")
 	     ;; macterm.c
-	     (mac-control-modifier mac (choice (const :tag "No modifier" nil)
-					       (const control) (const meta)
-					       (const alt) (const hyper)
-					       (const super)) "22.1")
-	     (mac-command-modifier mac (choice (const :tag "No modifier" nil)
-					       (const control) (const meta)
-					       (const alt) (const hyper)
-					       (const super)) "22.1")
-	     (mac-option-modifier mac (choice (const :tag "No modifier (work as option)" nil)
-					      (const control) (const meta)
-					      (const alt) (const hyper)
-					      (const super)) "22.1")
-	     (mac-function-modifier mac
-				    (choice (const :tag "No modifier (work as function)" nil)
-					    (const control) (const meta)
-					    (const alt) (const hyper)
-					    (const super)) "22.1")
-	     (mac-emulate-three-button-mouse mac
-					     (choice (const :tag "No emulation" nil)
-						     (const :tag "Option->2, Command->3" t)
-						     (const :tag "Command->2, Option->3" reverse))
-				    "22.1")
+	     (mac-control-modifier
+	      mac (choice (const :tag "No modifier" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "No modifier" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "22.1")
+	     (mac-right-control-modifier
+	      mac (choice (const :tag "Same as left one" Qleft)
+			  (const :tag "No modifier" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "Same as left one" Qleft)
+					 (const :tag "No modifier" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "24.4")
+	     (mac-command-modifier
+	      mac (choice (const :tag "No modifier" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "No modifier" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "22.1")
+	     (mac-right-command-modifier
+	      mac (choice (const :tag "Same as left one" Qleft)
+			  (const :tag "No modifier" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "Same as left one" Qleft)
+					 (const :tag "No modifier" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "24.4")
+	     (mac-option-modifier
+	      mac (choice (const :tag "No modifier (work as option)" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "No modifier (work as option)" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "22.1")
+	     (mac-right-option-modifier
+	      mac (choice (const :tag "Same as left one" Qleft)
+			  (const :tag "No modifier (work as option)" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "Same as left one" Qleft)
+					 (const :tag "No modifier (work as option)" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "24.4")
+	     (mac-function-modifier
+	      mac (choice (const :tag "No modifier (work as function)" nil)
+			  (const control) (const meta) (const alt)
+			  (const hyper) (const super)
+			  (plist :tag "Per event type"
+				 :key-type
+				 (choice (const :tag "Ordinary keys" :ordinary)
+					 (const :tag "Function keys" :function)
+					 (const :tag "Mouse operations" :mouse))
+				 :value-type
+				 (choice (const :tag "No modifier (work as function)" nil)
+					 (const control) (const meta)
+					 (const alt) (const hyper)
+					 (const super)))) "22.1")
+	     (mac-emulate-three-button-mouse
+	      mac (choice (const :tag "No emulation" nil)
+			  (const :tag "Option->2, Command->3" t)
+			  (const :tag "Command->2, Option->3" reverse)) "22.1")
 	     (mac-wheel-button-is-mouse-2 mac boolean "22.1")
 	     (mac-pass-command-to-system mac boolean "22.1")
 	     (mac-pass-control-to-system mac boolean "22.1")
-	     (mac-ts-script-language-on-focus mac
-					      (choice (const :tag "System default behavior" nil)
-						      (const :tag "Restore to script/language used in the last focus frame" t)
-						      (cons :tag "Specify script/language"
-							    (integer :tag "Script code")
-							    (integer :tag "Language code")))
-					      "22.1")
+	     (mac-ts-script-language-on-focus
+	      mac (choice (const :tag "System default behavior" nil)
+			  (const :tag "Restore to script/language used in the last focus frame" t)
+			  (cons :tag "Specify script/language"
+				(integer :tag "Script code")
+				(integer :tag "Language code"))) "22.1")
 	     (mac-drawing-use-gcd mac boolean "24.4")
              (debug-on-event debug
                              (choice (const :tag "None" nil)

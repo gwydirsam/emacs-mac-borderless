@@ -1,3 +1,67 @@
+2014-05-08  Glenn Morris  <rgm@gnu.org>
+
+	* automated/vc-bzr.el (vc-bzr-test-bug9726, vc-bzr-test-bug9781)
+	(vc-bzr-test-faulty-bzr-autoloads):
+	Give bzr a temporary home-directory, in case the real one is missing.
+
+2014-05-05  Dmitry Gutov  <dgutov@yandex.ru>
+
+	* automated/ruby-mode-tests.el
+	(ruby-interpolation-after-dollar-sign): New test.
+
+2014-05-05  Glenn Morris  <rgm@gnu.org>
+
+	* automated/help-fns.el: New file.
+
+2014-04-25  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el (top):
+	* automated/file-notify-tests.el (top): Do not disable interactive
+	passwords in batch mode.
+	(password-cache-expiry): Set to nil.
+
+2014-04-24  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/file-notify-tests.el
+	(file-notify-test-remote-temporary-file-directory):
+	* automated/tramp-tests.el (tramp-test-temporary-file-directory):
+	Use a mock-up method as default.
+	(tramp-test00-availability): Print the used directory name.
+	(tramp-test33-recursive-load): Fix typo.
+
+2014-04-22  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el (tramp--test-check-files): Remove traces.
+	(tramp-test30-special-characters): Remove test for backslash.
+
+2014-04-20  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el
+	(tramp-test19-directory-files-and-attributes)
+	(tramp-test22-file-times): Check for `file-attributes' equality
+	only if there is a usable timestamp.
+	(tramp--test-check-files): Do not use `copy-sequence'.
+
+2014-04-19  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el (tramp--test-check-files): Extend test.
+	(tramp-test31-utf8): Let-bind also `file-name-coding-system'.
+
+2014-04-18  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el (tramp-copy-size-limit): Set to nil.
+	(tramp--test-make-temp-name): Optional argument LOCAL.
+	(tramp--instrument-test-case): Show messages.  Catch also `quit'.
+	(tramp-test10-write-region): No special test for out-of-band copy
+	needed anymore.
+	(tramp-test11-copy-file, tramp-test12-rename-file)
+	(tramp-test21-file-links): Extend tests.
+	(tramp-test20-file-modes): More robust check for user "root".
+	(tramp--test-check-files): New defun.
+	(tramp-test30-special-characters, tramp-test33-recursive-load)
+	(tramp-test34-unload): New tests.
+	(tramp-test31-utf8, tramp-test32-asynchronous-requests):  Rename.
+
 2014-04-10  Paul Eggert  <eggert@cs.ucla.edu>
 
 	* automated/electric-tests.el: Fix spelling error in test name.

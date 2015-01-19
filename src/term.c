@@ -503,7 +503,7 @@ static ptrdiff_t encode_terminal_dst_size;
    Set CODING->produced to the byte-length of the resulting byte
    sequence, and return a pointer to that byte sequence.  */
 
-#ifndef WINDOWSNT
+#ifndef DOS_NT
 static
 #endif
 unsigned char *
@@ -2900,6 +2900,13 @@ tty_menu_display (tty_menu *menu, int x, int y, int pn, int *faces,
 	  menu_help_paneno = pn - 1;
 	  menu_help_itemno = j;
 	}
+      /* Take note of the coordinates of the active menu item, to
+	 display the cursor there.  */
+      if (mousehere)
+	{
+	  row = y + i;
+	  col = x;
+	}
       display_tty_menu_item (menu->text[j], max_width, face, x, y + i,
 			     menu->submenu[j] != NULL);
     }
@@ -3180,6 +3187,7 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
   bool first_time;
   Lisp_Object selectface;
   int first_item = 0;
+  int col, row;
 
   /* Don't allow non-positive x0 and y0, lest the menu will wrap
      around the display.  */
@@ -3235,7 +3243,10 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
 
   /* Turn off the cursor.  Otherwise it shows through the menu
      panes, which is ugly.  */
+  col = cursorX (tty);
+  row = cursorY (tty);
   tty_hide_cursor (tty);
+
   if (buffers_num_deleted)
     menu->text[0][7] = ' ';
   onepane = menu->count == 1 && menu->submenu[0];
@@ -3367,6 +3378,11 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
 			    faces, x, y, first_item, 1);
 	  tty_hide_cursor (tty);
 	  fflush (tty->output);
+	  /* The call to display help-echo below will move the cursor,
+	     so remember its current position as computed by
+	     tty_menu_display.  */
+	  col = cursorX (tty);
+	  row = cursorY (tty);
 	}
 
       /* Display the help-echo message for the currently-selected menu
@@ -3376,6 +3392,10 @@ tty_menu_activate (tty_menu *menu, int *pane, int *selidx,
 	{
 	  help_callback (menu_help_message,
 			 menu_help_paneno, menu_help_itemno);
+	  /* Move the cursor to the beginning of the current menu
+	     item, so that screen readers and other accessibility aids
+	     know where the active region is.  */
+	  cursor_to (sf, row, col);
 	  tty_hide_cursor (tty);
 	  fflush (tty->output);
 	  prev_menu_help_message = menu_help_message;
@@ -4560,6 +4580,7 @@ bigger, or it may make it blink, or it may do nothing at all.  */);
   encode_terminal_src = NULL;
   encode_terminal_dst = NULL;
 
+#ifndef MSDOS
   DEFSYM (Qtty_menu_next_item, "tty-menu-next-item");
   DEFSYM (Qtty_menu_prev_item, "tty-menu-prev-item");
   DEFSYM (Qtty_menu_next_menu, "tty-menu-next-menu");
@@ -4569,4 +4590,5 @@ bigger, or it may make it blink, or it may do nothing at all.  */);
   DEFSYM (Qtty_menu_exit, "tty-menu-exit");
   DEFSYM (Qtty_menu_mouse_movement, "tty-menu-mouse-movement");
   DEFSYM (Qtty_menu_navigation_map, "tty-menu-navigation-map");
+#endif
 }

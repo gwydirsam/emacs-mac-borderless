@@ -422,7 +422,10 @@ extern void mac_set_foreground (GC, unsigned long);
 extern void mac_set_background (GC, unsigned long);
 extern void mac_draw_line_to_pixmap (Pixmap, GC, int, int, int, int);
 extern void mac_clear_area (struct frame *, int, int, int, int);
-extern int mac_quit_char_key_p (UInt32, UInt32);
+extern UInt32 mac_cgevent_flags_to_modifiers (CGEventFlags);
+extern CGEventFlags mac_cgevent_to_input_event (CGEventRef,
+						struct input_event *);
+extern bool mac_keydown_cgevent_quit_p (CGEventRef);
 #define x_display_pixel_height(dpyinfo)	((dpyinfo)->height)
 #define x_display_pixel_width(dpyinfo)	((dpyinfo)->width)
 #define XCreatePixmap(display, w, width, height, depth) \

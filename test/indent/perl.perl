@@ -1,7 +1,20 @@
 #!/usr/bin/perl
 # -*- eval: (bug-reference-mode 1) -*-
 
-print <<"EOF1" . s/he"llo/th'ere/;
+use v5.14;
+
+my $str= <<END;
+Hello
+END
+
+my $a = $';
+
+my $b=3;
+
+print $str;
+if ($c && /====/){xyz;}
+
+print << "EOF1" . s/he"llo/th'ere/;
 foo
 EOF2
 bar

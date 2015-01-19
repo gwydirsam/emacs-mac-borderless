@@ -162,23 +162,44 @@ have to customize these variables manually.
 @vindex mac-command-modifier
 @vindex mac-option-modifier
 @vindex mac-function-modifier
-  On the Mac port, Emacs can use @key{control}, @key{command},
-@key{option}, and laptop @key{function} keys as any of Emacs modifier
-keys except @key{SHIFT} (i.e., @key{ALT}, @key{CTRL}, @key{HYPER},
-@key{META}, and @key{SUPER}).  The assignment is controlled by the
-variables @code{mac-control-modifier}, @code{mac-command-modifier},
-@code{mac-option-modifier}, and @code{mac-function-modifier}.  The
-value for each of these variables can be one of the following symbols:
-@code{alt}, @code{control}, @code{hyper}, @code{meta}, @code{super},
-and @code{nil} (no particular assignment).  By default, the
-@key{control} key works as @key{CTRL}, and the @key{command} key as
-@key{META}.
+@vindex mac-right-control-modifier
+@vindex mac-right-command-modifier
+@vindex mac-right-option-modifier
+  On the Mac port, Emacs can use the @key{control}, @key{command},
+@key{option}, and @key{function} (labeled @samp{fn}) keys as any of
+Emacs modifier keys except @key{SHIFT} (i.e., @key{ALT}, @key{CTRL},
+@key{HYPER}, @key{META}, and @key{SUPER}).  The assignment is
+controlled by the variables @code{mac-control-modifier},
+@code{mac-command-modifier}, @code{mac-option-modifier}, and
+@code{mac-function-modifier}.  One may assign different modifiers to
+the @key{control}, @key{command}, and @key{option} keys placed on the
+right part of the keyboard using the variables
+@code{mac-right-control-modifier}, @code{mac-right-command-modifier},
+and @code{mac-right-option-modifier}, respectively.@footnote{The left
+and right versions cannot be distinguished on some environments such
+as Screen Sharing.  Also, certain combinations of a key with both
+versions of the same modifier do not emit events at the system level.}
 
-  For the @key{option} key, if @code{mac-option-modifier} is set to
-@code{nil}, which is the default, the key works as the normal
-@key{option} key, i.e., dead-key processing will work.  This is useful
-for entering non-@acronym{ASCII} Latin characters directly from the
-Mac keyboard, for example.
+  The value for each of these variables can be one of the following
+symbols: @code{alt}, @code{control}, @code{hyper}, @code{meta},
+@code{super}, and @code{nil} (no particular assignment).  By default,
+the @key{control} key works as @key{CTRL}, and the @key{command} key
+as @key{META}.  For the right versions of the variables, the symbol
+@code{left}, which is the default, means the same assignment as the
+left counterpart.  The property list format @code{(:ordinary
+@var{symbol} :function @var{symbol} :mouse @var{symbol})} allows us to
+specify different assignments depending on the input types: ordinary
+keys, function keys, and mouse operations.
+
+  For the left and right @key{option} keys, if the value of the
+corresponding variable (or the value of the @code{:ordinary} property
+if the value of the variable is a property list) is set to @code{nil},
+then the key works as the normal @key{option} key.  This enables
+dead-key processing and is useful for entering non-@acronym{ASCII}
+Latin characters directly from the Mac keyboard, for example.  By
+default, the @key{option} key works as the normal @key{option} key for
+the ordinary keys, and as @key{ALT} for the function keys and the
+mouse operations.
 
   The Mac port recognizes the setting in the International system
 preference pane and supports international and alternative keyboard

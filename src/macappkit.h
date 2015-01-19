@@ -55,6 +55,7 @@ typedef unsigned int NSUInteger;
 
 #if !USE_ARC
 #define __unsafe_unretained
+#define __autoreleasing
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
@@ -95,6 +96,7 @@ typedef unsigned int NSUInteger;
 @interface NSEvent (Emacs)
 - (NSEvent *)mouseEventByChangingType:(NSEventType)type
 		          andLocation:(NSPoint)location;
+- (CGEventRef)coreGraphicsEvent;
 @end
 
 @interface NSAttributedString (Emacs)
@@ -381,6 +383,11 @@ typedef unsigned int NSUInteger;
   /* Whether scrollRect:by: has copied rounded bottom corner area.  */
   BOOL roundedBottomCornersCopied;
 
+  /* Whether the raw key event below has mapped any of CGEvent flags.
+     It is precalculated in keyDown: so as to avoid regeneration of a
+     CGEvent object.  */
+  BOOL rawKeyEventHasMappedFlags;
+
   /* Raw key event that is interpreted by intepretKeyEvents:.  */
   NSEvent *rawKeyEvent;
 
@@ -480,13 +487,9 @@ typedef unsigned int NSUInteger;
      scroller area.  */
   CGFloat clickPositionInFrame;
 
-  /* For a scroller click with the control modifier, this becomes the
-     value of the `code' member in struct input_event.  */
-  int inputEventCode;
-
-  /* For a scroller click with the control modifier, this becomes the
-     value of the `modifiers' member in struct input_event.  */
-  int inputEventModifiers;
+  /* This is used for saving the `code' and `modifiers' members of an
+     input event for a scroller click with the control modifier.  */
+  struct input_event inputEvent;
 }
 - (void)setEmacsScrollBar:(struct scroll_bar *)bar;
 - (struct scroll_bar *)emacsScrollBar;
@@ -495,7 +498,7 @@ typedef unsigned int NSUInteger;
 - (CGFloat)knobMinEdgeInSlot;
 - (CGFloat)frameSpan;
 - (CGFloat)clickPositionInFrame;
-- (int)inputEventCode;
+- (ptrdiff_t)inputEventCode;
 - (int)inputEventModifiers;
 @end
 
@@ -908,6 +911,12 @@ enum {
 @interface NSMenu (AvailableOn1060AndLater)
 - (BOOL)popUpMenuPositioningItem:(NSMenuItem *)item
 		      atLocation:(NSPoint)location inView:(NSView *)view;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@interface NSEvent (AvailableOn1050AndLater)
+- (CGEventRef)CGEvent;
 @end
 #endif
 

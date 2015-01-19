@@ -1266,12 +1266,23 @@ Value is the height in pixels of the line at point.  */)
   struct it it;
   struct text_pos pt;
   struct window *w = XWINDOW (selected_window);
+  struct buffer *old_buffer = NULL;
+  Lisp_Object result;
 
+  if (XBUFFER (w->contents) != current_buffer)
+    {
+      old_buffer = current_buffer;
+      set_buffer_internal_1 (XBUFFER (w->contents));
+    }
   SET_TEXT_POS (pt, PT, PT_BYTE);
   start_display (&it, w, pt);
   it.vpos = it.current_y = 0;
   last_height = 0;
-  return make_number (line_bottom_y (&it));
+  result = make_number (line_bottom_y (&it));
+  if (old_buffer)
+    set_buffer_internal_1 (old_buffer);
+
+  return result;
 }
 
 /* Return the default pixel height of text lines in window W.  The
@@ -18726,6 +18737,7 @@ insert_left_trunc_glyphs (struct it *it)
   truncate_it.current_x = 0;
   truncate_it.face_id = DEFAULT_FACE_ID;
   truncate_it.glyph_row = &scratch_glyph_row;
+  truncate_it.area = TEXT_AREA;
   truncate_it.glyph_row->used[TEXT_AREA] = 0;
   CHARPOS (truncate_it.position) = BYTEPOS (truncate_it.position) = -1;
   truncate_it.object = make_number (0);
@@ -24630,13 +24642,16 @@ draw_glyphs (struct window *w, int x, struct glyph_row *row,
 	  else
 	    overlap_hl = DRAW_NORMAL_TEXT;
 
+	  if (hl != overlap_hl)
+	    clip_head = head;
 	  j = i;
 	  BUILD_GLYPH_STRINGS (j, start, h, t,
 			       overlap_hl, dummy_x, last_x);
 	  start = i;
 	  compute_overhangs_and_x (t, head->x, 1);
 	  prepend_glyph_string_lists (&head, &tail, h, t);
-	  clip_head = head;
+	  if (clip_head == NULL)
+	    clip_head = head;
 	}
 
       /* Prepend glyph strings for glyphs in front of the first glyph
@@ -24657,7 +24672,8 @@ draw_glyphs (struct window *w, int x, struct glyph_row *row,
 	  else
 	    overlap_hl = DRAW_NORMAL_TEXT;
 
-	  clip_head = head;
+	  if (hl == overlap_hl || clip_head == NULL)
+	    clip_head = head;
 	  BUILD_GLYPH_STRINGS (i, start, h, t,
 			       overlap_hl, dummy_x, last_x);
 	  for (s = h; s; s = s->next)
@@ -24681,13 +24697,16 @@ draw_glyphs (struct window *w, int x, struct glyph_row *row,
 	  else
 	    overlap_hl = DRAW_NORMAL_TEXT;
 
+	  if (hl != overlap_hl)
+	    clip_tail = tail;
 	  BUILD_GLYPH_STRINGS (end, i, h, t,
 			       overlap_hl, x, last_x);
 	  /* Because BUILD_GLYPH_STRINGS updates the first argument,
 	     we don't have `end = i;' here.  */
 	  compute_overhangs_and_x (h, tail->x + tail->width, 0);
 	  append_glyph_string_lists (&head, &tail, h, t);
-	  clip_tail = tail;
+	  if (clip_tail == NULL)
+	    clip_tail = tail;
 	}
 
       /* Append glyph strings for glyphs following the last glyph
@@ -24705,7 +24724,8 @@ draw_glyphs (struct window *w, int x, struct glyph_row *row,
 	  else
 	    overlap_hl = DRAW_NORMAL_TEXT;
 
-	  clip_tail = tail;
+	  if (hl == overlap_hl || clip_tail == NULL)
+	    clip_tail = tail;
 	  i++;			/* We must include the Ith glyph.  */
 	  BUILD_GLYPH_STRINGS (end, i, h, t,
 			       overlap_hl, x, last_x);

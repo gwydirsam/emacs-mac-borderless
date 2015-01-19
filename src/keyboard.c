@@ -300,7 +300,7 @@ static Lisp_Object Qmouse_fixup_help_message;
 /* Symbols to denote kinds of events.  */
 static Lisp_Object Qfunction_key;
 Lisp_Object Qmouse_click;
-#if defined (HAVE_NTGUI) || defined (HAVE_MACGUI)
+#ifdef HAVE_NTGUI
 Lisp_Object Qlanguage_change;
 #endif
 static Lisp_Object Qdrag_n_drop;
@@ -828,14 +828,18 @@ This function is called by the editor initialization to begin editing.  */)
   if (input_blocked_p ())
     return Qnil;
 
-  command_loop_level++;
-  update_mode_lines = 17;
-
-  if (command_loop_level
+  if (command_loop_level >= 0
       && current_buffer != XBUFFER (XWINDOW (selected_window)->contents))
     buffer = Fcurrent_buffer ();
   else
     buffer = Qnil;
+
+  /* Don't do anything interesting between the increment and the
+     record_unwind_protect!  Otherwise, we could get distracted and
+     never decrement the counter again.  */
+  command_loop_level++;
+  update_mode_lines = 17;
+  record_unwind_protect (recursive_edit_unwind, buffer);
 
   /* If we leave recursive_edit_1 below with a `throw' for instance,
      like it is done in the splash screen display, we have to
@@ -843,7 +847,6 @@ This function is called by the editor initialization to begin editing.  */)
      would have done if it were left normally.  */
   if (command_loop_level > 0)
     temporarily_switch_to_single_kboard (SELECTED_FRAME ());
-  record_unwind_protect (recursive_edit_unwind, buffer);
 
   recursive_edit_1 ();
   return unbind_to (count, Qnil);
@@ -4062,20 +4065,14 @@ kbd_buffer_get_event (KBOARD **kbp,
 	    x_activate_menubar (XFRAME (event->frame_or_window));
 	}
 #endif
-#if defined (HAVE_NTGUI) || defined (HAVE_MACGUI)
+#ifdef HAVE_NTGUI
       else if (event->kind == LANGUAGE_CHANGE_EVENT)
 	{
-#ifdef HAVE_MACGUI
-	  /* Make an event (language-change (KEY_SCRIPT)).  */
-	  obj = list2 (Qlanguage_change,
-		       make_number (event->code));
-#else
 	  /* Make an event (language-change FRAME CODEPAGE LANGUAGE-ID).  */
 	  obj = list4 (Qlanguage_change,
 		       event->frame_or_window,
 		       make_number (event->code),
 		       make_number (event->modifiers));
-#endif
 	  kbd_fetch_ptr = event + 1;
 	}
 #endif
@@ -7238,7 +7235,12 @@ unblock_input_to (int level)
 /* End critical section.
 
    If doing signal-driven input, and a signal came in when input was
-   blocked, reinvoke the signal handler now to deal with it.  */
+   blocked, reinvoke the signal handler now to deal with it.
+
+   It will also process queued input, if it was not read before.
+   When a longer code sequence does not use block/unblock input
+   at all, the whole input gathered up to the next call to
+   unblock_input will be processed inside that call. */
 
 void
 unblock_input (void)
@@ -10208,16 +10210,13 @@ This may include sensitive information such as passwords.  */)
   if (!NILP (file))
     {
       int fd;
+      Lisp_Object encfile;
+
       file = Fexpand_file_name (file, Qnil);
-      /* This isn't robust, since eg file could be created after we
-         check whether it exists but before emacs_open.
-         Feel free to improve it, but this is not critical.  (Bug#17187)  */
-      if (! NILP (Ffile_exists_p (file)))
-        {
-          if (chmod (SSDATA (file), 0600) < 0)
-            report_file_error ("Doing chmod", file);
-        }
-      fd = emacs_open (SSDATA (file), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+      encfile = ENCODE_FILE (file);
+      fd = emacs_open (SSDATA (encfile), O_WRONLY | O_CREAT | O_EXCL, 0600);
+      if (fd < 0 && errno == EEXIST && unlink (SSDATA (encfile)) == 0)
+	fd = emacs_open (SSDATA (encfile), O_WRONLY | O_CREAT | O_EXCL, 0600);
       dribble = fd < 0 ? 0 : fdopen (fd, "w");
       if (dribble == 0)
 	report_file_error ("Opening dribble", file);
@@ -11107,7 +11106,7 @@ syms_of_keyboard (void)
   DEFSYM (Qconfig_changed_event, "config-changed-event");
   DEFSYM (Qmenu_enable, "menu-enable");
 
-#if defined (HAVE_NTGUI) || defined (HAVE_MACGUI)
+#ifdef HAVE_NTGUI
   DEFSYM (Qlanguage_change, "language-change");
 #endif
 

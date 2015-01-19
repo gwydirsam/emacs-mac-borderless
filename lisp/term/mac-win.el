@@ -312,20 +312,6 @@ modes have been enabled with Quartz Debug.app."
   (set-selection-coding-system mac-system-coding-system))
 
 
-;;;; Keyboard layout/language change events
-(defun mac-handle-language-change (event)
-  "Set keyboard coding system to what is specified in EVENT."
-  (interactive "e")
-  (let ((coding-system
-	 (cdr (assq (cadr event) mac-script-code-coding-systems))))
-    (set-keyboard-coding-system (or coding-system 'mac-roman))
-    ;; MacJapanese maps reverse solidus to ?\x80.
-    (if (eq coding-system 'japanese-shift-jis)
-	(define-key key-translation-map [?\x80] "\\"))))
-
-(define-key special-event-map [language-change] 'mac-handle-language-change)
-
-
 ;;;; Composition
 (defconst mac-emoji-variation-characters-alist
   '((keycap . "#0123456789")

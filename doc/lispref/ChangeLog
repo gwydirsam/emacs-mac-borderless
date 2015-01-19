@@ -1,3 +1,28 @@
+2014-05-07  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* internals.texi (C Dialect): New section.
+	(C Integer Types): Mention bool_bf.
+
+2014-04-29  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* processes.texi (Filter Functions, Sentinels): Advertise add-function.
+
+2014-04-24  Eli Zaretskii  <eliz@gnu.org>
+
+	* strings.texi (Text Comparison): Mention equal-including-properties
+	for when text properties of the strings matter for comparison.
+
+2014-04-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* text.texi (Registers): Document register-read-with-preview.
+
+	* internals.texi (Building Emacs): Improve indexing.
+
+2014-04-15  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* display.texi (Overlay Properties): Reword the doc of `priority'.
+	(Finding Overlays): Document new arg of `overlays-at'.
+
 2014-04-05  Glenn Morris  <rgm@gnu.org>
 
 	* os.texi (Recording Input): Dribble files may contain passwords.

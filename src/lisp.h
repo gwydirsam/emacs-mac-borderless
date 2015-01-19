@@ -344,7 +344,7 @@ enum enum_USE_LSB_TAG { USE_LSB_TAG = false };
    (eassert (CONSP (a)), (struct Lisp_Cons *) XUNTAG (a, Lisp_Cons))
 #define lisp_h_XHASH(a) XUINT (a)
 #define lisp_h_XPNTR(a) \
-   ((void *) (intptr_t) ((XLI (a) & VALMASK) | DATA_SEG_BITS))
+   ((void *) (intptr_t) ((XLI (a) & VALMASK) | (DATA_SEG_BITS & ~VALMASK)))
 #define lisp_h_XSYMBOL(a) \
    (eassert (SYMBOLP (a)), (struct Lisp_Symbol *) XUNTAG (a, Lisp_Symbol))
 #ifndef GC_CHECK_CONS_LIST
@@ -2533,11 +2533,13 @@ CHECK_WINDOW (Lisp_Object x)
 {
   CHECK_TYPE (WINDOWP (x), Qwindowp, x);
 }
+#ifdef subprocesses
 INLINE void
 CHECK_PROCESS (Lisp_Object x)
 {
   CHECK_TYPE (PROCESSP (x), Qprocessp, x);
 }
+#endif
 INLINE void
 CHECK_NATNUM (Lisp_Object x)
 {
@@ -4148,7 +4150,6 @@ extern bool running_asynch_code;
 
 /* Defined in process.c.  */
 extern Lisp_Object QCtype, Qlocal;
-extern Lisp_Object Qprocessp;
 extern void kill_buffer_processes (Lisp_Object);
 extern bool wait_reading_process_output (intmax_t, int, int, bool,
 					 Lisp_Object,

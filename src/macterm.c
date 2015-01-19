@@ -70,6 +70,7 @@ struct mac_display_info one_mac_display_info;
 /* The keysyms to use for the various modifiers.  */
 
 static Lisp_Object Qalt, Qhyper, Qsuper, Qcontrol, Qmeta, Qmodifier_value;
+static Lisp_Object QCordinary, QCfunction, QCmouse;
 
 static struct terminal *mac_create_terminal (struct mac_display_info *dpyinfo);
 static void x_update_end (struct frame *);
@@ -4484,11 +4485,11 @@ const unsigned char keycode_to_xkeysym_table[] = {
   /*0x7C*/ 0x53 /*right*/, 0x54 /*down*/, 0x52 /*up*/, 0
 };
 
-/* Table for translating Mac keycode with the laptop `fn' key to that
-   without it.  Destination symbols in comments are keys on US
-   keyboard, and they may not be the same on other types of keyboards.
-   If the destination is identical to the source, it doesn't map `fn'
-   key to a modifier.  */
+/* Table for translating Mac keycode with the `fn' key to that without
+   it.  Destination symbols in comments are keys on US keyboard, and
+   they may not be the same on other types of keyboards.  If the
+   destination is identical to the source, it doesn't map `fn' key to
+   a modifier.  */
 static const unsigned char fn_keycode_to_keycode_table[] = {
   /*0x00*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   /*0x10*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -4520,82 +4521,358 @@ static const unsigned char fn_keycode_to_keycode_table[] = {
   /*0x7C*/ 0x7c /*right = right*/, 0x7d /*down = down*/, 0x7e /*up = up*/, 0
 };
 
-int
-mac_to_emacs_modifiers (UInt32 mods, UInt32 unmapped_mods)
-{
-  unsigned int result = 0;
-  if ((mods | unmapped_mods) & shiftKey)
-    result |= shift_modifier;
-
-  /* Deactivated to simplify configuration:
-     if Vmac_option_modifier is non-NIL, we fully process the Option
-     key. Otherwise, we only process it if an additional Ctrl or Command
-     is pressed. That way the system may convert the character to a
-     composed one.
-     if ((mods & optionKey) &&
-      (( !NILP(Vmac_option_modifier) ||
-      ((mods & cmdKey) || (mods & controlKey))))) */
-
-  if (!NILP (Vmac_option_modifier) && (mods & optionKey)) {
-    Lisp_Object val = Fget(Vmac_option_modifier, Qmodifier_value);
-    if (INTEGERP(val))
-      result |= XUINT(val);
-  }
-  if (!NILP (Vmac_command_modifier) && (mods & cmdKey)) {
-    Lisp_Object val = Fget(Vmac_command_modifier, Qmodifier_value);
-    if (INTEGERP(val))
-      result |= XUINT(val);
-  }
-  if (!NILP (Vmac_control_modifier) && (mods & controlKey)) {
-    Lisp_Object val = Fget(Vmac_control_modifier, Qmodifier_value);
-    if (INTEGERP(val))
-      result |= XUINT(val);
-  }
-  if (!NILP (Vmac_function_modifier) && (mods & kEventKeyModifierFnMask)) {
-    Lisp_Object val = Fget(Vmac_function_modifier, Qmodifier_value);
-    if (INTEGERP(val))
-      result |= XUINT(val);
-  }
-
-  return result;
-}
+/* Convert CGEvent flags to Carbon key modifiers.  */
 
 UInt32
-mac_mapped_modifiers (UInt32 modifiers, UInt32 key_code)
+mac_cgevent_flags_to_modifiers (CGEventFlags flags)
 {
-  UInt32 mapped_modifiers_all =
-    (NILP (Vmac_control_modifier) ? 0 : controlKey)
-    | (NILP (Vmac_option_modifier) ? 0 : optionKey)
-    | (NILP (Vmac_command_modifier) ? 0 : cmdKey)
-    | (NILP (Vmac_function_modifier) ? 0 : kEventKeyModifierFnMask);
+  UInt32 modifiers = 0;
 
-  /* The meaning of kEventKeyModifierFnMask has changed in Mac OS X
-     10.5, and it now behaves much like Cocoa's NSFunctionKeyMask.  It
-     no longer means laptop's `fn' key is down for the following keys:
-     F1, F2, and so on, Help, Forward Delete, Home, End, Page Up, Page
-     Down, the arrow keys, and Clear.  We ignore the corresponding bit
-     if that key can be entered without the `fn' key on laptops.  */
-  if (modifiers & kEventKeyModifierFnMask
-      && key_code <= 0x7f
-      && fn_keycode_to_keycode_table[key_code] == key_code
-      && key_code != 0)		/* kVK_ANSI_A */
-    modifiers &= ~kEventKeyModifierFnMask;
+  if (flags & kCGEventFlagMaskAlphaShift)
+    modifiers |= alphaLock;
+  if (flags & kCGEventFlagMaskShift)
+    modifiers |= shiftKey;
+  if (flags & kCGEventFlagMaskControl)
+    modifiers |= controlKey;
+  if (flags & kCGEventFlagMaskAlternate)
+    modifiers |= optionKey;
+  if (flags & kCGEventFlagMaskCommand)
+    modifiers |= cmdKey;
+  /* if (flags & kCGEventFlagMaskHelp); */
+  if (flags & kCGEventFlagMaskSecondaryFn)
+    modifiers |= kEventKeyModifierFnMask;
+  if (flags & kCGEventFlagMaskNumericPad)
+    modifiers |= kEventKeyModifierNumLockMask;
 
-  return mapped_modifiers_all & modifiers;
+  return modifiers;
 }
 
-int
-mac_get_emulated_btn (UInt32 modifiers)
+/* Update the Unicode string in a Quartz event CGEVENT according to
+   its keycode, flags, and keyboard type values.  Return true if and
+   only if the Unicode string is successfully updated.  */
+
+static bool
+mac_cgevent_update_unicode_string (CGEventRef cgevent)
 {
-  int result = 0;
-  if (!NILP (Vmac_emulate_three_button_mouse)) {
-    int cmdIs3 = !EQ (Vmac_emulate_three_button_mouse, Qreverse);
-    if (modifiers & cmdKey)
-      result = cmdIs3 ? 2 : 1;
-    else if (modifiers & optionKey)
-      result = cmdIs3 ? 1 : 2;
-  }
+  bool result = false;
+  UInt32 modifiers = mac_cgevent_flags_to_modifiers (CGEventGetFlags (cgevent));
+  UInt32 keycode = CGEventGetIntegerValueField (cgevent,
+						kCGKeyboardEventKeycode);
+  UCKeyboardLayout *uchr_ptr = NULL;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+  TISInputSourceRef source = TISCopyCurrentKeyboardLayoutInputSource ();
+  CFDataRef uchr_data = NULL;
+
+  if (source)
+    uchr_data =
+      TISGetInputSourceProperty (source, kTISPropertyUnicodeKeyLayoutData);
+  if (uchr_data)
+    uchr_ptr = (UCKeyboardLayout *) CFDataGetBytePtr (uchr_data);
+#else
+  OSStatus err;
+  KeyboardLayoutRef layout;
+
+  err = KLGetCurrentKeyboardLayout (&layout);
+  if (err == noErr)
+    err = KLGetKeyboardLayoutProperty (layout, kKLuchrData,
+				       (const void **) &uchr_ptr);
+#endif
+
+  if (uchr_ptr)
+    {
+      OSStatus status;
+      UInt16 key_action =
+	(CGEventGetIntegerValueField (cgevent, kCGKeyboardEventAutorepeat)
+	 ? kUCKeyActionAutoKey : kUCKeyActionDown);
+      UInt32 modifier_key_state = modifiers >> 8;
+      UInt32 keyboard_type =
+	CGEventGetIntegerValueField (cgevent, kCGKeyboardEventKeyboardType);
+      UInt32 dead_key_state = 0;
+      UniCharCount actual_length;
+      UniChar string[255];
+
+      status = UCKeyTranslate (uchr_ptr, keycode, key_action,
+			       modifier_key_state, keyboard_type,
+			       kUCKeyTranslateNoDeadKeysMask,
+			       &dead_key_state, 255, &actual_length, string);
+      if (status == noErr)
+	{
+	  CGEventKeyboardSetUnicodeString (cgevent, actual_length, string);
+	  result = true;
+	}
+    }
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
+  if (source)
+    CFRelease (source);
+#endif
+
   return result;
+}
+
+static Lisp_Object
+mac_modifier_map_lookup (Lisp_Object modifier_map, Lisp_Object kind)
+{
+  if (SYMBOLP (modifier_map))
+    return modifier_map;
+  else
+    {
+      Lisp_Object value = Fplist_get (modifier_map, kind);
+
+      return SYMBOLP (value) ? value : Qnil;
+    }
+}
+
+/* Convert a Quartz event CGEVENT to an input event, and update
+   `modifier', `code', `timestamp' (and also `kind' for key-down
+   events) members of *BUF if BUF is not NULL.  Return bitwise-or of
+   CGEvent flag masks that have been mapped to emacs modifiers.  */
+
+CGEventFlags
+mac_cgevent_to_input_event (CGEventRef cgevent, struct input_event *buf)
+{
+  CGEventMask key_event_mask =
+    (CGEventMaskBit (kCGEventKeyDown) | CGEventMaskBit (kCGEventKeyUp));
+  CGEventMask mouse_button_event_mask =
+    (CGEventMaskBit (kCGEventLeftMouseDown)
+     | CGEventMaskBit (kCGEventLeftMouseUp)
+     | CGEventMaskBit (kCGEventRightMouseDown)
+     | CGEventMaskBit (kCGEventRightMouseUp)
+     | CGEventMaskBit (kCGEventLeftMouseDragged)
+     | CGEventMaskBit (kCGEventRightMouseDragged)
+     | CGEventMaskBit (kCGEventOtherMouseDown)
+     | CGEventMaskBit (kCGEventOtherMouseUp)
+     | CGEventMaskBit (kCGEventOtherMouseDragged));
+  CGEventMask other_mouse_event_mask =
+    (CGEventMaskBit (kCGEventMouseMoved)
+     | CGEventMaskBit (kCGEventScrollWheel)
+     | CGEventMaskBit (29)	/* NSEventTypeGesture */
+     /* Probably NSEventTypeGesture above covers all the cases below.
+	But just in case...  */
+     | CGEventMaskBit (30)	/* NSEventTypeMagnify */
+     | CGEventMaskBit (31)	/* NSEventTypeSwipe */
+     | CGEventMaskBit (18)	/* NSEventTypeRotate */
+     | CGEventMaskBit (19)	/* NSEventTypeBeginGesture */
+     | CGEventMaskBit (20)	/* NSEventTypeEndGesture */
+     | CGEventMaskBit (32)	/* NSEventTypeSmartMagnify */
+     | CGEventMaskBit (33));	/* NSEventTypeQuickLook */
+  CGEventFlags possibly_mapped_flags =
+    (kCGEventFlagMaskControl | kCGEventFlagMaskAlternate
+     | kCGEventFlagMaskCommand | kCGEventFlagMaskSecondaryFn);
+  enum side {LEFT, RIGHT, NSIDES};
+  static const struct {
+    CGEventFlags device_indep;
+    CGEventFlags device_deps[NSIDES];
+  } mask_table[] = {{kCGEventFlagMaskControl,
+		     {NX_DEVICELCTLKEYMASK, NX_DEVICERCTLKEYMASK}},
+		    {kCGEventFlagMaskAlternate,
+		     {NX_DEVICELALTKEYMASK, NX_DEVICERALTKEYMASK}},
+		    {kCGEventFlagMaskCommand,
+		     {NX_DEVICELCMDKEYMASK, NX_DEVICERCMDKEYMASK}},
+		    {kCGEventFlagMaskSecondaryFn,
+		     {0, 0}}};
+  static Lisp_Object *const modifier_maps[][NSIDES] =
+    {{&Vmac_control_modifier, &Vmac_right_control_modifier},
+     {&Vmac_option_modifier, &Vmac_right_option_modifier},
+     {&Vmac_command_modifier, &Vmac_right_command_modifier},
+     {&Vmac_function_modifier, NULL}};
+  Lisp_Object kind;
+  int i, keycode, emacs_modifiers = 0;
+  ptrdiff_t code = -1;
+  CGEventFlags mapped_flags = 0;
+  CGEventMask type_mask;
+  CGEventFlags flags = CGEventGetFlags (cgevent);
+
+  if (buf == NULL && (flags & possibly_mapped_flags) == 0)
+    return 0;
+
+  type_mask = CGEventMaskBit (CGEventGetType (cgevent));
+  if (type_mask & key_event_mask)
+    {
+      keycode = CGEventGetIntegerValueField (cgevent, kCGKeyboardEventKeycode);
+
+      if ((flags & kCGEventFlagMaskSecondaryFn)
+	  /* We exclude the case `keycode == 0' (kVK_ANSI_A) because
+	     the condition `fn_keycode_to_keycode_table[keycode] ==
+	     keycode' holds bogusly.  */
+	  && keycode > 0 && keycode <= 0x7f)
+	{
+	  ptrdiff_t stripped = fn_keycode_to_keycode_table[keycode];
+
+	  /* The meaning of kCGEventFlagMaskSecondaryFn has changed in
+	     Mac OS X 10.5, and it now behaves much like Cocoa's
+	     NSFunctionKeyMask.  It no longer means `fn' key is down
+	     for the following keys: F1, F2, and so on, Help, Forward
+	     Delete, Home, End, Page Up, Page Down, the arrow keys,
+	     and Clear.  We ignore the corresponding bit if that key
+	     can be entered without the `fn' key.  */
+	  if (stripped == keycode)
+	    flags &= ~kCGEventFlagMaskSecondaryFn;
+	  else if (stripped)
+	    {
+	      Lisp_Object k = (keycode_to_xkeysym_table[stripped]
+			       ? QCfunction : QCordinary);
+
+	      if (!NILP (mac_modifier_map_lookup (Vmac_function_modifier, k)))
+		keycode = stripped;
+	    }
+	}
+
+      if (keycode >= 0 && keycode <= 0x7f && keycode_to_xkeysym_table[keycode])
+	kind = QCfunction;
+      else
+	kind = QCordinary;
+    }
+  else if (type_mask & mouse_button_event_mask)
+    {
+      code = CGEventGetIntegerValueField (cgevent, kCGMouseEventButtonNumber);
+
+      if (code == kCGMouseButtonLeft)
+	{
+	  if (!NILP (Vmac_emulate_three_button_mouse)
+	      && (flags & (kCGEventFlagMaskAlternate
+			   | kCGEventFlagMaskCommand)))
+	    {
+	      CGEventFlags mask_for_center =
+		(!EQ (Vmac_emulate_three_button_mouse, Qreverse)
+		 ? (mac_wheel_button_is_mouse_2
+		    ? kCGEventFlagMaskAlternate : kCGEventFlagMaskCommand)
+		 : (mac_wheel_button_is_mouse_2
+		    ? kCGEventFlagMaskCommand : kCGEventFlagMaskAlternate));
+
+	      if (flags & mask_for_center)
+		{
+		  code = kCGMouseButtonCenter;
+		  flags &= ~mask_for_center;
+		}
+	      else
+		{
+		  code = kCGMouseButtonRight;
+		  flags &= ~(kCGEventFlagMaskAlternate
+			     | kCGEventFlagMaskCommand);
+		}
+	    }
+	}
+      if (mac_wheel_button_is_mouse_2)
+	{
+	  if (code == kCGMouseButtonRight)
+	    code = kCGMouseButtonCenter;
+	  else if (code == kCGMouseButtonCenter)
+	    code = kCGMouseButtonRight;
+	}
+
+      kind = QCmouse;
+    }
+  else if (type_mask & other_mouse_event_mask)
+    kind = QCmouse;
+  else
+    kind = QCordinary;
+
+  if (flags & kCGEventFlagMaskShift)
+    emacs_modifiers |= shift_modifier;
+  for (i = 0; i < sizeof (mask_table) / sizeof (mask_table[0]); i++)
+    if (flags & mask_table[i].device_indep)
+      {
+	Lisp_Object modifier_symbols[NSIDES];
+	bool lookup_left_p = true;
+	int n = 0;
+
+	if (flags & mask_table[i].device_deps[RIGHT])
+	  {
+	    Lisp_Object right_modifier_symbol =
+	      mac_modifier_map_lookup (*modifier_maps[i][RIGHT], kind);
+
+	    if (!EQ (right_modifier_symbol, Qleft))
+	      {
+		modifier_symbols[n++] = right_modifier_symbol;
+		if (!(flags & mask_table[i].device_deps[LEFT]))
+		  lookup_left_p = false;
+	      }
+	  }
+	if (lookup_left_p)
+	  modifier_symbols[n++] =
+	    mac_modifier_map_lookup (*modifier_maps[i][LEFT], kind);
+
+	flags &= ~(mask_table[i].device_indep);
+	do
+	  {
+	    Lisp_Object modifier_symbol = modifier_symbols[--n];
+
+	    if (NILP (modifier_symbol))
+	      flags |= mask_table[i].device_indep;
+	    else
+	      {
+		Lisp_Object value = Fget (modifier_symbol, Qmodifier_value);
+
+		if (INTEGERP (value))
+		  {
+		    emacs_modifiers |= XUINT (value);
+		    mapped_flags |= mask_table[i].device_indep;
+		  }
+	      }
+	  }
+	while (n > 0);
+      }
+
+  if (buf == NULL)
+    return mapped_flags;
+
+  if (type_mask == CGEventMaskBit (kCGEventKeyDown))
+    {
+      if (keycode >= 0 && keycode <= 0x7f && keycode_to_xkeysym_table[keycode])
+	{
+	  buf->kind = NON_ASCII_KEYSTROKE_EVENT;
+	  code = 0xff00 | keycode_to_xkeysym_table[keycode];
+	}
+      else
+	{
+	  UniCharCount length;
+	  UniChar text[2];
+
+	  if ((emacs_modifiers & ~shift_modifier) == 0)
+	    CGEventKeyboardGetUnicodeString (cgevent, 2, &length, text);
+	  else
+	    {
+	      CGEventRef tmp = CGEventCreateCopy (cgevent);
+
+	      CGEventSetIntegerValueField (tmp, kCGKeyboardEventKeycode,
+					   keycode);
+	      CGEventSetFlags (tmp, flags);
+	      mac_cgevent_update_unicode_string (tmp);
+	      CGEventKeyboardGetUnicodeString (tmp, 2, &length, text);
+	      CFRelease (tmp);
+	    }
+
+	  if (length == 1)
+	    {
+	      if (text[0] < 0x80)
+		buf->kind = ASCII_KEYSTROKE_EVENT;
+	      else
+		buf->kind = MULTIBYTE_CHAR_KEYSTROKE_EVENT;
+	      code = text[0];
+	    }
+	  else if (length == 2
+		   && UCIsSurrogateHighCharacter (text[0])
+		   && UCIsSurrogateLowCharacter (text[1]))
+	    {
+	      buf->kind = MULTIBYTE_CHAR_KEYSTROKE_EVENT;
+	      code = UCGetUnicodeScalarValueForSurrogatePair (text[0], text[1]);
+	    }
+	  else
+	    {
+	      buf->kind = NO_EVENT;
+	      code = 0;
+	    }
+	}
+      emacs_modifiers |= (extra_keyboard_modifiers
+			  & (meta_modifier | alt_modifier
+			     | hyper_modifier | super_modifier));
+    }
+
+  buf->modifiers = emacs_modifiers;
+  buf->code = code;
+  buf->timestamp = CGEventGetTimestamp (cgevent) / kMillisecondScale;
+
+  return mapped_flags;
 }
 
 void
@@ -5130,196 +5407,30 @@ mac_save_keyboard_input_source (void)
 #endif	/* !__LP64__ */
 }
 
-/***** Code to handle C-g testing  *****/
-extern int quit_char;
-extern int make_ctrl_char (int);
+/* Return true if and only if a key-down Quartz event CGEVENT is
+   regarded as a quit char event.  */
 
-int
-mac_quit_char_key_p (UInt32 modifiers, UInt32 key_code)
+bool
+mac_keydown_cgevent_quit_p (CGEventRef cgevent)
 {
-  UInt32 char_code, mapped_modifiers;
-  unsigned long some_state = 0;
-  Ptr kchr_ptr = (Ptr) GetScriptManagerVariable (smKCHRCache);
-  int c, emacs_modifiers;
+  struct input_event buf;
 
-  /* Mask off modifier keys that are mapped to some Emacs modifiers.  */
-  mapped_modifiers = mac_mapped_modifiers (modifiers, key_code);
-  key_code |= (modifiers & ~mapped_modifiers);
-  char_code = KeyTranslate (kchr_ptr, key_code, &some_state);
-  if (char_code & ~0xff)
-    return 0;
+  mac_cgevent_to_input_event (cgevent, &buf);
+  if (buf.kind == ASCII_KEYSTROKE_EVENT)
+    {
+      int c = buf.code & 0377;
 
-  c = char_code;
-  emacs_modifiers = mac_to_emacs_modifiers (mapped_modifiers, modifiers);
-  if (emacs_modifiers & ctrl_modifier)
-    c = make_ctrl_char (c);
+      if (buf.modifiers & ctrl_modifier)
+	c = make_ctrl_char (c);
 
-  c |= (emacs_modifiers
-	& (meta_modifier | alt_modifier
-	   | hyper_modifier | super_modifier));
+      c |= (buf.modifiers
+	    & (meta_modifier | alt_modifier
+	       | hyper_modifier | super_modifier));
 
-  return c == quit_char;
-}
-
-static void
-mac_set_unicode_keystroke_event (UniChar code, struct input_event *buf)
-{
-  if (code < 0x80)
-    buf->kind = ASCII_KEYSTROKE_EVENT;
+      return c == quit_char;
+    }
   else
-    buf->kind = MULTIBYTE_CHAR_KEYSTROKE_EVENT;
-  buf->code = code;
-}
-
-void
-do_keystroke (EventKind action, unsigned char char_code, UInt32 key_code,
-	      UInt32 modifiers, unsigned long timestamp,
-	      struct input_event *buf)
-{
-  static SInt16 last_key_script = -1;
-  SInt16 current_key_script = GetScriptManagerVariable (smKeyScript);
-  UInt32 mapped_modifiers = mac_mapped_modifiers (modifiers, key_code);
-
-  if (mapped_modifiers & kEventKeyModifierFnMask
-      && key_code <= 0x7f
-      && fn_keycode_to_keycode_table[key_code])
-    key_code = fn_keycode_to_keycode_table[key_code];
-
-  if (key_code <= 0x7f && keycode_to_xkeysym_table[key_code])
-    {
-      buf->kind = NON_ASCII_KEYSTROKE_EVENT;
-      buf->code = 0xff00 | keycode_to_xkeysym_table[key_code];
-    }
-  else if (mapped_modifiers)
-    {
-      /* translate the keycode back to determine the original key */
-      UCKeyboardLayout *uchr_ptr = NULL;
-#if __LP64__
-      TISInputSourceRef source = TISCopyCurrentKeyboardLayoutInputSource ();
-      CFDataRef uchr_data = NULL;
-
-      if (source)
-	uchr_data =
-	  TISGetInputSourceProperty (source, kTISPropertyUnicodeKeyLayoutData);
-      if (uchr_data)
-	uchr_ptr = (UCKeyboardLayout *) CFDataGetBytePtr (uchr_data);
-#else
-      OSStatus err;
-      KeyboardLayoutRef layout;
-
-      err = KLGetCurrentKeyboardLayout (&layout);
-      if (err == noErr)
-	err = KLGetKeyboardLayoutProperty (layout, kKLuchrData,
-					   (const void **) &uchr_ptr);
-#endif
-
-      if (uchr_ptr)
-	{
-	  OSStatus status;
-	  UInt16 key_action = action - keyDown;
-	  UInt32 modifier_key_state =
-	    (modifiers & ~mapped_modifiers & ~alphaLock) >> 8;
-	  UInt32 keyboard_type = LMGetKbdType ();
-	  UInt32 dead_key_state = 0;
-	  UniChar code;
-	  UniCharCount actual_length;
-
-	  status = UCKeyTranslate (uchr_ptr, key_code, key_action,
-				   modifier_key_state, keyboard_type,
-				   kUCKeyTranslateNoDeadKeysMask,
-				   &dead_key_state,
-				   1, &actual_length, &code);
-	  if (status == noErr && actual_length == 1)
-	    mac_set_unicode_keystroke_event (code, buf);
-	}
-#if __LP64__
-      if (source)
-	CFRelease (source);
-#endif
-
-      if (buf->kind == NO_EVENT)
-	{
-	  /* This code comes from Keyboard Resource, Appendix C of IM
-	     - Text.  This is necessary since shift is ignored in KCHR
-	     table translation when option or command is pressed.  It
-	     also does not translate correctly control-shift chars
-	     like C-% so mask off shift here also.  */
-	  /* Mask off modifier keys that are mapped to some Emacs
-	     modifiers.  */
-	  int new_modifiers = modifiers & ~mapped_modifiers & ~alphaLock;
-	  /* set high byte of keycode to modifier high byte*/
-	  int new_key_code = key_code | new_modifiers;
-	  Ptr kchr_ptr = (Ptr) GetScriptManagerVariable (smKCHRCache);
-	  unsigned long some_state = 0;
-	  UInt32 new_char_code;
-
-	  new_char_code = KeyTranslate (kchr_ptr, new_key_code, &some_state);
-	  if (new_char_code == 0)
-	    /* Seems like a dead key.  Append up-stroke.  */
-	    new_char_code = KeyTranslate (kchr_ptr, new_key_code | 0x80,
-					  &some_state);
-	  if (new_char_code)
-	    {
-	      buf->kind = ASCII_KEYSTROKE_EVENT;
-	      buf->code = new_char_code & 0xff;
-	    }
-	}
-    }
-
-  if (buf->kind == NO_EVENT)
-    {
-      buf->kind = ASCII_KEYSTROKE_EVENT;
-      buf->code = char_code;
-    }
-
-  buf->modifiers = mac_to_emacs_modifiers (mapped_modifiers, modifiers);
-  buf->modifiers |= (extra_keyboard_modifiers
-		     & (meta_modifier | alt_modifier
-			| hyper_modifier | super_modifier));
-
-  if (buf->kind == ASCII_KEYSTROKE_EVENT
-      && buf->code >= 0x80 && buf->modifiers)
-    {
-      OSStatus err;
-      TextEncoding encoding = kTextEncodingMacRoman;
-      TextToUnicodeInfo ttu_info;
-
-      UpgradeScriptInfoToTextEncoding (current_key_script,
-				       kTextLanguageDontCare,
-				       kTextRegionDontCare,
-				       NULL, &encoding);
-      err = CreateTextToUnicodeInfoByEncoding (encoding, &ttu_info);
-      if (err == noErr)
-	{
-	  UniChar code;
-	  Str255 pstr;
-	  ByteCount unicode_len;
-
-	  pstr[0] = 1;
-	  pstr[1] = buf->code;
-	  err = ConvertFromPStringToUnicode (ttu_info, pstr,
-					     sizeof (UniChar),
-					     &unicode_len, &code);
-	  if (err == noErr && unicode_len == sizeof (UniChar))
-	    mac_set_unicode_keystroke_event (code, buf);
-	  DisposeTextToUnicodeInfo (&ttu_info);
-	}
-    }
-
-  if (buf->kind == ASCII_KEYSTROKE_EVENT
-      && buf->code >= 0x80
-      && last_key_script != current_key_script)
-    {
-      struct input_event event;
-
-      EVENT_INIT (event);
-      event.kind = LANGUAGE_CHANGE_EVENT;
-      event.arg = Qnil;
-      event.code = current_key_script;
-      event.timestamp = timestamp;
-      kbd_buffer_store_event (&event);
-      last_key_script = current_key_script;
-    }
+    return false;
 }
 
 void
@@ -5672,6 +5783,9 @@ syms_of_macterm (void)
   DEFSYM (Qhyper, "hyper");
   DEFSYM (Qsuper, "super");
   DEFSYM (Qmodifier_value, "modifier-value");
+  DEFSYM (QCordinary, ":ordinary");
+  DEFSYM (QCfunction, ":function");
+  DEFSYM (QCmouse, ":mouse");
 
   Fput (Qcontrol, Qmodifier_value, make_number (ctrl_modifier));
   Fput (Qmeta,    Qmodifier_value, make_number (meta_modifier));
@@ -5739,29 +5853,96 @@ baseline level.  The default value is nil.  */);
 
   DEFVAR_LISP ("mac-control-modifier", Vmac_control_modifier,
     doc: /* Modifier key assumed when the Mac control key is pressed.
-The value can be `control', `meta', `alt', `hyper', or `super' for the
-respective modifier.  The default is `control'.  */);
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  The default is `control'.  */);
   Vmac_control_modifier = Qcontrol;
+
+  DEFVAR_LISP ("mac-right-control-modifier", Vmac_right_control_modifier,
+    doc: /* Modifier key assumed when the Mac right control key is pressed.
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  The value `left' means the same setting as
+`mac-control-modifier'.  The default is `left'.
+
+Note: the left and right versions cannot be distinguished on some
+environments such as Screen Sharing.  Also, certain combinations of a
+key with both versions of the same modifier do not emit events at the
+system level.  */);
+  Vmac_right_control_modifier = Qleft;
 
   DEFVAR_LISP ("mac-option-modifier", Vmac_option_modifier,
     doc: /* Modifier key assumed when the Mac alt/option key is pressed.
-The value can be `control', `meta', `alt', `hyper', or `super' for the
-respective modifier.  If the value is nil then the key will act as the
-normal Mac control modifier, and the option key can be used to compose
-characters depending on the chosen Mac keyboard setting.  */);
-  Vmac_option_modifier = Qnil;
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  If the value is nil then the key will act as
+the normal Mac option modifier, and the option key can be used to
+compose characters depending on the chosen Mac keyboard setting.  */);
+  Vmac_option_modifier = list4 (QCfunction, Qalt, QCmouse, Qalt);
+
+  DEFVAR_LISP ("mac-right-option-modifier", Vmac_right_option_modifier,
+    doc: /* Modifier key assumed when the Mac right option key is pressed.
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  If the value is nil then the key will act as
+the normal Mac option modifier, and the option key can be used to
+compose characters depending on the chosen Mac keyboard setting.  The
+value `left' means the same setting as `mac-option-modifier'.  The
+default is `left'.
+
+Note: the left and right versions cannot be distinguished on some
+environments such as Screen Sharing.  Also, certain combinations of a
+key with both versions of the same modifier do not emit events at the
+system level.  */);
+  Vmac_right_option_modifier = Qleft;
 
   DEFVAR_LISP ("mac-command-modifier", Vmac_command_modifier,
     doc: /* Modifier key assumed when the Mac command key is pressed.
-The value can be `control', `meta', `alt', `hyper', or `super' for the
-respective modifier.  The default is `meta'.  */);
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  The default is `meta'.  */);
   Vmac_command_modifier = Qmeta;
 
+  DEFVAR_LISP ("mac-right-command-modifier", Vmac_right_command_modifier,
+    doc: /* Modifier key assumed when the Mac right command key is pressed.
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  The value `left' means the same setting as
+`mac-command-modifier'.  The default is `left'.
+
+Note: the left and right versions cannot be distinguished on some
+environments such as Screen Sharing.  Also, certain combinations of a
+key with both versions of the same modifier do not emit events at the
+system level.  */);
+  Vmac_right_command_modifier = Qleft;
+
   DEFVAR_LISP ("mac-function-modifier", Vmac_function_modifier,
-    doc: /* Modifier key assumed when the Mac function key is pressed.
-The value can be `control', `meta', `alt', `hyper', or `super' for the
-respective modifier.  Note that remapping the function key may lead to
-unexpected results for some keys on non-US/GB keyboards.  */);
+    doc: /* Modifier key assumed when the Mac function (fn) key is pressed.
+The value is of the form either SYMBOL or `(:ordinary SYMBOL :function
+SYMBOL :mouse SYMBOL)'.  The latter allows us to specify different
+behaviors among ordinary keys, function keys, and mouse operations.
+
+Each SYMBOL can be `control', `meta', `alt', `hyper', or `super' for
+the respective modifier.  If the value is nil, then the key will act
+as the normal Mac function (fn) key.  */);
   Vmac_function_modifier = Qnil;
 
   DEFVAR_LISP ("mac-emulate-three-button-mouse",

@@ -520,7 +520,7 @@ extern bool input_polling_used (void);
 extern void clear_input_pending (void);
 extern bool requeued_events_pending_p (void);
 extern void bind_polling_period (int);
-#if HAVE_NTGUI
+#if defined (HAVE_NTGUI) || defined (HAVE_MACGUI)
 extern int make_ctrl_char (int) ATTRIBUTE_CONST;
 #endif
 extern void stuff_buffered_input (Lisp_Object);

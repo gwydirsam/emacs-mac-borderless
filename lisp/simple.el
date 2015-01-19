@@ -2143,7 +2143,12 @@ as an argument limits undo to changes within the current region."
       ;; above when checking.
       (while (eq (car list) nil)
 	(setq list (cdr list)))
-      (puthash list (if undo-in-region t pending-undo-list)
+      (puthash list
+               ;; Prevent identity mapping.  This can happen if
+               ;; consecutive nils are erroneously in undo list.
+               (if (or undo-in-region (eq list pending-undo-list))
+                   t
+                 pending-undo-list)
 	       undo-equiv-table))
     ;; Don't specify a position in the undo record for the undo command.
     ;; Instead, undoing this should move point to where the change is.
@@ -4490,7 +4495,12 @@ Some commands act specially on the region when Transient Mark
 mode is enabled.  Usually, such commands should use
 `use-region-p' instead of this function, because `use-region-p'
 also checks the value of `use-empty-active-region'."
-  (and transient-mark-mode mark-active))
+  (and transient-mark-mode mark-active
+       ;; FIXME: Somehow we sometimes end up with mark-active non-nil but
+       ;; without the mark being set (e.g. bug#17324).  We really should fix
+       ;; that problem, but in the mean time, let's make sure we don't say the
+       ;; region is active when there's no mark.
+       (mark)))
 
 
 (defvar redisplay-unhighlight-region-function
@@ -6865,7 +6875,7 @@ With a prefix argument, set VARIABLE to VALUE buffer-locally."
 
 (defvar completion-list-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [mouse-2] 'mouse-choose-completion)
+    (define-key map [mouse-2] 'choose-completion)
     (define-key map [follow-link] 'mouse-face)
     (define-key map [down-mouse-2] nil)
     (define-key map "\C-m" 'choose-completion)
@@ -7114,8 +7124,7 @@ back on `completion-list-insert-choice-function' when nil."
   "Major mode for buffers showing lists of possible completions.
 Type \\<completion-list-mode-map>\\[choose-completion] in the completion list\
  to select the completion near point.
-Use \\<completion-list-mode-map>\\[mouse-choose-completion] to select one\
- with the mouse.
+Or click to select one with the mouse.
 
 \\{completion-list-mode-map}"
   (set (make-local-variable 'completion-base-size) nil))
@@ -7173,7 +7182,7 @@ Called from `temp-buffer-show-hook'."
 	(goto-char (point-min))
 	(if (display-mouse-p)
 	    (insert (substitute-command-keys
-		     "Click \\[mouse-choose-completion] on a completion to select it.\n")))
+		     "Click on a completion to select it.\n")))
 	(insert (substitute-command-keys
 		 "In this buffer, type \\[choose-completion] to \
 select the completion near point.\n\n"))))))
