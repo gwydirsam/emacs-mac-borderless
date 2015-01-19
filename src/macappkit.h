@@ -47,10 +47,6 @@ typedef int NSInteger;
 typedef unsigned int NSUInteger;
 #endif
 
-#ifndef __has_feature
-#define __has_feature(x) 0
-#endif
-
 #ifndef USE_ARC
 #if defined (__clang__) && __has_feature (objc_arc)
 #define USE_ARC 1
@@ -164,7 +160,7 @@ typedef unsigned int NSUInteger;
 
   /* Non-zero means that a HELP_EVENT has been generated since Emacs
    start.  */
-  int any_help_event_p;
+  bool any_help_event_p;
 
   /* The frame on which a HELP_EVENT occurs.  */
   struct frame *emacsHelpFrame;
@@ -656,8 +652,8 @@ typedef unsigned int NSUInteger;
 /* Protocol for document rasterization.  */
 
 @protocol EmacsDocumentRasterizer <NSObject>
-- (id)initWithURL:(NSURL *)url;
-- (id)initWithData:(NSData *)data;
+- (id)initWithURL:(NSURL *)url options:(NSDictionary *)options;
+- (id)initWithData:(NSData *)data options:(NSDictionary *)options;
 + (NSArray *)supportedTypes;
 - (NSUInteger)pageCount;
 - (NSSize)integralSizeOfPageAtIndex:(NSUInteger)index;

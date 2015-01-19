@@ -27,12 +27,6 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "termhooks.h"
 #include "keyboard.h"
 
-static void x_own_selection (Lisp_Object, Lisp_Object, Lisp_Object);
-static Lisp_Object x_get_local_selection (Lisp_Object, Lisp_Object, int,
-					  struct mac_display_info *);
-static Lisp_Object x_get_foreign_selection (Lisp_Object, Lisp_Object,
-					    Lisp_Object, Lisp_Object);
-
 static Lisp_Object QSECONDARY, QTIMESTAMP, QTARGETS;
 
 static Lisp_Object Qforeign_selection;
@@ -91,8 +85,8 @@ x_own_selection (Lisp_Object selection_name, Lisp_Object selection_value,
 		 Lisp_Object frame)
 {
   struct frame *f = XFRAME (frame);
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
-  Time timestamp = last_event_timestamp;
+  struct mac_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
+  Time timestamp = mac_system_uptime () * 1000;
   OSStatus err;
   Selection sel;
   struct gcpro gcpro1, gcpro2;
@@ -260,11 +254,11 @@ x_get_local_selection (Lisp_Object selection_symbol, Lisp_Object target_type,
    We do this when about to delete a frame.  */
 
 void
-x_clear_frame_selections (FRAME_PTR f)
+x_clear_frame_selections (struct frame *f)
 {
   Lisp_Object frame;
   Lisp_Object rest;
-  struct mac_display_info *dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+  struct mac_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   struct terminal *t = dpyinfo->terminal;
 
   XSETFRAME (frame, f);
@@ -350,7 +344,7 @@ x_get_foreign_selection (Lisp_Object selection_symbol, Lisp_Object target_type,
 static struct frame *
 frame_for_x_selection (Lisp_Object object)
 {
-  Lisp_Object tail;
+  Lisp_Object tail, frame;
   struct frame *f;
 
   if (NILP (object))
@@ -359,9 +353,9 @@ frame_for_x_selection (Lisp_Object object)
       if (FRAME_MAC_P (f) && FRAME_LIVE_P (f))
 	return f;
 
-      for (tail = Vframe_list; CONSP (tail); tail = XCDR (tail))
+      FOR_EACH_FRAME (tail, frame)
 	{
-	  f = XFRAME (XCAR (tail));
+	  f = XFRAME (frame);
 	  if (FRAME_MAC_P (f) && FRAME_LIVE_P (f))
 	    return f;
 	}
@@ -370,14 +364,12 @@ frame_for_x_selection (Lisp_Object object)
     {
       struct terminal *t = get_terminal (object, 1);
       if (t->type == output_mac)
-	{
-	  for (tail = Vframe_list; CONSP (tail); tail = XCDR (tail))
-	    {
-	      f = XFRAME (XCAR (tail));
-	      if (FRAME_LIVE_P (f) && f->terminal == t)
-		return f;
-	    }
-	}
+	FOR_EACH_FRAME (tail, frame)
+	  {
+	    f = XFRAME (frame);
+	    if (FRAME_LIVE_P (f) && f->terminal == t)
+	      return f;
+	  }
     }
   else if (FRAMEP (object))
     {
@@ -394,6 +386,7 @@ DEFUN ("x-own-selection-internal", Fx_own_selection_internal,
        Sx_own_selection_internal, 2, 3, 0,
        doc: /* Assert a selection of type SELECTION and value VALUE.
 SELECTION is a symbol, typically `PRIMARY', `SECONDARY', or `CLIPBOARD'.
+\(Those are literal upper-case symbol names, since that's what X expects.)
 VALUE is typically a string, or a cons of two markers, but may be
 anything that the functions on `selection-converter-alist' know about.
 
@@ -419,13 +412,11 @@ nil, it defaults to the selected frame.  */)
 DEFUN ("x-get-selection-internal", Fx_get_selection_internal,
        Sx_get_selection_internal, 2, 4, 0,
        doc: /* Return text selected from some Mac application.
-SELECTION is a symbol, typically `PRIMARY', `SECONDARY', or `CLIPBOARD'.
-TYPE is the type of data desired, typically `STRING'.
-TIME_STAMP is ignored on Mac.
+SELECTION-SYMBOL is typically `PRIMARY', `SECONDARY', or `CLIPBOARD'.
+\(Those are literal upper-case symbol names, since that's what X expects.)
+TARGET-TYPE is the type of data desired, typically `STRING'.
 
-TERMINAL should be a terminal object or a frame specifying the
-server to query.  If omitted or nil, that stands for the selected
-frame's display, or the first available display.  */)
+On Mac, TIME-STAMP and TERMINAL are unused.  */)
   (Lisp_Object selection_symbol, Lisp_Object target_type,
    Lisp_Object time_stamp, Lisp_Object terminal)
 {
@@ -440,7 +431,7 @@ frame's display, or the first available display.  */)
     error ("Selection unavailable for this frame");
 
   val = x_get_local_selection (selection_symbol, target_type, 1,
-			       FRAME_MAC_DISPLAY_INFO (f));
+			       FRAME_DISPLAY_INFO (f));
 
   if (NILP (val) && FRAME_LIVE_P (f))
     {
@@ -466,7 +457,9 @@ Disowning it means there is no such selection.
 
 TERMINAL should be a terminal object or a frame specifying the
 server to query.  If omitted or nil, that stands for the selected
-frame's display, or the first available display.  */)
+frame's display, or the first available display.
+
+On Mac, the TIME-OBJECT and TERMINAL arguments are unused.  */)
   (Lisp_Object selection, Lisp_Object time_object, Lisp_Object terminal)
 {
   struct frame *f = frame_for_x_selection (terminal);
@@ -479,7 +472,7 @@ frame's display, or the first available display.  */)
   if (!f)
     return Qnil;
 
-  dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+  dpyinfo = FRAME_DISPLAY_INFO (f);
   CHECK_SYMBOL (selection);
 
   if (!x_selection_owner_p (selection, dpyinfo))
@@ -514,7 +507,6 @@ frame's display, or the first available display.  */)
     Frun_hook_with_args (2, args);
   }
 
-  prepare_menu_bars ();
   redisplay_preserve_echo_area (20);
 
   block_input ();
@@ -533,6 +525,7 @@ DEFUN ("x-selection-owner-p", Fx_selection_owner_p, Sx_selection_owner_p,
        doc: /* Whether the current Emacs process owns the given SELECTION.
 The arg should be the name of the selection in question, typically one of
 the symbols `PRIMARY', `SECONDARY', or `CLIPBOARD'.
+\(Those are literal upper-case symbol names, since that's what X expects.)
 For convenience, the symbol nil is the same as `PRIMARY',
 and t is the same as `SECONDARY'.
 
@@ -547,7 +540,7 @@ frame's display, or the first available display.  */)
   if (EQ (selection, Qnil)) selection = QPRIMARY;
   if (EQ (selection, Qt)) selection = QSECONDARY;
 
-  if (f && x_selection_owner_p (selection, FRAME_MAC_DISPLAY_INFO (f)))
+  if (f && x_selection_owner_p (selection, FRAME_DISPLAY_INFO (f)))
     return Qt;
   else
     return Qnil;
@@ -557,8 +550,9 @@ DEFUN ("x-selection-exists-p", Fx_selection_exists_p, Sx_selection_exists_p,
        0, 2, 0,
        doc: /* Whether there is an owner for the given selection.
 SELECTION should be the name of the selection in question, typically
-one of the symbols `PRIMARY', `SECONDARY', or `CLIPBOARD'.
-The symbol nil is the same as `PRIMARY', and t is the same as `SECONDARY'.
+one of the symbols `PRIMARY', `SECONDARY', or `CLIPBOARD' (X expects
+these literal upper-case names.)  The symbol nil is the same as
+`PRIMARY', and t is the same as `SECONDARY'.
 
 TERMINAL should be a terminal object or a frame specifying the
 server to query.  If omitted or nil, that stands for the selected
@@ -578,7 +572,7 @@ frame's display, or the first available display.  */)
   if (!f)
     return Qnil;
 
-  dpyinfo = FRAME_MAC_DISPLAY_INFO (f);
+  dpyinfo = FRAME_DISPLAY_INFO (f);
 
   if (x_selection_owner_p (selection, dpyinfo))
     return Qt;
@@ -1164,7 +1158,7 @@ the name of the selection (typically `PRIMARY', `SECONDARY', or `CLIPBOARD');
 a desired type to which the selection should be converted;
 and the local selection value (whatever was given to `x-own-selection').
 
-The function should return the value to send to the Scrap Manager
+The function should return the value to send to the Pasteboard Manager
 \(must be a string).  A return value of nil
 means that the conversion could not be done.  */);
   Vselection_converter_alist = Qnil;

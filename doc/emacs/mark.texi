@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2013 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2014 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Mark
@@ -42,6 +42,9 @@ regions, but they all share one common mark position.  @xref{Windows}.
 Ordinarily, only the selected window highlights its region; however,
 if the variable @code{highlight-nonselected-windows} is
 non-@code{nil}, each window highlights its own region.
+
+  There is another kind of region: the ``rectangular region''.
+@xref{Rectangles}.
 
 @menu
 * Setting Mark::            Commands to set the mark.

@@ -1119,11 +1119,11 @@ cfobject_to_lisp (CFTypeRef obj, int flags, int hash_bound)
 	}
       else
 	{
-	  result = make_hash_table (Qequal,
+	  result = make_hash_table (hashtest_equal,
 				    make_number (count),
 				    make_float (DEFAULT_REHASH_SIZE),
 				    make_float (DEFAULT_REHASH_THRESHOLD),
-				    Qnil, Qnil, Qnil);
+				    Qnil);
 	  CFDictionaryApplyFunction (obj, cfdictionary_puthash,
 				     &context);
 	}
@@ -1781,10 +1781,9 @@ xrm_create_database (void)
 {
   XrmDatabase database;
 
-  database = make_hash_table (Qequal, make_number (DEFAULT_HASH_SIZE),
+  database = make_hash_table (hashtest_equal, make_number (DEFAULT_HASH_SIZE),
 			      make_float (DEFAULT_REHASH_SIZE),
-			      make_float (DEFAULT_REHASH_THRESHOLD),
-			      Qnil, Qnil, Qnil);
+			      make_float (DEFAULT_REHASH_THRESHOLD), Qnil);
   Fputhash (HASHKEY_MAX_NID, make_number (0), database);
   Fputhash (HASHKEY_QUERY_CACHE, Qnil, database);
 
@@ -1916,10 +1915,11 @@ xrm_get_resource (XrmDatabase database, const char *name, const char *class)
   query_cache = Fgethash (HASHKEY_QUERY_CACHE, database, Qnil);
   if (NILP (query_cache))
     {
-      query_cache = make_hash_table (Qequal, make_number (DEFAULT_HASH_SIZE),
+      query_cache = make_hash_table (hashtest_equal,
+				     make_number (DEFAULT_HASH_SIZE),
 				     make_float (DEFAULT_REHASH_SIZE),
 				     make_float (DEFAULT_REHASH_THRESHOLD),
-				     Qnil, Qnil, Qnil);
+				     Qnil);
       Fputhash (HASHKEY_QUERY_CACHE, query_cache, database);
     }
   h = XHASH_TABLE (query_cache);
@@ -2568,7 +2568,7 @@ return value (see `mac-convert-property-list').  FORMAT also accepts
 	  CHECK_STRING_CAR (tmp);
 	  QUIT;
 	}
-      CHECK_LIST_END (tmp, key);
+      CHECK_TYPE (NILP (tmp), Qlistp, key);
     }
   if (!NILP (application))
     CHECK_STRING (application);
@@ -3127,16 +3127,16 @@ static CFRunLoopRef select_run_loop = NULL;
 static struct
 {
   int nfds;
-  SELECT_TYPE *rfds, *wfds, *efds;
-  EMACS_TIME *timeout;
+  fd_set *rfds, *wfds, *efds;
+  struct timespec *timeout;
 } select_args;
 
 static void
 select_perform (void *info)
 {
   int qnfds = select_args.nfds;
-  SELECT_TYPE qrfds, qwfds, qefds;
-  EMACS_TIME qtimeout;
+  fd_set qrfds, qwfds, qefds;
+  struct timespec qtimeout;
   int r;
 
   if (select_args.rfds)
@@ -3163,8 +3163,8 @@ select_perform (void *info)
 }
 
 static void
-select_fire (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds, SELECT_TYPE *efds,
-	     EMACS_TIME *timeout)
+select_fire (int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds,
+	     struct timespec *timeout)
 {
   select_args.nfds = nfds;
   select_args.rfds = rfds;
@@ -3203,15 +3203,15 @@ select_thread_launch (void)
 #endif	/* !SELECT_USE_GCD */
 
 static int
-select_and_poll_event (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds,
-		       SELECT_TYPE *efds, EMACS_TIME *timeout)
+select_and_poll_event (int nfds, fd_set *rfds, fd_set *wfds,
+		       fd_set *efds, struct timespec const *timeout)
 {
   int timedout_p = 0;
   int r = 0;
-  EMACS_TIME select_timeout;
-  EventTimeout timeoutval = (timeout ? EMACS_TIME_TO_DOUBLE (*timeout)
+  struct timespec select_timeout;
+  EventTimeout timeoutval = (timeout ? timespectod (*timeout)
 			     : kEventDurationForever);
-  SELECT_TYPE orfds, owfds, oefds;
+  fd_set orfds, owfds, oefds;
 
   if (timeout == NULL)
     {
@@ -3229,7 +3229,7 @@ select_and_poll_event (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds,
       if (detect_input_pending ())
 	break;
 
-      select_timeout = make_emacs_time (0, 0);
+      select_timeout = make_timespec (0, 0);
       r = pselect (nfds, rfds, wfds, efds, &select_timeout, NULL);
       if (r != 0)
 	break;
@@ -3285,13 +3285,13 @@ select_and_poll_event (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds,
 }
 
 int
-sys_select (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds, SELECT_TYPE *efds,
-	    EMACS_TIME *timeout, void *sigmask)
+mac_select (int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds,
+	    struct timespec const *timeout, sigset_t const *sigmask)
 {
   int timedout_p = 0;
   int r;
-  EMACS_TIME select_timeout;
-  SELECT_TYPE orfds, owfds, oefds;
+  struct timespec select_timeout;
+  fd_set orfds, owfds, oefds;
   EventTimeout timeoutval;
 
   if (inhibit_window_system || noninteractive
@@ -3313,8 +3313,7 @@ sys_select (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds, SELECT_TYPE *efds,
   else
     FD_ZERO (&oefds);
 
-  timeoutval = (timeout ? EMACS_TIME_TO_DOUBLE (*timeout)
-		: kEventDurationForever);
+  timeoutval = (timeout ? timespectod (*timeout) : kEventDurationForever);
 
   FD_SET (0, rfds);		/* sentinel */
   do
@@ -3331,7 +3330,7 @@ sys_select (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds, SELECT_TYPE *efds,
 
   /* Avoid initial overhead of RunLoop setup for the case that some
      input is already available.  */
-  select_timeout = make_emacs_time (0, 0);
+  select_timeout = make_timespec (0, 0);
   r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
   if (r != 0 || timeoutval == 0.0)
     return r;
@@ -3352,7 +3351,7 @@ sys_select (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds, SELECT_TYPE *efds,
       dispatch_sync (select_dispatch_queue, ^{});
       wokeup_from_run_loop_run_once_p = 0;
       dispatch_async (select_dispatch_queue, ^{
-	  SELECT_TYPE qrfds = orfds, qwfds = owfds, qefds = oefds;
+	  fd_set qrfds = orfds, qwfds = owfds, qefds = oefds;
 	  int qnfds = nfds;
 	  int r;
 
@@ -3404,7 +3403,7 @@ sys_select (int nfds, SELECT_TYPE *rfds, SELECT_TYPE *wfds, SELECT_TYPE *efds,
 
   if (!timedout_p)
     {
-      select_timeout = make_emacs_time (0, 0);
+      select_timeout = make_timespec (0, 0);
       r = select_and_poll_event (nfds, rfds, wfds, efds, &select_timeout);
       if (r != 0)
 	return r;

@@ -132,6 +132,18 @@
 (defconst x-pointer-sb-v-double-arrow mac-pointer-resize-up-down)
 
 
+;;;; Utility functions
+(defun mac-possibly-use-high-resolution-monitors-p ()
+  "Return non-nil if high-resolution monitors can possibly be used.
+Namely, either a Retina display is connected or HiDPI display
+modes have been enabled with Quartz Debug.app."
+  (or
+   ;; HiDPI display modes have been enabled with Quartz Debug.app.
+   (mac-get-preference "DisplayResolutionEnabled" "com.apple.windowserver")
+   (cl-loop for attributes in (display-monitor-attributes-list)
+	    if (eq (cdr (assq 'backing-scale-factor attributes)) 2) return t)))
+
+
 ;;;; Modifier keys
 
 ;; Modifier name `ctrl' is an alias of `control'.
@@ -305,7 +317,7 @@
   "Set keyboard coding system to what is specified in EVENT."
   (interactive "e")
   (let ((coding-system
-	 (cdr (assq (car (cadr event)) mac-script-code-coding-systems))))
+	 (cdr (assq (cadr event) mac-script-code-coding-systems))))
     (set-keyboard-coding-system (or coding-system 'mac-roman))
     ;; MacJapanese maps reverse solidus to ?\x80.
     (if (eq coding-system 'japanese-shift-jis)
@@ -1916,7 +1928,8 @@ non-nil, and the input device supports it."
 	     ;; Do redisplay and measure line heights before selecting
 	     ;; the window to scroll.
 	     (point-height
-	      (or (progn
+	      (or (window-line-height nil window-to-scroll)
+		  (progn
 		    (redisplay t)
 		    (window-line-height nil window-to-scroll))
 		  ;; The above still sometimes return nil.
@@ -2398,6 +2411,8 @@ The actual magnification is performed by `text-scale-mode'."
 ;;; Window system initialization.
 
 (defun x-win-suspend-error ()
+  "Report an error when a suspend is attempted.
+This returns an error if any Emacs frames are X frames, or always under W32 or Mac."
   (error "Suspending an Emacs running under Mac makes no sense"))
 
 (defvar mac-initialized nil
@@ -2459,7 +2474,7 @@ standard ones in `x-handle-args'."
   (mac-start-animation (selected-window) :type 'fade-out)
   (exit-splash-screen))
 
-(defun mac-initialize-window-system ()
+(defun mac-initialize-window-system (&optional _display)
   "Initialize Emacs for Mac GUI frames."
   (cl-assert (not mac-initialized))
 

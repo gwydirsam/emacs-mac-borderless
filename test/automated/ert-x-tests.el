@@ -1,6 +1,6 @@
 ;;; ert-x-tests.el --- Tests for ert-x.el
 
-;; Copyright (C) 2008, 2010-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2008, 2010-2014 Free Software Foundation, Inc.
 
 ;; Author: Phil Hagelberg
 ;; 	   Christian Ohler <ohler@gnu.org>
@@ -28,7 +28,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl))
+  (require 'cl-lib))
 (require 'ert)
 (require 'ert-x)
 
@@ -111,6 +111,9 @@
                                                                      'a 'b))
                                                 (ert-fail
                                                  "failure message")))))
+         (skipped-test (make-ert-test :name 'skipped-test
+                                      :body (lambda () (ert-skip
+							"skip message"))))
          (ert-debug-on-error nil)
          (buffer-name (generate-new-buffer-name "*ert-test-run-tests*"))
          (messages nil)
@@ -119,10 +122,12 @@
             (push (apply #'format format-string args) messages))))
     (cl-flet ((expected-string (with-font-lock-p)
                 (ert-propertized-string
-                 "Selector: (member <passing-test> <failing-test>)\n"
-                 "Passed: 1\n"
-                 "Failed: 1 (1 unexpected)\n"
-                 "Total:  2/2\n\n"
+                 "Selector: (member <passing-test> <failing-test> "
+		 "<skipped-test>)\n"
+                 "Passed:  1\n"
+                 "Failed:  1 (1 unexpected)\n"
+                 "Skipped: 1\n"
+                 "Total:   3/3\n\n"
                  "Started at:\n"
                  "Finished.\n"
                  "Finished at:\n\n"
@@ -132,7 +137,7 @@
                             face ,(if with-font-lock-p
                                       'ert-test-result-unexpected
                                     'button))
-                 ".F" nil "\n\n"
+                 ".Fs" nil "\n\n"
                  `(category ,(button-category-symbol
                               'ert--results-expand-collapse-button)
                             button (t)
@@ -153,11 +158,12 @@
         (unwind-protect
             (let ((case-fold-search nil))
               (ert-run-tests-interactively
-               `(member ,passing-test ,failing-test) buffer-name
+               `(member ,passing-test ,failing-test ,skipped-test) buffer-name
                mock-message-fn)
               (should (equal messages `(,(concat
-                                          "Ran 2 tests, 1 results were "
-                                          "as expected, 1 unexpected"))))
+                                          "Ran 3 tests, 1 results were "
+                                          "as expected, 1 unexpected, "
+					  "1 skipped"))))
               (with-current-buffer buffer-name
                 (font-lock-mode 0)
                 (should (ert-equal-including-properties
@@ -233,8 +239,8 @@ desired effect."
       (should (equal (buffer-string) ""))
       (let ((message-log-max 2))
         (let ((message-log-max t))
-          (loop for i below 4 do
-                (message "%s" i))
+          (cl-loop for i below 4 do
+                   (message "%s" i))
           (should (equal (buffer-string) "0\n1\n2\n3\n")))
         (should (equal (buffer-string) "0\n1\n2\n3\n"))
         (message "")
@@ -244,28 +250,28 @@ desired effect."
 
 (ert-deftest ert-test-force-message-log-buffer-truncation ()
   :tags '(:causes-redisplay)
-  (labels ((body ()
-             (loop for i below 3 do
-                   (message "%s" i)))
-           ;; Uses the implicit messages buffer truncation implemented
-           ;; in Emacs' C core.
-           (c (x)
-             (ert-with-buffer-renamed ("*Messages*")
-               (let ((message-log-max x))
-                 (body))
-               (with-current-buffer "*Messages*"
-                 (buffer-string))))
-           ;; Uses our lisp reimplementation.
-           (lisp (x)
-             (ert-with-buffer-renamed ("*Messages*")
-               (let ((message-log-max t))
-                 (body))
-               (let ((message-log-max x))
-                 (ert--force-message-log-buffer-truncation))
-               (with-current-buffer "*Messages*"
-                 (buffer-string)))))
-    (loop for x in '(0 1 2 3 4 t) do
-          (should (equal (c x) (lisp x))))))
+  (cl-labels ((body ()
+                (cl-loop for i below 3 do
+                         (message "%s" i)))
+              ;; Uses the implicit messages buffer truncation implemented
+              ;; in Emacs' C core.
+              (c (x)
+                (ert-with-buffer-renamed ("*Messages*")
+                  (let ((message-log-max x))
+                    (body))
+                  (with-current-buffer "*Messages*"
+                    (buffer-string))))
+              ;; Uses our lisp reimplementation.
+              (lisp (x)
+                (ert-with-buffer-renamed ("*Messages*")
+                  (let ((message-log-max t))
+                    (body))
+                  (let ((message-log-max x))
+                    (ert--force-message-log-buffer-truncation))
+                  (with-current-buffer "*Messages*"
+                    (buffer-string)))))
+    (cl-loop for x in '(0 1 2 3 4 t) do
+             (should (equal (c x) (lisp x))))))
 
 
 (provide 'ert-x-tests)

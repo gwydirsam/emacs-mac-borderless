@@ -8,7 +8,12 @@ don't need to try this.
 
   *** IMPORTANT NOTE ***
 
-  If you find a bug, then please try to reproduce it with some
+  This version (4.9X) should be regarded as experimental/hackers-only.
+  Things are subject to change/removal in an incompatible way.  Please
+  refrain from distributing this in any different form, including for
+  (binary) distribution basis, until the version gets to 5.0.
+
+  Also, if you find a bug, then please try to reproduce it with some
   official builds such as X11 or NS (Cocoa).  If it turns out to be
   specific to the Mac port, then please report it to
   "mituharu+bug-gnu-emacs-mac@math.s.chiba-u.ac.jp".  Otherwise (i.e.,
@@ -239,8 +244,10 @@ Dock without separating a GUI process (not thread) from the main Emacs
 
   e. [Optional, recommended for Retina Display]
      If you want to use high resolution versions of some tool bar
-     icons and the splash screen image, then copy all the files in the
-     subdirectory `etc/images' to `EMACS_SOURCE_TOP/etc/images'.
+     icons and the splash screen image, then download the latest
+     `emacs-hires-icons-VERSION_NUMBER.tar.gz' file from
+     ftp://ftp.math.s.chiba-u.ac.jp/emacs/ and copy all the files in
+     the subdirectory `etc/images' to `EMACS_SOURCE_TOP/etc/images'.
 
   f. Copy all the files in the `src' subdirectory to
      `EMACS_SOURCE_TOP/src'.

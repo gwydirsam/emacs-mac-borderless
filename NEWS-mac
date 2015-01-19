@@ -1,4 +1,37 @@
+* emacs-24.3.90-mac-4.90 [experimental/hackers-only] (2014-04-14)
+Based on Emacs 24.3.90.
+High-resolution icons are now distributed as a separate package.
+File notification is supported via GLib (you'll also need `pkg-config'
+when running the configure command).
+The `image-io' image type supports `:max-width', `:max-height', and
+`:format' keywords just as in `imagemagick'.
+Now that Image mode supports multi-frame image navigation (`f', 'b',
+and `F'), you can browse multi-page documents in several formats that
+`image-io' supports (e.g., PDF and DOC) with the setting like this:
+  (when (and (image-type-available-p 'image-io)
+	     (not (boundp 'imagemagick-render-type)))
+     ;; Image I/O is used as a fallback of ImageMagick.
+     (setq imagemagick-enabled-types t)
+     (setq imagemagick-types-inhibit
+	  (cons 'XML (delq 'PDF imagemagick-types-inhibit)))
+     (imagemagick-register-types))
+Note: if you have ImageMagick installed, you need to build the Mac
+port executable without the genuine ImageMagick support so `image-io'
+can be used as a fallback of `imagemagick'.
+
+** Improvements
+
+*** Graphical drawing operations might be performed in non-main
+threads via GCD (Grand Central Dispatch) on Mac OS X 10.6 and later.
+You can turn this off by setting `mac-drawing-use-gcd' to nil.
+
+*** DocView mode generates pixel-doubled "@2x" bitmap image files in
+addition to normal ones on high-resolution environments such as Retina
+display or HiDPI mode.
+
+
 * emacs-24.3-mac-4.8 (2014-04-01)
+http://lists.gnu.org/archive/html/emacs-devel/2014-03/msg01271.html
 
 ** Fixed bugs
 

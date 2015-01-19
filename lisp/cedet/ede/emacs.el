@@ -1,6 +1,6 @@
 ;;; ede/emacs.el --- Special project for Emacs
 
-;; Copyright (C) 2008-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2014 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -59,7 +59,7 @@ DIR is the directory to search from."
   "Get the root directory for DIR."
   (when (not dir) (setq dir default-directory))
   (let ((case-fold-search t)
-	(proj (ede-emacs-file-existing dir)))
+	(proj (ede-files-find-existing dir ede-emacs-project-list)))
     (if proj
 	(ede-up-directory (file-name-directory
 			   (oref proj :file)))
@@ -116,7 +116,7 @@ m4_define(\\[SXEM4CS_BETA_VERSION\\], \\[\\([0-9]+\\)\\])")
        (t
 	(insert-file-contents configure_ac)
 	(goto-char (point-min))
-	(re-search-forward "AC_INIT(emacs,\\s-*\\([0-9.]+\\)\\s-*)")
+	(re-search-forward "AC_INIT(\\(?:GNU \\)?[eE]macs,\\s-*\\([0-9.]+\\)\\s-*[,)]")
 	(setq ver (match-string 1))
 	)
        )
@@ -134,7 +134,7 @@ m4_define(\\[SXEM4CS_BETA_VERSION\\], \\[\\([0-9]+\\)\\])")
 Return nil if there isn't one.
 Argument DIR is the directory it is created for.
 ROOTPROJ is nil, since there is only one project."
-  (or (ede-emacs-file-existing dir)
+  (or (ede-files-find-existing dir ede-emacs-project-list)
       ;; Doesn't already exist, so let's make one.
       (let* ((vertuple (ede-emacs-version dir))
 	     (proj (ede-emacs-project
