@@ -71,9 +71,9 @@ CF_BRIDGING_RELEASE (CFTypeRef X)
 static inline CFTypeRef
 CF_AUTORELEASE (CFTypeRef X)
 {
-    id __autoreleasing result = CF_BRIDGING_RELEASE (X);
+  id __autoreleasing result = CF_BRIDGING_RELEASE (X);
 
-    return (__bridge CFTypeRef) result;
+  return (__bridge CFTypeRef) result;
 }
 #endif
 
@@ -2465,17 +2465,6 @@ static CGRect unset_global_focus_view_frame (void);
 
 @end				// EmacsFullscreenWindow
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-@implementation EmacsFullscreenTransitionView
-
-- (BOOL)isFlipped
-{
-  return YES;
-}
-
-@end				// EmacsFullscreenTransitionView
-#endif
-
 @implementation EmacsFrameController
 
 - (instancetype)initWithEmacsFrame:(struct frame *)f
@@ -2530,7 +2519,10 @@ static CGRect unset_global_focus_view_frame (void);
   [window setBackgroundColor:[NSColor clearColor]];
   [window setOpaque:NO];
   [window setIgnoresMouseEvents:YES];
-  [window useOptimizedDrawing:YES];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
+    [window useOptimizedDrawing:YES];
+#endif
 
   overlayView = [[EmacsOverlayView alloc] initWithFrame:contentRect];
   [window setContentView:overlayView];
@@ -2569,6 +2561,7 @@ static CGRect unset_global_focus_view_frame (void);
   NSRect contentRect;
   NSUInteger windowStyle;
   EmacsWindow *window;
+  id visualEffectView;
 
   if (!FRAME_TOOLTIP_P (f))
     {
@@ -2644,7 +2637,19 @@ static CGRect unset_global_focus_view_frame (void);
 
   emacsWindow = window;
   [window setDelegate:self];
-  [window useOptimizedDrawing:YES];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
+    [window useOptimizedDrawing:YES];
+#endif
+  visualEffectView = [[(NSClassFromString (@"NSVisualEffectView")) alloc]
+		       initWithFrame:[[window contentView] frame]];
+  if (visualEffectView)
+    {
+      [window setContentView:visualEffectView];
+      MRC_RELEASE (visualEffectView);
+      [window setOpaque:NO];
+      FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = true;
+    }
   [[window contentView] addSubview:emacsView];
   [self updateBackingScaleFactor];
 
@@ -2709,9 +2714,6 @@ static CGRect unset_global_focus_view_frame (void);
 #endif
   [overlayView release];
   [overlayWindow release];
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-  [fullScreenTransitionView release];
-#endif
   [super dealloc];
 }
 #endif
@@ -2776,7 +2778,14 @@ static CGRect unset_global_focus_view_frame (void);
 	      NSPoint location = [currentEvent locationInWindow];
 
 	      if (eventWindow)
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+		location =
+		  [eventWindow
+		    convertRectToScreen:(NSMakeRect (location.x, location.y,
+						     0, 0))].origin;
+#else
 		location = [eventWindow convertBaseToScreen:location];
+#endif
 
 	      screen = [NSScreen screenContainingPoint:location];
 	    }
@@ -3199,6 +3208,15 @@ static CGRect unset_global_focus_view_frame (void);
     }
 }
 
+- (void)setEmacsViewNeedsDisplayInRects:(const NSRect *)rects
+				  count:(NSUInteger)count
+{
+  NSUInteger i;
+
+  for (i = 0; i < count; i++)
+    [emacsView setNeedsDisplayInRect:rects[i]];
+}
+
 /* Delegete Methods.  */
 
 - (void)windowDidBecomeKey:(NSNotification *)notification
@@ -3235,17 +3253,18 @@ static CGRect unset_global_focus_view_frame (void);
   [emacsController setConflictingKeyBindingsDisabled:NO];
 }
 
-- (void)windowDidBecomeMain:(NSNotification *)notification
-{
-  mac_restore_keyboard_input_source ();
-}
-
 - (void)windowDidResignMain:(NSNotification *)notification
 {
-  if ([emacsView conformsToProtocol:@protocol(NSTextInput)])
-    [(id <NSTextInput>)emacsView unmarkText];
-  [[NSInputManager currentInputManager] markedTextAbandoned:emacsView];
-  mac_save_keyboard_input_source ();
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  /* OS X 10.10 seems to do this task for us.  */
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
+    {
+      eassert ([emacsView isMemberOfClass:[EmacsMainView class]]);
+
+      [(EmacsMainView *)emacsView unmarkText];
+      [[NSInputManager currentInputManager] markedTextAbandoned:emacsView];
+    }
+#endif
 }
 
 - (void)windowDidMove:(NSNotification *)notification
@@ -3438,11 +3457,12 @@ static CGRect unset_global_focus_view_frame (void);
 }
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-- (void)setupFullScreenTransitionView
+- (EmacsFullScreenTransitionView *)fullScreenTransitionView
 {
   struct frame *f = emacsFrame;
-  struct window *root_window = XWINDOW (FRAME_ROOT_WINDOW (f));
-  NSView *contentView, *view;
+  struct window *root_window;
+  NSView *contentView;
+  EmacsFullScreenTransitionView *view;
   NSRect contentViewRect;
   NSBitmapImageRep *bitmap;
   id image;
@@ -3466,8 +3486,9 @@ static CGRect unset_global_focus_view_frame (void);
     rootLayer.geometryFlipped = YES;
   rootLayer.layoutManager = [CA_CONSTRAINT_LAYOUT_MANAGER layoutManager];
 
-  rootWindowMaxY = (WINDOW_TOP_EDGE_Y (root_window) +
-		    WINDOW_PIXEL_HEIGHT (root_window));
+  root_window = XWINDOW (FRAME_ROOT_WINDOW (f));
+  rootWindowMaxY = (WINDOW_TOP_EDGE_Y (root_window)
+		    + WINDOW_PIXEL_HEIGHT (root_window));
 
   mac_foreach_window (f, ^(struct window *w) {
       enum {MIN_X_SCALE = 1 << 0, MAX_X_SCALE = 1 << 1,
@@ -3605,7 +3626,7 @@ static CGRect unset_global_focus_view_frame (void);
       return 1;
     });
 
-  view = [[EmacsFullscreenTransitionView alloc] initWithFrame:contentViewRect];
+  view = [[EmacsFullScreenTransitionView alloc] initWithFrame:contentViewRect];
   [view setLayer:rootLayer];
   [view setWantsLayer:YES];
   [view setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
@@ -3615,7 +3636,7 @@ static CGRect unset_global_focus_view_frame (void);
   if ([view respondsToSelector:@selector(setLayerUsesCoreImageFilters:)])
     [view setLayerUsesCoreImageFilters:YES];
 
-  fullScreenTransitionView = view;
+  return MRC_AUTORELEASE (view);
 }
 
 - (NSApplicationPresentationOptions)window:(NSWindow *)window
@@ -3688,10 +3709,11 @@ static CGRect unset_global_focus_view_frame (void);
   NSUInteger previousAutoresizingMask = [emacsView autoresizingMask];
   NSRect srcRect = [window frame], destRect;
   NSView *contentView = [window contentView];
+  EmacsFullScreenTransitionView *transitionView;
   CGFloat titleBarHeight;
   BOOL toolbarIsVisible;
 
-  [self setupFullScreenTransitionView];
+  transitionView = MRC_RETAIN ([self fullScreenTransitionView]);
 
   titleBarHeight = NSHeight (srcRect) - NSMaxY ([contentView frame]);
 
@@ -3712,10 +3734,18 @@ static CGRect unset_global_focus_view_frame (void);
 
   [emacsView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin)];
   [(EmacsWindow *)window setConstrainingToScreenSuspended:YES];
-  srcRect.size.height -= titleBarHeight;
+  /* We no longer set NSFullScreenWindowMask until the transition
+     animation completes because OS X 10.10 places such a window at
+     the center of screen and also makes calls to
+     -window:willUseFullScreenContentSize: or
+     -windowWillUseStandardFrame:defaultFrame:.  For the same reason,
+     we shorten the given animation duration below a bit so as to
+     avoid adding NSFullScreenWindowMask before the completion of the
+     transition animation.  */
+  [window setStyleMask:([window styleMask] & ~NSFullScreenWindowMask)];
   [window setFrame:srcRect display:NO];
 
-  [contentView addSubview:fullScreenTransitionView positioned:NSWindowAbove
+  [contentView addSubview:transitionView positioned:NSWindowAbove
 	       relativeTo:emacsView];
   [window display];
 
@@ -3724,24 +3754,28 @@ static CGRect unset_global_focus_view_frame (void);
   NSEnableScreenUpdates ();
 
   [NS_ANIMATION_CONTEXT runAnimationGroup:^(NSAnimationContext *context) {
-      CALayer *layer = [fullScreenTransitionView layer];
+      CALayer *layer = [transitionView layer];
+      NSRect destRectWithTitleBar =
+	NSMakeRect (NSMinX (destRect), NSMinY (destRect),
+		    NSWidth (destRect), NSHeight (destRect) + titleBarHeight);
 
-      [context setDuration:duration];
+      [context setDuration:(duration * .9)];
       [context
 	setTimingFunction:[CA_MEDIA_TIMING_FUNCTION
 			    functionWithName:kCAMediaTimingFunctionDefault]];
-      [[window animator] setFrame:destRect display:YES];
+      [[window animator] setFrame:destRectWithTitleBar display:YES];
       layer.beginTime = [layer convertTime:(CACurrentMediaTime ())
-				 fromLayer:nil] + duration * (1 - 1.0 / 5);
+				 fromLayer:nil] + duration * .9 * (1 - 1.0 / 5);
       layer.speed = 5;
       layer.fillMode = kCAFillModeBackwards;
       layer.opacity = 0;
     } completionHandler:^{
-      [fullScreenTransitionView removeFromSuperview];
-      MRC_RELEASE (fullScreenTransitionView);
-      fullScreenTransitionView = nil;
+      [transitionView removeFromSuperview];
+      MRC_RELEASE (transitionView);
       [window setAlphaValue:previousAlphaValue];
       [(EmacsWindow *)window setConstrainingToScreenSuspended:NO];
+      [window setStyleMask:([window styleMask] | NSFullScreenWindowMask)];
+      [window setFrame:destRect display:NO];
       [emacsView setAutoresizingMask:previousAutoresizingMask];
       /* Mac OS X 10.7 needs this.  */
       [emacsView setFrame:[[emacsView superview] bounds]];
@@ -3764,10 +3798,11 @@ static CGRect unset_global_focus_view_frame (void);
   NSUInteger previousAutoresizingMask = [emacsView autoresizingMask];
   NSRect srcRect = [window frame], destRect;
   NSView *contentView = [window contentView];
+  EmacsFullScreenTransitionView *transitionView;
   CGFloat titleBarHeight;
   BOOL toolbarIsVisible;
 
-  [self setupFullScreenTransitionView];
+  transitionView = MRC_RETAIN ([self fullScreenTransitionView]);
 
   if (fullScreenTargetState & WM_STATE_DEDICATED_DESKTOP)
     {
@@ -3791,7 +3826,7 @@ static CGRect unset_global_focus_view_frame (void);
   [(EmacsWindow *)window setConstrainingToScreenSuspended:YES];
   [window setFrame:srcRect display:NO];
 
-  [contentView addSubview:fullScreenTransitionView positioned:NSWindowAbove
+  [contentView addSubview:transitionView positioned:NSWindowAbove
 	       relativeTo:emacsView];
   [window display];
 
@@ -3801,7 +3836,7 @@ static CGRect unset_global_focus_view_frame (void);
   NSEnableScreenUpdates ();
 
   [NS_ANIMATION_CONTEXT runAnimationGroup:^(NSAnimationContext *context) {
-      CALayer *layer = [fullScreenTransitionView layer];
+      CALayer *layer = [transitionView layer];
 
       [context setDuration:duration];
       [context
@@ -3814,9 +3849,8 @@ static CGRect unset_global_focus_view_frame (void);
       layer.fillMode = kCAFillModeBackwards;
       layer.opacity = 0;
     } completionHandler:^{
-      [fullScreenTransitionView removeFromSuperview];
-      MRC_RELEASE (fullScreenTransitionView);
-      fullScreenTransitionView = nil;
+      [transitionView removeFromSuperview];
+      MRC_RELEASE (transitionView);
       [window setAlphaValue:previousAlphaValue];
       [window setLevel:previousWindowLevel];
       [(EmacsWindow *)window setConstrainingToScreenSuspended:NO];
@@ -4298,6 +4332,21 @@ mac_mask_rounded_bottom_corners (struct frame *f, CGRect clip_rect,
 
   [frameController maskRoundedBottomCorners:(NSRectFromCGRect (clip_rect))
 				   directly:direct_p];
+}
+
+void
+mac_invalidate_rectangles (struct frame *f, NativeRectangle *rectangles, int n)
+{
+  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+  NSRect *rects = alloca (sizeof (NSRect) * n);
+  int i;
+
+  for (i = 0; i < n; i++)
+    rects[i] = NSRectFromCGRect (mac_rect_make (f, rectangles[i].x,
+						rectangles[i].y,
+						rectangles[i].width,
+						rectangles[i].height));
+  [frameController setEmacsViewNeedsDisplayInRects:rects count:n];
 }
 
 
@@ -5816,6 +5865,17 @@ create_resize_indicator_image (void)
 
 @end				// EmacsOverlayView
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+@implementation EmacsFullScreenTransitionView
+
+- (BOOL)isFlipped
+{
+  return YES;
+}
+
+@end				// EmacsFullScreenTransitionView
+#endif
+
 
 /************************************************************************
 			Multi-monitor support
@@ -7235,7 +7295,21 @@ update_frame_tool_bar (struct frame *f)
      position.  How can we know we are in asynchronous dragging?  Note
      that sometimes we don't receive windowDidMove: messages for
      preceding windowWillMove:.  */
-  [toolbar setVisible:YES];
+  if (![toolbar isVisible])
+    {
+      [toolbar setVisible:YES];
+      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
+	  && ([window styleMask] & NSFullScreenWindowMask))
+	{
+	  /* This is a workaround: if we toggle toolbar visiblity for
+	     a full screen window on OS X 10.10, then the buttons on
+	     the title bar will be placed inappropriately.  */
+	  MRC_RETAIN (toolbar);
+	  [window setToolbar:nil];
+	  [window setToolbar:toolbar];
+	  MRC_RELEASE (toolbar);
+	}
+    }
 
   win_gravity = f->output_data.mac->toolbar_win_gravity;
   if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
@@ -7263,7 +7337,20 @@ free_frame_tool_bar (struct frame *f)
 
   toolbar = [window toolbar];
   if ([toolbar isVisible])
-    [toolbar setVisible:NO];
+    {
+      [toolbar setVisible:NO];
+      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
+	  && ([window styleMask] & NSFullScreenWindowMask))
+	{
+	  /* This is a workaround: if we toggle toolbar visiblity for
+	     a full screen window on OS X 10.10, then the buttons on
+	     the title bar will be placed inappropriately.  */
+	  MRC_RETAIN (toolbar);
+	  [window setToolbar:nil];
+	  [window setToolbar:toolbar];
+	  MRC_RELEASE (toolbar);
+	}
+    }
 
   if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
     mac_move_window_to_gravity_reference_point (f, win_gravity, rx, ry);
@@ -8132,7 +8219,7 @@ mac_file_dialog (Lisp_Object prompt, Lisp_Object dir,
 	[openPanel setNameFieldStringValue:nondirectory];
       [openPanel setAllowedFileTypes:nil];
       response = [openPanel runModal];
-      if (response == NSOKButton)
+      if (response == NSModalResponseOK)
 	{
 	  NSURL *url = [[openPanel URLs] objectAtIndex:0];
 
@@ -8231,6 +8318,57 @@ mac_file_dialog (Lisp_Object prompt, Lisp_Object dir,
 static NSView *
 create_ok_cancel_buttons_view (void)
 {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+  NSView *view;
+  NSButton *cancelButton, *okButton;
+  NSDictionary *viewsDictionary;
+  NSArray *constraints;
+
+  cancelButton = [[NSButton alloc] init];
+  [cancelButton setBezelStyle:NSRoundedBezelStyle];
+  [cancelButton setTitle:@"Cancel"];
+  [cancelButton setAction:@selector(cancel:)];
+  [cancelButton setKeyEquivalent:@"\e"];
+  [cancelButton setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+  okButton = [[NSButton alloc] init];
+  [okButton setBezelStyle:NSRoundedBezelStyle];
+  [okButton setTitle:@"OK"];
+  [okButton setAction:@selector(ok:)];
+  [okButton setKeyEquivalent:@"\r"];
+  [okButton setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+  view = [[NSView alloc] initWithFrame:NSZeroRect];
+  [view addSubview:cancelButton];
+  [view addSubview:okButton];
+
+  viewsDictionary = NSDictionaryOfVariableBindings (cancelButton, okButton);
+  constraints = [NSLayoutConstraint
+		  constraintsWithVisualFormat:
+		    @"|-[cancelButton]-[okButton(==cancelButton)]-|"
+				      options:NSLayoutFormatAlignAllCenterY
+				      metrics:nil views:viewsDictionary];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
+  [NSLayoutConstraint activateConstraints:constraints];
+#else
+  [view addConstraints:constraints];
+#endif
+  constraints = [NSLayoutConstraint
+		  constraintsWithVisualFormat:@"V:|[cancelButton]-5-|"
+				      options:0
+				      metrics:nil views:viewsDictionary];
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
+  [NSLayoutConstraint activateConstraints:constraints];
+#else
+  [view addConstraints:constraints];
+#endif
+  [view setFrameSize:[view fittingSize]];
+
+  MRC_RELEASE (cancelButton);
+  MRC_RELEASE (okButton);
+
+  return view;
+#else
   NSMatrix *view;
   NSButtonCell *prototype = [[NSButtonCell alloc] init];
   NSSize cellSize;
@@ -8256,6 +8394,7 @@ create_ok_cancel_buttons_view (void)
   [view selectCell:okButton];
 
   return view;
+#endif
 }
 
 Lisp_Object
@@ -12039,13 +12178,17 @@ mac_update_accessibility_status (struct frame *f)
 
 - (CALayer *)layerForRect:(NSRect)rect
 {
+  struct frame *f = emacsFrame;
   NSView *contentView = [emacsWindow contentView];
   NSRect rectInContentView = [emacsView convertRect:rect toView:contentView];
   NSBitmapImageRep *bitmap =
     [contentView bitmapImageRepForCachingDisplayInRect:rectInContentView];
   CALayer *layer, *contentLayer;
+  bool saved_background_alpha_enabled_p = FRAME_BACKGROUND_ALPHA_ENABLED_P (f);
 
+  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = false;
   [contentView cacheDisplayInRect:rectInContentView toBitmapImageRep:bitmap];
+  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = saved_background_alpha_enabled_p;
 
   layer = [CA_LAYER layer];
   contentLayer = [CA_LAYER layer];
@@ -13438,7 +13581,8 @@ mac_font_get_glyph_for_cid (FontRef font, CharacterCollection collection,
 				      / sizeof (characters[0]))];
     NSGlyphInfo *glyphInfo =
       [NSGlyphInfo glyphInfoWithCharacterIdentifier:cid
-					 collection:collection
+					 collection:((NSCharacterCollection)
+						     collection)
 					 baseString:string];
     NSDictionary *attributes =
       [NSDictionary dictionaryWithObjectsAndKeys:nsFont,NSFontAttributeName,

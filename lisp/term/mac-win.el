@@ -1967,9 +1967,8 @@ non-nil, and the input device supports it."
 			    delta-y)
 			(or
 			 ;; Cursor is still fully visible if scrolled?
-			 (<= (- (nth 2 point-height) delta-y)
-			     (- (+ first-y window-inside-pixel-height)
-				(frame-char-height)))
+			 (<= (+ (car point-height) (nth 2 point-height))
+			     (+ first-y window-inside-pixel-height delta-y))
 			 ;; Window has the only one row?
 			 (= (nth 2 first-height) (nth 2 last-height)))))
 		      ((> delta-y 0) ; scroll up
@@ -2007,6 +2006,8 @@ non-nil, and the input device supports it."
 		       (funcall mwheel-scroll-up-function 1)
 		     (end-of-buffer))
 		   (setq delta-y 0)))
+		;; XXX: Why is this necessary?
+		(set-window-start nil (window-start))
 		(set-window-vscroll nil 0 t))
 	      (condition-case nil
 		  (if (< delta-y 0)
@@ -2075,13 +2076,16 @@ non-nil, and the input device supports it."
 						 0 prev-first-vscrolled-y))))))
 			      (set-window-vscroll nil 0 t))))
 			(let* ((target-posn (posn-at-x-y 0 (+ first-y delta-y)))
-			       (target-coord (pos-visible-in-window-p
-					      (posn-point target-posn) nil t))
-			       (target-row (cdr (posn-actual-col-row
-						 target-posn)))
+			       target-coord target-row
 			       target-y scrolled-pixel-height)
-			  (if (and target-coord target-row)
-			      (setq target-y (cadr target-coord))
+			  (if (and (eq (posn-window target-posn)
+				       (selected-window))
+				   (null (posn-area target-posn)))
+			      (progn
+				(setq target-coord
+				      (pos-visible-in-window-p
+				       (posn-point target-posn) nil t))
+				(setq target-y (cadr target-coord)))
 			    ;; The target row is below the visible
 			    ;; area.  Temporarily set vscroll so the
 			    ;; target row comes at the top and
@@ -2091,12 +2095,23 @@ non-nil, and the input device supports it."
 			    (setq target-coord (pos-visible-in-window-p
 						(posn-point target-posn) nil t))
 			    (set-window-vscroll nil 0 t)
-			    (setq target-row (cdr (posn-actual-col-row
-						   target-posn)))
 			    (setq target-y (cadr target-coord))
-			    (if (= target-y 0)
-				(setq target-y (- (or (nth 2 target-coord)) 0)))
+			    (cond ((null target-y)
+			    	   ;; Image is completely invisible
+			    	   ;; but its descent is visible in
+			    	   ;; the first row.
+			    	   (setq target-y
+			    		 (- first-y (cdr (posn-object-x-y
+			    				  target-posn)))))
+			    	  ((= target-y first-y)
+			    	   ;; Image is partly invisible in the
+			    	   ;; first row.
+			    	   (setq target-y
+			    		 (- first-y (or (nth 2 target-coord)
+			    				0)))))
 			    (setq target-y (+ target-y delta-y)))
+			  (setq target-row
+				(cdr (posn-actual-col-row target-posn)))
 			  (setq scrolled-pixel-height (- target-y first-y))
 			  ;; Cancel the last scroll.
 			  (goto-char prev-point)

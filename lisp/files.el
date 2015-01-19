@@ -572,7 +572,7 @@ A value of nil means ignore them; anything else means query."
 In fact, this means that all read-only buffers normally have
 View mode enabled, including buffers that are read-only because
 you visit a file you cannot alter, and buffers you make read-only
-using \\[toggle-read-only]."
+using \\[read-only-mode]."
   :type 'boolean
   :group 'view)
 
@@ -1517,7 +1517,7 @@ file names with wildcards."
 (defun find-file-read-only (filename &optional wildcards)
   "Edit file FILENAME but don't allow changes.
 Like \\[find-file], but marks buffer as read-only.
-Use \\[toggle-read-only] to permit editing."
+Use \\[read-only-mode] to permit editing."
   (interactive
    (find-file-read-args "Find file read-only: "
                         (confirm-nonexistent-file-or-buffer)))
@@ -1526,7 +1526,7 @@ Use \\[toggle-read-only] to permit editing."
 (defun find-file-read-only-other-window (filename &optional wildcards)
   "Edit file FILENAME in another window but don't allow changes.
 Like \\[find-file-other-window], but marks buffer as read-only.
-Use \\[toggle-read-only] to permit editing."
+Use \\[read-only-mode] to permit editing."
   (interactive
    (find-file-read-args "Find file read-only other window: "
                         (confirm-nonexistent-file-or-buffer)))
@@ -1535,7 +1535,7 @@ Use \\[toggle-read-only] to permit editing."
 (defun find-file-read-only-other-frame (filename &optional wildcards)
   "Edit file FILENAME in another frame but don't allow changes.
 Like \\[find-file-other-frame], but marks buffer as read-only.
-Use \\[toggle-read-only] to permit editing."
+Use \\[read-only-mode] to permit editing."
   (interactive
    (find-file-read-args "Find file read-only other frame: "
                         (confirm-nonexistent-file-or-buffer)))
@@ -4756,7 +4756,7 @@ Before and after saving the buffer, this function runs
 ;; This returns a value (MODES EXTENDED-ATTRIBUTES BACKUPNAME), like
 ;; backup-buffer.
 (defun basic-save-buffer-2 ()
-  (let (tempsetmodes setmodes writecoding)
+  (let (tempsetmodes setmodes)
     (if (not (file-writable-p buffer-file-name))
 	(let ((dir (file-name-directory buffer-file-name)))
 	  (if (not (file-directory-p dir))
@@ -4772,14 +4772,6 @@ Before and after saving the buffer, this function runs
 		     buffer-file-name)))
 		  (setq tempsetmodes t)
 		(error "Attempt to save to a file which you aren't allowed to write"))))))
-    ;; This may involve prompting, so do it now before backing up the file.
-    ;; Otherwise there can be a delay while the user answers the
-    ;; prompt during which the original file has been renamed.  (Bug#13522)
-    (setq writecoding
-	  ;; Args here should match write-region call below around
-	  ;; which we use writecoding.
-	  (choose-write-coding-system nil nil buffer-file-name nil t
-				      buffer-file-truename))
     (or buffer-backed-up
 	(setq setmodes (backup-buffer)))
     (let* ((dir (file-name-directory buffer-file-name))
@@ -4861,11 +4853,10 @@ Before and after saving the buffer, this function runs
 				 (logior (car setmodes) 128))))))
 	(let (success)
 	  (unwind-protect
+	      (progn
                 ;; Pass in nil&nil rather than point-min&max to indicate
                 ;; we're saving the buffer rather than just a region.
                 ;; write-region-annotate-functions may make us of it.
-	      (let ((coding-system-for-write writecoding)
-		    (coding-system-require-warning nil))
 		(write-region nil nil
 			      buffer-file-name nil t buffer-file-truename)
 		(setq success t))
@@ -5012,6 +5003,7 @@ prints a message in the minibuffer.  Instead, use `set-buffer-modified-p'."
   (set-buffer-modified-p arg))
 
 (defun toggle-read-only (&optional arg interactive)
+  "Change whether this buffer is read-only."
   (declare (obsolete read-only-mode "24.3"))
   (interactive (list current-prefix-arg t))
   (if interactive

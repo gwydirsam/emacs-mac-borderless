@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.3.92)
+AC_INIT(emacs, 24.3.93)
 
 dnl We get MINGW64 with MSYS2
 if test "x$MSYSTEM" = "xMINGW32" -o "x$MSYSTEM" = "xMINGW64"
@@ -3559,7 +3559,7 @@ esac
 AC_SUBST(BLESSMAIL_TARGET)
 
 
-AC_CHECK_FUNCS(accept4 gethostname \
+AC_CHECK_FUNCS(accept4 fchdir gethostname \
 getrusage get_current_dir_name \
 lrand48 \
 select getpagesize setlocale \

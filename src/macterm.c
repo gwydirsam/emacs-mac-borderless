@@ -242,11 +242,10 @@ mac_erase_rectangle (struct frame *f, GC gc, int x, int y,
 		     int width, int height)
 {
   MAC_BEGIN_DRAW_TO_FRAME (f, gc, context);
-  CGContextSetFillColorWithColor (context, gc->cg_back_color);
   {
     CGRect rect = mac_rect_make (f, x, y, width, height);
 
-    CGContextFillRects (context, &rect, 1);
+    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, rect, gc);
   }
   MAC_END_DRAW_TO_FRAME (f);
 }
@@ -294,10 +293,7 @@ mac_draw_cg_image (CGImageRef image, struct frame *f, GC gc,
 			      CGImageGetWidth (image) / 2,
 			      CGImageGetHeight (image) / 2);
     if (!(flags & MAC_DRAW_CG_IMAGE_OVERLAY))
-      {
-	CGContextSetFillColorWithColor (context, gc->cg_back_color);
-	CGContextFillRects (context, &dest_rect, 1);
-      }
+      CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, dest_rect, gc);
     CGContextClipToRects (context, &dest_rect, 1);
     CGContextTranslateCTM (context,
 			   CGRectGetMinX (bounds), CGRectGetMaxY (bounds));
@@ -519,8 +515,6 @@ mac_erase_corners_for_relief (struct frame *f, GC gc, int x, int y,
     CGRect rect = mac_rect_make (f, x, y, width, height);
     int i;
 
-    CGContextSetFillColorWithColor (context, gc->cg_back_color);
-    CGContextClipToRect (context, rect);
     CGContextBeginPath (context);
     for (i = 0; i < CORNER_LAST; i++)
       if (corners & (1 << i))
@@ -541,7 +535,8 @@ mac_erase_corners_for_relief (struct frame *f, GC gc, int x, int y,
 	  CGContextAddLineToPoint (context, x1, y1);
 	}
     CGContextClosePath (context);
-    CGContextFillPath (context);
+    CGContextClip (context);
+    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, rect, gc);
   }
   MAC_END_DRAW_TO_FRAME (f);
 }
@@ -734,9 +729,11 @@ mac_set_background (GC gc, unsigned long color)
 {
   if (gc->xgcv.background != color)
     {
+      CGFloat alpha = CGColorGetAlpha (gc->cg_back_color);
+
       gc->xgcv.background = color;
       CGColorRelease (gc->cg_back_color);
-      if (color == 0)
+      if (color == 0 && alpha == 1)
 	{
 	  gc->cg_back_color = mac_cg_color_black;
 	  CGColorRetain (gc->cg_back_color);
@@ -748,7 +745,7 @@ mac_set_background (GC gc, unsigned long color)
 	  rgba[0] = (CGFloat) RED_FROM_ULONG (color) / 255.0f;
 	  rgba[1] = (CGFloat) GREEN_FROM_ULONG (color) / 255.0f;
 	  rgba[2] = (CGFloat) BLUE_FROM_ULONG (color) / 255.0f;
-	  rgba[3] = 1.0f;
+	  rgba[3] = alpha;
 	  gc->cg_back_color = CGColorCreate (mac_cg_color_space_rgb, rgba);
 	}
     }
@@ -788,6 +785,18 @@ mac_reset_clip_rectangles (struct frame *f, GC gc)
     {
       CFRelease (gc->clip_rects_data);
       gc->clip_rects_data = NULL;
+    }
+}
+
+static void
+mac_set_background_alpha (GC gc, CGFloat alpha)
+{
+  if (CGColorGetAlpha (gc->cg_back_color) != alpha)
+    {
+      CGColorRef color = CGColorCreateCopyWithAlpha (gc->cg_back_color, alpha);
+
+      CGColorRelease (gc->cg_back_color);
+      gc->cg_back_color = color;
     }
 }
 
@@ -1063,6 +1072,8 @@ x_after_update_window_line (struct window *w, struct glyph_row *desired_row)
   }
 }
 
+#define MAC_FRINGE_BACKGROUND_ALPHA (0.5f)
+
 static void
 x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fringe_bitmap_params *p)
 {
@@ -1073,6 +1084,8 @@ x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fring
 
   /* Must clip because of partially visible lines.  */
   x_clip_to_row (w, row, ANY_AREA, face->gc);
+  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f))
+    mac_set_background_alpha (face->gc, MAC_FRINGE_BACKGROUND_ALPHA);
 
   if (p->bx >= 0 && !overlay_p)
     {
@@ -1117,6 +1130,8 @@ x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fring
     }
 
   mac_reset_clip_rectangles (f, face->gc);
+  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f))
+    mac_set_background_alpha (face->gc, 1);
 }
 
 static void
@@ -2790,7 +2805,10 @@ mac_flash (struct frame *f)
   }
 
   mac_invert_rectangles (f, rects, nrects);
-  mac_mask_rounded_bottom_corners (f, clip_rect, false);
+  if (FRAME_BACKGROUND_ALPHA_ENABLED_P (f))
+    mac_invalidate_rectangles (f, rects, nrects);
+  else
+    mac_mask_rounded_bottom_corners (f, clip_rect, false);
 
   x_flush (f);
 
@@ -3833,8 +3851,15 @@ mac_handle_origin_change (struct frame *f)
 void
 mac_handle_size_change (struct frame *f, int pixelwidth, int pixelheight)
 {
-  int width = FRAME_PIXEL_TO_TEXT_WIDTH (f, pixelwidth);
-  int height = FRAME_PIXEL_TO_TEXT_HEIGHT (f, pixelheight);
+  int width, height;
+
+  /* This might be called when a full screen window is closed on OS X
+     10.10.  */
+  if (!WINDOWP (FRAME_ROOT_WINDOW (f)))
+    return;
+
+  width = FRAME_PIXEL_TO_TEXT_WIDTH (f, pixelwidth);
+  height = FRAME_PIXEL_TO_TEXT_HEIGHT (f, pixelheight);
 
   if (width != FRAME_TEXT_WIDTH (f)
       || height != FRAME_TEXT_HEIGHT (f)
@@ -4444,9 +4469,6 @@ bool mac_screen_config_changed = 0;
 
 /* Apple Events */
 Lisp_Object Qtext_input;
-static Lisp_Object saved_ts_script_language_on_focus;
-static ScriptLanguageRecord saved_ts_language;
-static Component saved_ts_component;
 Lisp_Object Qinsert_text, Qset_marked_text;
 Lisp_Object Qaction, Qmac_action_key_paths;
 Lisp_Object Qaccessibility;
@@ -5338,78 +5360,6 @@ mac_ax_create_string_for_range (struct frame *f, const CFRange *range,
   return result;
 }
 
-OSStatus
-mac_restore_keyboard_input_source (void)
-{
-  OSStatus err = noErr;
-#if !__LP64__ // XXX
-  ScriptLanguageRecord slrec, *slptr = NULL;
-
-  if (EQ (Vmac_ts_script_language_on_focus, Qt)
-      && EQ (saved_ts_script_language_on_focus, Qt))
-    slptr = &saved_ts_language;
-  else if (CONSP (Vmac_ts_script_language_on_focus)
-	   && INTEGERP (XCAR (Vmac_ts_script_language_on_focus))
-	   && INTEGERP (XCDR (Vmac_ts_script_language_on_focus))
-	   && CONSP (saved_ts_script_language_on_focus)
-	   && EQ (XCAR (saved_ts_script_language_on_focus),
-		  XCAR (Vmac_ts_script_language_on_focus))
-	   && EQ (XCDR (saved_ts_script_language_on_focus),
-		  XCDR (Vmac_ts_script_language_on_focus)))
-    {
-      slrec.fScript = XINT (XCAR (Vmac_ts_script_language_on_focus));
-      slrec.fLanguage = XINT (XCDR (Vmac_ts_script_language_on_focus));
-      slptr = &slrec;
-    }
-
-  if (slptr)
-    {
-      err = SetDefaultInputMethodOfClass (saved_ts_component, slptr,
-					  kKeyboardInputMethodClass);
-      if (err == noErr)
-	err = SetTextServiceLanguage (slptr);
-
-      /* Seems to be needed on Mac OS X 10.2.  */
-      if (err == noErr)
-	KeyScript (slptr->fScript | smKeyForceKeyScriptMask);
-    }
-#endif	/* !__LP64__ */
-
-  return err;
-}
-
-void
-mac_save_keyboard_input_source (void)
-{
-#if !__LP64__ // XXX
-  OSStatus err;
-  ScriptLanguageRecord slrec, *slptr = NULL;
-
-  saved_ts_script_language_on_focus = Vmac_ts_script_language_on_focus;
-
-  if (EQ (Vmac_ts_script_language_on_focus, Qt))
-    {
-      err = GetTextServiceLanguage (&saved_ts_language);
-      if (err == noErr)
-	slptr = &saved_ts_language;
-    }
-  else if (CONSP (Vmac_ts_script_language_on_focus)
-	   && INTEGERP (XCAR (Vmac_ts_script_language_on_focus))
-	   && INTEGERP (XCDR (Vmac_ts_script_language_on_focus)))
-    {
-      slrec.fScript = XINT (XCAR (Vmac_ts_script_language_on_focus));
-      slrec.fLanguage = XINT (XCDR (Vmac_ts_script_language_on_focus));
-      slptr = &slrec;
-    }
-
-  if (slptr)
-    {
-      GetDefaultInputMethodOfClass (&saved_ts_component, slptr,
-				    kKeyboardInputMethodClass);
-    }
-#endif	/* !__LP64__ */
-}
-
 /* Return true if and only if a key-down Quartz event CGEVENT is
    regarded as a quit char event.  */
 
@@ -5816,9 +5766,6 @@ syms_of_macterm (void)
   staticpro (&x_display_rdb_list);
   x_display_rdb_list = Qnil;
 
-  staticpro (&saved_ts_script_language_on_focus);
-  saved_ts_script_language_on_focus = Qnil;
-
   /* We don't yet support this, but defining this here avoids whining
      from cus-start.el and other places, like "M-x set-variable".  */
   DEFVAR_BOOL ("x-use-underline-position-properties",
@@ -5986,15 +5933,6 @@ OPTION-TYPE is a symbol specifying the type of startup options:
   DEFVAR_LISP ("mac-ts-active-input-overlay", Vmac_ts_active_input_overlay,
     doc: /* Overlay used to display Mac TSM active input area.  */);
   Vmac_ts_active_input_overlay = Qnil;
-
-  DEFVAR_LISP ("mac-ts-script-language-on-focus", Vmac_ts_script_language_on_focus,
-    doc: /* How to change Mac TSM script/language when a frame gets focus.
-If the value is t, the input script and language are restored to those
-used in the last focus frame.  If the value is a pair of integers, the
-input script and language codes, which are defined in the Script
-Manager, are set to its car and cdr parts, respectively.  Otherwise,
-Emacs doesn't set them and thus follows the system default behavior.  */);
-  Vmac_ts_script_language_on_focus = Qnil;
 
   DEFVAR_BOOL ("mac-drawing-use-gcd", mac_drawing_use_gcd,
     doc: /* Non-nil means graphical drawing uses GCD (Grand Central Dispatch).

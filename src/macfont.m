@@ -165,8 +165,8 @@ static Boolean macfont_supports_charset_and_languages_p (FontDescriptorRef,
 							 CFCharacterSetRef,
 							 Lisp_Object,
 							 CFArrayRef);
-static CFIndex macfont_closest_traits_index (CFArrayRef,
-					     FontSymbolicTraits);
+static Boolean macfont_closest_traits_index_p (CFArrayRef, FontSymbolicTraits,
+					       CFIndex);
 static CFDataRef mac_font_copy_uvs_table (FontRef);
 static void mac_font_get_glyphs_for_variants (CFDataRef, UTF32Char,
 					      const UTF32Char [],
@@ -755,9 +755,6 @@ static const struct
 
 static CGFloat macfont_antialias_threshold;
 
-#ifdef HAVE_NS
-static
-#endif
 void
 macfont_update_antialias_threshold (void)
 {
@@ -2049,38 +2046,49 @@ macfont_supports_charset_and_languages_p (FontDescriptorRef desc,
   return result;
 }
 
-static CFIndex
-macfont_closest_traits_index (CFArrayRef traits_array,
-			      FontSymbolicTraits target)
+static int
+macfont_traits_distance (FontSymbolicTraits sym_traits1,
+			 FontSymbolicTraits sym_traits2)
 {
-  CFIndex i, result = -1, count = CFArrayGetCount (traits_array);
-  int min_distance = (1 << 3);
+  FontSymbolicTraits diff = (sym_traits1 ^ sym_traits2);
+  int distance = 0;
+
+  /* We prefer synthetic bold of italic to synthetic italic of bold
+     when both bold and italic are available but bold-italic is not
+     available.  */
+  if (diff & MAC_FONT_TRAIT_BOLD)
+    distance |= (1 << 0);
+  if (diff & MAC_FONT_TRAIT_ITALIC)
+    distance |= (1 << 1);
+  if (diff & MAC_FONT_TRAIT_MONO_SPACE)
+    distance |= (1 << 2);
+
+  return distance;
+}
+
+static Boolean
+macfont_closest_traits_index_p (CFArrayRef traits_array,
+				FontSymbolicTraits target,
+				CFIndex index)
+{
+  CFIndex i, count = CFArrayGetCount (traits_array);
+  FontSymbolicTraits traits;
+  int my_distance;
+
+  traits = ((FontSymbolicTraits) (uintptr_t)
+	    CFArrayGetValueAtIndex (traits_array, index));
+  my_distance = macfont_traits_distance (target, traits);
 
   for (i = 0; i < count; i++)
-    {
-      FontSymbolicTraits traits, diff;
-      int distance = 0;
+    if (i != index)
+      {
+	traits = ((FontSymbolicTraits) (uintptr_t)
+		  CFArrayGetValueAtIndex (traits_array, i));
+	if (macfont_traits_distance (target, traits) < my_distance)
+	  return false;
+      }
 
-      traits = ((FontSymbolicTraits) (uintptr_t)
-		CFArrayGetValueAtIndex (traits_array, i));
-      diff = (target ^ traits);
-      /* We prefer synthetic bold of italic to synthetic italic of
-	 bold when both bold and italic are available but bold-italic
-	 is not available.  */
-      if (diff & MAC_FONT_TRAIT_BOLD)
-	distance |= (1 << 0);
-      if (diff & MAC_FONT_TRAIT_ITALIC)
-	distance |= (1 << 1);
-      if (diff & MAC_FONT_TRAIT_MONO_SPACE)
-	distance |= (1 << 2);
-      if (distance < min_distance)
-	{
-	  min_distance = distance;
-	  result = i;
-	}
-    }
-
-  return result;
+  return true;
 }
 
 static Lisp_Object
@@ -2371,8 +2379,9 @@ macfont_list (struct frame *f, Lisp_Object spec)
 		  FontSymbolicTraits synth = (imask | bmask | mmask);
 
 		  if (synth == 0
-		      || j == macfont_closest_traits_index (traits_array,
-							    (sym_traits | synth)))
+		      || macfont_closest_traits_index_p (traits_array,
+							 (sym_traits | synth),
+							 j))
 		    {
 		      entity = macfont_descriptor_entity (desc, extra, synth);
 		      if (! NILP (entity))
@@ -2817,10 +2826,7 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
   MAC_BEGIN_DRAW_TO_FRAME (f, gc, context);
 
   if (!CGRectIsNull (background_rect))
-    {
-      CGContextSetFillColorWithColor (context, gc->cg_back_color);
-      CGContextFillRects (context, &background_rect, 1);
-    }
+    CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (context, background_rect, gc);
 
   if (macfont_info->cgfont)
     {

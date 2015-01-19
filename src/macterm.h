@@ -251,6 +251,9 @@ struct mac_output
      toolkit one).  */
   bool_bf native_tool_bar_p : 1;
 
+  /* True means background alpha value is enabled for this frame.  */
+  bool_bf background_alpha_enabled_p : 1;
+
   /* Backing scale factor (1 or 2), used for rendering images.  */
   unsigned backing_scale_factor : 2;
 
@@ -305,6 +308,8 @@ struct mac_output
 #define FRAME_CHECK_FULLSCREEN_NEEDED_P(f) \
   ((f)->output_data.mac->check_fullscreen_needed_p)
 #define FRAME_NATIVE_TOOL_BAR_P(f) ((f)->output_data.mac->native_tool_bar_p)
+#define FRAME_BACKGROUND_ALPHA_ENABLED_P(f) \
+  ((f)->output_data.mac->background_alpha_enabled_p)
 #define FRAME_BACKING_SCALE_FACTOR(f) \
   ((f)->output_data.mac->backing_scale_factor)
 #define FRAME_SCALE_MISMATCH_STATE(f) \
@@ -477,8 +482,6 @@ extern EMACS_INT mac_ax_line_for_index (struct frame *, EMACS_INT);
 extern int mac_ax_range_for_line (struct frame *, EMACS_INT, CFRange *);
 extern CFStringRef mac_ax_create_string_for_range (struct frame *,
 						   const CFRange *, CFRange *);
-extern OSStatus mac_restore_keyboard_input_source (void);
-extern void mac_save_keyboard_input_source (void);
 extern bool mac_keydown_cgevent_quit_p (CGEventRef);
 extern void mac_store_apple_event (Lisp_Object, Lisp_Object, const AEDesc *);
 extern OSStatus mac_store_event_ref_as_apple_event (AEEventClass, AEEventID,
@@ -662,6 +665,7 @@ extern void mac_release_autorelease_pool (void *);
 extern bool mac_tracking_area_works_with_cursor_rects_invalidation_p (void);
 extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
+extern void mac_invalidate_rectangles (struct frame *, NativeRectangle *, int);
 extern long mac_appkit_do_applescript (Lisp_Object, Lisp_Object *);
 extern bool mac_webkit_supports_svg_p (void);
 extern CFArrayRef mac_document_copy_type_identifiers (void);
@@ -692,6 +696,14 @@ extern void mac_sound_play (CFTypeRef, Lisp_Object, Lisp_Object);
 #define MAC_END_DRAW_TO_FRAME(f)		\
   mac_end_cg_clip (f);} while (0)
 #endif
+
+#define CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND(context, rect, gc)	\
+  do {									\
+    if (CGColorGetAlpha ((gc)->cg_back_color) != 1)			\
+      CGContextClearRect (context, rect);				\
+    CGContextSetFillColorWithColor (context, (gc)->cg_back_color);	\
+    CGContextFillRects (context, &(rect), 1);				\
+  } while (0)
 
 /* Defined in macfont.m */
 extern void macfont_update_antialias_threshold (void);

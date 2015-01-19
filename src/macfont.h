@@ -272,4 +272,5 @@ extern CGGlyph mac_ctfont_get_glyph_for_cid (CTFontRef,
 #else  /* HAVE_NS */
 extern void mac_register_font_driver (struct frame *f);
 extern void *macfont_get_nsctfont (struct font *font);
+extern void macfont_update_antialias_threshold (void);
 #endif  /* HAVE_NS */

@@ -413,12 +413,6 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     (mac-wheel-button-is-mouse-2 mac boolean "22.1")
 	     (mac-pass-command-to-system mac boolean "22.1")
 	     (mac-pass-control-to-system mac boolean "22.1")
-	     (mac-ts-script-language-on-focus
-	      mac (choice (const :tag "System default behavior" nil)
-			  (const :tag "Restore to script/language used in the last focus frame" t)
-			  (cons :tag "Specify script/language"
-				(integer :tag "Script code")
-				(integer :tag "Language code"))) "22.1")
 	     (mac-drawing-use-gcd mac boolean "24.4")
              (debug-on-event debug
                              (choice (const :tag "None" nil)

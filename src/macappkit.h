@@ -45,6 +45,9 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifndef NSAppKitVersionNumber10_8
 #define NSAppKitVersionNumber10_8 1187
 #endif
+#ifndef NSAppKitVersionNumber10_9
+#define NSAppKitVersionNumber10_9 1265
+#endif
 
 #ifndef NSINTEGER_DEFINED
 typedef int NSInteger;
@@ -283,11 +286,6 @@ typedef id instancetype;
 @interface EmacsFullscreenWindow : EmacsWindow
 @end
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-@interface EmacsFullscreenTransitionView : NSView
-@end
-#endif
-
 @interface NSObject (EmacsWindowDelegate)
 - (BOOL)window:(NSWindow *)sender shouldForwardAction:(SEL)action to:(id)target;
 - (NSRect)window:(NSWindow *)sender willConstrainFrame:(NSRect)frameRect
@@ -338,9 +336,6 @@ typedef id instancetype;
   /* Pointer to the Lisp symbol that is set as `fullscreen' frame
      parameter after the full screen transition.  */
   Lisp_Object *fullscreenFrameParameterAfterTransition;
-
-  /* View used for the full screen transition.  */
-  NSView *fullScreenTransitionView;
 #endif
 }
 - (instancetype)initWithEmacsFrame:(struct frame *)emacsFrame;
@@ -375,7 +370,11 @@ typedef id instancetype;
 /* Class for Emacs view that also handles input events.  Used by
    ordinary frames.  */
 
-@interface EmacsMainView : EmacsView <NSTextInput, NSTextInputClient>
+@interface EmacsMainView : EmacsView <NSTextInputClient
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+				      , NSTextInput
+#endif
+				      >
 {
   /* Target object to which the EmacsMainView object sends
      actions.  */
@@ -440,6 +439,13 @@ typedef id instancetype;
 - (void)setShowsResizeIndicator:(BOOL)flag;
 - (void)adjustWindowFrame;
 @end
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+/* Class for view used in full screen transition animations.  */
+
+@interface EmacsFullScreenTransitionView : NSView
+@end
+#endif
 
 /* Class for scroller that doesn't do modal mouse tracking.  */
 
@@ -856,6 +862,10 @@ enum {
 enum {
   NSModalResponseAbort		= NSRunAbortedResponse,
   NSModalResponseContinue	= NSRunContinuesResponse
+};
+
+enum {
+  NSModalResponseOK	= NSOKButton
 };
 #endif
 

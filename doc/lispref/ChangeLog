@@ -1,3 +1,13 @@
+2014-07-08  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* debugging.texi (Function Debugging, Debugger Commands):
+	Update debug-on-entry w.r.t behavior after redefinitions (bug#17902).
+
+2014-06-29  Glenn Morris  <rgm@gnu.org>
+
+	* help.texi (Help Functions): "Online" help doesn't mean what it
+	used to any more.
+
 2014-06-26  Glenn Morris  <rgm@gnu.org>
 
 	* minibuf.texi (Intro to Minibuffers): Batch mode is basic.

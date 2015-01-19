@@ -1189,8 +1189,8 @@ alloc_destination (struct coding_system *coding, ptrdiff_t nbytes,
 #define UTF_8_BOM_2 0xBB
 #define UTF_8_BOM_3 0xBF
 
-/* Unlike the other detect_coding_XXX, this function counts number of
-   characters and check EOL format.  */
+/* Unlike the other detect_coding_XXX, this function counts the number
+   of characters and checks the EOL format.  */
 
 static bool
 detect_coding_utf_8 (struct coding_system *coding,
@@ -1548,8 +1548,8 @@ encode_coding_utf_8 (struct coding_system *coding)
 	    *dst++ = CHAR_TO_BYTE8 (c);
 	  else
 	    CHAR_STRING_ADVANCE_NO_UNIFY (c, dst);
-	  produced_chars++;
 	}
+      produced_chars = dst - (coding->destination + coding->produced);
     }
   record_conversion_result (coding, CODING_RESULT_SUCCESS);
   coding->produced_char += produced_chars;
@@ -11275,7 +11275,7 @@ decode text as usual.  */);
 
   DEFVAR_BOOL ("disable-ascii-optimization", disable_ascii_optimization,
 	       doc: /* If non-nil, Emacs does not optimize code decoder for ASCII files.
-Internal use only.  Removed after the experimental optimizer gets stable. */);
+Internal use only.  Remove after the experimental optimizer becomes stable.  */);
   disable_ascii_optimization = 0;
 
   DEFVAR_LISP ("translation-table-for-input", Vtranslation_table_for_input,
