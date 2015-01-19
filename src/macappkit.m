@@ -318,17 +318,52 @@ NSSizeToCGSize (NSSize nssize)
 		  pressure:[self pressure]];
 }
 
+static void
+mac_cgevent_set_unicode_string_from_event_ref (CGEventRef cgevent,
+					       EventRef eventRef)
+{
+  ByteCount size;
+
+  if (GetEventParameter (eventRef, kEventParamKeyUnicodes,
+			 typeUnicodeText, NULL, 0, &size, NULL) == noErr)
+    {
+      UniChar *text = alloca (size);
+
+      if (GetEventParameter (eventRef, kEventParamKeyUnicodes,
+			     typeUnicodeText, NULL, size, NULL, text) == noErr)
+	CGEventKeyboardSetUnicodeString (cgevent, size / sizeof (UniChar),
+					 text);
+    }
+}
+
 - (CGEventRef)coreGraphicsEvent
 {
   CGEventRef event;
-  NSEventType type;
+  NSEventType type = [self type];
   static BOOL defaultEventSourceInitialized = NO;
 
   if ([self respondsToSelector:@selector(CGEvent)])
     {
       event = [self CGEvent];
       if (event)
-	return event;
+	{
+	  /* Unicode string is not set if the keyboard event comes
+	     from Screen Sharing on Mac OS X 10.6 and later.  */
+	  if (NSEventMaskFromType (type) & (NSKeyDownMask | NSKeyUpMask))
+	    {
+	      UniCharCount length;
+
+	      CGEventKeyboardGetUnicodeString (event, 0, &length, NULL);
+	      if (length == 0)
+		{
+		  EventRef eventRef = (EventRef) [self eventRef];
+
+		  mac_cgevent_set_unicode_string_from_event_ref (event,
+								 eventRef);
+		}
+	    }
+	  return event;
+	}
     }
 
   /* Workaround for a bug on Mac OS X 10.4.  */
@@ -339,7 +374,6 @@ NSSizeToCGSize (NSSize nssize)
     }
 
   event = NULL;
-  type = [self type];
   if (NSEventMaskFromType (type) & ANY_MOUSE_EVENT_MASK)
     {
       CGPoint position = CGPointZero;
@@ -369,21 +403,10 @@ NSSizeToCGSize (NSSize nssize)
 #if __LP64__
       /* This seems to be unnecessary for 32-bit executables.  */
       {
-	ByteCount size;
 	UInt32 keyboard_type;
 	EventRef eventRef = (EventRef) [self eventRef];
 
-	if (GetEventParameter (eventRef, kEventParamKeyUnicodes,
-			       typeUnicodeText, NULL, 0, &size, NULL) == noErr)
-	  {
-	    UniChar *text = alloca (size);
-
-	    if (GetEventParameter (eventRef, kEventParamKeyUnicodes,
-				   typeUnicodeText, NULL, size, NULL,
-				   text) == noErr)
-	      CGEventKeyboardSetUnicodeString (event, size / sizeof (UniChar),
-					       text);
-	  }
+	mac_cgevent_set_unicode_string_from_event_ref (event, eventRef);
 	if (GetEventParameter (eventRef, kEventParamKeyboardType,
 			       typeUInt32, NULL, sizeof (UInt32), NULL,
 			       &keyboard_type) == noErr)
@@ -1501,8 +1524,8 @@ static void handle_services_invocation (NSInvocation *);
 }
 #endif
 
-/* Workarounds for memory leaks on OS X 10.9.  Should be removed once
-   the problem is fixed in the framework.  */
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+/* Workarounds for memory leaks on OS X 10.9.  */
 
 - (void)_installMemoryPressureDispatchSources
 {
@@ -1511,7 +1534,8 @@ static void handle_services_invocation (NSInvocation *);
   if (doNotInstallDispatchSources)
     return;
   [super _installMemoryPressureDispatchSources];
-  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_8))
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9
+      && !(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_8))
     doNotInstallDispatchSources = YES;
 }
 
@@ -1522,9 +1546,11 @@ static void handle_services_invocation (NSInvocation *);
   if (doNotInstallDispatchSources)
     return;
   [super _installMemoryStatusDispatchSources];
-  if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_8))
+  if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9
+      && !(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_8))
     doNotInstallDispatchSources = YES;
 }
+#endif
 
 @end				// EmacsApplication
 
@@ -3530,11 +3556,14 @@ static CGRect unset_global_focus_view_frame (void);
   id image;
   CGFloat rootWindowMaxY;
   CALayer *rootLayer;
+  bool saved_background_alpha_enabled_p = FRAME_BACKGROUND_ALPHA_ENABLED_P (f);
 
   contentView = [emacsWindow contentView];
   contentViewRect = [contentView visibleRect];
   bitmap = [contentView bitmapImageRepForCachingDisplayInRect:contentViewRect];
+  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = false;
   [contentView cacheDisplayInRect:contentViewRect toBitmapImageRep:bitmap];
+  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = saved_background_alpha_enabled_p;
   image = (id) [bitmap CGImage];
 
   rootLayer = [CA_LAYER layer];
@@ -3809,7 +3838,10 @@ static CGRect unset_global_focus_view_frame (void);
   [window setStyleMask:([window styleMask] | NSFullScreenWindowMask)];
 
   destRect = [self postprocessWindowManagerStateChange:destRect];
-  [window setFrame:destRect display:NO];
+  /* The line below used to be [window setFrame:destRect display:NO],
+     but this does not set content view's frame correctly on OS X
+     10.10.  */
+  [contentView setFrameSize:destRect.size];
 
   [emacsView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin)];
   [(EmacsWindow *)window setConstrainingToScreenSuspended:YES];

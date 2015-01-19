@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.3.94)
+AC_INIT(emacs, 24.4)
 
 dnl We get MINGW64 with MSYS2
 if test "x$MSYSTEM" = "xMINGW32" -o "x$MSYSTEM" = "xMINGW64"
@@ -35,7 +35,8 @@ then
       # "/c/foo/bar", to simplify later conversions to native Windows
       # format ("c:/foo/bar")
       srcdir=`cd "${srcdir}" && pwd -W`
-      srcdir="/${srcdir:0:1}${srcdir:2}"
+      # 'eval' pacifies strict POSIX non-MinGW shells (Bug#18612).
+      eval 'srcdir="/${srcdir:0:1}${srcdir:2}"'
       ;;
   esac
 fi
@@ -259,7 +260,7 @@ OPTION_DEFAULT_ON([m17n-flt],[don't use m17n-flt for text shaping])
 OPTION_DEFAULT_ON([toolkit-scroll-bars],[don't use Motif or Xaw3d scroll bars])
 OPTION_DEFAULT_ON([xaw3d],[don't use Xaw3d])
 OPTION_DEFAULT_ON([xim],[don't use X11 XIM])
-OPTION_DEFAULT_OFF([mac],[use GUI on Mac OS X.  This is experimental/hackers-only!])
+OPTION_DEFAULT_OFF([mac],[use GUI on Mac OS X])
 OPTION_DEFAULT_OFF([ns],[use NeXTstep (Cocoa or GNUstep) windowing system])
 OPTION_DEFAULT_OFF([w32], [use native MS Windows GUI in a Cygwin build])
 
@@ -4896,6 +4897,8 @@ fi
 case "$opsys" in
   aix4-2) LD_SWITCH_SYSTEM_TEMACS="-Wl,-bnodelcsect" ;;
 
+  cygwin) LD_SWITCH_SYSTEM_TEMACS="-Wl,-stack,0x00800000" ;;
+
   darwin)
    ## The -headerpad option tells ld (see man page) to leave room at the
    ## end of the header for adding load commands.  Needed for dumping.
@@ -5121,11 +5124,6 @@ fi
 echo
 
 if test "$HAVE_MACGUI" = "yes"; then
-   echo
-   echo "Warning: The Mac port 4.9X is experimental/hackers-only.
-It is not recommended for casual use
-or as a basis of (binary) distributions."
-   echo
    if test "$with_wide_int" = yes; then
       echo "Warning: \`--with-wide-int' is not eagerly tested on the Mac port.
 Use it at your own risk."

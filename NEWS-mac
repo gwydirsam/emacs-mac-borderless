@@ -1,5 +1,15 @@
+* emacs-24.4-mac-5.0 (2014-10-21)
+Based on Emacs 24.4.
+
+** Fixed bugs
+
+*** Keyboard input via Screen Sharing causes crash.
+Reported by Kazu Yamamoto.
+
+
 * emacs-24.3.94-mac-4.94 [experimental/hackers-only] (2014-10-02)
 Based on Emacs 24.3.94.
+http://lists.gnu.org/archive/html/emacs-devel/2014-10/msg00028.html
 
 ** Fixed bugs
 

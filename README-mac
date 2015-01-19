@@ -1,19 +1,14 @@
 1. What's this?
 
 This is "Mac port" addition to GNU Emacs 24.  This provides a native
-GUI support for Mac OS X 10.4 - 10.9.  Note that Emacs 23 and later
+GUI support for Mac OS X 10.4 - 10.10.  Note that Emacs 23 and later
 already contain the official GUI support via the NS (Cocoa) port for
 Mac OS X 10.4 and later.  So if it is good enough for you, then you
 don't need to try this.
 
   *** IMPORTANT NOTE ***
 
-  This version (4.9X) should be regarded as experimental/hackers-only.
-  Things are subject to change/removal in an incompatible way.  Please
-  refrain from distributing this in any different form, including for
-  (binary) distribution basis, until the version gets to 5.0.
-
-  Also, if you find a bug, then please try to reproduce it with some
+  If you find a bug, then please try to reproduce it with some
   official builds such as X11 or NS (Cocoa).  If it turns out to be
   specific to the Mac port, then please report it to
   "mituharu+bug-gnu-emacs-mac@math.s.chiba-u.ac.jp".  Otherwise (i.e.,

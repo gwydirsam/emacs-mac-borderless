@@ -143,12 +143,13 @@ typedef id instancetype;
 + (NSCursor *)cursorWithThemeCursor:(ThemeCursor)shape;
 @end
 
-/* Workarounds for memory leaks on OS X 10.9.  Should be removed once
-   the problem is fixed in the framework.  */
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+/* Workarounds for memory leaks on OS X 10.9.  */
 @interface NSApplication (Undocumented)
 - (void)_installMemoryPressureDispatchSources;
 - (void)_installMemoryStatusDispatchSources;
 @end
+#endif
 
 @interface EmacsApplication : NSApplication
 @end
@@ -945,17 +946,14 @@ enum {
 @end
 #endif
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
-@interface NSCursor (AvailableOn1050AndLater)
-+ (NSCursor *)operationNotAllowedCursor;
-@end
-#endif
-
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
 @interface NSCursor (AvailableOn1060AndLater)
 + (NSCursor *)dragLinkCursor;
 + (NSCursor *)dragCopyCursor;
 + (NSCursor *)contextualMenuCursor;
+/* The documentation says it is available on Mac OS X 10.5, but
+   actually it was not declared in the header.  */
++ (NSCursor *)operationNotAllowedCursor;
 @end
 #endif
 
@@ -975,6 +973,7 @@ enum {
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
 @interface NSEvent (AvailableOn1050AndLater)
 - (CGEventRef)CGEvent;
+- (const void * /* EventRef */)eventRef;
 @end
 #endif
 
