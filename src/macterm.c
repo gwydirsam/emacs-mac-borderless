@@ -2323,7 +2323,7 @@ x_draw_stretch_glyph_string (struct glyph_string *s)
 	{
 	  /* In R2L rows, draw the cursor on the right edge of the
 	     stretch glyph.  */
-	  int right_x = window_box_right_offset (s->w, TEXT_AREA);
+	  int right_x = window_box_right (s->w, TEXT_AREA);
 
 	  if (x + background_width > right_x)
 	    background_width -= x - right_x;
@@ -3587,6 +3587,15 @@ x_draw_hollow_cursor (struct window *w, struct glyph_row *row)
 					    GCForeground, &xgcv);
   gc = dpyinfo->scratch_cursor_gc;
 
+  /* When on R2L character, show cursor at the right edge of the
+     glyph, unless the cursor box is as wide as the glyph or wider
+     (the latter happens when x-stretch-cursor is non-nil).  */
+  if ((cursor_glyph->resolved_level & 1) != 0
+      && cursor_glyph->pixel_width > w->phys_cursor_width)
+    {
+      x += cursor_glyph->pixel_width - w->phys_cursor_width;
+      wd -= 1;
+    }
   /* Set clipping, draw the rectangle, and reset clipping again.  */
   x_clip_to_row (w, row, TEXT_AREA, gc);
   mac_draw_rectangle (f, gc, x, y, wd, h - 1);
@@ -3671,9 +3680,10 @@ x_draw_bar_cursor (struct window *w, struct glyph_row *row, int width, enum text
 			      WINDOW_TO_FRAME_PIXEL_Y (w, w->phys_cursor.y),
 			      width, row->height);
 	}
-      else
+      else /* HBAR_CURSOR */
 	{
 	  int dummy_x, dummy_y, dummy_h;
+	  int x = WINDOW_TEXT_TO_FRAME_PIXEL_X (w, w->phys_cursor.x);
 
 	  if (width < 0)
 	    width = row->height;
@@ -3683,8 +3693,10 @@ x_draw_bar_cursor (struct window *w, struct glyph_row *row, int width, enum text
 	  get_phys_cursor_geometry (w, row, cursor_glyph, &dummy_x,
 				    &dummy_y, &dummy_h);
 
-	  mac_fill_rectangle (f, gc,
-			      WINDOW_TEXT_TO_FRAME_PIXEL_X (w, w->phys_cursor.x),
+	  if ((cursor_glyph->resolved_level & 1) != 0
+	      && cursor_glyph->pixel_width > w->phys_cursor_width)
+	    x += cursor_glyph->pixel_width - w->phys_cursor_width;
+	  mac_fill_rectangle (f, gc, x,
 			      WINDOW_TO_FRAME_PIXEL_Y (w, w->phys_cursor.y +
 						       row->height - width),
 			      w->phys_cursor_width, width);
@@ -3720,7 +3732,7 @@ mac_define_frame_cursor (struct frame *f, Cursor cursor)
       struct mac_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
 
       if (dpyinfo->x_focus_frame == f)
-	SetThemeCursor (cursor);
+	mac_cursor_set (cursor);
     }
 #endif
 }
@@ -4353,6 +4365,15 @@ x_free_frame_resources (struct frame *f)
   x_free_gcs (f);
 
   xfree (FRAME_SIZE_HINTS (f));
+
+  /* Free cursors.  */
+  mac_cursor_release (f->output_data.mac->text_cursor);
+  mac_cursor_release (f->output_data.mac->nontext_cursor);
+  mac_cursor_release (f->output_data.mac->modeline_cursor);
+  mac_cursor_release (f->output_data.mac->hand_cursor);
+  mac_cursor_release (f->output_data.mac->hourglass_cursor);
+  mac_cursor_release (f->output_data.mac->horizontal_drag_cursor);
+  mac_cursor_release (f->output_data.mac->vertical_drag_cursor);
 
   xfree (f->output_data.mac);
   f->output_data.mac = NULL;
@@ -5522,6 +5543,10 @@ mac_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
 				  + SBYTES (Vsystem_name) + 2);
   strcat (strcat (strcpy (dpyinfo->mac_id_name, SSDATA (Vinvocation_name)), "@"),
 	  SSDATA (Vsystem_name));
+
+  /* Get the scroll bar cursor.  */
+  dpyinfo->vertical_scroll_bar_cursor =
+    mac_cursor_create (kThemeArrowCursor, NULL, NULL);
 
   /* Put the rdb where we can find it in a way that works on
      all versions.  */

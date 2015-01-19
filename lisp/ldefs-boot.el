@@ -2979,8 +2979,8 @@ See the documentation for `calculator-mode' for more information.
 
 ;;;***
 
-;;;### (autoloads nil "calendar" "calendar/calendar.el" (21291 53104
-;;;;;;  431149 0))
+;;;### (autoloads nil "calendar" "calendar/calendar.el" (21517 17755
+;;;;;;  154419 0))
 ;;; Generated autoloads from calendar/calendar.el
 
 (autoload 'calendar "calendar" "\
@@ -5101,8 +5101,8 @@ Enable CUA selection mode without the C-z/C-x/C-c/C-v bindings.
 
 ;;;***
 
-;;;### (autoloads nil "cua-rect" "emulation/cua-rect.el" (21424 41722
-;;;;;;  267004 677000))
+;;;### (autoloads nil "cua-rect" "emulation/cua-rect.el" (21501 26335
+;;;;;;  264462 0))
 ;;; Generated autoloads from emulation/cua-rect.el
 
 (autoload 'cua-rectangle-mark-mode "cua-rect" "\
@@ -5972,7 +5972,8 @@ relevant to POS.
 
 ;;;***
 
-;;;### (autoloads nil "desktop" "desktop.el" (21445 65378 74911 672000))
+;;;### (autoloads nil "desktop" "desktop.el" (21522 31638 598764
+;;;;;;  0))
 ;;; Generated autoloads from desktop.el
 
 (defvar desktop-save-mode nil "\
@@ -6210,8 +6211,8 @@ Deuglify broken Outlook (Express) articles and redisplay.
 
 ;;;***
 
-;;;### (autoloads nil "diary-lib" "calendar/diary-lib.el" (21291
-;;;;;;  53104 431149 0))
+;;;### (autoloads nil "diary-lib" "calendar/diary-lib.el" (21522
+;;;;;;  31638 598764 0))
 ;;; Generated autoloads from calendar/diary-lib.el
 
 (autoload 'diary "diary-lib" "\
@@ -9153,8 +9154,8 @@ This will add a speedbar major display mode.
 
 ;;;***
 
-;;;### (autoloads nil "erc-track" "erc/erc-track.el" (21291 53104
-;;;;;;  431149 0))
+;;;### (autoloads nil "erc-track" "erc/erc-track.el" (21546 52205
+;;;;;;  704969 0))
 ;;; Generated autoloads from erc/erc-track.el
 
 (defvar erc-track-minor-mode nil "\
@@ -12789,7 +12790,7 @@ the form \"WINDOW-ID PIXMAP-ID\".  Value is non-nil if successful.
 
 ;;;***
 
-;;;### (autoloads nil "gud" "progmodes/gud.el" (21291 53104 431149
+;;;### (autoloads nil "gud" "progmodes/gud.el" (21513 8534 259476
 ;;;;;;  0))
 ;;; Generated autoloads from progmodes/gud.el
 
@@ -14893,7 +14894,7 @@ the mode if ARG is omitted or nil, and toggle it if ARG is `toggle'.
 
 ;;;***
 
-;;;### (autoloads nil "image" "image.el" (21291 53104 431149 0))
+;;;### (autoloads nil "image" "image.el" (21526 9707 512144 108000))
 ;;; Generated autoloads from image.el
 
 (autoload 'image-type-from-data "image" "\
@@ -17916,7 +17917,7 @@ redisplayed as output is inserted.
 
 ;;;***
 
-;;;### (autoloads nil "mh-comp" "mh-e/mh-comp.el" (21291 53104 431149
+;;;### (autoloads nil "mh-comp" "mh-e/mh-comp.el" (21546 52205 704969
 ;;;;;;  0))
 ;;; Generated autoloads from mh-e/mh-comp.el
 
@@ -18007,9 +18008,9 @@ delete the draft message.
 
 ;;;***
 
-;;;### (autoloads nil "mh-e" "mh-e/mh-e.el" (21291 53104 431149 0))
+;;;### (autoloads nil "mh-e" "mh-e/mh-e.el" (21546 52205 704969 0))
 ;;; Generated autoloads from mh-e/mh-e.el
-(push (purecopy '(mh-e 8 5 -4)) package--builtin-versions)
+(push (purecopy '(mh-e 8 6)) package--builtin-versions)
 
 (put 'mh-progs 'risky-local-variable t)
 
@@ -18366,7 +18367,7 @@ Assume text has been decoded if DECODED is non-nil.
 
 ;;;***
 
-;;;### (autoloads nil "mml" "gnus/mml.el" (21291 53104 431149 0))
+;;;### (autoloads nil "mml" "gnus/mml.el" (21548 39298 812747 0))
 ;;; Generated autoloads from gnus/mml.el
 
 (autoload 'mml-to-mime "mml" "\
@@ -20125,8 +20126,8 @@ See the command `outline-mode' for more information on this mode.
 
 ;;;***
 
-;;;### (autoloads nil "package" "emacs-lisp/package.el" (21420 54160
-;;;;;;  358217 0))
+;;;### (autoloads nil "package" "emacs-lisp/package.el" (21548 39298
+;;;;;;  812747 0))
 ;;; Generated autoloads from emacs-lisp/package.el
 (push (purecopy '(package 1 0 1)) package--builtin-versions)
 
@@ -21849,8 +21850,8 @@ If EXTENSION is any other symbol, it is ignored.
 
 ;;;***
 
-;;;### (autoloads nil "python" "progmodes/python.el" (21461 43491
-;;;;;;  589246 0))
+;;;### (autoloads nil "python" "progmodes/python.el" (21548 39298
+;;;;;;  812747 0))
 ;;; Generated autoloads from progmodes/python.el
 (push (purecopy '(python 0 24 4)) package--builtin-versions)
 
@@ -24586,7 +24587,7 @@ Otherwise, one argument `-i' is passed to the shell.
 
 ;;;***
 
-;;;### (autoloads nil "shr" "net/shr.el" (21341 23900 988149 0))
+;;;### (autoloads nil "shr" "net/shr.el" (21501 26431 616864 948000))
 ;;; Generated autoloads from net/shr.el
 
 (autoload 'shr-render-region "shr" "\
@@ -26729,7 +26730,7 @@ Connect to the Emacs talk group from the current X display or tty frame.
 
 ;;;***
 
-;;;### (autoloads nil "tar-mode" "tar-mode.el" (21291 53104 431149
+;;;### (autoloads nil "tar-mode" "tar-mode.el" (21504 6071 527764
 ;;;;;;  0))
 ;;; Generated autoloads from tar-mode.el
 
@@ -28342,8 +28343,8 @@ Discard Tramp from loading remote files.
 
 ;;;***
 
-;;;### (autoloads nil "tutorial" "tutorial.el" (21464 17294 690912
-;;;;;;  0))
+;;;### (autoloads nil "tutorial" "tutorial.el" (21509 26638 997760
+;;;;;;  598000))
 ;;; Generated autoloads from tutorial.el
 
 (autoload 'help-with-tutorial "tutorial" "\
@@ -28693,7 +28694,7 @@ UNSAFEP-VARS is a list of symbols with local bindings.
 
 ;;;***
 
-;;;### (autoloads nil "url" "url/url.el" (21291 53104 431149 0))
+;;;### (autoloads nil "url" "url/url.el" (21546 52205 704969 0))
 ;;; Generated autoloads from url/url.el
 
 (autoload 'url-retrieve "url" "\
@@ -28935,7 +28936,7 @@ accessible.
 
 ;;;***
 
-;;;### (autoloads nil "url-http" "url/url-http.el" (21419 46255 468379
+;;;### (autoloads nil "url-http" "url/url-http.el" (21546 52205 704969
 ;;;;;;  0))
 ;;; Generated autoloads from url/url-http.el
  (autoload 'url-default-expander "url-expand")
@@ -29774,7 +29775,7 @@ Name of the format file in a .bzr directory.")
 
 ;;;***
 
-;;;### (autoloads nil "vc-dir" "vc/vc-dir.el" (21291 53104 431149
+;;;### (autoloads nil "vc-dir" "vc/vc-dir.el" (21515 41273 793570
 ;;;;;;  0))
 ;;; Generated autoloads from vc/vc-dir.el
 
@@ -32087,20 +32088,20 @@ Zone out, completely.
 ;;;;;;  "international/uni-old-name.el" "international/uni-titlecase.el"
 ;;;;;;  "international/uni-uppercase.el" "kermit.el" "language/hanja-util.el"
 ;;;;;;  "language/thai-word.el" "ldefs-boot.el" "leim/ja-dic/ja-dic.el"
-;;;;;;  "leim/quail/arabic.el" "leim/quail/croatian.el" "leim/quail/cyril-jis.el"
-;;;;;;  "leim/quail/cyrillic.el" "leim/quail/czech.el" "leim/quail/ethiopic.el"
-;;;;;;  "leim/quail/georgian.el" "leim/quail/greek.el" "leim/quail/hanja-jis.el"
-;;;;;;  "leim/quail/hanja.el" "leim/quail/hanja3.el" "leim/quail/hebrew.el"
-;;;;;;  "leim/quail/indian.el" "leim/quail/ipa-praat.el" "leim/quail/ipa.el"
-;;;;;;  "leim/quail/japanese.el" "leim/quail/lao.el" "leim/quail/latin-alt.el"
-;;;;;;  "leim/quail/latin-ltx.el" "leim/quail/latin-post.el" "leim/quail/latin-pre.el"
-;;;;;;  "leim/quail/lrt.el" "leim/quail/persian.el" "leim/quail/py-punct.el"
-;;;;;;  "leim/quail/pypunct-b5.el" "leim/quail/rfc1345.el" "leim/quail/sgml-input.el"
-;;;;;;  "leim/quail/sisheng.el" "leim/quail/slovak.el" "leim/quail/symbol-ksc.el"
-;;;;;;  "leim/quail/thai.el" "leim/quail/tibetan.el" "leim/quail/viqr.el"
-;;;;;;  "leim/quail/vntelex.el" "leim/quail/vnvni.el" "leim/quail/welsh.el"
-;;;;;;  "loadup.el" "mail/blessmail.el" "mail/mailheader.el" "mail/mspools.el"
-;;;;;;  "mail/rfc2368.el" "mail/rfc822.el" "mail/rmail-spam-filter.el"
+;;;;;;  "leim/quail/4Corner.el" "leim/quail/arabic.el" "leim/quail/croatian.el"
+;;;;;;  "leim/quail/cyril-jis.el" "leim/quail/cyrillic.el" "leim/quail/czech.el"
+;;;;;;  "leim/quail/ethiopic.el" "leim/quail/georgian.el" "leim/quail/greek.el"
+;;;;;;  "leim/quail/hanja-jis.el" "leim/quail/hanja.el" "leim/quail/hanja3.el"
+;;;;;;  "leim/quail/hebrew.el" "leim/quail/indian.el" "leim/quail/ipa-praat.el"
+;;;;;;  "leim/quail/ipa.el" "leim/quail/japanese.el" "leim/quail/lao.el"
+;;;;;;  "leim/quail/latin-alt.el" "leim/quail/latin-ltx.el" "leim/quail/latin-post.el"
+;;;;;;  "leim/quail/latin-pre.el" "leim/quail/lrt.el" "leim/quail/persian.el"
+;;;;;;  "leim/quail/py-punct.el" "leim/quail/pypunct-b5.el" "leim/quail/rfc1345.el"
+;;;;;;  "leim/quail/sgml-input.el" "leim/quail/sisheng.el" "leim/quail/slovak.el"
+;;;;;;  "leim/quail/symbol-ksc.el" "leim/quail/thai.el" "leim/quail/tibetan.el"
+;;;;;;  "leim/quail/viqr.el" "leim/quail/vntelex.el" "leim/quail/vnvni.el"
+;;;;;;  "leim/quail/welsh.el" "loadup.el" "mail/blessmail.el" "mail/mailheader.el"
+;;;;;;  "mail/mspools.el" "mail/rfc2368.el" "mail/rfc822.el" "mail/rmail-spam-filter.el"
 ;;;;;;  "mail/rmailedit.el" "mail/rmailkwd.el" "mail/rmailmm.el"
 ;;;;;;  "mail/rmailmsc.el" "mail/rmailsort.el" "mail/rmailsum.el"
 ;;;;;;  "mail/undigest.el" "mh-e/mh-acros.el" "mh-e/mh-alias.el"
@@ -32174,8 +32175,8 @@ Zone out, completely.
 ;;;;;;  "vc/ediff-ptch.el" "vc/ediff-vers.el" "vc/ediff-wind.el"
 ;;;;;;  "vc/pcvs-info.el" "vc/pcvs-parse.el" "vc/pcvs-util.el" "vc/vc-dav.el"
 ;;;;;;  "vcursor.el" "vt-control.el" "vt100-led.el" "w32-common-fns.el"
-;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (21485 34311 67536
-;;;;;;  930000))
+;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (21548 39937 969940
+;;;;;;  896000))
 
 ;;;***
 

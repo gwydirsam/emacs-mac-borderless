@@ -2801,13 +2801,22 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
 	    CFDictionaryGetValue (props, kCGImagePropertyHasAlpha);
 
 	  has_alpha_p = (boolean && CFBooleanGetValue (boolean));
-	  if (gif_p)
+
+	  /* Get animation-related properties for animated GIF (all
+	     versions) or PNG (OS X 10.10 and later).  Note that
+	     kCGImagePropertyGIFLoopCount and
+	     kCGImagePropertyAPNGLoopCount have the same value (CFSTR
+	     "LoopCount").  Likewise for (Unclamped)DelayTime.  */
+	  if (type == NULL || gif_p)
 	    {
 	      CFDictionaryRef dict;
 	      CFNumberRef num;
 
 	      dict = CFDictionaryGetValue (src_props,
 					   kCGImagePropertyGIFDictionary);
+	      if (dict == NULL)
+		dict = CFDictionaryGetValue (src_props,
+					     kCGImagePropertyPNGDictionary);
 	      if (dict)
 		{
 		  num = CFDictionaryGetValue (dict,
@@ -2818,6 +2827,9 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
 
 	      dict = CFDictionaryGetValue (props,
 					   kCGImagePropertyGIFDictionary);
+	      if (dict == NULL)
+		dict = CFDictionaryGetValue (props,
+					     kCGImagePropertyPNGDictionary);
 	      if (dict)
 		{
 		  /* Use the unclamped delay time if available.  */
@@ -2836,7 +2848,7 @@ image_load_image_io (struct frame *f, struct image *img, CFStringRef type)
       if (props)
 	CFRelease (props);
 
-      if (gif_p)
+      if (type == NULL || gif_p)
 	{
 	  Lisp_Object extension_data = Qnil;
 
@@ -9250,6 +9262,12 @@ imagemagick_load_image (struct frame *f, struct image *img,
       DestroyMagickWand (image_wand);
       return 0;
     }
+
+  if (MagickGetImageDelay (image_wand) > 0)
+    img->lisp_data =
+      Fcons (Qdelay,
+             Fcons (make_float (MagickGetImageDelay (image_wand) / 100.0),
+                    img->lisp_data));
 
   if (MagickGetNumberImages (image_wand) > 1)
     img->lisp_data =

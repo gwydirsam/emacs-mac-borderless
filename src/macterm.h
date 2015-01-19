@@ -228,7 +228,7 @@ struct mac_output
   Cursor hourglass_cursor;
   Cursor horizontal_drag_cursor;
   Cursor vertical_drag_cursor;
-  Cursor current_cursor;
+  Cursor current_cursor;	/* unretained */
 
   /* Menubar "widget" handle.  */
   bool_bf menubar_widget : 1;
@@ -663,6 +663,9 @@ extern void mac_release_autorelease_pool (void *);
 #endif
 
 extern bool mac_tracking_area_works_with_cursor_rects_invalidation_p (void);
+extern Cursor mac_cursor_create (ThemeCursor, const XColor *, const XColor *);
+extern void mac_cursor_set (Cursor);
+extern void mac_cursor_release (Cursor);
 extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
 extern void mac_invalidate_rectangles (struct frame *, NativeRectangle *, int);

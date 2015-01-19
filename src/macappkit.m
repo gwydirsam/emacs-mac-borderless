@@ -710,6 +710,68 @@ get_srgb_color_space (void)
 
 @end				// NSScreen (Emacs)
 
+@implementation NSCursor (Emacs)
+
++ (NSCursor *)cursorWithThemeCursor:(ThemeCursor)themeCursor
+{
+  /* We don't use a mapping from ThemeCursor to SEL together with
+     performSelector: because ARC cannot know whether the return
+     value should be retained or not at compile time.  */
+  switch (themeCursor)
+    {
+    case kThemeArrowCursor:
+      return [NSCursor arrowCursor];
+    case kThemeCopyArrowCursor:
+      if ([NSCursor respondsToSelector:@selector(dragCopyCursor)])
+	return [NSCursor dragCopyCursor];
+      else
+	return nil;
+    case kThemeAliasArrowCursor:
+      if ([NSCursor respondsToSelector:@selector(dragLinkCursor)])
+	return [NSCursor dragLinkCursor];
+      else
+	return nil;
+    case kThemeContextualMenuArrowCursor:
+      if ([NSCursor respondsToSelector:@selector(contextualMenuCursor)])
+	return [NSCursor contextualMenuCursor];
+      else
+	return nil;
+    case kThemeIBeamCursor:
+      return [NSCursor IBeamCursor];
+    case kThemeCrossCursor:
+      return [NSCursor crosshairCursor];
+    case kThemeClosedHandCursor:
+      return [NSCursor closedHandCursor];
+    case kThemeOpenHandCursor:
+      return [NSCursor openHandCursor];
+    case kThemePointingHandCursor:
+      return [NSCursor pointingHandCursor];
+    case kThemeResizeLeftCursor:
+      return [NSCursor resizeLeftCursor];
+    case kThemeResizeRightCursor:
+      return [NSCursor resizeRightCursor];
+    case kThemeResizeLeftRightCursor:
+      return [NSCursor resizeLeftRightCursor];
+    case kThemeNotAllowedCursor:
+      if ([NSCursor respondsToSelector:@selector(operationNotAllowedCursor)])
+	return [NSCursor operationNotAllowedCursor];
+      else
+	return nil;
+    case kThemeResizeUpCursor:
+      return [NSCursor resizeUpCursor];
+    case kThemeResizeDownCursor:
+      return [NSCursor resizeDownCursor];
+    case kThemeResizeUpDownCursor:
+      return [NSCursor resizeUpDownCursor];
+    case kThemePoofCursor:
+      return [NSCursor disappearingItemCursor];
+    default:
+      return nil;
+    }
+}
+
+@end				// NSCursor (Emacs)
+
 @implementation EmacsPosingWindow
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
@@ -3645,6 +3707,15 @@ static CGRect unset_global_focus_view_frame (void);
   return proposedOptions | NSApplicationPresentationAutoHideToolbar;
 }
 
+- (void)saveToolbarVisibility
+{
+  savedToolbarVisibility = [[emacsWindow toolbar] isVisible];
+}
+- (void)restoreToolbarVisibility
+{
+  [[emacsWindow toolbar] setVisible:savedToolbarVisibility];
+}
+
 - (void)windowWillEnterFullScreen:(NSNotification *)notification
 {
   /* We used to detach/attach the overlay window in the
@@ -3656,6 +3727,7 @@ static CGRect unset_global_focus_view_frame (void);
      detach/attach the overlay window in the
      `window{Will,Did}{Enter,Exit}FullScreen:' delegate methods.  */
   [self detachOverlayWindow];
+  [self saveToolbarVisibility];
 }
 
 - (void)windowDidEnterFullScreen:(NSNotification *)notification
@@ -3670,6 +3742,10 @@ static CGRect unset_global_focus_view_frame (void);
     }
 
   [self attachOverlayWindow];
+  /* This is a workaround for the problem of not preserving toolbar
+     visibility value.  */
+  [self performSelector:@selector(restoreToolbarVisibility)
+	     withObject:nil afterDelay:0];
 }
 
 - (void)windowWillExitFullScreen:(NSNotification *)notification
@@ -3677,6 +3753,7 @@ static CGRect unset_global_focus_view_frame (void);
   /* Called also when a full screen window is being closed.  */
   if (overlayWindow)
     [self detachOverlayWindow];
+  [self saveToolbarVisibility];
 }
 
 - (void)windowDidExitFullScreen:(NSNotification *)notification
@@ -3695,6 +3772,10 @@ static CGRect unset_global_focus_view_frame (void);
     [self attachOverlayWindow];
   [emacsController updatePresentationOptions];
   [self updateCollectionBehavior];
+  /* This is a workaround for the problem of not preserving toolbar
+     visibility value.  */
+  [self performSelector:@selector(restoreToolbarVisibility)
+	     withObject:nil afterDelay:0];
 }
 
 - (NSArray *)customWindowsToEnterFullScreenForWindow:(NSWindow *)window
@@ -3711,7 +3792,6 @@ static CGRect unset_global_focus_view_frame (void);
   NSView *contentView = [window contentView];
   EmacsFullScreenTransitionView *transitionView;
   CGFloat titleBarHeight;
-  BOOL toolbarIsVisible;
 
   transitionView = MRC_RETAIN ([self fullScreenTransitionView]);
 
@@ -3726,7 +3806,6 @@ static CGRect unset_global_focus_view_frame (void);
 
   NSDisableScreenUpdates ();
 
-  toolbarIsVisible = [[window toolbar] isVisible];
   [window setStyleMask:([window styleMask] | NSFullScreenWindowMask)];
 
   destRect = [self postprocessWindowManagerStateChange:destRect];
@@ -3779,9 +3858,6 @@ static CGRect unset_global_focus_view_frame (void);
       [emacsView setAutoresizingMask:previousAutoresizingMask];
       /* Mac OS X 10.7 needs this.  */
       [emacsView setFrame:[[emacsView superview] bounds]];
-      /* This is a workaround for the problem of not preserving
-	 toolbar visibility value.  */
-      [[window toolbar] setVisible:toolbarIsVisible];
     }];
 }
 
@@ -3800,7 +3876,6 @@ static CGRect unset_global_focus_view_frame (void);
   NSView *contentView = [window contentView];
   EmacsFullScreenTransitionView *transitionView;
   CGFloat titleBarHeight;
-  BOOL toolbarIsVisible;
 
   transitionView = MRC_RETAIN ([self fullScreenTransitionView]);
 
@@ -3813,7 +3888,6 @@ static CGRect unset_global_focus_view_frame (void);
 
   NSDisableScreenUpdates ();
 
-  toolbarIsVisible = [[window toolbar] isVisible];
   [window setStyleMask:([window styleMask] & ~NSFullScreenWindowMask)];
 
   destRect = [self postprocessWindowManagerStateChange:destRect];
@@ -3857,9 +3931,6 @@ static CGRect unset_global_focus_view_frame (void);
       [emacsView setAutoresizingMask:previousAutoresizingMask];
       /* Mac OS X 10.7 needs this.  */
       [emacsView setFrame:[[emacsView superview] bounds]];
-      /* This is a workaround for the problem of not preserving
-	 toolbar visibility value.  */
-      [[window toolbar] setVisible:toolbarIsVisible];
     }];
 }
 #endif
@@ -4314,6 +4385,121 @@ mac_change_frame_window_wm_state (struct frame *f, WMState flags_to_set,
   oldState = [frameController windowManagerState];
   newState = (oldState & ~flags_to_clear) | flags_to_set;
   [frameController setWindowManagerState:newState];
+}
+
+Cursor
+mac_cursor_create (ThemeCursor shape, const XColor *fore_color,
+		   const XColor *back_color)
+{
+  NSCursor *cursor = nil;
+  NSImage *image;
+  NSSize imageSize;
+  NSEnumerator *enumerator;
+  NSImageRep *rep;
+  enum {RED, GREEN, BLUE, ALPHA, NCOMPONENTS = ALPHA} c;
+  int fg[NCOMPONENTS], delta[NCOMPONENTS];
+
+  if ((fore_color && fore_color->pixel != 0)
+      || (back_color && back_color->pixel != 0xffffff))
+    cursor = [NSCursor cursorWithThemeCursor:shape];
+  if (cursor == nil)
+    return CFNumberCreate (NULL, kCFNumberSInt32Type, &shape);
+
+  if (fore_color == NULL)
+    fg[RED] = fg[GREEN] = fg[BLUE] = 0;
+  else
+    {
+      fg[RED] = fore_color->red;
+      fg[GREEN] = fore_color->green;
+      fg[BLUE] = fore_color->blue;
+    }
+  if (back_color == NULL)
+    for (c = 0; c < NCOMPONENTS; c++)
+      delta[c] = 0xffff - fg[c];
+  else
+    {
+      delta[RED] = back_color->red - fg[RED];
+      delta[GREEN] = back_color->green - fg[GREEN];
+      delta[BLUE] = back_color->blue - fg[BLUE];
+    }
+
+  image = [cursor image];
+  enumerator = [[image representations] objectEnumerator];
+
+  imageSize = [image size];
+  image = [[NSImage alloc] initWithSize:imageSize];
+  while ((rep = [enumerator nextObject]) != nil)
+    {
+      NSInteger width = [rep pixelsWide], height = [rep pixelsHigh];
+      unsigned char *data = xmalloc (width * height * 4);
+      CGContextRef context =
+	CGBitmapContextCreate (data, width, height, 8, width * 4,
+			       mac_cg_color_space_rgb,
+			       (kCGImageAlphaPremultipliedLast
+				| kCGBitmapByteOrder32Big));
+
+      if (context)
+	{
+	  NSGraphicsContext *gcontext;
+	  CGImageRef cgImage;
+	  NSInteger i;
+
+	  CGContextClearRect (context, CGRectMake (0, 0, width, height));
+	  [NSGraphicsContext saveGraphicsState];
+	  gcontext = [NSGraphicsContext graphicsContextWithGraphicsPort:context
+								flipped:NO];
+	  [NSGraphicsContext setCurrentContext:gcontext];
+	  [rep draw];
+	  [NSGraphicsContext restoreGraphicsState];
+	  for (i = 0; i < width * height; i++)
+	    if (data[i*4+ALPHA] > 0x7f)
+	      if ((max (data[i*4+RED], max (data[i*4+GREEN], data[i*4+BLUE]))
+		   - min (data[i*4+RED], min (data[i*4+GREEN], data[i*4+BLUE])))
+		  <= 5)
+		for (c = 0; c < NCOMPONENTS; c++)
+		  data[i*4+c] = (fg[c] * data[i*4+ALPHA]
+				 + delta[c] * data[i*4+c]) / 0xffff;
+	  cgImage = CGBitmapContextCreateImage (context);
+	  CGContextRelease (context);
+	  if (cgImage)
+	    {
+	      rep = [[[NSImage imageWithCGImage:cgImage exclusive:NO]
+		       representations] objectAtIndex:0];
+	      CGImageRelease (cgImage);
+	    }
+	}
+      xfree (data);
+      [rep setSize:imageSize];
+      [image addRepresentation:rep];
+    }
+  cursor = [[NSCursor alloc] initWithImage:image hotSpot:[cursor hotSpot]];
+  MRC_RELEASE (image);
+
+  return CF_BRIDGING_RETAIN (MRC_AUTORELEASE (cursor));
+}
+
+void
+mac_cursor_set (Cursor cursor)
+{
+  if (CFGetTypeID (cursor) == CFNumberGetTypeID ())
+    {
+#if __LP64__
+      extern OSStatus SetThemeCursor (ThemeCursor);
+#endif
+      ThemeCursor cursor_value;
+
+      if (CFNumberGetValue (cursor, kCFNumberSInt32Type, &cursor_value))
+	SetThemeCursor (cursor_value);
+    }
+  else
+    [(__bridge NSCursor *)cursor set];
+}
+
+void
+mac_cursor_release (Cursor cursor)
+{
+  if (cursor)
+    CFRelease (cursor);
 }
 
 void
@@ -4897,12 +5083,9 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 
 - (void)cursorUpdate:(NSEvent *)event
 {
-#if __LP64__
-  extern OSStatus SetThemeCursor (ThemeCursor);
-#endif
   struct frame *f = [self emacsFrame];
 
-  SetThemeCursor (f->output_data.mac->current_cursor);
+  mac_cursor_set (f->output_data.mac->current_cursor);
 }
 
 - (void)keyDown:(NSEvent *)theEvent
@@ -7296,20 +7479,7 @@ update_frame_tool_bar (struct frame *f)
      that sometimes we don't receive windowDidMove: messages for
      preceding windowWillMove:.  */
   if (![toolbar isVisible])
-    {
-      [toolbar setVisible:YES];
-      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
-	  && ([window styleMask] & NSFullScreenWindowMask))
-	{
-	  /* This is a workaround: if we toggle toolbar visiblity for
-	     a full screen window on OS X 10.10, then the buttons on
-	     the title bar will be placed inappropriately.  */
-	  MRC_RETAIN (toolbar);
-	  [window setToolbar:nil];
-	  [window setToolbar:toolbar];
-	  MRC_RELEASE (toolbar);
-	}
-    }
+    [toolbar setVisible:YES];
 
   win_gravity = f->output_data.mac->toolbar_win_gravity;
   if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
@@ -7337,20 +7507,7 @@ free_frame_tool_bar (struct frame *f)
 
   toolbar = [window toolbar];
   if ([toolbar isVisible])
-    {
-      [toolbar setVisible:NO];
-      if (!(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
-	  && ([window styleMask] & NSFullScreenWindowMask))
-	{
-	  /* This is a workaround: if we toggle toolbar visiblity for
-	     a full screen window on OS X 10.10, then the buttons on
-	     the title bar will be placed inappropriately.  */
-	  MRC_RETAIN (toolbar);
-	  [window setToolbar:nil];
-	  [window setToolbar:toolbar];
-	  MRC_RELEASE (toolbar);
-	}
-    }
+    [toolbar setVisible:NO];
 
   if (win_gravity >= NorthWestGravity && win_gravity <= SouthEastGravity)
     mac_move_window_to_gravity_reference_point (f, win_gravity, rx, ry);

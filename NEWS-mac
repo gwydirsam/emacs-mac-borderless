@@ -1,7 +1,30 @@
+* emacs-24.3.94-mac-4.94 [experimental/hackers-only] (2014-10-02)
+Based on Emacs 24.3.94.
+
+** Fixed bugs
+
+*** Right fringe on the row containing a hollow cursor at the tab
+character in a non-selected window sometimes gets erased on wheel
+scrolling.
+
+*** M-x toggle-frame-fullscreen RET -> M-x tool-bar-mode RET -> M-x
+toggle-frame-fullscreen RET does not preserve tool bar visibility on
+OS X 10.7 - 10.9.
+
+** Improvements
+
+*** Add mouse pointer color support.
+
+*** Animation-related properties of animated GIF are added to metadata
+of images in the `image-io' image type.  Likewise for animated PNG on
+OS X 10.10.
+
+
 * emacs-24.3.93-mac-4.93 [experimental/hackers-only] (2014-08-15)
 Based on Emacs 24.3.93.
 Remove mac-ts-script-language-on-focus, which hasn't had any effect
 on 64-bit executables.
+http://lists.gnu.org/archive/html/emacs-devel/2014-08/msg00343.html
 
 ** Fixed bugs
 

@@ -1,3 +1,18 @@
+2014-09-21  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* configure.ac: Increase headerpad_extra to 1000, update the comment
+	about load commands (Bug#18505).
+
+2014-09-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* configure.ac (HAVE_SOUND): Check for mmsystem.h header that
+	defines the sound stuff on MS-Windows.  (Bug#18463)
+
+2014-08-22  Ken Brown  <kbrown@cornell.edu>
+
+	* configure.ac (HAVE_XPM): Explain the use of CPPFLAGS in the
+	Cygwin-w32 build.  (Bug#18302)
+
 2014-08-10  Paul Eggert  <eggert@cs.ucla.edu>
 
 	Don't prevent random file systems from being unmounted (Bug#18232).

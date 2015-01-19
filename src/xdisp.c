@@ -1456,15 +1456,19 @@ pos_visible_p (struct window *w, ptrdiff_t charpos, int *x, int *y,
 	 glyph.  */
       int top_x = it.current_x;
       int top_y = it.current_y;
-      /* Calling line_bottom_y may change it.method, it.position, etc.  */
-      enum it_method it_method = it.method;
-      int bottom_y = (last_height = 0, line_bottom_y (&it));
       int window_top_y = WINDOW_HEADER_LINE_HEIGHT (w);
+      int bottom_y;
+      struct it save_it;
+      void *save_it_data = NULL;
 
+      /* Calling line_bottom_y may change it.method, it.position, etc.  */
+      SAVE_IT (save_it, it, save_it_data);
+      last_height = 0;
+      bottom_y = line_bottom_y (&it);
       if (top_y < window_top_y)
 	visible_p = bottom_y > window_top_y;
       else if (top_y < it.last_visible_y)
-	visible_p = true;
+	visible_p = 1;
       if (bottom_y >= it.last_visible_y
 	  && it.bidi_p && it.bidi_it.scan_dir == -1
 	  && IT_CHARPOS (it) < charpos)
@@ -1477,7 +1481,6 @@ pos_visible_p (struct window *w, ptrdiff_t charpos, int *x, int *y,
 	     move_it_to again with a slightly larger vertical limit,
 	     and see if it actually moved vertically; if it did, we
 	     didn't really reach CHARPOS, which is beyond window end.  */
-	  struct it save_it = it;
 	  /* Why 10? because we don't know how many canonical lines
 	     will the height of the next line(s) be.  So we guess.  */
 	  int ten_more_lines = 10 * default_line_pixel_height (w);
@@ -1487,11 +1490,11 @@ pos_visible_p (struct window *w, ptrdiff_t charpos, int *x, int *y,
 	  if (it.current_y > top_y)
 	    visible_p = 0;
 
-	  it = save_it;
 	}
+      RESTORE_IT (&it, &save_it, save_it_data);
       if (visible_p)
 	{
-	  if (it_method == GET_FROM_DISPLAY_VECTOR)
+	  if (it.method == GET_FROM_DISPLAY_VECTOR)
 	    {
 	      /* We stopped on the last glyph of a display vector.
 		 Try and recompute.  Hack alert!  */
@@ -3001,12 +3004,8 @@ init_iterator (struct it *it, struct window *w,
 
       /* If we truncate lines, leave room for the truncation glyph(s) at
 	 the right margin.  Otherwise, leave room for the continuation
-	 glyph(s).  Done only if the window has no fringes.  Since we
-	 don't know at this point whether there will be any R2L lines in
-	 the window, we reserve space for truncation/continuation glyphs
-	 even if only one of the fringes is absent.  */
-      if (WINDOW_RIGHT_FRINGE_WIDTH (it->w) == 0
-	  || (it->bidi_p && WINDOW_LEFT_FRINGE_WIDTH (it->w) == 0))
+	 glyph(s).  Done only if the window has no right fringe.  */
+      if (WINDOW_RIGHT_FRINGE_WIDTH (it->w) == 0)
 	{
 	  if (it->line_wrap == TRUNCATE)
 	    it->last_visible_x -= it->truncation_pixel_width;
@@ -3071,6 +3070,19 @@ init_iterator (struct it *it, struct window *w,
 	 iterator.  */
       if (it->bidi_p)
 	{
+	  /*  Since we don't know at this point whether there will be
+	      any R2L lines in the window, we reserve space for
+	      truncation/continuation glyphs even if only the left
+	      fringe is absent.  */
+	  if (base_face_id == DEFAULT_FACE_ID
+	      && WINDOW_LEFT_FRINGE_WIDTH (it->w) == 0
+	      && WINDOW_RIGHT_FRINGE_WIDTH (it->w) != 0)
+	    {
+	      if (it->line_wrap == TRUNCATE)
+		it->last_visible_x -= it->truncation_pixel_width;
+	      else
+		it->last_visible_x -= it->continuation_pixel_width;
+	    }
 	  /* Note the paragraph direction that this buffer wants to
 	     use.  */
 	  if (EQ (BVAR (current_buffer, bidi_paragraph_direction),
@@ -3423,6 +3435,48 @@ handle_stop (struct it *it)
   /* Use face of preceding text for ellipsis (if invisible) */
   if (it->selective_display_ellipsis_p)
     it->saved_face_id = it->face_id;
+
+  /* Here's the description of the semantics of, and the logic behind,
+     the various HANDLED_* statuses:
+
+     HANDLED_NORMALLY means the handler did its job, and the loop
+     should proceed to calling the next handler in order.
+
+     HANDLED_RECOMPUTE_PROPS means the handler caused a significant
+     change in the properties and overlays at current position, so the
+     loop should be restarted, to re-invoke the handlers that were
+     already called.  This happens when fontification-functions were
+     called by handle_fontified_prop, and actually fontified
+     something.  Another case where HANDLED_RECOMPUTE_PROPS is
+     returned is when we discover overlay strings that need to be
+     displayed right away.  The loop below will continue for as long
+     as the status is HANDLED_RECOMPUTE_PROPS.
+
+     HANDLED_RETURN means return immediately to the caller, to
+     continue iteration without calling any further handlers.  This is
+     used when we need to act on some property right away, for example
+     when we need to display the ellipsis or a replacing display
+     property, such as display string or image.
+
+     HANDLED_OVERLAY_STRING_CONSUMED means an overlay string was just
+     consumed, and the handler switched to the next overlay string.
+     This signals the loop below to refrain from looking for more
+     overlays before all the overlay strings of the current overlay
+     are processed.
+
+     Some of the handlers called by the loop push the iterator state
+     onto the stack (see 'push_it'), and arrange for the iteration to
+     continue with another object, such as an image, a display string,
+     or an overlay string.  In most such cases, it->stop_charpos is
+     set to the first character of the string, so that when the
+     iteration resumes, this function will immediately be called
+     again, to examine the properties at the beginning of the string.
+
+     When a display or overlay string is exhausted, the iterator state
+     is popped (see 'pop_it'), and iteration continues with the
+     previous object.  Again, in many such cases this function is
+     called again to find the next position where properties might
+     change.  */
 
   do
     {
@@ -13580,6 +13634,12 @@ redisplay_internal (void)
 
       if (mode_line_update_needed (w))
 	w->update_mode_line = 1;
+
+      /* If reconsider_clip_changes above decided that the narrowing
+	 in the current buffer changed, make sure all other windows
+	 showing that buffer will be redisplayed.  */
+      if (current_buffer->clip_changed)
+	bset_update_mode_line (current_buffer);
     }
 
   /* Normally the message* functions will have already displayed and
@@ -15003,6 +15063,10 @@ run_window_scroll_functions (Lisp_Object window, struct text_pos startp)
    If FORCE_P is non-zero, return 0 even if partial visible cursor row
    is higher than window.
 
+   If CURRENT_MATRIX_P is non-zero, use the information from the
+   window's current glyph matrix; otherwise use the desired glyph
+   matrix.
+
    A value of 0 means the caller should do scrolling
    as if point had gone off the screen.  */
 
@@ -16112,26 +16176,48 @@ redisplay_window (Lisp_Object window, bool just_this_one_p)
 
   /* If someone specified a new starting point but did not insist,
      check whether it can be used.  */
-  if (w->optional_new_start
+  if ((w->optional_new_start || window_frozen_p (w))
       && CHARPOS (startp) >= BEGV
       && CHARPOS (startp) <= ZV)
     {
+      ptrdiff_t it_charpos;
+
       w->optional_new_start = 0;
       start_display (&it, w, startp);
       move_it_to (&it, PT, 0, it.last_visible_y, -1,
 		  MOVE_TO_POS | MOVE_TO_X | MOVE_TO_Y);
-      if (IT_CHARPOS (it) == PT)
-	w->force_start = 1;
-      /* IT may overshoot PT if text at PT is invisible.  */
-      else if (IT_CHARPOS (it) > PT && CHARPOS (startp) <= PT)
-	w->force_start = 1;
+      /* Record IT's position now, since line_bottom_y might change
+	 that.  */
+      it_charpos = IT_CHARPOS (it);
+      /* Make sure we set the force_start flag only if the cursor row
+	 will be fully visible.  Otherwise, the code under force_start
+	 label below will try to move point back into view, which is
+	 not what the code which sets optional_new_start wants.  */
+      if ((it.current_y == 0 || line_bottom_y (&it) < it.last_visible_y)
+	  && !w->force_start)
+	{
+	  if (it_charpos == PT)
+	    w->force_start = 1;
+	  /* IT may overshoot PT if text at PT is invisible.  */
+	  else if (it_charpos > PT && CHARPOS (startp) <= PT)
+	    w->force_start = 1;
+#ifdef GLYPH_DEBUG
+	  if (w->force_start)
+	    {
+	      if (window_frozen_p (w))
+		debug_method_add (w, "set force_start from frozen window start");
+	      else
+		debug_method_add (w, "set force_start from optional_new_start");
+	    }
+#endif
+	}
     }
 
  force_start:
 
   /* Handle case where place to start displaying has been specified,
      unless the specified location is outside the accessible range.  */
-  if (w->force_start || window_frozen_p (w))
+  if (w->force_start)
     {
       /* We set this later on if we have to adjust point.  */
       int new_vpos = -1;
@@ -16179,7 +16265,7 @@ redisplay_window (Lisp_Object window, bool just_this_one_p)
 	  goto need_larger_matrices;
 	}
 
-      if (w->cursor.vpos < 0 && !window_frozen_p (w))
+      if (w->cursor.vpos < 0)
 	{
 	  /* If point does not appear, try to move point so it does
 	     appear. The desired matrix has been built above, so we
@@ -16272,6 +16358,11 @@ redisplay_window (Lisp_Object window, bool just_this_one_p)
 	    }
 	  */
 	}
+      if (w->cursor.vpos < 0 || !cursor_row_fully_visible_p (w, 0, 0))
+	{
+	  clear_glyph_matrix (w->desired_matrix);
+	  goto try_to_scroll;
+	}
 
 #ifdef GLYPH_DEBUG
       debug_method_add (w, "forced window start");
@@ -16336,7 +16427,8 @@ redisplay_window (Lisp_Object window, bool just_this_one_p)
 	       || CHARPOS (startp) == BEGV
 	       || !window_outdated (w)))
     {
-      int d1, d2, d3, d4, d5, d6;
+      int d1, d2, d5, d6;
+      int rtop, rbot;
 
       /* If first window line is a continuation line, and window start
 	 is inside the modified region, but the first change is before
@@ -16361,14 +16453,20 @@ redisplay_window (Lisp_Object window, bool just_this_one_p)
 	  && compute_window_start_on_continuation_line (w)
 	  /* It doesn't make sense to force the window start like we
 	     do at label force_start if it is already known that point
-	     will not be visible in the resulting window, because
+	     will not be fully visible in the resulting window, because
 	     doing so will move point from its correct position
 	     instead of scrolling the window to bring point into view.
 	     See bug#9324.  */
-	  && pos_visible_p (w, PT, &d1, &d2, &d3, &d4, &d5, &d6))
+	  && pos_visible_p (w, PT, &d1, &d2, &rtop, &rbot, &d5, &d6)
+	  /* A very tall row could need more than the window height,
+	     in which case we accept that it is partially visible.  */
+	  && (rtop != 0) == (rbot != 0))
 	{
 	  w->force_start = 1;
 	  SET_TEXT_POS_FROM_MARKER (startp, w->start);
+#ifdef GLYPH_DEBUG
+	  debug_method_add (w, "recomputed window start in continuation line");
+#endif
 	  goto force_start;
       	}
 
@@ -19338,7 +19436,18 @@ extend_face_to_end_of_line (struct it *it)
 
 	  for (row_width = 0, g = row_start; g < row_end; g++)
 	    row_width += g->pixel_width;
-	  stretch_width = window_box_width (it->w, TEXT_AREA) - row_width;
+
+	  /* FIXME: There are various minor display glitches in R2L
+	     rows when only one of the fringes is missing.  The
+	     strange condition below produces the least bad effect.  */
+	  if ((WINDOW_LEFT_FRINGE_WIDTH (it->w) == 0)
+	      == (WINDOW_RIGHT_FRINGE_WIDTH (it->w) == 0)
+	      || WINDOW_RIGHT_FRINGE_WIDTH (it->w) != 0)
+	    stretch_width = window_box_width (it->w, TEXT_AREA);
+	  else
+	    stretch_width = it->last_visible_x - it->first_visible_x;
+	  stretch_width -= row_width;
+
 	  if (stretch_width > 0)
 	    {
 	      stretch_ascent =
@@ -20479,9 +20588,17 @@ display_line (struct it *it)
 		  /* When the last glyph of an R2L row only fits
 		     partially on the line, we need to set row->x to a
 		     negative offset, so that the leftmost glyph is
-		     the one that is partially visible.  */
-		  if (row->reversed_p && new_x > it->last_visible_x)
-		    row->x = it->last_visible_x - new_x;
+		     the one that is partially visible.  But if we are
+		     going to produce the truncation glyph, this will
+		     be taken care of in produce_special_glyphs.  */
+		  if (row->reversed_p
+		      && new_x > it->last_visible_x
+		      && !(it->line_wrap == TRUNCATE
+			   && WINDOW_LEFT_FRINGE_WIDTH (it->w) == 0))
+		    {
+		      eassert (FRAME_WINDOW_P (it->f));
+		      row->x = it->last_visible_x - new_x;
+		    }
 		}
 	      else
 		{
@@ -20555,7 +20672,10 @@ display_line (struct it *it)
 		  that they are cropped at the right edge of the
 		  window, so an image glyph will always end exactly at
 		  last_visible_x, even if there's no right fringe.  */
-	       && (WINDOW_RIGHT_FRINGE_WIDTH (it->w) || it->what == IT_IMAGE))
+	       && ((row->reversed_p
+		    ? WINDOW_LEFT_FRINGE_WIDTH (it->w)
+		    : WINDOW_RIGHT_FRINGE_WIDTH (it->w))
+		   || it->what == IT_IMAGE))
 	      ? (it->current_x >= it->last_visible_x)
 	      : (it->current_x > it->last_visible_x)))
 	{
@@ -20632,10 +20752,15 @@ display_line (struct it *it)
 	  row->truncated_on_right_p = 1;
 	  it->continuation_lines_width = 0;
 	  reseat_at_next_visible_line_start (it, 0);
-	  if (IT_BYTEPOS (*it) <= BEG_BYTE)
-	    row->ends_at_zv_p = true;
+	  /* We insist below that IT's position be at ZV because in
+	     bidi-reordered lines the character at visible line start
+	     might not be the character that follows the newline in
+	     the logical order.  */
+	  if (IT_BYTEPOS (*it) > BEG_BYTE)
+	    row->ends_at_zv_p =
+	      IT_BYTEPOS (*it) >= ZV_BYTE && FETCH_BYTE (ZV_BYTE - 1) != '\n';
 	  else
-	    row->ends_at_zv_p = FETCH_BYTE (IT_BYTEPOS (*it) - 1) != '\n';
+	    row->ends_at_zv_p = false;
 	  break;
 	}
     }
@@ -25730,14 +25855,13 @@ produce_special_glyphs (struct it *it, enum display_element_type what)
 
   temp_it.dp = NULL;
   temp_it.what = IT_CHARACTER;
-  temp_it.len = 1;
   temp_it.c = temp_it.char_to_display = GLYPH_CHAR (glyph);
   temp_it.face_id = GLYPH_FACE (glyph);
   temp_it.len = CHAR_BYTES (temp_it.c);
 
   PRODUCE_GLYPHS (&temp_it);
   it->pixel_width = temp_it.pixel_width;
-  it->nglyphs = temp_it.pixel_width;
+  it->nglyphs = temp_it.nglyphs;
 }
 
 #ifdef HAVE_WINDOW_SYSTEM
@@ -27387,7 +27511,7 @@ erase_phys_cursor (struct window *w)
   /* Maybe clear the display under the cursor.  */
   if (w->phys_cursor_type == HOLLOW_BOX_CURSOR)
     {
-      int x, y, left_x;
+      int x, y;
       int header_line_height = WINDOW_HEADER_LINE_HEIGHT (w);
       int width;
 
@@ -27396,13 +27520,15 @@ erase_phys_cursor (struct window *w)
 	goto mark_cursor_off;
 
       width = cursor_glyph->pixel_width;
-      left_x = window_box_left_offset (w, TEXT_AREA);
       x = w->phys_cursor.x;
-      if (x < left_x)
-	width -= left_x - x;
+      if (x < 0)
+	{
+	  width += x;
+	  x = 0;
+	}
       width = min (width, window_box_width (w, TEXT_AREA) - x);
       y = WINDOW_TO_FRAME_PIXEL_Y (w, max (header_line_height, cursor_row->y));
-      x = WINDOW_TEXT_TO_FRAME_PIXEL_X (w, max (x, left_x));
+      x = WINDOW_TEXT_TO_FRAME_PIXEL_X (w, x);
 
       if (width > 0)
 	FRAME_RIF (f)->clear_frame_area (f, x, y, width, cursor_row->visible_height);
@@ -27478,6 +27604,10 @@ display_and_set_cursor (struct window *w, bool on,
       && (!on
 	  || w->phys_cursor.x != x
 	  || w->phys_cursor.y != y
+	  /* HPOS can be negative in R2L rows whose
+	     exact_window_width_line_p flag is set (i.e. their newline
+	     would "overflow into the fringe").  */
+	  || hpos < 0
 	  || new_cursor_type != w->phys_cursor_type
 	  || ((new_cursor_type == BAR_CURSOR || new_cursor_type == HBAR_CURSOR)
 	      && new_cursor_width != w->phys_cursor_width)))

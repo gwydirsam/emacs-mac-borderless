@@ -2187,8 +2187,12 @@ non-nil, and the input device supports it."
 			  ;; Emacs 23 -> 24 incompatibility: the
 			  ;; actual row part of POSITION now counts
 			  ;; the header line.
-			  (if header-line-height
-			      (setq target-row (1- target-row)))
+			  ;;
+			  ;; Emacs 24.3 -> 24.4 incompatibility again:
+			  ;; the actual row part of POSITION no longer
+			  ;; counts the header line (see Bug#18384).
+			  ;; (if header-line-height
+			  ;;     (setq target-row (1- target-row)))
 			  (scroll-up (if (= delta-y scrolled-pixel-height)
 					 target-row
 				       (1+ target-row)))

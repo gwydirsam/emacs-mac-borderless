@@ -7173,7 +7173,7 @@ and header line and a bottom divider, if any.
 
 If WINDOW is part of a horizontal combination and the value of
 the option `fit-window-to-buffer-horizontally' is non-nil, adjust
-WINDOW's height.  The new width of WINDOW is calculated from the
+WINDOW's width.  The new width of WINDOW is calculated from the
 maximum length of its buffer's lines that follow the current
 start position of WINDOW.  The optional argument MAX-WIDTH
 specifies a maximum width and defaults to the width of WINDOW's
@@ -7289,10 +7289,10 @@ accessible position."
 			     max-width))
 		    (+ total-width (window-max-delta
 				    nil t nil nil nil nil pixelwise))))
-		 ;; When fitting vertically, assume that WINDOW's start
-		 ;; position remains unaltered.  WINDOW can't get wider
-		 ;; than its frame's pixel width, its height remains
-		 ;; unaltered.
+		 ;; When fitting horizontally, assume that WINDOW's
+		 ;; start position remains unaltered.  WINDOW can't get
+		 ;; wider than its frame's pixel width, its height
+		 ;; remains unaltered.
 		 (width (+ (car (window-text-pixel-size
 				 nil (window-start) (point-max)
 				 (frame-pixel-width)
@@ -7301,7 +7301,7 @@ accessible position."
 				 ;; overshoots when the first line below
 				 ;; the bottom is wider than the window.
 				 (* body-height
-				    (if pixelwise char-height 1))))
+				    (if pixelwise 1 char-height))))
 			   (window-right-divider-width))))
 	    (unless pixelwise
 	      (setq width (/ (+ width char-width -1) char-width)))

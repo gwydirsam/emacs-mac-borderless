@@ -1237,9 +1237,26 @@ x_set_background_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 static void
 x_set_mouse_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
-  struct x_output *x = f->output_data.x;
-  Cursor cursor, nontext_cursor, mode_cursor, hand_cursor;
-  Cursor hourglass_cursor, horizontal_drag_cursor, vertical_drag_cursor;
+  struct mac_output *mac = f->output_data.mac;
+  enum cursor {TEXT, NONTEXT, MODELINE, HAND, HOURGLASS,
+	       HORIZONTAL_DRAG, VERTICAL_DRAG, NCURSORS} i;
+  struct {
+    Lisp_Object lisp_value;
+    Cursor *dst;
+  } table[NCURSORS] = {
+    {Vx_pointer_shape,			&mac->text_cursor},
+    {Vx_nontext_pointer_shape,		&mac->nontext_cursor},
+    {Vx_mode_pointer_shape,		&mac->modeline_cursor},
+    {Vx_sensitive_text_pointer_shape,	&mac->hand_cursor},
+    {Vx_hourglass_pointer_shape,	&mac->hourglass_cursor},
+    {Vx_window_horizontal_drag_shape,	&mac->horizontal_drag_cursor},
+    {Vx_window_vertical_drag_shape,	&mac->vertical_drag_cursor}
+  };
+  ThemeCursor shapes[NCURSORS] = {
+    kThemeIBeamCursor, kThemeArrowCursor, kThemeArrowCursor,
+    kThemePointingHandCursor, kThemeWatchCursor,
+    kThemeResizeLeftRightCursor, kThemeResizeUpDownCursor
+  };
   unsigned long pixel = x_decode_color (f, arg, BLACK_PIX_DEFAULT (f));
   unsigned long mask_color = FRAME_BACKGROUND_PIXEL (f);
 
@@ -1247,95 +1264,34 @@ x_set_mouse_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   if (mask_color == pixel)
     pixel = FRAME_FOREGROUND_PIXEL (f);
 
-  f->output_data.mac->mouse_pixel = pixel;
+  mac->mouse_pixel = pixel;
 
-  if (!NILP (Vx_pointer_shape))
-    {
-      CHECK_NUMBER (Vx_pointer_shape);
-      cursor = XINT (Vx_pointer_shape);
-    }
-  else
-    cursor = kThemeIBeamCursor;
+  for (i = 0; i < NCURSORS; i++)
+    if (!NILP (table[i].lisp_value))
+      {
+	CHECK_NUMBER (table[i].lisp_value);
+	shapes[i] = XINT (table[i].lisp_value);
+      }
 
-  if (!NILP (Vx_nontext_pointer_shape))
-    {
-      CHECK_NUMBER (Vx_nontext_pointer_shape);
-      nontext_cursor = XINT (Vx_nontext_pointer_shape);
-    }
-  else
-    nontext_cursor = kThemeArrowCursor;
+  block_input ();
 
-  if (!NILP (Vx_hourglass_pointer_shape))
-    {
-      CHECK_NUMBER (Vx_hourglass_pointer_shape);
-      hourglass_cursor = XINT (Vx_hourglass_pointer_shape);
-    }
-  else
-    hourglass_cursor = kThemeWatchCursor;
-
-  if (!NILP (Vx_mode_pointer_shape))
-    {
-      CHECK_NUMBER (Vx_mode_pointer_shape);
-      mode_cursor = XINT (Vx_mode_pointer_shape);
-    }
-  else
-    mode_cursor = kThemeArrowCursor;
-
-  if (!NILP (Vx_sensitive_text_pointer_shape))
-    {
-      CHECK_NUMBER (Vx_sensitive_text_pointer_shape);
-      hand_cursor = XINT (Vx_sensitive_text_pointer_shape);
-    }
-  else
-    hand_cursor = kThemePointingHandCursor;
-
-  if (!NILP (Vx_window_horizontal_drag_shape))
-    {
-      CHECK_NUMBER (Vx_window_horizontal_drag_shape);
-      horizontal_drag_cursor = XINT (Vx_window_horizontal_drag_shape);
-    }
-  else
-    horizontal_drag_cursor = kThemeResizeLeftRightCursor;
-
-  if (!NILP (Vx_window_vertical_drag_shape))
-    {
-      CHECK_NUMBER (Vx_window_vertical_drag_shape);
-      vertical_drag_cursor = XINT (Vx_window_vertical_drag_shape);
-    }
-  else
-    vertical_drag_cursor = kThemeResizeUpDownCursor;
-
-#if 0 /* MAC_TODO: cursor color changes */
   {
     XColor fore_color, back_color;
 
-    fore_color.pixel = f->output_data.mac->mouse_pixel;
+    fore_color.pixel = mac->mouse_pixel;
     x_query_color (f, &fore_color);
     back_color.pixel = mask_color;
     x_query_color (f, &back_color);
 
-    XRecolorCursor (dpy, cursor, &fore_color, &back_color);
-    XRecolorCursor (dpy, nontext_cursor, &fore_color, &back_color);
-    XRecolorCursor (dpy, mode_cursor, &fore_color, &back_color);
-    XRecolorCursor (dpy, hand_cursor, &fore_color, &back_color);
-    XRecolorCursor (dpy, hourglass_cursor, &fore_color, &back_color);
-    XRecolorCursor (dpy, horizontal_drag_cursor, &fore_color, &back_color);
-    XRecolorCursor (dpy, vertical_drag_cursor, &fore_color, &back_color);
+    for (i = 0; i < NCURSORS; i++)
+      {
+	mac_cursor_release (*table[i].dst);
+	*table[i].dst = mac_cursor_create (shapes[i], &fore_color, &back_color);
+      }
   }
-#endif
-
-  block_input ();
 
   if (FRAME_MAC_WINDOW (f) != 0)
-    FRAME_TERMINAL (f)->rif->define_frame_cursor (f, cursor);
-
-  f->output_data.mac->text_cursor = cursor;
-  f->output_data.mac->nontext_cursor = nontext_cursor;
-  f->output_data.mac->hourglass_cursor = hourglass_cursor;
-  f->output_data.mac->modeline_cursor = mode_cursor;
-  f->output_data.mac->hand_cursor = hand_cursor;
-  f->output_data.mac->horizontal_drag_cursor = horizontal_drag_cursor;
-  f->output_data.mac->vertical_drag_cursor = vertical_drag_cursor;
+    FRAME_TERMINAL (f)->rif->define_frame_cursor (f, mac->text_cursor);
 
   unblock_input ();
 

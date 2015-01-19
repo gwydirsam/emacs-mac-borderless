@@ -1083,8 +1083,7 @@ prepare_desired_row (struct window *w, struct glyph_row *row, bool mode_line_p)
       if (w->right_margin_cols > 0)
 	row->glyphs[RIGHT_MARGIN_AREA] = row->glyphs[LAST_AREA];
     }
-  else if (row == MATRIX_MODE_LINE_ROW (w->desired_matrix)
-	   || row == MATRIX_HEADER_LINE_ROW (w->desired_matrix))
+  else
     {
       /* The real number of glyphs reserved for the margins is
 	 recorded in the glyph matrix, and can be different from
@@ -1094,8 +1093,8 @@ prepare_desired_row (struct window *w, struct glyph_row *row, bool mode_line_p)
       int right = w->desired_matrix->right_margin_glyphs;
 
       /* Make sure the marginal areas of this row are in sync with
-	 what the window wants, when the 1st/last row of the matrix
-	 actually displays text and not header/mode line.  */
+	 what the window wants, when the row actually displays text
+	 and not header/mode line.  */
       if (w->left_margin_cols > 0
 	  && (left != row->glyphs[TEXT_AREA] - row->glyphs[LEFT_MARGIN_AREA]))
 	row->glyphs[TEXT_AREA] = row->glyphs[LEFT_MARGIN_AREA] + left;
@@ -2139,8 +2138,11 @@ adjust_frame_glyphs_for_window_redisplay (struct frame *f)
 static void
 adjust_decode_mode_spec_buffer (struct frame *f)
 {
+  ssize_t frame_message_buf_size = FRAME_MESSAGE_BUF_SIZE (f);
+
+  eassert (frame_message_buf_size >= 0);
   f->decode_mode_spec_buffer = xrealloc (f->decode_mode_spec_buffer,
-					 FRAME_MESSAGE_BUF_SIZE (f) + 1);
+					 frame_message_buf_size + 1);
 }
 
 
@@ -5107,7 +5109,7 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
 #ifdef HAVE_WINDOW_SYSTEM
   struct image *img = 0;
 #endif
-  int x0, x1, to_x;
+  int x0, x1, to_x, it_vpos;
   void *itdata = NULL;
 
   /* We used to set current_buffer directly here, but that does the
@@ -5116,11 +5118,6 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
   itdata = bidi_shelve_cache ();
   CLIP_TEXT_POS_FROM_MARKER (startp, w->start);
   start_display (&it, w, startp);
-  /* start_display takes into account the header-line row, but IT's
-     vpos still counts from the glyph row that includes the window's
-     start position.  Adjust for a possible header-line row.  */
-  it.vpos += WINDOW_WANTS_HEADER_LINE_P (w);
-
   x0 = *x;
 
   /* First, move to the beginning of the row corresponding to *Y.  We
@@ -5129,9 +5126,8 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
   move_it_to (&it, -1, 0, *y, -1, MOVE_TO_X | MOVE_TO_Y);
 
   /* TO_X is the pixel position that the iterator will compute for the
-     glyph at *X.  We add it.first_visible_x because iterator
-     positions include the hscroll.  */
-  to_x = x0 + it.first_visible_x;
+     glyph at *X.  */
+  to_x = x0;
   if (it.bidi_it.paragraph_dir == R2L)
     /* For lines in an R2L paragraph, we need to mirror TO_X wrt the
        text area.  This is because the iterator, even in R2L
@@ -5144,6 +5140,10 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
        text-area width is W, the rightmost pixel position is W-1, and
        it should be mirrored into zero pixel position.)  */
     to_x = window_box_width (w, TEXT_AREA) - to_x - 1;
+
+  /* We need to add it.first_visible_x because iterator positions
+     include the hscroll. */
+  to_x += it.first_visible_x;
 
   /* Now move horizontally in the row to the glyph under *X.  Second
      argument is ZV to prevent move_it_in_display_line from matching
@@ -5187,8 +5187,13 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
     }
 #endif
 
-  if (it.vpos < w->current_matrix->nrows
-      && (row = MATRIX_ROW (w->current_matrix, it.vpos),
+  /* IT's vpos counts from the glyph row that includes the window's
+     start position, i.e. it excludes the header-line row, but
+     MATRIX_ROW includes the header-line row.  Adjust for a possible
+     header-line row.  */
+  it_vpos = it.vpos + WINDOW_WANTS_MODELINE_P (w);
+  if (it_vpos < w->current_matrix->nrows
+      && (row = MATRIX_ROW (w->current_matrix, it_vpos),
 	  row->enabled_p))
     {
       if (it.hpos < row->used[TEXT_AREA])
@@ -5537,10 +5542,6 @@ change_frame_size_1 (struct frame *f, int new_width, int new_height,
     {
       new_text_width = (new_width == 0) ? FRAME_TEXT_WIDTH (f) : new_width;
       new_text_height = (new_height == 0) ? FRAME_TEXT_HEIGHT (f) : new_height;
-      /* Consider rounding here: Currently, the root window can be
-	 larger than the frame in terms of columns/lines.  */
-      new_cols = new_text_width / FRAME_COLUMN_WIDTH (f);
-      new_lines = new_text_height / FRAME_LINE_HEIGHT (f);
     }
   else
     {
@@ -5553,6 +5554,12 @@ change_frame_size_1 (struct frame *f, int new_width, int new_height,
   /* Compute width of windows in F.  */
   /* Round up to the smallest acceptable size.  */
   check_frame_size (f, &new_text_width, &new_text_height, 1);
+  /* Recompute the dimensions in character units, since
+     check_frame_size might have changed the pixel dimensions.  */
+  /* Consider rounding here: Currently, the root window can be
+     larger than the frame in terms of columns/lines.  */
+  new_cols = new_text_width / FRAME_COLUMN_WIDTH (f);
+  new_lines = new_text_height / FRAME_LINE_HEIGHT (f);
 
   /* This is the width of the frame without vertical scroll bars and
      fringe columns.  Do this after rounding - see discussion of

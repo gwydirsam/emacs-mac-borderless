@@ -139,6 +139,10 @@ typedef id instancetype;
 - (BOOL)canShowMenuBar;
 @end
 
+@interface NSCursor (Emacs)
++ (NSCursor *)cursorWithThemeCursor:(ThemeCursor)shape;
+@end
+
 /* Workarounds for memory leaks on OS X 10.9.  Should be removed once
    the problem is fixed in the framework.  */
 @interface NSApplication (Undocumented)
@@ -332,6 +336,9 @@ typedef id instancetype;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
   /* Window manager state after the full screen transition.  */
   WMState fullScreenTargetState;
+
+  /* Toolbar visibility saved for full screen transition.  */
+  BOOL savedToolbarVisibility;
 
   /* Pointer to the Lisp symbol that is set as `fullscreen' frame
      parameter after the full screen transition.  */
@@ -935,6 +942,20 @@ enum {
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1090
 @interface NSScreen (AvailableOn1090AndLater)
 + (BOOL)screensHaveSeparateSpaces;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+@interface NSCursor (AvailableOn1050AndLater)
++ (NSCursor *)operationNotAllowedCursor;
+@end
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+@interface NSCursor (AvailableOn1060AndLater)
++ (NSCursor *)dragLinkCursor;
++ (NSCursor *)dragCopyCursor;
++ (NSCursor *)contextualMenuCursor;
 @end
 #endif
 

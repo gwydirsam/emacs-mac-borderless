@@ -1155,9 +1155,15 @@ the line will be re-indented automatically if needed."
      ((and (eq ?: last-command-event)
            (memq ?: electric-indent-chars)
            (not current-prefix-arg)
+           ;; Trigger electric colon only at end of line
            (eolp)
+           ;; Avoid re-indenting on extra colon
            (not (equal ?: (char-before (1- (point)))))
-           (not (python-syntax-comment-or-string-p)))
+           (not (python-syntax-comment-or-string-p))
+           ;; Never re-indent at beginning of defun
+           (not (save-excursion
+                  (python-nav-beginning-of-statement)
+                  (python-info-looking-at-beginning-of-defun))))
       (python-indent-line)))))
 
 
@@ -1894,7 +1900,7 @@ detection and just returns nil."
                 (let ((code-file (python-shell--save-temp-file code)))
                   ;; Use `process-file' as it is remote-host friendly.
                   (process-file
-                   (executable-find python-shell-interpreter)
+                   python-shell-interpreter
                    code-file
                    '(t nil)
                    nil
@@ -2048,11 +2054,14 @@ uniqueness for different types of configurations."
             (or python-shell-virtualenv-path "")
             (mapconcat #'identity python-shell-exec-path "")))))
 
-(defun python-shell-parse-command ()
+(defun python-shell-parse-command ()    ;FIXME: why name it "parse"?
   "Calculate the string used to execute the inferior Python process."
+  ;; FIXME: process-environment doesn't seem to be used anywhere within
+  ;; this let.
   (let ((process-environment (python-shell-calculate-process-environment))
         (exec-path (python-shell-calculate-exec-path)))
     (format "%s %s"
+            ;; FIXME: Why executable-find?
             (executable-find python-shell-interpreter)
             python-shell-interpreter-args)))
 
@@ -2084,11 +2093,10 @@ uniqueness for different types of configurations."
 (defun python-shell-calculate-exec-path ()
   "Calculate exec path given `python-shell-virtualenv-path'."
   (let ((path (append python-shell-exec-path
-                      exec-path nil)))
+                      exec-path nil)))  ;FIXME: Why nil?
     (if (not python-shell-virtualenv-path)
         path
-      (cons (format "%s/bin"
-                    (directory-file-name python-shell-virtualenv-path))
+      (cons (expand-file-name "bin" python-shell-virtualenv-path)
             path))))
 
 (defun python-comint-output-filter-function (output)
@@ -2679,39 +2687,38 @@ the full statement in the case of imports."
 (defun python-shell-completion-get-completions (process line input)
   "Do completion at point for PROCESS.
 LINE is used to detect the context on how to complete given INPUT."
-  (let* ((prompt
-          ;; Get last prompt of the inferior process buffer (this
-          ;; intentionally avoids using `comint-last-prompt' because
-          ;; of incompatibilities with Emacs 24.x).
-          (with-current-buffer (process-buffer process)
+  (with-current-buffer (process-buffer process)
+    (let* ((prompt
+            ;; Get last prompt of the inferior process buffer (this
+            ;; intentionally avoids using `comint-last-prompt' because
+            ;; of incompatibilities with Emacs 24.x).
             (save-excursion
               (buffer-substring-no-properties
-               (- (point) (length line))
+               (line-beginning-position) ;End of prompt.
                (progn
                  (re-search-backward "^")
-                 (python-util-forward-comment)
-                 (point))))))
-         (completion-code
-          ;; Check whether a prompt matches a pdb string, an import
-          ;; statement or just the standard prompt and use the
-          ;; correct python-shell-completion-*-code string
-          (cond ((and (> (length python-shell-completion-pdb-string-code) 0)
-                      (string-match
-                       (concat "^" python-shell-prompt-pdb-regexp) prompt))
-                 python-shell-completion-pdb-string-code)
-                ((string-match
-                  python-shell--prompt-calculated-input-regexp prompt)
-                 python-shell-completion-string-code)
-                (t nil)))
-         (input
-          (if (string-match
-               (python-rx (+ space) (or "from" "import") space)
-               line)
-              line
-            input)))
-    (and completion-code
-         (> (length input) 0)
-         (with-current-buffer (process-buffer process)
+                 (python-util-forward-comment) ;FIXME: Why?
+                 (point)))))
+           (completion-code
+            ;; Check whether a prompt matches a pdb string, an import
+            ;; statement or just the standard prompt and use the
+            ;; correct python-shell-completion-*-code string
+            (cond ((and (> (length python-shell-completion-pdb-string-code) 0)
+                        (string-match
+                         (concat "^" python-shell-prompt-pdb-regexp) prompt))
+                   python-shell-completion-pdb-string-code)
+                  ((string-match
+                    python-shell--prompt-calculated-input-regexp prompt)
+                   python-shell-completion-string-code)
+                  (t nil)))
+           (input
+            (if (string-match
+                 (python-rx (+ space) (or "from" "import") space)
+                 line)
+                line
+              input)))
+      (and completion-code
+           (> (length input) 0)
            (let ((completions
                   (python-util-strip-string
                    (python-shell-send-string-no-output
@@ -3099,7 +3106,8 @@ JUSTIFY should be used (if applicable) as in `fill-paragraph'."
                           (end-of-line)
                           (when (not (python-syntax-context 'paren))
                             (skip-syntax-backward "^)")))
-                        (while (python-syntax-context 'paren)
+                        (while (and (python-syntax-context 'paren)
+                                    (not (eobp)))
                           (goto-char (1+ (point-marker))))
                         (point-marker)))
     (let ((paragraph-start "\f\\|[ \t]*$")
@@ -3110,7 +3118,8 @@ JUSTIFY should be used (if applicable) as in `fill-paragraph'."
     (while (not (eobp))
       (forward-line 1)
       (python-indent-line)
-      (goto-char (line-end-position)))) t)
+      (goto-char (line-end-position))))
+  t)
 
 
 ;;; Skeletons

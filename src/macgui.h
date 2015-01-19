@@ -78,8 +78,8 @@ typedef struct _XImage
 
 typedef const struct _EmacsDocument *EmacsDocumentRef; /* opaque */
 
-#define Cursor ThemeCursor
-#define No_Cursor (-1)
+#define Cursor CFTypeRef
+#define No_Cursor NULL
 
 
 typedef CGGlyph XChar2b;
