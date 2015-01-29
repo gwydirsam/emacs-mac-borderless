@@ -1,6 +1,6 @@
 /* Selection processing for Emacs on Mac OS.
    Copyright (C) 2005-2008 Free Software Foundation, Inc.
-   Copyright (C) 2009-2014  YAMAMOTO Mitsuharu
+   Copyright (C) 2009-2015  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -996,7 +996,7 @@ Return t if the parameter is successfully set.  Otherwise return nil.  */)
   suspension_id = get_suspension_id (apple_event);
 
   CHECK_STRING (keyword);
-  if (mac_string_to_four_char_code (keyword, &code))
+  if (!mac_string_to_four_char_code (keyword, &code))
     error ("Apple event keyword must be a 4-byte string: %s",
 	   SDATA (keyword));
 

@@ -1,6 +1,6 @@
 /* Display module for Mac OS.
    Copyright (C) 2000-2008 Free Software Foundation, Inc.
-   Copyright (C) 2009-2014  YAMAMOTO Mitsuharu
+   Copyright (C) 2009-2015  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -250,6 +250,10 @@ struct mac_output
   /* True means background alpha value is enabled for this frame.  */
   bool_bf background_alpha_enabled_p : 1;
 
+  /* True means synthetic bold workaround is disabled for this
+     frame.  */
+  bool_bf synthetic_bold_workaround_disabled_p : 1;
+
   /* Backing scale factor (1 or 2), used for rendering images.  */
   unsigned backing_scale_factor : 2;
 
@@ -306,7 +310,9 @@ struct mac_output
 #define FRAME_NATIVE_TOOL_BAR_P(f) ((f)->output_data.mac->native_tool_bar_p)
 #define FRAME_BACKGROUND_ALPHA_ENABLED_P(f) \
   ((f)->output_data.mac->background_alpha_enabled_p)
-#define FRAME_BACKING_SCALE_FACTOR(f) \
+#define FRAME_SYNTHETIC_BOLD_WORKAROUND_DISABLED_P(f) \
+  ((f)->output_data.mac->synthetic_bold_workaround_disabled_p)
+#define FRAME_BACKING_SCALE_FACTOR(f)		\
   ((f)->output_data.mac->backing_scale_factor)
 #define FRAME_SCALE_MISMATCH_STATE(f) \
   ((f)->output_data.mac->scale_mismatch_state)

@@ -1,5 +1,5 @@
 /* Definitions and headers for AppKit framework on the Mac OS.
-   Copyright (C) 2008-2014  YAMAMOTO Mitsuharu
+   Copyright (C) 2008-2015  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -371,6 +371,7 @@ typedef id instancetype;
 - (NSRect)centerScanEmacsViewRect:(NSRect)rect;
 - (void)invalidateCursorRectsForEmacsView;
 - (void)maskRoundedBottomCorners:(NSRect)clipRect directly:(BOOL)flag;
+- (NSBitmapImageRep *)bitmapImageRepInContentViewRect:(NSRect)rect;
 - (void)storeModifyFrameParametersEvent:(Lisp_Object)alist;
 - (BOOL)isWindowFrontmost;
 @end

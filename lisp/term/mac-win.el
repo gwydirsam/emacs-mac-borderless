@@ -1,7 +1,7 @@
 ;;; mac-win.el --- parse switches controlling interface with Mac window system -*-coding: utf-8-*-
 
 ;; Copyright (C) 1999-2008  Free Software Foundation, Inc.
-;; Copyright (C) 2009-2014  YAMAMOTO Mitsuharu
+;; Copyright (C) 2009-2015  YAMAMOTO Mitsuharu
 
 ;; Author: Andrew Choi <akochoi@mac.com>
 ;;	YAMAMOTO Mitsuharu <mituharu@math.s.chiba-u.ac.jp>
@@ -1083,18 +1083,34 @@ through this without \"emulated closures\".  For example,
 
 ;; url-generic-parse-url is autoloaded from url-parse.
 (declare-function url-type "url-parse" t t) ; defstruct
+(declare-function org-protocol-check-filename-for-protocol "org-protocol.el"
+		  (fname restoffiles client))
 
 (defun mac-ae-get-url (event)
   "Open the URL specified by the Apple event EVENT.
-Currently the `mailto' scheme is supported."
+Currently the `mailto' and `org-protocol' schemes are supported."
   (interactive "e")
   (let* ((ae (mac-event-ae event))
-	 (parsed-url (url-generic-parse-url (mac-ae-text ae))))
-    (if (string= (url-type parsed-url) "mailto")
-	(progn
-	  (url-mailto parsed-url)
-	  (select-frame-set-input-focus (selected-frame)))
-      (mac-resume-apple-event ae t))))
+	 (url (mac-ae-text ae)))
+    (cond ((string-match "\\`mailto:" url)
+	   (url-mailto (url-generic-parse-url url))
+	   (select-frame-set-input-focus (selected-frame)))
+	  ((string-match "\\`org-protocol:" url)
+	   (require 'org-protocol)
+	   ;; URL of the form `org-protocol://sub-protocol:/...' might
+	   ;; have been standardized to
+	   ;; `org-protocol://sub-protocol/...' .
+	   (if (and (string-match "\\`org-protocol:/+[^/]+/" url)
+		    (not (eq (aref url (- (match-end 0) 2)) ?:)))
+	       (setq url (concat (substring url 0 (1- (match-end 0)))
+				 ":" (substring url (1- (match-end 0))))))
+	   (condition-case err
+	       (org-protocol-check-filename-for-protocol url (list url) nil)
+	     (error
+	      (message "%s" (error-message-string err))))
+	   (select-frame-set-input-focus (selected-frame)))
+	  (t
+	   (mac-resume-apple-event ae t)))))
 
 (setq mac-apple-event-map (make-sparse-keymap))
 
@@ -1296,6 +1312,9 @@ the mode if ARG is omitted or nil."
 (setq mac-ts-active-input-overlay (make-overlay 1 1))
 (overlay-put mac-ts-active-input-overlay 'display "")
 
+(defvar mac-ts-active-input-string ""
+  "String of text in Mac TSM active input area.")
+
 (defface mac-ts-caret-position
   '((t :inverse-video t))
   "Face for caret position in Mac TSM active input area.
@@ -1438,7 +1457,8 @@ the echo area or in a buffer where the cursor is not displayed."
 		(delete-region (+ (point-min) (car replacement-range))
 			       (+ (point-min) (car replacement-range)
 				  (cdr replacement-range)))
-	      (error nil)))))))
+	      (error nil))))
+      (setq mac-ts-active-input-string active-input-string))))
 
 (defvar mac-emoji-font-regexp "\\<emoji\\>"
   "Regexp matching font names for emoji.
@@ -1489,6 +1509,7 @@ sensitive to the variation selector.")
 				      '(mac-ts-active-input-string nil)
 				      msg)
 	      (message "%s" msg))))))
+    (setq mac-ts-active-input-string "")
     (if replacement-range
 	(condition-case nil
 	    ;; Strictly speaking, the replacement range can be out of
@@ -1544,7 +1565,7 @@ This hook is not used on Mac OS X 10.4."
 (defun mac-auto-ascii-select-input-source ()
   "Select the most-recently-used ASCII-capable keyboard input source.
 Expects to be added to normal hooks."
-  (if (eq (terminal-live-p (frame-terminal)) 'mac)
+  (if (= (length mac-ts-active-input-string) 0)
       (mac-select-input-source 'ascii-capable-keyboard)))
 
 (defun mac-auto-ascii-setup-input-source (&optional _prompt)
@@ -1575,7 +1596,7 @@ be processed by the Lisp interpreter."
   :group 'mac
   :package-version '(Mac\ port . "5.2")
   (if mac-auto-ascii-mode
-      (progn
+      (when (eq (terminal-live-p (frame-terminal)) 'mac)
 	(map-keymap (lambda (event definition)
 		      (if (and (keymapp definition) (integerp event)
 			       (not (eq event ?\e)))

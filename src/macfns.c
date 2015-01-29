@@ -1,6 +1,6 @@
 /* Graphical user interface functions for Mac OS.
    Copyright (C) 2000-2008  Free Software Foundation, Inc.
-   Copyright (C) 2009-2014  YAMAMOTO Mitsuharu
+   Copyright (C) 2009-2015  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -2104,6 +2104,9 @@ This function is an internal primitive--use `make-frame' instead.  */)
 		       "leftFringe", "LeftFringe", RES_TYPE_NUMBER);
   x_default_parameter (f, parms, Qright_fringe, Qnil,
 		       "rightFringe", "RightFringe", RES_TYPE_NUMBER);
+  /* Process alpha here (Bug#16619).  */
+  x_default_parameter (f, parms, Qalpha, Qnil,
+		       "alpha", "Alpha", RES_TYPE_NUMBER);
 
 #ifdef GLYPH_DEBUG
   image_cache_refcount =
@@ -2200,8 +2203,6 @@ This function is an internal primitive--use `make-frame' instead.  */)
   x_default_parameter (f, parms, Qscroll_bar_width, Qnil,
 		       "scrollBarWidth", "ScrollBarWidth",
 		       RES_TYPE_NUMBER);
-  x_default_parameter (f, parms, Qalpha, Qnil,
-		       "alpha", "Alpha", RES_TYPE_NUMBER);
 
   /* Dimensions, especially FRAME_LINES (f), must be done via change_frame_size.
      Change will not be effected unless different from the current
@@ -3713,6 +3714,8 @@ mac_create_input_source_from_lisp (Lisp_Object source)
 	  if (properties)
 	    {
 	      sources = TISCreateInputSourceList (properties, false);
+	      if (sources == NULL)
+		sources = TISCreateInputSourceList (properties, true);
 	      CFRelease (properties);
 	    }
 	  if (sources)
@@ -3951,8 +3954,8 @@ and values:
     The file containing the image to be used as the input source icon.
 
 The value corresponding to a name ending with "-p" is nil or t.  The
-value for `:icon-image-file' is a vector of strings.  The other values
-are strings.
+value for `:languages' is a vector of strings.  The other values are
+strings.
 
 If FORMAT is a list of symbols, then it is interpreted as a list of
 properties above.  The result is a cons (ID . PLIST) as in the case of

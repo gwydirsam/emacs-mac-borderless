@@ -1,5 +1,5 @@
 /* Functions for GUI implemented with Cocoa AppKit on the Mac OS.
-   Copyright (C) 2008-2014  YAMAMOTO Mitsuharu
+   Copyright (C) 2008-2015  YAMAMOTO Mitsuharu
 
 This file is part of GNU Emacs Mac port.
 
@@ -2748,6 +2748,9 @@ static CGRect unset_global_focus_view_frame (void);
   if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
     [window useOptimizedDrawing:YES];
 #endif
+  /* Temporarily disabled to avoid mode-line erasure on frame focus
+     switch.  */
+#if 0
   visualEffectView = [[(NSClassFromString (@"NSVisualEffectView")) alloc]
 		       initWithFrame:[[window contentView] frame]];
   if (visualEffectView)
@@ -2757,6 +2760,7 @@ static CGRect unset_global_focus_view_frame (void);
       [window setOpaque:NO];
       FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = true;
     }
+#endif
   [[window contentView] addSubview:emacsView];
   [self updateBackingScaleFactor];
 
@@ -3545,6 +3549,23 @@ static CGRect unset_global_focus_view_frame (void);
   return windowFrame;
 }
 
+- (NSBitmapImageRep *)bitmapImageRepInContentViewRect:(NSRect)rect
+{
+  struct frame *f = emacsFrame;
+  NSView *contentView = [emacsWindow contentView];
+  NSBitmapImageRep *bitmap = [contentView
+			       bitmapImageRepForCachingDisplayInRect:rect];
+  bool saved_background_alpha_enabled_p = FRAME_BACKGROUND_ALPHA_ENABLED_P (f);
+
+  FRAME_SYNTHETIC_BOLD_WORKAROUND_DISABLED_P (f) = true;
+  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = false;
+  [contentView cacheDisplayInRect:rect toBitmapImageRep:bitmap];
+  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = saved_background_alpha_enabled_p;
+  FRAME_SYNTHETIC_BOLD_WORKAROUND_DISABLED_P (f) = false;
+
+  return bitmap;
+}
+
 - (void)storeModifyFrameParametersEvent:(Lisp_Object)alist
 {
   struct frame *f = emacsFrame;
@@ -3568,22 +3589,14 @@ static CGRect unset_global_focus_view_frame (void);
 {
   struct frame *f = emacsFrame;
   struct window *root_window;
-  NSView *contentView;
-  EmacsFullScreenTransitionView *view;
-  NSRect contentViewRect;
-  NSBitmapImageRep *bitmap;
-  id image;
   CGFloat rootWindowMaxY;
   CALayer *rootLayer;
-  bool saved_background_alpha_enabled_p = FRAME_BACKGROUND_ALPHA_ENABLED_P (f);
-
-  contentView = [emacsWindow contentView];
-  contentViewRect = [contentView visibleRect];
-  bitmap = [contentView bitmapImageRepForCachingDisplayInRect:contentViewRect];
-  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = false;
-  [contentView cacheDisplayInRect:contentViewRect toBitmapImageRep:bitmap];
-  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = saved_background_alpha_enabled_p;
-  image = (id) [bitmap CGImage];
+  EmacsFullScreenTransitionView *view;
+  NSView *contentView = [emacsWindow contentView];
+  NSRect contentViewRect = [contentView visibleRect];
+  NSBitmapImageRep *bitmap =
+    [self bitmapImageRepInContentViewRect:contentViewRect];
+  id image = (id) [bitmap CGImage];
 
   rootLayer = [CA_LAYER layer];
   contentViewRect.origin = NSZeroPoint;
@@ -7996,7 +8009,18 @@ peek_if_next_event_activates_menu_bar (void)
 
       if (_IsSymbolicHotKeyEvent (event, &code, &isEnabled)
 	  && isEnabled && code == 7) /* Move focus to the menu bar */
-	return event;
+	{
+	  OSStatus err;
+	  UInt32 modifiers;
+
+	  err = GetEventParameter (event, kEventParamKeyModifiers, typeUInt32,
+				   NULL, sizeof (UInt32), NULL, &modifiers);
+	  if (err == noErr
+	      && !(modifiers
+		   & ((mac_pass_command_to_system ? 0 : cmdKey)
+		      | (mac_pass_control_to_system ? 0 : controlKey))))
+	    return event;
+	}
     }
   else if (event_class == kEventClassMouse
 	   && event_kind == kEventMouseDown)
@@ -13002,17 +13026,11 @@ mac_update_accessibility_status (struct frame *f)
 
 - (CALayer *)layerForRect:(NSRect)rect
 {
-  struct frame *f = emacsFrame;
   NSView *contentView = [emacsWindow contentView];
   NSRect rectInContentView = [emacsView convertRect:rect toView:contentView];
   NSBitmapImageRep *bitmap =
-    [contentView bitmapImageRepForCachingDisplayInRect:rectInContentView];
+    [self bitmapImageRepInContentViewRect:rectInContentView];
   CALayer *layer, *contentLayer;
-  bool saved_background_alpha_enabled_p = FRAME_BACKGROUND_ALPHA_ENABLED_P (f);
-
-  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = false;
-  [contentView cacheDisplayInRect:rectInContentView toBitmapImageRep:bitmap];
-  FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = saved_background_alpha_enabled_p;
 
   layer = [CA_LAYER layer];
   contentLayer = [CA_LAYER layer];

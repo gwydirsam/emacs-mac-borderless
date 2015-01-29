@@ -1,4 +1,50 @@
+* emacs-24.4-mac-5.3 (2015-01-29)
+
+Blend-and-blur of background color on OS X 10.10 is temporarily
+disabled to avoid mode-line erasure on frame focus switch.  For some
+reason, mode-line row's `enabled_p' flag in the current matrix is
+sometimes reset even if it is visible.  This causes blank mode-line on
+"expose" (drawRect:) events.  In principle, this mode-line erasure can
+also happen on older versions of OS X or this version of Emacs Mac
+port.  But it is usually observed on OS X 10.10 together with previous
+5.x versions of Emacs Mac port, because the use of NSVisualEffectView,
+which provides the blend-and-blur feature, triggers full frame
+"exposure" on focus switch.
+
+** Fixed bugs
+
+*** Special-display completion frame becomes transparent.
+Reported by Alan Shumitt.
+Adapt a fix for Bug#16619.
+
+*** `mac-auto-ascii-mode' on TTY terminals disables prefix keys with
+the meta key.
+
+*** Control-F2 is passed to the system even if
+mac-pass-control-to-system is set to nil.
+
+*** Synthetic bold text looks thinner on Retina display/HiDPI mode.
+This is because stroke line width for text drawing is not correctly
+scaled (whereas it is correctly scaled when drawn to bitmaps) on such
+environments.  I've been reporting this to Apple on every OS X update
+since it was 10.7.4, but I couldn't get any response until recently.
+At last Apple answers that there are no plans to address this issue
+(rdar://11644870) currently.  So I added a workaround that would cause
+a bad reverse effect if the original issue were fixed.
+
+*** `mac-ae-set-reply-parameter', which is used for reporting an error
+in Apple event hander, has not been working since emacs-24.2-mac-3.2.
+
+*** Input source functions ignore disabled input source ID strings.
+
+** Improvements
+
+*** URL handler via Apple events now accepts the `org-protocol' scheme
+as well as `mailto'.
+
+
 * emacs-24.4-mac-5.2 (2014-11-21)
+http://lists.gnu.org/archive/html/emacs-devel/2014-11/msg01719.html
 
 ** Fixed bugs
 

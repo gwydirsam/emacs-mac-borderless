@@ -2848,7 +2848,20 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
 	  CGFloat bold_factor;
 
 	  CGContextSetTextDrawingMode (context, kCGTextFillStroke);
-	  CGContextSetLineWidth (context, synthetic_bold_factor * font_size);
+	  /* Stroke line width for text drawing is not correctly
+	     scaled on Retina display/HiDPI mode when drawn to screen
+	     (whereas it is correctly scaled when drawn to bitmaps),
+	     and synthetic bold looks thinner on such environments.
+	     Apple says there are no plans to address this issue
+	     (rdar://11644870) currently.  So we add a workaround.  */
+	  if (FRAME_BACKING_SCALE_FACTOR (f) != 1
+	      && !FRAME_SYNTHETIC_BOLD_WORKAROUND_DISABLED_P (f)
+	      && (mac_operating_system_version.minor >= 7
+		  || mac_operating_system_version.major > 10))
+	    bold_factor = synthetic_bold_factor * 2;
+	  else
+	    bold_factor = synthetic_bold_factor;
+	  CGContextSetLineWidth (context, bold_factor * font_size);
 	  CGContextSetStrokeColorWithColor (context, gc->cg_fore_color);
 	}
       if (no_antialias_p)
