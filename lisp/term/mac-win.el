@@ -1266,6 +1266,8 @@ or the Mac port of Emacs 23-24 about encoding of SCRIPT."
 						     (cadr err) 'utf-8) "TEXT")
 		       (cadr err))))))))
 
+(defalias 'do-applescript 'mac-do-applescript)
+
 ;;; Font panel
 (declare-function mac-set-font-panel-visible-p "macfns.c" (flag))
 

@@ -1,8 +1,34 @@
+2015-01-17  Eli Zaretskii  <eliz@gnu.org>
+
+	* tutorials/TUTORIAL.he: Use u+05f4 HEBREW PUNCTUATION GERSHAYIM
+	instead of u+0022 QUOTATION MARK in Hebrew acronyms.
+
+2014-12-24  Álvar Ibeas  <ibeas@gmx.com>  (tiny change)
+
+	* tutorials/TUTORIAL.es: Improve style consistency.  Spelling fixes.
+
+2014-11-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Lessen focus on ChangeLog files, as opposed to change log entries.
+	* CONTRIBUTE: Give advice about git commit messages and how
+	to generate proposed patches containing them.
+
+2014-11-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Backport fix for minor Bazaar leftovers.
+	Reported by Perry E. Metzger in:
+	http://lists.gnu.org/archive/html/emacs-devel/2014-11/msg00745.html
+	* CONTRIBUTE: More git transition.
+
+2014-11-11  Eric S. Raymond  <esr@thyrsus.com>
+
+	* CONTRIBUTE: git transition.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
 
-2014-09-30  Bill Wohler	 <wohler@newt.com>
+2014-09-30  Bill Wohler  <wohler@newt.com>
 
 	Release MH-E version 8.6
 
@@ -6512,7 +6538,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

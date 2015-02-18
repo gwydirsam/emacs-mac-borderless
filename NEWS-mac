@@ -1,4 +1,14 @@
+* emacs-24.4.90-mac-5.4 (2015-02-18)
+Based on 24.4.90.
+
+Blend-and-blur of background color on OS X 10.10 is enabled again
+because the mode-line erasure issue (Bug#19721) is fixed upstream.
+The function `do-applescript' is now an alias of `mac-do-applescript',
+which is implemented on top of `mac-osa-script'.
+
+
 * emacs-24.4-mac-5.3 (2015-01-29)
+http://lists.gnu.org/archive/html/emacs-devel/2015-01/msg01040.html
 
 Blend-and-blur of background color on OS X 10.10 is temporarily
 disabled to avoid mode-line erasure on frame focus switch.  For some

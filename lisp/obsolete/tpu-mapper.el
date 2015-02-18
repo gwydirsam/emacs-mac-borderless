@@ -1,11 +1,12 @@
 ;;; tpu-mapper.el --- create a TPU-edt X-windows keymap file
 
-;; Copyright (C) 1993-1995, 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 2001-2015 Free Software Foundation, Inc.
 
 ;; Author: Rob Riepel <riepel@networking.stanford.edu>
 ;; Maintainer: Rob Riepel <riepel@networking.stanford.edu>
 ;; Keywords: emulations
 ;; Package: tpu-edt
+;; Obsolete-since: 24.5
 
 ;; This file is part of GNU Emacs.
 

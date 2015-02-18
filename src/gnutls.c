@@ -1,5 +1,5 @@
 /* GnuTLS glue for GNU Emacs.
-   Copyright (C) 2010-2014 Free Software Foundation, Inc.
+   Copyright (C) 2010-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -116,12 +116,8 @@ DEF_GNUTLS_FN (void, gnutls_global_set_log_function, (gnutls_log_func));
 DEF_GNUTLS_FN (void, gnutls_global_set_audit_log_function, (gnutls_audit_log_func));
 #endif
 DEF_GNUTLS_FN (void, gnutls_global_set_log_level, (int));
-DEF_GNUTLS_FN (void, gnutls_global_set_mem_functions,
-	       (gnutls_alloc_function, gnutls_alloc_function,
-		gnutls_is_secure_function, gnutls_realloc_function,
-		gnutls_free_function));
 DEF_GNUTLS_FN (int, gnutls_handshake, (gnutls_session_t));
-DEF_GNUTLS_FN (int, gnutls_init, (gnutls_session_t *, gnutls_connection_end_t));
+DEF_GNUTLS_FN (int, gnutls_init, (gnutls_session_t *, unsigned int));
 DEF_GNUTLS_FN (int, gnutls_priority_set_direct,
 	       (gnutls_session_t, const char *, const char **));
 DEF_GNUTLS_FN (size_t, gnutls_record_check_pending, (gnutls_session_t));
@@ -184,7 +180,6 @@ init_gnutls_functions (void)
   LOAD_GNUTLS_FN (library, gnutls_global_set_audit_log_function);
 #endif
   LOAD_GNUTLS_FN (library, gnutls_global_set_log_level);
-  LOAD_GNUTLS_FN (library, gnutls_global_set_mem_functions);
   LOAD_GNUTLS_FN (library, gnutls_handshake);
   LOAD_GNUTLS_FN (library, gnutls_init);
   LOAD_GNUTLS_FN (library, gnutls_priority_set_direct);
@@ -244,7 +239,6 @@ init_gnutls_functions (void)
 #define fn_gnutls_global_set_audit_log_function	gnutls_global_set_audit_log_function
 #endif
 #define fn_gnutls_global_set_log_level		gnutls_global_set_log_level
-#define fn_gnutls_global_set_mem_functions	gnutls_global_set_mem_functions
 #define fn_gnutls_handshake			gnutls_handshake
 #define fn_gnutls_init				gnutls_init
 #define fn_gnutls_priority_set_direct		gnutls_priority_set_direct
@@ -264,6 +258,17 @@ init_gnutls_functions (void)
 #endif /* !WINDOWSNT */
 
 
+/* Report memory exhaustion if ERR is an out-of-memory indication.  */
+static void
+check_memory_full (int err)
+{
+  /* When GnuTLS exhausts memory, it doesn't say how much memory it
+     asked for, so tell the Emacs allocator that GnuTLS asked for no
+     bytes.  This isn't accurate, but it's good enough.  */
+  if (err == GNUTLS_E_MEMORY_ERROR)
+    memory_full (0);
+}
+
 #ifdef HAVE_GNUTLS3
 /* Function to log a simple audit message.  */
 static void
@@ -360,7 +365,7 @@ emacs_gnutls_handshake (struct Lisp_Process *proc)
     }
   else
     {
-      fn_gnutls_alert_send_appropriate (state, ret);
+      check_memory_full (fn_gnutls_alert_send_appropriate (state, ret));
     }
   return ret;
 }
@@ -477,6 +482,8 @@ emacs_gnutls_handle_error (gnutls_session_t session, int err)
   if (err >= 0)
     return 1;
 
+  check_memory_full (err);
+
   max_log_level = global_gnutls_log_level;
 
   /* TODO: use gnutls-error-fatalp and gnutls-error-string.  */
@@ -542,6 +549,7 @@ gnutls_make_error (int err)
       return Qgnutls_e_invalid_session;
     }
 
+  check_memory_full (err);
   return make_number (err);
 }
 
@@ -673,27 +681,6 @@ See also `gnutls-init'.  */)
   return emacs_gnutls_deinit (proc);
 }
 
-DEFUN ("gnutls-available-p", Fgnutls_available_p, Sgnutls_available_p, 0, 0, 0,
-       doc: /* Return t if GnuTLS is available in this instance of Emacs.  */)
-     (void)
-{
-#ifdef WINDOWSNT
-  Lisp_Object found = Fassq (Qgnutls_dll, Vlibrary_cache);
-  if (CONSP (found))
-    return XCDR (found);
-  else
-    {
-      Lisp_Object status;
-      status = init_gnutls_functions () ? Qt : Qnil;
-      Vlibrary_cache = Fcons (Fcons (Qgnutls_dll, status), Vlibrary_cache);
-      return status;
-    }
-#else
-  return Qt;
-#endif
-}
-
-
 /* Initializes global GnuTLS state to defaults.
 Call `gnutls-global-deinit' when GnuTLS usage is no longer needed.
 Returns zero on success.  */
@@ -703,11 +690,8 @@ emacs_gnutls_global_init (void)
   int ret = GNUTLS_E_SUCCESS;
 
   if (!gnutls_global_initialized)
-    {
-      fn_gnutls_global_set_mem_functions (xmalloc, xmalloc, NULL,
-					  xrealloc, xfree);
-      ret = fn_gnutls_global_init ();
-    }
+    ret = fn_gnutls_global_init ();
+
   gnutls_global_initialized = 1;
 
   return gnutls_make_error (ret);
@@ -875,7 +859,8 @@ one trustfile (usually a CA bundle).  */)
       unsigned int gnutls_verify_flags = GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT;
 
       GNUTLS_LOG (2, max_log_level, "allocating x509 credentials");
-      fn_gnutls_certificate_allocate_credentials (&x509_cred);
+      check_memory_full ((fn_gnutls_certificate_allocate_credentials
+			  (&x509_cred)));
       XPROCESS (proc)->gnutls_x509_cred = x509_cred;
 
       verify_flags = Fplist_get (proplist, QCgnutls_bootprop_verify_flags);
@@ -894,7 +879,8 @@ one trustfile (usually a CA bundle).  */)
   else /* Qgnutls_anon: */
     {
       GNUTLS_LOG (2, max_log_level, "allocating anon credentials");
-      fn_gnutls_anon_allocate_client_credentials (&anon_cred);
+      check_memory_full ((fn_gnutls_anon_allocate_client_credentials
+			  (&anon_cred)));
       XPROCESS (proc)->gnutls_anon_cred = anon_cred;
     }
 
@@ -1126,7 +1112,10 @@ one trustfile (usually a CA bundle).  */)
 	  return gnutls_make_error (ret);
 	}
 
-      if (!fn_gnutls_x509_crt_check_hostname (gnutls_verify_cert, c_hostname))
+      int err
+	= fn_gnutls_x509_crt_check_hostname (gnutls_verify_cert, c_hostname);
+      check_memory_full (err);
+      if (!err)
 	{
           if (verify_error_all
               || !NILP (Fmember (QCgnutls_bootprop_hostname, verify_error)))
@@ -1179,9 +1168,36 @@ This function may also return `gnutls-e-again', or
   return gnutls_make_error (ret);
 }
 
+#endif	/* HAVE_GNUTLS */
+
+DEFUN ("gnutls-available-p", Fgnutls_available_p, Sgnutls_available_p, 0, 0, 0,
+       doc: /* Return t if GnuTLS is available in this instance of Emacs.  */)
+     (void)
+{
+#ifdef HAVE_GNUTLS
+# ifdef WINDOWSNT
+  Lisp_Object found = Fassq (Qgnutls_dll, Vlibrary_cache);
+  if (CONSP (found))
+    return XCDR (found);
+  else
+    {
+      Lisp_Object status;
+      status = init_gnutls_functions () ? Qt : Qnil;
+      Vlibrary_cache = Fcons (Fcons (Qgnutls_dll, status), Vlibrary_cache);
+      return status;
+    }
+# else	/* !WINDOWSNT */
+  return Qt;
+# endif	 /* !WINDOWSNT */
+#else  /* !HAVE_GNUTLS */
+  return Qnil;
+#endif	/* !HAVE_GNUTLS */
+}
+
 void
 syms_of_gnutls (void)
 {
+#ifdef HAVE_GNUTLS
   gnutls_global_initialized = 0;
 
   DEFSYM (Qgnutls_dll, "gnutls");
@@ -1223,7 +1239,6 @@ syms_of_gnutls (void)
   defsubr (&Sgnutls_boot);
   defsubr (&Sgnutls_deinit);
   defsubr (&Sgnutls_bye);
-  defsubr (&Sgnutls_available_p);
 
   DEFVAR_INT ("gnutls-log-level", global_gnutls_log_level,
 	      doc: /* Logging level used by the GnuTLS functions.
@@ -1231,6 +1246,8 @@ Set this larger than 0 to get debug output in the *Messages* buffer.
 1 is for important messages, 2 is for debug data, and higher numbers
 are as per the GnuTLS logging conventions.  */);
   global_gnutls_log_level = 0;
-}
 
-#endif /* HAVE_GNUTLS */
+#endif	/* HAVE_GNUTLS */
+
+  defsubr (&Sgnutls_available_p);
+}

@@ -1,5 +1,5 @@
 /* GNU Emacs routines to deal with syntax tables; also word and list parsing.
-   Copyright (C) 1985, 1987, 1993-1995, 1997-1999, 2001-2014 Free
+   Copyright (C) 1985, 1987, 1993-1995, 1997-1999, 2001-2015 Free
    Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -825,7 +825,7 @@ back_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
     {
       from = comment_end;
       from_byte = comment_end_byte;
-      UPDATE_SYNTAX_TABLE_FORWARD (comment_end - 1);
+      UPDATE_SYNTAX_TABLE_FORWARD (comment_end);
     }
   /* If comstart_pos is set and we get here (ie. didn't jump to `lossage'
      or `done'), then we've found the beginning of the non-nested comment.  */

@@ -1,6 +1,6 @@
 /* Updating of data structures for redisplay.
 
-Copyright (C) 1985-1988, 1993-1995, 1997-2014 Free Software Foundation,
+Copyright (C) 1985-1988, 1993-1995, 1997-2015 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -570,6 +570,12 @@ adjust_glyph_matrix (struct window *w, struct glyph_matrix *matrix, int x, int y
 	      for (i = 0; i < matrix->nrows; ++i)
 		matrix->rows[i].enabled_p = false;
 	    }
+	  /* We've disabled the mode-line row, so force redrawing of
+	     the mode line, if any, since otherwise it will remain
+	     disabled in the current matrix, and expose events won't
+	     redraw it.  */
+	  if (WINDOW_WANTS_MODELINE_P (w))
+	    w->update_mode_line = 1;
 	}
       else if (matrix == w->desired_matrix)
 	{
@@ -5153,7 +5159,7 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
 
   Fset_buffer (old_current_buffer);
 
-  *dx = x0 + it.first_visible_x - it.current_x;
+  *dx = to_x - it.current_x;
   *dy = *y - it.current_y;
 
   string = w->contents;
@@ -5191,7 +5197,7 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
      start position, i.e. it excludes the header-line row, but
      MATRIX_ROW includes the header-line row.  Adjust for a possible
      header-line row.  */
-  it_vpos = it.vpos + WINDOW_WANTS_MODELINE_P (w);
+  it_vpos = it.vpos + WINDOW_WANTS_HEADER_LINE_P (w);
   if (it_vpos < w->current_matrix->nrows
       && (row = MATRIX_ROW (w->current_matrix, it_vpos),
 	  row->enabled_p))
@@ -5228,9 +5234,9 @@ buffer_posn_from_coords (struct window *w, int *x, int *y, struct display_pos *p
     }
 
   /* Add extra (default width) columns if clicked after EOL. */
-  x1 = max (0, it.current_x + it.pixel_width - it.first_visible_x);
-  if (x0 > x1)
-    it.hpos += (x0 - x1) / WINDOW_FRAME_COLUMN_WIDTH (w);
+  x1 = max (0, it.current_x + it.pixel_width);
+  if (to_x > x1)
+    it.hpos += (to_x - x1) / WINDOW_FRAME_COLUMN_WIDTH (w);
 
   *x = it.hpos;
   *y = it.vpos;

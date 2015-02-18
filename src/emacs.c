@@ -1,6 +1,6 @@
 /* Fully extensible Emacs, running on Unix, intended for GNU.
 
-Copyright (C) 1985-1987, 1993-1995, 1997-1999, 2001-2014 Free Software
+Copyright (C) 1985-1987, 1993-1995, 1997-1999, 2001-2015 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -82,9 +82,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "syntax.h"
 #include "systime.h"
 
-#ifdef HAVE_GNUTLS
 #include "gnutls.h"
-#endif
 
 #if (defined PROFILING \
      && (defined __FreeBSD__ || defined GNU_LINUX || defined __MINGW32__))
@@ -235,7 +233,7 @@ Initialization options:\n\
     "\
 --no-desktop                do not load a saved desktop\n\
 --no-init-file, -q          load neither ~/.emacs nor default.el\n\
---no-shared-memory, -nl     do not use shared memory\n\
+--no-loadup, -nl            do not load loadup.el into bare Emacs\n\
 --no-site-file              do not load site-start.el\n\
 --no-site-lisp, -nsl        do not add site-lisp directories to load-path\n\
 --no-splash                 do not display a splash screen on startup\n\
@@ -724,7 +722,7 @@ main (int argc, char **argv)
 #ifdef DAEMON_MUST_EXEC
   char dname_arg2[80];
 #endif
-  char *ch_to_dir;
+  char *ch_to_dir = 0;
 
   /* If we use --chdir, this records the original directory.  */
   char *original_pwd = 0;
@@ -1248,19 +1246,19 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
       /* Started from GUI? */
       /* FIXME: Do the right thing if getenv returns NULL, or if
          chdir fails.  */
-      if (! inhibit_window_system && ! isatty (0))
+      if (! inhibit_window_system && ! isatty (0) && ! ch_to_dir)
         chdir (getenv ("HOME"));
       if (skip_args < argc)
         {
           if (!strncmp (argv[skip_args], "-psn", 4))
             {
               skip_args += 1;
-              chdir (getenv ("HOME"));
+              if (! ch_to_dir) chdir (getenv ("HOME"));
             }
           else if (skip_args+1 < argc && !strncmp (argv[skip_args+1], "-psn", 4))
             {
               skip_args += 2;
-              chdir (getenv ("HOME"));
+              if (! ch_to_dir) chdir (getenv ("HOME"));
             }
         }
 #endif  /* COCOA */
@@ -1524,9 +1522,7 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
       syms_of_fontset ();
 #endif /* HAVE_NS */
 
-#ifdef HAVE_GNUTLS
       syms_of_gnutls ();
-#endif
 
 #ifdef HAVE_GFILENOTIFY
       syms_of_gfilenotify ();
@@ -2326,7 +2322,7 @@ decode_env_path (const char *evarname, const char *defalt, bool empty)
       p = strchr (path, SEPCHAR);
       if (!p)
 	p = path + strlen (path);
-      element = (p - path ? make_unibyte_string (path, p - path)
+      element = ((p - path) ? make_unibyte_string (path, p - path)
 		 : empty_element);
       if (! NILP (element))
         {
@@ -2465,9 +2461,7 @@ hpux, irix, usg-unix-v) indicates some sort of Unix system.  */);
   /* See configure.ac (and config.nt) for the possible SYSTEM_TYPEs.  */
 
   DEFVAR_LISP ("system-configuration", Vsystem_configuration,
-	       doc: /* Value is string indicating configuration Emacs was built for.
-On MS-Windows, the value reflects the OS flavor and version on which
-Emacs is running.  */);
+	       doc: /* Value is string indicating configuration Emacs was built for.  */);
   Vsystem_configuration = build_string (EMACS_CONFIGURATION);
 
   DEFVAR_LISP ("system-configuration-options", Vsystem_configuration_options,

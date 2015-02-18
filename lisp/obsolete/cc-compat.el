@@ -1,6 +1,6 @@
 ;;; cc-compat.el --- cc-mode compatibility with c-mode.el confusion
 
-;; Copyright (C) 1985, 1987, 1992-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
 
 ;; Authors:    1998- Martin Stjernholm
 ;;	       1994-1999 Barry A. Warsaw
@@ -8,6 +8,7 @@
 ;; Created:    August 1994, split from cc-mode.el
 ;; Keywords:   c languages
 ;; Package:    cc-mode
+;; Obsolete-Since: 24.5
 
 ;; This file is part of GNU Emacs.
 

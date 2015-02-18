@@ -1,6 +1,6 @@
 ;;; nnimap.el --- IMAP interface for Gnus
 
-;; Copyright (C) 2010-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;         Simon Josefsson <simon@josefsson.org>
@@ -979,20 +979,20 @@ textual parts.")
 
 (defun nnimap-find-expired-articles (group)
   (let ((cutoff (nnmail-expired-article-p group nil nil)))
-    (with-current-buffer (nnimap-buffer)
-      (let ((result
-	     (nnimap-command
-	      "UID SEARCH SENTBEFORE %s"
-	      (format-time-string
-	       (format "%%d-%s-%%Y"
-		       (upcase
-			(car (rassoc (nth 4 (decode-time cutoff))
-				     parse-time-months))))
-	       cutoff))))
-	(and (car result)
-	     (delete 0 (mapcar #'string-to-number
-			       (cdr (assoc "SEARCH" (cdr result))))))))))
-
+    (when cutoff
+      (with-current-buffer (nnimap-buffer)
+	(let ((result
+	       (nnimap-command
+		"UID SEARCH SENTBEFORE %s"
+		(format-time-string
+		 (format "%%d-%s-%%Y"
+			 (upcase
+			  (car (rassoc (nth 4 (decode-time cutoff))
+				       parse-time-months))))
+		 cutoff))))
+	  (and (car result)
+	       (delete 0 (mapcar #'string-to-number
+				 (cdr (assoc "SEARCH" (cdr result)))))))))))
 
 (defun nnimap-find-article-by-message-id (group server message-id
 						&optional limit)
@@ -1872,7 +1872,7 @@ Return the server's response to the SELECT or EXAMINE command."
 			(while (and (not (bobp))
 				    (progn
 				      (forward-line -1)
-				      (looking-at "\\*"))))
+				      (looking-at "\\*\\|[0-9]+ OK NOOP"))))
 			(not (looking-at (format "%d .*\n" sequence)))))
 	    (when messagep
 	      (nnheader-message-maybe

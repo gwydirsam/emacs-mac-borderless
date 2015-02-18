@@ -1,6 +1,6 @@
 ;;; window.el --- GNU Emacs window commands aside from those written in C
 
-;; Copyright (C) 1985, 1989, 1992-1994, 2000-2014 Free Software
+;; Copyright (C) 1985, 1989, 1992-1994, 2000-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -7715,7 +7715,7 @@ is active.  This function is run by `mouse-autoselect-window-timer'."
 
 (defun handle-select-window (event)
   "Handle select-window events."
-  (interactive "e")
+  (interactive "^e")
   (let ((window (posn-window (event-start event))))
     (unless (or (not (window-live-p window))
 		;; Don't switch if we're currently in the minibuffer.

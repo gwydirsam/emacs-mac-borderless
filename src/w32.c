@@ -1,6 +1,6 @@
 /* Utility and Unix shadow routines for GNU Emacs on the Microsoft Windows API.
 
-Copyright (C) 1994-1995, 2000-2014 Free Software Foundation, Inc.
+Copyright (C) 1994-1995, 2000-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -72,8 +72,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <pwd.h>
 #include <grp.h>
 
-/* MinGW64 (_W64) defines these in its _mingw.h.  */
-#if defined(__GNUC__) && !defined(_W64)
+/* MinGW64 defines these in its _mingw.h.  */
+#if defined(__GNUC__) && !defined(MINGW_W64)
 #define _ANONYMOUS_UNION
 #define _ANONYMOUS_STRUCT
 #endif
@@ -149,7 +149,7 @@ typedef struct _PROCESS_MEMORY_COUNTERS_EX {
 #define SDDL_REVISION_1	1
 #endif	/* SDDL_REVISION_1 */
 
-#if defined(_MSC_VER) || defined(_W64)
+#if defined(_MSC_VER) || defined(MINGW_W64)
 /* MSVC and MinGW64 don't provide the definition of
    REPARSE_DATA_BUFFER and the associated macros, except on ntifs.h,
    which cannot be included because it triggers conflicts with other
@@ -3432,17 +3432,52 @@ sys_readdir (DIR *dirp)
 	}
 
       if (dir_find_handle == INVALID_HANDLE_VALUE)
-	return NULL;
+	{
+	  /* Any changes in the value of errno here should be in sync
+	     with what directory_files_internal does when it calls
+	     readdir.  */
+	  switch (GetLastError ())
+	    {
+	      /* Windows uses this value when FindFirstFile finds no
+		 files that match the wildcard.  This is not supposed
+		 to happen, since our wildcard is "*", but just in
+		 case, if there's some weird empty directory with not
+		 even "." and ".." entries...  */
+	    case ERROR_FILE_NOT_FOUND:
+	      errno = 0;
+	      /* FALLTHRU */
+	    default:
+	      break;
+	    case ERROR_ACCESS_DENIED:
+	    case ERROR_NETWORK_ACCESS_DENIED:
+	      errno = EACCES;
+	      break;
+	    case ERROR_PATH_NOT_FOUND:
+	    case ERROR_INVALID_DRIVE:
+	    case ERROR_NOT_READY:
+	    case ERROR_BAD_NETPATH:
+	    case ERROR_BAD_NET_NAME:
+	      errno = ENOENT;
+	      break;
+	    }
+	  return NULL;
+	}
     }
   else if (w32_unicode_filenames)
     {
       if (!FindNextFileW (dir_find_handle, &dir_find_data_w))
-	return NULL;
+	{
+	  errno = 0;
+	  return NULL;
+	}
     }
   else
     {
       if (!FindNextFileA (dir_find_handle, &dir_find_data_a))
-	return NULL;
+	{
+	  errno = 0;
+	  return NULL;
+	}
     }
 
   /* Emacs never uses this value, so don't bother making it match
@@ -3544,7 +3579,11 @@ open_unc_volume (const char *path)
   if (result == NO_ERROR)
     return henum;
   else
-    return INVALID_HANDLE_VALUE;
+    {
+      /* Make sure directory_files_internal reports a sensible error.  */
+      errno = ENOENT;
+      return INVALID_HANDLE_VALUE;
+    }
 }
 
 static void *

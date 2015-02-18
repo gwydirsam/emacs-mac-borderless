@@ -2748,9 +2748,6 @@ static CGRect unset_global_focus_view_frame (void);
   if (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9)
     [window useOptimizedDrawing:YES];
 #endif
-  /* Temporarily disabled to avoid mode-line erasure on frame focus
-     switch.  */
-#if 0
   visualEffectView = [[(NSClassFromString (@"NSVisualEffectView")) alloc]
 		       initWithFrame:[[window contentView] frame]];
   if (visualEffectView)
@@ -2760,7 +2757,6 @@ static CGRect unset_global_focus_view_frame (void);
       [window setOpaque:NO];
       FRAME_BACKGROUND_ALPHA_ENABLED_P (f) = true;
     }
-#endif
   [[window contentView] addSubview:emacsView];
   [self updateBackingScaleFactor];
 
@@ -10659,101 +10655,6 @@ handle_action_invocation (NSInvocation *invocation)
 
 
 /***********************************************************************
-			 AppleScript support
-***********************************************************************/
-
-@implementation EmacsController (AppleScript)
-
-- (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result
-{
-  if ([NSApp isRunning])
-    return do_applescript (script, result);
-  else
-    {
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-      long __block osaerror;
-
-      [NSApp runTemporarilyWithBlock:^{
-	  osaerror = do_applescript (script, result);
-	}];
-
-      return osaerror;
-#else
-      NSMethodSignature *signature = [self methodSignatureForSelector:_cmd];
-      NSInvocation *invocation =
-	[NSInvocation invocationWithMethodSignature:signature];
-      long osaerror;
-
-      [invocation setTarget:self];
-      [invocation setSelector:_cmd];
-      [invocation setArgument:&script atIndex:2];
-      [invocation setArgument:&result atIndex:3];
-
-      [NSApp runTemporarilyWithInvocation:invocation];
-
-      [invocation getReturnValue:&osaerror];
-
-      return osaerror;
-#endif
-    }
-}
-
-@end				// EmacsController (AppleScript)
-
-static const void *
-cfarray_event_ref_retain (CFAllocatorRef allocator, const void *value)
-{
-  return RetainEvent ((EventRef) value);
-}
-
-static void
-cfarray_event_ref_release (CFAllocatorRef allocator, const void *value)
-{
-  ReleaseEvent ((EventRef) value);
-}
-
-static const CFArrayCallBacks
-cfarray_event_ref_callbacks = {0, cfarray_event_ref_retain,
-			       cfarray_event_ref_release, NULL, NULL};
-
-static void
-mac_begin_defer_key_events (void)
-{
-  deferred_key_events = CFArrayCreateMutable (NULL, 0,
-					      &cfarray_event_ref_callbacks);
-}
-
-static void
-mac_end_defer_key_events (void)
-{
-  EventQueueRef queue = GetMainEventQueue ();
-  CFIndex index, count = CFArrayGetCount (deferred_key_events);
-
-  for (index = 0; index < count; index++)
-    {
-      EventRef event = (EventRef) CFArrayGetValueAtIndex (deferred_key_events,
-							  index);
-
-      PostEventToQueue (queue, event, kEventPriorityHigh);
-    }
-  CFRelease (deferred_key_events);
-  deferred_key_events = NULL;
-}
-
-long
-mac_appkit_do_applescript (Lisp_Object script, Lisp_Object *result)
-{
-  long retval;
-
-  mac_begin_defer_key_events ();
-  retval = [emacsController doAppleScript:script result:result];
-  mac_end_defer_key_events ();
-
-  return retval;
-}
-
-
-/***********************************************************************
 		 Open Scripting Architecture support
 ***********************************************************************/
 
@@ -11271,6 +11172,46 @@ mac_apple_event_descriptor_with_handler_call (Lisp_Object handler_call,
     }
 
   return result;
+}
+
+static const void *
+cfarray_event_ref_retain (CFAllocatorRef allocator, const void *value)
+{
+  return RetainEvent ((EventRef) value);
+}
+
+static void
+cfarray_event_ref_release (CFAllocatorRef allocator, const void *value)
+{
+  ReleaseEvent ((EventRef) value);
+}
+
+static const CFArrayCallBacks
+cfarray_event_ref_callbacks = {0, cfarray_event_ref_retain,
+			       cfarray_event_ref_release, NULL, NULL};
+
+static void
+mac_begin_defer_key_events (void)
+{
+  deferred_key_events = CFArrayCreateMutable (NULL, 0,
+					      &cfarray_event_ref_callbacks);
+}
+
+static void
+mac_end_defer_key_events (void)
+{
+  EventQueueRef queue = GetMainEventQueue ();
+  CFIndex index, count = CFArrayGetCount (deferred_key_events);
+
+  for (index = 0; index < count; index++)
+    {
+      EventRef event = (EventRef) CFArrayGetValueAtIndex (deferred_key_events,
+							  index);
+
+      PostEventToQueue (queue, event, kEventPriorityHigh);
+    }
+  CFRelease (deferred_key_events);
+  deferred_key_events = NULL;
 }
 
 Lisp_Object

@@ -232,7 +232,6 @@ mac_draw_line_to_pixmap (Pixmap p, GC gc, int x1, int y1, int x2, int y2)
   else
     CGContextSetGrayStrokeColor (context,
 				 (CGFloat) gc->xgcv.foreground / 255.0f, 1.0f);
-  CGContextBeginPath (context);
   CGContextMoveToPoint (context, gx1, gy1);
   CGContextAddLineToPoint (context, gx2, gy2);
   CGContextStrokePath (context);
@@ -491,9 +490,7 @@ mac_fill_trapezoid_for_relief (struct frame *f, GC gc, int x, int y,
       points[0].x += CGRectGetHeight (rect);
 
     CGContextSetFillColorWithColor (context, gc->cg_fore_color);
-    CGContextBeginPath (context);
     CGContextAddLines (context, points, 4);
-    CGContextClosePath (context);
     CGContextFillPath (context);
   }
   MAC_END_DRAW_TO_FRAME (f);
@@ -501,43 +498,41 @@ mac_fill_trapezoid_for_relief (struct frame *f, GC gc, int x, int y,
 
 enum corners
   {
-    CORNER_TOP_LEFT,		/* 00 */
-    CORNER_TOP_RIGHT,		/* 01 */
-    CORNER_BOTTOM_LEFT,		/* 10 */
-    CORNER_BOTTOM_RIGHT,	/* 11 */
+    CORNER_BOTTOM_RIGHT,	/* 0 -> pi/2 */
+    CORNER_BOTTOM_LEFT,		/* pi/2 -> pi */
+    CORNER_TOP_LEFT,		/* pi -> 3pi/2 */
+    CORNER_TOP_RIGHT,		/* 3pi/2 -> 2pi */
     CORNER_LAST
   };
 
 static void
 mac_erase_corners_for_relief (struct frame *f, GC gc, int x, int y,
 			      int width, int height,
-			      int radius, int margin, int corners)
+			      CGFloat radius, CGFloat margin, int corners)
 {
   MAC_BEGIN_DRAW_TO_FRAME (f, gc, context);
   {
     CGRect rect = mac_rect_make (f, x, y, width, height);
     int i;
 
-    CGContextBeginPath (context);
     for (i = 0; i < CORNER_LAST; i++)
       if (corners & (1 << i))
 	{
-	  CGFloat x1, y1, x2, y2;
+	  CGFloat xm, ym, xc, yc;
 
-	  if (i % 2 == 0)
-	    x1 = CGRectGetMinX (rect) - margin, x2 = x1 + radius;
+	  if (i == CORNER_TOP_LEFT || i == CORNER_BOTTOM_LEFT)
+	    xm = CGRectGetMinX (rect) - margin, xc = xm + radius;
 	  else
-	    x1 = CGRectGetMaxX (rect) + margin, x2 = x1 - radius;
-	  if (i / 2 == 0)
-	    y1 = CGRectGetMinY (rect) - margin, y2 = y1 + radius;
+	    xm = CGRectGetMaxX (rect) + margin, xc = xm - radius;
+	  if (i == CORNER_TOP_LEFT || i == CORNER_TOP_RIGHT)
+	    ym = CGRectGetMinY (rect) - margin, yc = ym + radius;
 	  else
-	    y1 = CGRectGetMaxY (rect) + margin, y2 = y1 - radius;
+	    ym = CGRectGetMaxY (rect) + margin, yc = ym - radius;
 
-	  CGContextMoveToPoint (context, x1, y2);
-	  CGContextAddArcToPoint (context, x1, y1, x2, y1, radius);
-	  CGContextAddLineToPoint (context, x1, y1);
+	  CGContextMoveToPoint (context, xm, ym);
+	  CGContextAddArc (context, xc, yc, radius,
+			   i * M_PI_2, (i + 1) * M_PI_2, 0);
 	}
-    CGContextClosePath (context);
     CGContextClip (context);
     CG_CONTEXT_FILL_RECT_WITH_GC_BACKGROUND (f, context, rect, gc);
   }
@@ -547,23 +542,22 @@ mac_erase_corners_for_relief (struct frame *f, GC gc, int x, int y,
 
 static void
 mac_draw_horizontal_wave (struct frame *f, GC gc, int x, int y,
-			  int width, int height, int period)
+			  int width, int height, int wave_length)
 {
   MAC_BEGIN_DRAW_TO_FRAME (f, gc, context);
   {
     CGRect wave_clip;
     CGFloat gperiod, gx1, gxmax, gy1, gy2;
 
-    gperiod = period;
+    gperiod = wave_length * 2;
     wave_clip = mac_rect_make (f, x, y, width, height);
-    gx1 = (ceil (CGRectGetMinX (wave_clip) / gperiod) - 1) * gperiod + 0.5f;
+    gx1 = floor ((CGRectGetMinX (wave_clip) - 1.0f) / gperiod) * gperiod + 0.5f;
     gxmax = CGRectGetMaxX (wave_clip);
     gy1 = (CGFloat) y + 0.5f;
     gy2 = (CGFloat) (y + height) - 0.5f;
 
     CGContextClipToRect (context, wave_clip);
     CGContextSetStrokeColorWithColor (context, gc->cg_fore_color);
-    CGContextBeginPath (context);
     CGContextMoveToPoint (context, gx1, gy1);
     while (gx1 <= gxmax)
       {
@@ -2400,7 +2394,7 @@ x_draw_underwave (struct glyph_string *s)
   int wave_height = 3, wave_length = 2;
 
   mac_draw_horizontal_wave (s->f, s->gc, s->x, s->ybase - wave_height + 3,
-			    s->width, wave_height, wave_length * 2);
+			    s->width, wave_height, wave_length);
 }
 
 

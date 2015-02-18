@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-2014 Free Software Foundation, Inc.
+@c Copyright (C) 1990-1995, 1998-2015 Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Text
 @chapter Text
@@ -162,6 +162,7 @@ the end of a line.
 
 @node Buffer Contents
 @section Examining Buffer Contents
+@cindex buffer portion as string
 
   This section describes functions that allow a Lisp program to
 convert any portion of the text in the buffer into a string.
@@ -343,10 +344,10 @@ This function ignores case when comparing characters
 if @code{case-fold-search} is non-@code{nil}.  It always ignores
 text properties.
 
-Suppose the current buffer contains the text @samp{foobarbar
-haha!rara!}; then in this example the two substrings are @samp{rbar }
-and @samp{rara!}.  The value is 2 because the first substring is greater
-at the second character.
+Suppose you have the text @w{@samp{foobarbar haha!rara!}} in the
+current buffer; then in this example the two substrings are @samp{rbar
+} and @samp{rara!}.  The value is 2 because the first substring is
+greater at the second character.
 
 @example
 (compare-buffer-substrings nil 6 11 nil 16 21)
@@ -2673,6 +2674,8 @@ along with the characters; this includes such diverse functions as
 
 @node Examining Properties
 @subsection Examining Text Properties
+@cindex examining text properties
+@cindex text properties, examining
 
   The simplest way to examine text properties is to ask for the value of
 a particular property of a particular character.  For that, use
@@ -2764,6 +2767,8 @@ used instead.  Here is an example:
 
 @node Changing Properties
 @subsection Changing Text Properties
+@cindex changing text properties
+@cindex text properties, changing
 
   The primitives for changing properties apply to a specified range of
 text in a buffer or string.  The function @code{set-text-properties}
@@ -2927,6 +2932,8 @@ buffer but does not copy its properties.
 
 @node Property Search
 @subsection Text Property Search Functions
+@cindex searching text properties
+@cindex text properties, searching
 
   In typical use of text properties, most of the time several or many
 consecutive characters have the same value for a property.  Rather than
@@ -3713,6 +3720,7 @@ clicks on the link quickly without moving the mouse.  This behavior is
 controlled by the user option @code{mouse-1-click-follows-link}.
 @xref{Mouse References,,, emacs, The GNU Emacs Manual}.
 
+@cindex follow-link (text or overlay property)
   To set up the link so that it obeys
 @code{mouse-1-click-follows-link}, you must either (1) apply a
 @code{follow-link} text or overlay property to the link text, or (2)
@@ -3980,6 +3988,8 @@ coalesced whenever possible.  @xref{Property Search}.
 
 @node Substitution
 @section Substituting for a Character Code
+@cindex replace characters in region
+@cindex substitute characters
 
   The following functions replace characters within a specified region
 based on their character codes.

@@ -1,6 +1,6 @@
 /* Minibuffer input and completion.
 
-Copyright (C) 1985-1986, 1993-2014 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1970,7 +1970,7 @@ A value of t means no truncation.
 This variable only affects history lists that don't specify their own
 maximum lengths.  Setting the `history-length' property of a history
 variable overrides this default.  */);
-  XSETFASTINT (Vhistory_length, 30);
+  XSETFASTINT (Vhistory_length, 100);
 
   DEFVAR_BOOL ("history-delete-duplicates", history_delete_duplicates,
 	       doc: /* Non-nil means to delete duplicates in history.

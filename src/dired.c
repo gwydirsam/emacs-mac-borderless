@@ -1,5 +1,5 @@
 /* Lisp functions for making directory listings.
-   Copyright (C) 1985-1986, 1993-1994, 1999-2014 Free Software
+   Copyright (C) 1985-1986, 1993-1994, 1999-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -247,6 +247,14 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 	      QUIT;
 	      continue;
 	    }
+#ifdef WINDOWSNT
+	  /* The MS-Windows implementation of 'opendir' doesn't
+	     actually open a directory until the first call to
+	     'readdir'.  If 'readdir' fails to open the directory, it
+	     sets errno to ENOENT or EACCES, see w32.c.  */
+	  if (errno)
+	    report_file_error ("Opening directory", directory);
+#endif
 	  break;
 	}
 
@@ -517,6 +525,10 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	      QUIT;
 	      continue;
 	    }
+#ifdef WINDOWSNT
+	  if (errno)
+	    report_file_error ("Opening directory", dirname);
+#endif
 	  break;
 	}
 
@@ -909,7 +921,10 @@ so last access time will always be midnight of that day.  */)
   Lisp_Object encoded;
   Lisp_Object handler;
 
-  filename = Fexpand_file_name (filename, Qnil);
+  filename = internal_condition_case_2 (Fexpand_file_name, filename, Qnil,
+					Qt, Fidentity);
+  if (!STRINGP (filename))
+    return Qnil;
 
   /* If the file name has special constructs in it,
      call the corresponding file handler.  */

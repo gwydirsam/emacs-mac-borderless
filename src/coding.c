@@ -1,5 +1,5 @@
 /* Coding system handler (conversion, detection, etc).
-   Copyright (C) 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 2001-2015 Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
      2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
@@ -398,7 +398,8 @@ static Lisp_Object Vbig5_coding_system;
 #define CODING_ISO_BOL(coding)	\
   ((coding)->spec.iso_2022.bol)
 #define CODING_ISO_INVOKED_CHARSET(coding, plane)	\
-  CODING_ISO_DESIGNATION ((coding), CODING_ISO_INVOCATION ((coding), (plane)))
+  (CODING_ISO_INVOCATION (coding, plane) < 0 ? -1	\
+   : CODING_ISO_DESIGNATION (coding, CODING_ISO_INVOCATION (coding, plane)))
 #define CODING_ISO_CMP_STATUS(coding)	\
   (&(coding)->spec.iso_2022.cmp_status)
 #define CODING_ISO_EXTSEGMENT_LEN(coding)	\

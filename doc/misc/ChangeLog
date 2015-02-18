@@ -1,3 +1,64 @@
+2014-12-29  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.2.11.
+
+	* trampver.texi: Update release number.
+
+2014-11-10  Tassilo Horn  <tsdh@gnu.org>
+
+	* gnus.texi (HTML): Update section so that it mentions shr and w3m.
+	Also link the full EWW manual that explains more on shr, too.
+
+	* gnus-faq.texi (FAQ 4 - Reading messages, FAQ 4-16): Add Q&A on how to
+	increase contrast when displaying HTML mail with shr.
+
+2014-11-09  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (version): Remove variable.
+	(clean): No longer delete dist tarfile.
+	(dist): Remove rule; replace with code in admin.el.
+
+2014-11-08  Michael Albinus  <michael.albinus@gmx.de>
+
+	Backport Tramp changes from trunk.
+
+	* tramp.texi (Inline methods): Remove restriction on "telnet".
+	Recommend sharing ssh connections for "plink".
+	(External methods): Remove "sftp".  Merge "pscp" and "psftp"
+	descriptions.  Recommend sharing ssh connections.  Add "nc" method.
+	(GVFS based methods): Add "sftp".
+	(Customizing Completion, External packages, Issues): Use @dots{}.
+	(Remote shell setup): Explain, how to change command line
+	arguments of remote "nc" listener.
+
+	* trampver.texi: Update release number.
+
+2014-11-07  Tassilo Horn  <tsdh@gnu.org>
+
+	* eww.texi (Advanced): Document increasing contrast with
+	shr-color-visible-distance-min and
+	shr-color-visible-luminance-min.
+
+2014-10-31  Eric S. Raymond  <esr@thyrsus.com>
+
+	* efaq-w32.texi, gnus-coding.texi:
+	Neutralize language specific to a repository type.
+
+2014-10-30  Glenn Morris  <rgm@gnu.org>
+
+	* efaq.texi (Gnus does not work with NNTP): Remove; ancient.
+
+2014-10-20  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* eieio.texi (Accessing Slots, CLOS compatibility): Adjust wording
+	since `setf' is in core rather than in CL nowadays.
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* efaq.texi (Finding a package with particular functionality):
+	Update example.
+	* vip.texi: Mention this is obsolete.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -283,6 +344,7 @@
 2014-02-16  Michael Albinus  <michael.albinus@gmx.de>
 
 	Sync with Tramp 2.2.9.
+
 	* trampver.texi: Update release number.
 
 	* efaq-w32.texi (Tramp ssh): Remove also pscp1 and pscp2.
@@ -11707,7 +11769,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

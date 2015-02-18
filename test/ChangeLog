@@ -1,3 +1,154 @@
+2015-01-30  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el
+	(python-indent-dedent-line-backspace-2)
+	(python-indent-dedent-line-backspace-3): New tests.
+
+2015-01-30  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-indent-pep8-1)
+	(python-indent-pep8-2, python-indent-pep8-3)
+	(python-indent-after-comment-2): Fix tests.
+	(python-indent-after-comment-3): New test.
+
+2015-01-26  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-indent-pep8-1)
+	(python-indent-pep8-2, python-indent-pep8-3)
+	(python-indent-after-comment-1, python-indent-after-comment-2)
+	(python-indent-inside-paren-1, python-indent-inside-paren-2)
+	(python-indent-after-block-1, python-indent-after-block-2)
+	(python-indent-after-backslash-1, python-indent-after-backslash-2)
+	(python-indent-after-backslash-3, python-indent-block-enders-1)
+	(python-indent-block-enders-2, python-indent-block-enders-3)
+	(python-indent-block-enders-4, python-indent-block-enders-5)
+	(python-indent-dedenters-1, python-indent-dedenters-2)
+	(python-indent-dedenters-3, python-indent-dedenters-4)
+	(python-indent-dedenters-5, python-indent-dedenters-6)
+	(python-indent-dedenters-7, python-indent-dedenters-8): Fix tests.
+	(python-indent-base-case, python-indent-after-block-3)
+	(python-indent-after-backslash-5, python-indent-inside-paren-3)
+	(python-indent-inside-paren-4, python-indent-inside-paren-5)
+	(python-indent-inside-paren-6, python-indent-inside-string-1)
+	(python-indent-inside-string-2, python-indent-inside-string-3)
+	(python-indent-dedent-line-backspace-1): New Tests.
+
+2015-01-24  Glenn Morris  <rgm@gnu.org>
+
+	* automated/regexp-tests.el: Require regexp-opt, which is
+	not preloaded --without-x.
+
+2015-01-23  Dmitry Gutov  <dgutov@yandex.ru>
+
+	Fix package tests when TMPDIR is in HOME.  (Bug#19657)
+	* automated/package-test.el (with-package-test):
+	Bind `abbreviated-home-dir' to nil.
+	(package-test-describe-package, package-test-signed):
+	Expect abbreviated directory names.
+
+2015-01-22  Wolfgang Jenkner  <wjenkner@inode.at>
+
+	* automated/calc-tests.el (calc-tests-equal, calc-tests-simple):
+	New functions.
+	(test-calc-remove-units, test-calc-extract-units)
+	(test-calc-convert-units): New tests.
+	[Backport]
+
+2014-12-30  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el (tramp--test-smb-or-windows-nt-p):
+	New defun.
+	(tramp-test30-special-characters): Use it.  (Bug#19463)
+	(tramp--test-check-files): Filter nil file names out.
+
+2014-12-29  Michael Albinus  <michael.albinus@gmx.de>
+
+	Sync with Tramp 2.2.11.
+
+	* automated/tramp-tests.el (tramp-test30-special-characters):
+	Skip test on MS-Windows.
+
+2014-12-27  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-shell-buffer-substring-9): New test.
+
+2014-12-27  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-shell-buffer-substring-1)
+	(python-shell-buffer-substring-2, python-shell-buffer-substring-3)
+	(python-shell-buffer-substring-4, python-shell-buffer-substring-5)
+	(python-shell-buffer-substring-6, python-shell-buffer-substring-7)
+	(python-shell-buffer-substring-8)
+	(python-info-encoding-from-cookie-1)
+	(python-info-encoding-from-cookie-2)
+	(python-info-encoding-from-cookie-3)
+	(python-info-encoding-from-cookie-4)
+	(python-info-encoding-from-cookie-5)
+	(python-info-encoding-from-cookie-6)
+	(python-info-encoding-from-cookie-7, python-info-encoding-1)
+	(python-info-encoding-2): New tests.
+
+2014-12-25  Michael Albinus  <michael.albinus@gmx.de>
+
+	* automated/tramp-tests.el (tramp-test17-insert-directory): Do not
+	expect a given order of "." and "..".
+
+2014-12-22  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-indent-electric-colon-2)
+	(python-indent-electric-colon-3): New tests.
+
+2014-12-14  João Távora  <joaotavora@gmail.com>
+
+	* automated/electric-tests.el (autowrapping-7): Tests for
+	tex-mode.
+
+2014-12-13  Glenn Morris  <rgm@gnu.org>
+
+	* automated/flymake/warnpred/test.pl: Tweak format, since the
+	previous one seems to have stopped giving a warning with perl 5.20.1.
+
+2014-11-22  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el
+	(python-shell-calculate-process-environment-4)
+	(python-shell-calculate-process-environment-5): New tests.
+	(python-shell-make-comint-3): Use file-equal-p.
+	(python-shell-get-or-create-process-1)
+	(python-shell-get-or-create-process-2)
+	(python-shell-get-or-create-process-3): Fix interpreter for
+	Windows (Bug#18595).
+
+2014-11-15  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-indent-dedenters-8): New test
+	for Bug#18432.
+
+2014-11-15  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* automated/python-tests.el (python-indent-region-1)
+	(python-indent-region-2, python-indent-region-3)
+	(python-indent-region-4, python-indent-region-5): New tests.
+
+2014-11-08  Michael Albinus  <michael.albinus@gmx.de>
+
+	Backport Tramp changes from trunk.
+
+	* automated/tramp-tests.el (tramp-remote-process-environment):
+	Declare.
+	(tramp--test-enabled): Ignore errors.
+	(tramp--instrument-test-case): Extend docstring.  Print debug
+	buffer in any case.
+	(tramp-test15-copy-directory): Skip for tramp-smb.el.
+	(tramp-test21-file-links): Use `file-truename' for directories.
+	(tramp-test26-process-file): Extend test according to Bug#17815.
+	(tramp-test27-start-file-process, tramp-test28-shell-command):
+	Retrieve process output more robustly.
+	(tramp-test29-vc-registered): Set $BZR_HOME.
+	(tramp--test-check-files): Extend test with `substitute-in-file-name'.
+	(tramp-test30-special-characters): Skip for tramp-adb.el,
+	tramp-gvfs.el and tramp-smb.el.  Add further file names.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -1924,7 +2075,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2008-2014 Free Software Foundation, Inc.
+  Copyright (C) 2008-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

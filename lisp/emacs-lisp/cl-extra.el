@@ -1,6 +1,6 @@
 ;;; cl-extra.el --- Common Lisp features, part 2  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2000-2015 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Keywords: extensions
@@ -700,4 +700,5 @@ including `cl-block' and `cl-eval-when'."
 ;; generated-autoload-file: "cl-loaddefs.el"
 ;; End:
 
+(provide 'cl-extra)
 ;;; cl-extra.el ends here

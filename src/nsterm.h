@@ -1,5 +1,5 @@
 /* Definitions and headers for communication with NeXT/Open/GNUstep API.
-   Copyright (C) 1989, 1993, 2005, 2008-2014 Free Software Foundation,
+   Copyright (C) 1989, 1993, 2005, 2008-2015 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -100,7 +100,7 @@ typedef float EmacsCGFloat;
 /* We override sendEvent: as a means to stop/start the event loop */
 @interface EmacsApp : NSApplication
 {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_9
+#ifdef NS_IMPL_COCOA
   BOOL shouldKeepRunning;
   BOOL isFirst;
 #endif
@@ -358,16 +358,11 @@ typedef float EmacsCGFloat;
 
 @interface EmacsImage : NSImage
 {
-  id imageListNext;
-  int refCount;
   NSBitmapImageRep *bmRep; /* used for accessing pixel data */
   unsigned char *pixmapData[5]; /* shortcut to access pixel data */
   NSColor *stippleMask;
 }
 + allocInitFromFile: (Lisp_Object)file;
-- reference;
-- imageListSetNext: (id)arg;
-- imageListNext;
 - (void)dealloc;
 - initFromXBM: (unsigned char *)bits width: (int)w height: (int)h
          flip: (BOOL)flip;
@@ -393,7 +388,7 @@ typedef float EmacsCGFloat;
 
 @interface EmacsScroller : NSScroller
   {
-   Lisp_Object win;
+   struct window *window;
    struct frame *frame;
    NSResponder *prevResponder;
 
@@ -418,13 +413,11 @@ typedef float EmacsCGFloat;
 - setPosition: (int) position portion: (int) portion whole: (int) whole;
 - (int) checkSamePosition: (int)position portion: (int)portion
                     whole: (int)whole;
-- (void) getMouseMotionPart: (int *)part window: (Lisp_Object *)window
-                          x: (Lisp_Object *)x y: ( Lisp_Object *)y;
 - (void) sendScrollEventAtLoc: (float)loc fromEvent: (NSEvent *)e;
 - repeatScroll: (NSTimer *)sender;
 - condemn;
 - reprieve;
-- judge;
+- (bool)judge;
 @end
 
 
@@ -685,8 +678,8 @@ struct ns_output
      value contains an ID of the fontset, else -1.  */
   int fontset; /* only used with font_backend */
 
-  Lisp_Object icon_top;
-  Lisp_Object icon_left;
+  int icon_top;
+  int icon_left;
 
   /* The size of the extra width currently allotted for vertical
      scroll bars, in pixels.  */
@@ -820,7 +813,7 @@ extern void nxatoms_of_nsselect (void);
 extern int ns_lisp_to_cursor_type (Lisp_Object arg);
 extern Lisp_Object ns_cursor_type_to_lisp (int arg);
 extern void ns_set_name_as_filename (struct frame *f);
-extern void ns_set_doc_edited (struct frame *f, Lisp_Object arg);
+extern void ns_set_doc_edited (void);
 
 extern bool
 ns_defined_color (struct frame *f,
@@ -897,11 +890,15 @@ extern int ns_select (int nfds, fd_set *readfds, fd_set *writefds,
 extern unsigned long ns_get_rgb_color (struct frame *f,
                                        float r, float g, float b, float a);
 
-/* From nsterm.m, needed in nsfont.m. */
 #ifdef __OBJC__
+/* From nsterm.m, needed in nsfont.m. */
 extern void
 ns_draw_text_decoration (struct glyph_string *s, struct face *face,
                          NSColor *defaultCol, CGFloat width, CGFloat x);
+/* Needed in nsfns.m.  */
+extern void
+ns_set_represented_filename (NSString* fstr, struct frame *f);
+
 #endif
 
 #ifdef NS_IMPL_GNUSTEP

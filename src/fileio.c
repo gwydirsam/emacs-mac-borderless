@@ -1,6 +1,6 @@
 /* File IO for GNU Emacs.
 
-Copyright (C) 1985-1988, 1993-2014 Free Software Foundation, Inc.
+Copyright (C) 1985-1988, 1993-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1166,7 +1166,7 @@ filesystem tree, not (expand-file-name ".."  dirname).  */)
 	      char newdir_utf8[MAX_UTF8_PATH];
 
 	      filename_from_ansi (newdir, newdir_utf8);
-	      tem = build_string (newdir_utf8);
+	      tem = make_unibyte_string (newdir_utf8, strlen (newdir_utf8));
 	    }
 	  else
 #endif
@@ -1200,7 +1200,7 @@ filesystem tree, not (expand-file-name ".."  dirname).  */)
 	      /* `getpwnam' may return a unibyte string, which will
 		 bite us since we expect the directory to be
 		 multibyte.  */
-	      tem = build_string (newdir);
+	      tem = make_unibyte_string (newdir, strlen (newdir));
 	      if (multibyte && !STRING_MULTIBYTE (tem))
 		{
 		  hdir = DECODE_FILE (tem);
@@ -4308,8 +4308,11 @@ by calling `format-decode', which see.  */)
       coding_system = CODING_ID_NAME (coding.id);
     }
   else if (inserted > 0)
-    adjust_after_insert (PT, PT_BYTE, PT + inserted, PT_BYTE + inserted,
-			 inserted);
+    {
+      invalidate_buffer_caches (current_buffer, PT, PT + inserted);
+      adjust_after_insert (PT, PT_BYTE, PT + inserted, PT_BYTE + inserted,
+			   inserted);
+    }
 
   /* Call after-change hooks for the inserted text, aside from the case
      of normal visiting (not with REPLACE), which is done in a new buffer

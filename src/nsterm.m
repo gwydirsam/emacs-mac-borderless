@@ -1,6 +1,6 @@
 /* NeXT/Open/GNUstep / MacOSX communication module.
 
-Copyright (C) 1989, 1993-1994, 2005-2006, 2008-2014 Free Software
+Copyright (C) 1989, 1993-1994, 2005-2006, 2008-2015 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -290,6 +290,9 @@ static struct {
   NULL, 0, 0
 };
 
+static NSString *represented_filename = nil;
+static struct frame *represented_frame = 0;
+
 #ifdef NS_IMPL_COCOA
 /*
  * State for pending menu activation:
@@ -375,8 +378,11 @@ static CGPoint menu_mouse_point;
       if (e) emacs_event->timestamp = EV_TIMESTAMP (e);                 \
       if (q_event_ptr)                                                  \
         {                                                               \
+          Lisp_Object tem = Vinhibit_quit;                              \
+          Vinhibit_quit = Qt;                                           \
           n_emacs_events_pending++;                                     \
           kbd_buffer_store_event_hold (emacs_event, q_event_ptr);       \
+          Vinhibit_quit = tem;                                          \
         }                                                               \
       else                                                              \
         hold_event (emacs_event);                                       \
@@ -395,6 +401,14 @@ void x_set_frame_alpha (struct frame *f);
     Utilities
 
    ========================================================================== */
+
+void
+ns_set_represented_filename (NSString* fstr, struct frame *f)
+{
+  represented_filename = [fstr retain];
+  represented_frame = f;
+}
+
 
 static void
 hold_event (struct input_event *event)
@@ -1902,51 +1916,37 @@ ns_mouse_position (struct frame **fp, int insist, Lisp_Object *bar_window,
 
   block_input ();
 
-  if (dpyinfo->last_mouse_scroll_bar != nil && insist == 0)
-    {
-      /* TODO: we do not use this path at the moment because drag events will
-           go directly to the EmacsScroller.  Leaving code in for now. */
-      [dpyinfo->last_mouse_scroll_bar
-	  getMouseMotionPart: (int *)part window: bar_window x: x y: y];
-      if (time)
-	*time = dpyinfo->last_mouse_movement_time;
-      dpyinfo->last_mouse_scroll_bar = nil;
-    }
+  /* Clear the mouse-moved flag for every frame on this display.  */
+  FOR_EACH_FRAME (tail, frame)
+    if (FRAME_NS_P (XFRAME (frame))
+        && FRAME_NS_DISPLAY (XFRAME (frame)) == FRAME_NS_DISPLAY (*fp))
+      XFRAME (frame)->mouse_moved = 0;
+
+  dpyinfo->last_mouse_scroll_bar = nil;
+  if (dpyinfo->last_mouse_frame
+      && FRAME_LIVE_P (dpyinfo->last_mouse_frame))
+    f = dpyinfo->last_mouse_frame;
   else
+    f = dpyinfo->x_focus_frame ? dpyinfo->x_focus_frame : SELECTED_FRAME ();
+
+  if (f && FRAME_NS_P (f))
     {
-      /* Clear the mouse-moved flag for every frame on this display.  */
-      FOR_EACH_FRAME (tail, frame)
-        if (FRAME_NS_P (XFRAME (frame))
-            && FRAME_NS_DISPLAY (XFRAME (frame)) == FRAME_NS_DISPLAY (*fp))
-          XFRAME (frame)->mouse_moved = 0;
+      view = FRAME_NS_VIEW (*fp);
 
-      dpyinfo->last_mouse_scroll_bar = nil;
-      if (dpyinfo->last_mouse_frame
-	  && FRAME_LIVE_P (dpyinfo->last_mouse_frame))
-        f = dpyinfo->last_mouse_frame;
-      else
-        f = dpyinfo->x_focus_frame ? dpyinfo->x_focus_frame
-                                    : SELECTED_FRAME ();
-
-      if (f && FRAME_NS_P (f))
-        {
-          view = FRAME_NS_VIEW (*fp);
-
-          position = [[view window] mouseLocationOutsideOfEventStream];
-          position = [view convertPoint: position fromView: nil];
-          remember_mouse_glyph (f, position.x, position.y,
-				&dpyinfo->last_mouse_glyph);
+      position = [[view window] mouseLocationOutsideOfEventStream];
+      position = [view convertPoint: position fromView: nil];
+      remember_mouse_glyph (f, position.x, position.y,
+                            &dpyinfo->last_mouse_glyph);
 /*fprintf (stderr, "ns_mouse_position: %.0f, %.0f\n", position.x, position.y); */
 
-          if (bar_window) *bar_window = Qnil;
-          if (part) *part = 0; /*scroll_bar_handle; */
+      if (bar_window) *bar_window = Qnil;
+      if (part) *part = 0; /*scroll_bar_handle; */
 
-          if (x) XSETINT (*x, lrint (position.x));
-          if (y) XSETINT (*y, lrint (position.y));
-          if (time)
-	    *time = dpyinfo->last_mouse_movement_time;
-          *fp = f;
-        }
+      if (x) XSETINT (*x, lrint (position.x));
+      if (y) XSETINT (*y, lrint (position.y));
+      if (time)
+        *time = dpyinfo->last_mouse_movement_time;
+      *fp = f;
     }
 
   unblock_input ();
@@ -3448,6 +3448,21 @@ ns_send_appdefined (int value)
   /* Only post this event if we haven't already posted one.  This will end
        the [NXApp run] main loop after having processed all events queued at
        this moment.  */
+
+#ifdef NS_IMPL_COCOA
+  if (! send_appdefined)
+    {
+      /* OSX 10.10.1 swallows the AppDefined event we are sending ourselves
+         in certain situations (rapid incoming events).
+         So check if we have one, if not add one.  */
+      NSEvent *appev = [NSApp nextEventMatchingMask:NSApplicationDefinedMask
+                                          untilDate:[NSDate distantPast]
+                                             inMode:NSDefaultRunLoopMode
+                                            dequeue:NO];
+      if (! appev) send_appdefined = YES;
+    }
+#endif
+
   if (send_appdefined)
     {
       NSEvent *nxev;
@@ -3816,6 +3831,7 @@ ns_set_vertical_scroll_bar (struct window *window,
   int top, left, height, width, sb_width, sb_left;
   EmacsScroller *bar;
   BOOL fringe_extended_p;
+  BOOL update_p = YES;
 
   /* optimization; display engine sends WAY too many of these.. */
   if (!NILP (window->vertical_scroll_bar))
@@ -3830,6 +3846,7 @@ ns_set_vertical_scroll_bar (struct window *window,
             }
           else
             view->scrollbarsNeedingUpdate--;
+          update_p = NO;
         }
     }
 
@@ -3865,6 +3882,7 @@ ns_set_vertical_scroll_bar (struct window *window,
           bar = XNS_SCROLL_BAR (window->vertical_scroll_bar);
           [bar removeFromSuperview];
           wset_vertical_scroll_bar (window, Qnil);
+          [bar release];
         }
       ns_clear_frame_area (f, sb_left, top, width, height);
       unblock_input ();
@@ -3883,6 +3901,7 @@ ns_set_vertical_scroll_bar (struct window *window,
 
       bar = [[EmacsScroller alloc] initFrame: r window: win];
       wset_vertical_scroll_bar (window, make_save_ptr (bar));
+      update_p = YES;
     }
   else
     {
@@ -3895,10 +3914,12 @@ ns_set_vertical_scroll_bar (struct window *window,
           if (oldRect.origin.x != r.origin.x)
               ns_clear_frame_area (f, sb_left, top, width, height);
           [bar setFrame: r];
+          update_p = YES;
         }
     }
 
-  [bar setPosition: position portion: portion whole: whole];
+  if (update_p)
+    [bar setPosition: position portion: portion whole: whole];
   unblock_input ();
 }
 
@@ -3960,8 +3981,8 @@ ns_judge_scroll_bars (struct frame *f)
     {
       view = [subviews objectAtIndex: i];
       if (![view isKindOfClass: [EmacsScroller class]]) continue;
-      [view judge];
-      removed = YES;
+      if ([view judge])
+        removed = YES;
     }
 
   if (removed)
@@ -4466,7 +4487,7 @@ ns_term_shutdown (int sig)
 {
   if (self = [super init])
     {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_9
+#ifdef NS_IMPL_COCOA
       self->isFirst = YES;
 #endif
 #ifdef NS_IMPL_GNUSTEP
@@ -4477,9 +4498,19 @@ ns_term_shutdown (int sig)
   return self;
 }
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_9
+#ifdef NS_IMPL_COCOA
 - (void)run
 {
+#ifndef NSAppKitVersionNumber10_9
+#define NSAppKitVersionNumber10_9 1265
+#endif
+
+    if ((int)NSAppKitVersionNumber != NSAppKitVersionNumber10_9)
+      {
+        [super run];
+        return;
+      }
+
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
     if (isFirst) [self finishLaunching];
@@ -4510,7 +4541,7 @@ ns_term_shutdown (int sig)
     // The file dialog still leaks 7k - 10k on 10.9 though.
     [super stop:sender];
 }
-#endif
+#endif /* NS_IMPL_COCOA */
 
 - (void)logNotification: (NSNotification *)notification
 {
@@ -4542,6 +4573,23 @@ ns_term_shutdown (int sig)
       return;
     }
 #endif
+
+  if (represented_filename != nil && represented_frame)
+    {
+      NSString *fstr = represented_filename;
+      NSView *view = FRAME_NS_VIEW (represented_frame);
+#ifdef NS_IMPL_COCOA
+      /* work around a bug observed on 10.3 and later where
+         setTitleWithRepresentedFilename does not clear out previous state
+         if given filename does not exist */
+      if (! [[NSFileManager defaultManager] fileExistsAtPath: fstr])
+        [[view window] setRepresentedFilename: @""];
+#endif
+      [[view window] setRepresentedFilename: fstr];
+      [represented_filename release];
+      represented_filename = nil;
+      represented_frame = NULL;
+    }
 
   if (type == NSApplicationDefined)
     {
@@ -6702,7 +6750,9 @@ if (cols > 0 && rows > 0)
     return;
 
   ns_clear_frame_area (emacsframe, x, y, width, height);
+  block_input ();
   expose_frame (emacsframe, x, y, width, height);
+  unblock_input ();
 
   /*
     drawRect: may be called (at least in OS X 10.5) for invisible
@@ -7121,13 +7171,13 @@ if (cols > 0 && rows > 0)
   [self setAutoresizingMask: NSViewMinXMargin | NSViewHeightSizable];
 #endif
 
-  win = nwin;
+  window = XWINDOW (nwin);
   condemned = NO;
   pixel_height = NSHeight (r);
   if (pixel_height == 0) pixel_height = 1;
   min_portion = 20 / pixel_height;
 
-  frame = XFRAME (XWINDOW (win)->frame);
+  frame = XFRAME (window->frame);
   if (FRAME_LIVE_P (frame))
     {
       int i;
@@ -7157,7 +7207,6 @@ if (cols > 0 && rows > 0)
   if (pixel_height == 0) pixel_height = 1;
   min_portion = 20 / pixel_height;
   [super setFrame: newRect];
-  [self display];
 /*  unblock_input (); */
 }
 
@@ -7165,8 +7214,9 @@ if (cols > 0 && rows > 0)
 - (void)dealloc
 {
   NSTRACE (EmacsScroller_dealloc);
-  if (!NILP (win))
-    wset_vertical_scroll_bar (XWINDOW (win), Qnil);
+  if (window)
+    wset_vertical_scroll_bar (window, Qnil);
+  window = 0;
   [super dealloc];
 }
 
@@ -7187,9 +7237,10 @@ if (cols > 0 && rows > 0)
 }
 
 
-- judge
+-(bool)judge
 {
   NSTRACE (judge);
+  bool ret = condemned;
   if (condemned)
     {
       EmacsView *view;
@@ -7198,11 +7249,14 @@ if (cols > 0 && rows > 0)
       view = (EmacsView *)FRAME_NS_VIEW (frame);
       if (view != nil)
         view->scrollbarsNeedingUpdate++;
+      if (window)
+        wset_vertical_scroll_bar (window, Qnil);
+      window = 0;
       [self removeFromSuperview];
       [self release];
       unblock_input ();
     }
-  return self;
+  return ret;
 }
 
 
@@ -7257,38 +7311,20 @@ if (cols > 0 && rows > 0)
 #endif
     }
 
-  /* Events may come here even if the event loop is not running.
-     If we don't enter the event loop, the scroll bar will not update.
-     So send SIGIO to ourselves.  */
-  if (apploopnr == 0) raise (SIGIO);
-
   return self;
 }
-
-/* FIXME: unused at moment (see ns_mouse_position) at the moment because
-     drag events will go directly to the EmacsScroller.  Leaving in for now. */
--(void)getMouseMotionPart: (int *)part window: (Lisp_Object *)window
-                        x: (Lisp_Object *)x y: ( Lisp_Object *)y
-{
-  *part = last_hit_part;
-  *window = win;
-  XSETINT (*y, pixel_height);
-  if ([self floatValue] > 0.999F)
-    XSETINT (*x, pixel_height);
-  else
-    XSETINT (*x, pixel_height * [self floatValue]);
-}
-
 
 /* set up emacs_event */
 - (void) sendScrollEventAtLoc: (float)loc fromEvent: (NSEvent *)e
 {
+  Lisp_Object win;
   if (!emacs_event)
     return;
 
   emacs_event->part = last_hit_part;
   emacs_event->code = 0;
   emacs_event->modifiers = EV_MODIFIERS (e) | down_modifier;
+  XSETWINDOW (win, window);
   emacs_event->frame_or_window = win;
   emacs_event->timestamp = EV_TIMESTAMP (e);
   emacs_event->kind = SCROLL_BAR_CLICK_EVENT;

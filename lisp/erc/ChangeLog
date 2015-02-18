@@ -1,3 +1,105 @@
+2015-01-14  Dima Kogan  <dima@secretsauce.net>
+
+	* erc-backend.el (define-erc-response-handler): Give hook-name
+	default value of nil and add-to-list (bug#19363)
+
+2014-11-10  Kelvin White  <kwhite@gnu.org>
+
+	* erc-stamp.el (erc-timestamp-intangible): Change version tag to 24.5.
+
+2014-11-09  Ivan Shmakov  <ivan@siamics.net>
+
+	* erc-track.el (erc-modified-channels-display): Update mode line
+	more frequently (bug#18510).
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el (erc-initialize-log-marker): Only initialize
+	  erc-last-saved-position if not already a marker.
+
+2014-11-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* erc.el (erc-channel-receive-names): Silence compiler warning.
+	(erc-format-@nick, erc-update-modes): Idem.
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el (erc-rename-buffers): Use defcustom instead of defvar for
+	buffer renaming configuration option.
+
+2014-11-09  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* erc.el (erc-nick-at-point): Fix format-string typo (Bug#17755).
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el (erc-rename-buffer-p): When set to t buffers will be
+	renamed to the current irc network.
+	(erc-format-target-and/or-network): Use `erc-rename-buffer-p' when
+	renaming buffers.
+
+	* erc-ring.el (erc-input-ring-setup): Fixes Bug #18599
+
+2014-11-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* erc-track.el (erc-modified-channels-display): Update all mode lines
+	if needed (bug#18510).  Remove call to erc-modified-channels-object
+	where we ignored the return value.
+	(erc-modified-channels-update): Don't force-mode-line-update here
+	any more.
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el (erc-format-nick): Fix code regression - Bug #18551
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el: Follow Emacs version instead of tracking it seperately.
+	(erc-quit/part-reason-default) : Clean up quit/part message
+	functions by abstracting repetitive code, change version string.
+	(erc-quit-reason-various, erc-quit-reason-normal, erc-quit-reason-zippy)
+	(erc-part-reason-normal, erc-part-reason-zippy, erc-part-reason-various)
+	(erc-cmd-SV, erc-ctcp-query-VERSION, erc-version, erc-version-string):
+	Change version string.
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el (erc-send-input): Disable display commands in current buffer
+	(erc-format-target-and/or-network): Fix cases when buffer name is set
+
+2014-11-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* erc-stamp.el (erc-timestamp-intangible): Disable by default because
+	`intangible' is evil.
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc.el (erc-channel-receive-names): Fix variable names
+	(erc-format-target-and/or-network): Rename server-buffers to
+	network name if possible
+
+2014-11-09  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* erc.el (erc-channel-receive-names): Reduce redundancy.
+
+2014-11-09  Kelvin White  <kwhite@gnu.org>
+
+	* erc-backend.el: Handle user modes in relevant server responses
+	* erc.el: Better user mode support.
+	(erc-channel-user): Add members for new modes.
+	(erc-channel-member-halfop-p, erc-channel-user-admin-p)
+	(erc-channel-user-owner-p): Use new struct members.
+	(erc-format-nick, erc-format-@nick): Display user modes as nick prefix.
+	(erc-nick-prefix-face, erc-my-nick-prefix-face): Add new faces
+	(erc-get-user-mode-prefix): Return symbol for mode prefix.
+	(erc-update-channel-member, erc-update-current-channel-member)
+	(erc-channel-receive-names): Update channel users.
+	(erc-nick-at-point): Return correct user info.
+
+2014-11-04  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* erc.el (erc-send-input): Bind `str' dynamically (bug#18936).
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -600,7 +702,7 @@
 
 See ChangeLog.08 for earlier changes.
 
-	Copyright (C) 2009-2014 Free Software Foundation, Inc.
+	Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 
@@ -621,4 +723,3 @@ See ChangeLog.08 for earlier changes.
 ;; coding: utf-8
 ;; add-log-time-zone-rule: t
 ;; End:
-

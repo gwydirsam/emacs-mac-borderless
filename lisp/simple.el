@@ -1,6 +1,6 @@
 ;;; simple.el --- basic editing commands for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1993-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1987, 1993-2015 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -27,6 +27,8 @@
 ;; major mode or to file-handling.
 
 ;;; Code:
+
+(eval-when-compile (require 'cl-lib))
 
 (declare-function widget-convert "wid-edit" (type &rest args))
 (declare-function shell-mode "shell" ())
@@ -410,6 +412,7 @@ A non-nil INTERACTIVE argument means to run the `post-self-insert-hook'."
           ;; Do the rest in post-self-insert-hook, because we want to do it
           ;; *before* other functions on that hook.
           (lambda ()
+            (cl-assert (eq ?\n (char-before)))
             ;; Mark the newline(s) `hard'.
             (if use-hard-newlines
                 (set-hard-newline-properties
@@ -428,7 +431,8 @@ A non-nil INTERACTIVE argument means to run the `post-self-insert-hook'."
             ;; starts a page.
             (or was-page-start
                 (move-to-left-margin nil t)))))
-    (if (not interactive)
+    (unwind-protect
+        (if (not interactive)
         ;; FIXME: For non-interactive uses, many calls actually just want
         ;; (insert "\n"), so maybe we should do just that, so as to avoid
         ;; the risk of filling or running abbrevs unexpectedly.
@@ -436,12 +440,14 @@ A non-nil INTERACTIVE argument means to run the `post-self-insert-hook'."
           (self-insert-command (prefix-numeric-value arg)))
       (unwind-protect
           (progn
-            (add-hook 'post-self-insert-hook postproc)
+            (add-hook 'post-self-insert-hook postproc nil t)
             (self-insert-command (prefix-numeric-value arg)))
         ;; We first used let-binding to protect the hook, but that was naive
         ;; since add-hook affects the symbol-default value of the variable,
         ;; whereas the let-binding might only protect the buffer-local value.
-        (remove-hook 'post-self-insert-hook postproc))))
+        (remove-hook 'post-self-insert-hook postproc t)))
+      (cl-assert (not (member postproc post-self-insert-hook)))
+      (cl-assert (not (member postproc (default-value 'post-self-insert-hook))))))
   nil)
 
 (defun set-hard-newline-properties (from to)
@@ -2598,7 +2604,7 @@ which is defined in the `warnings' library.\n")
     t))
 
 (defcustom password-word-equivalents
-  '("password" "passphrase" "pass phrase"
+  '("password" "passcode" "passphrase" "pass phrase"
     ; These are sorted according to the GNU en_US locale.
     "암호"		; ko
     "パスワード"	; ja
@@ -5185,7 +5191,7 @@ TRY-VSCROLL controls whether to vscroll tall lines: if either
 `auto-window-vscroll' or TRY-VSCROLL is nil, this function will
 not vscroll."
   (if noninteractive
-      (forward-line arg)
+      (line-move-1 arg noerror to-end)
     (unless (and auto-window-vscroll try-vscroll
 		 ;; Only vscroll for single line moves
 		 (= (abs arg) 1)
@@ -5248,15 +5254,24 @@ If NOERROR, don't signal an error if we can't move that many lines."
 		(>  (cdr temporary-goal-column) 0))
 	    (setq target-hscroll (cdr temporary-goal-column)))
       ;; Otherwise, we should reset `temporary-goal-column'.
-      (let ((posn (posn-at-point)))
+      (let ((posn (posn-at-point))
+	    x-pos)
 	(cond
 	 ;; Handle the `overflow-newline-into-fringe' case:
 	 ((eq (nth 1 posn) 'right-fringe)
 	  (setq temporary-goal-column (cons (- (window-width) 1) hscroll)))
 	 ((car (posn-x-y posn))
+	  (setq x-pos (car (posn-x-y posn)))
+	  ;; In R2L lines, the X pixel coordinate is measured from the
+	  ;; left edge of the window, but columns are still counted
+	  ;; from the logical-order beginning of the line, i.e. from
+	  ;; the right edge in this case.  We need to adjust for that.
+	  (if (eq (current-bidi-paragraph-direction) 'right-to-left)
+	      (setq x-pos (- (window-body-width nil t) 1 x-pos)))
 	  (setq temporary-goal-column
-		(cons (/ (float (car (posn-x-y posn)))
-			 (frame-char-width)) hscroll))))))
+		(cons (/ (float x-pos)
+			 (frame-char-width))
+                      hscroll))))))
     (if target-hscroll
 	(set-window-hscroll (selected-window) target-hscroll))
     ;; vertical-motion can move more than it was asked to if it moves

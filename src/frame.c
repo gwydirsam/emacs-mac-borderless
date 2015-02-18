@@ -1,6 +1,6 @@
 /* Generic frame functions.
 
-Copyright (C) 1993-1995, 1997, 1999-2014 Free Software Foundation, Inc.
+Copyright (C) 1993-1995, 1997, 1999-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -921,7 +921,7 @@ This function returns FRAME, or nil if FRAME has been deleted.  */)
   return do_switch_frame (frame, 1, 0, norecord);
 }
 
-DEFUN ("handle-switch-frame", Fhandle_switch_frame, Shandle_switch_frame, 1, 1, "e",
+DEFUN ("handle-switch-frame", Fhandle_switch_frame, Shandle_switch_frame, 1, 1, "^e",
        doc: /* Handle a switch-frame event EVENT.
 Switch-frame events are usually bound to this function.
 A switch-frame event tells Emacs that the window manager has requested

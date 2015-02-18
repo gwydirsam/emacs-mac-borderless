@@ -1,5 +1,5 @@
 /* Font driver on Mac OSX Core text.
-   Copyright (C) 2009-2014 Free Software Foundation, Inc.
+   Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1127,7 +1127,7 @@ macfont_glyph_extents (struct font *font, CGGlyph glyph,
 	      bounds.size =
 		CGSizeApplyAffineTransform (bounds.size, synthetic_italic_atfm);
 	    }
-	  if (macfont_info->synthetic_bold_p)
+	  if (macfont_info->synthetic_bold_p && ! force_integral_p)
 	    {
 	      CGFloat d =
 		- synthetic_bold_factor * mac_font_get_size (macfont) / 2;
@@ -2982,7 +2982,8 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
       CGFloat advance_delta = 0;
       int y_draw = -s->ybase;
       int no_antialias_p =
-	(macfont_info->antialias == MACFONT_ANTIALIAS_OFF
+	(NILP (ns_antialias_text)
+         || macfont_info->antialias == MACFONT_ANTIALIAS_OFF
 	 || (macfont_info->antialias == MACFONT_ANTIALIAS_DEFAULT
 	     && font_size <= macfont_antialias_threshold));
 
@@ -3006,7 +3007,7 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
 	atfm = synthetic_italic_atfm;
       else
 	atfm = CGAffineTransformIdentity;
-      if (macfont_info->synthetic_bold_p)
+      if (macfont_info->synthetic_bold_p && ! no_antialias_p)
 	{
 	  CGContextSetTextDrawingMode (context, kCGTextFillStroke);
 	  CGContextSetLineWidth (context, synthetic_bold_factor * font_size);

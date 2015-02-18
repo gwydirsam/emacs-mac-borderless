@@ -1,6 +1,6 @@
 ;;; bytecomp.el --- compilation of Lisp code into byte code -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1992, 1994, 1998, 2000-2014 Free Software
+;; Copyright (C) 1985-1987, 1992, 1994, 1998, 2000-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Jamie Zawinski <jwz@lucid.com>
@@ -120,7 +120,11 @@
 (require 'backquote)
 (require 'macroexp)
 (require 'cconv)
-(eval-when-compile (require 'cl-lib))
+
+;; During bootstrap, cl-loaddefs.el is not created yet, so loading cl-lib
+;; doesn't setup autoloads for things like cl-every, which is why we have to
+;; require cl-extra instead (bug#18804).
+(require 'cl-extra)
 
 (or (fboundp 'defsubst)
     ;; This really ought to be loaded already!
@@ -1143,10 +1147,13 @@ Each function's symbol gets added to `byte-compile-noruntime-functions'."
 	(byte-compile-warn "%s" msg)))))
 
 (defun byte-compile-report-error (error-info)
-  "Report Lisp error in compilation.  ERROR-INFO is the error data."
+  "Report Lisp error in compilation.
+ERROR-INFO is the error data, in the form of either (ERROR-SYMBOL . DATA)
+or STRING."
   (setq byte-compiler-error-flag t)
   (byte-compile-log-warning
-   (error-message-string error-info)
+   (if (stringp error-info) error-info
+     (error-message-string error-info))
    nil :error))
 
 ;;; sanity-checking arglists
@@ -3336,8 +3343,10 @@ These implicitly `and' together a bunch of two-arg bytecodes."
     (cond
      ((< l 3) (byte-compile-form `(progn ,(nth 1 form) t)))
      ((= l 3) (byte-compile-two-args form))
-     (t (byte-compile-form `(and (,(car form) ,(nth 1 form) ,(nth 2 form))
-				 (,(car form) ,@(nthcdr 2 form))))))))
+     ((cl-every #'macroexp-copyable-p (nthcdr 2 form))
+      (byte-compile-form `(and (,(car form) ,(nth 1 form) ,(nth 2 form))
+			       (,(car form) ,@(nthcdr 2 form)))))
+     (t (byte-compile-normal-call form)))))
 
 (defun byte-compile-three-args (form)
   (if (not (= (length form) 4))

@@ -1,6 +1,6 @@
 ;;; dired-x.el --- extra Dired functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1994, 1997, 2001-2014 Free Software Foundation,
+;; Copyright (C) 1993-1994, 1997, 2001-2015 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
@@ -556,8 +556,9 @@ interactively, prompt for REGEXP.
 With prefix argument, unflag all those files.
 Optional fourth argument LOCALP is as in `dired-get-filename'."
   (interactive
-   (list (dired-read-regexp
-	  "Mark unmarked files matching regexp (default all): ")
+   (list (read-regexp
+	  "Mark unmarked files matching regexp (default all): "
+          nil 'dired-regexp-history)
 	 nil current-prefix-arg nil))
   (let ((dired-marker-char (if unflag-p ?\s dired-marker-char)))
     (dired-mark-if

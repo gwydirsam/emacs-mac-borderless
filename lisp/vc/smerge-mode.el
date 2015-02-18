@@ -1,6 +1,6 @@
 ;;; smerge-mode.el --- Minor mode to resolve diff3 conflicts -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: vc, tools, revision control, merge, diff3, cvs, conflict
@@ -116,9 +116,10 @@ Used in `smerge-diff-base-mine' and related functions."
 (define-obsolete-face-alias 'smerge-markers-face 'smerge-markers "22.1")
 (defvar smerge-markers-face 'smerge-markers)
 
-(defface smerge-refined-change
+(defface smerge-refined-changed
   '((t nil))
   "Face used for char-based changes shown by `smerge-refine'.")
+(define-obsolete-face-alias 'smerge-refined-change 'smerge-refined-changed "24.5")
 
 (defface smerge-refined-removed
   '((default

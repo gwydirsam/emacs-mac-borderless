@@ -55,11 +55,6 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <pthread.h>
 #endif
 
-/* An instance of the AppleScript component.  */
-static ComponentInstance as_scripting_component;
-/* The single script context used for all script executions.  */
-static OSAID as_script_context;
-
 
 /***********************************************************************
 			  Utility functions
@@ -2109,35 +2104,6 @@ xrm_get_preference_database (const char *application)
 
 Lisp_Object Qmac_file_alias_p;
 
-void
-initialize_applescript (void)
-{
-  AEDesc null_desc;
-  OSAError osaerror;
-
-  /* if open fails, as_scripting_component is set to NULL.  Its
-     subsequent use in OSA calls will fail with badComponentInstance
-     error.  */
-  as_scripting_component = OpenDefaultComponent (kOSAComponentType,
-						 kAppleScriptSubtype);
-
-  null_desc.descriptorType = typeNull;
-  null_desc.dataHandle = 0;
-  osaerror = OSAMakeContext (as_scripting_component, &null_desc,
-			     kOSANullScript, &as_script_context);
-  if (osaerror)
-    as_script_context = kOSANullScript;
-      /* use default context if create fails */
-}
-
-
-void
-terminate_applescript (void)
-{
-  OSADispose (as_scripting_component, as_script_context);
-  CloseComponent (as_scripting_component);
-}
-
 /* Convert a lisp string to the 4 byte character code.  */
 
 OSType
@@ -2453,119 +2419,6 @@ DEFUN ("system-move-file-to-trash", Fsystem_move_file_to_trash,
     }
 
   return Qnil;
-}
-
-
-/* Compile and execute the AppleScript SCRIPT and return the error
-   status as function value.  A zero is returned if compilation and
-   execution is successful, in which case *RESULT is set to a Lisp
-   string containing the resulting script value.  Otherwise, the Mac
-   error code is returned and *RESULT is set to an error Lisp string.
-   For documentation on the MacOS scripting architecture, see Inside
-   Macintosh - Interapplication Communications: Scripting
-   Components.  */
-
-long
-do_applescript (Lisp_Object script, Lisp_Object *result)
-{
-  AEDesc script_desc, result_desc, error_desc, *desc = NULL;
-  OSErr error;
-  OSAError osaerror;
-  DescType desc_type;
-
-  *result = Qnil;
-
-  if (!as_scripting_component)
-    initialize_applescript();
-
-  if (STRING_MULTIBYTE (script))
-    {
-      desc_type = typeUnicodeText;
-      script = code_convert_string_norecord (script,
-#ifdef WORDS_BIGENDIAN
-					     intern ("utf-16be"),
-#else
-					     intern ("utf-16le"),
-#endif
-					     1);
-    }
-  else
-    desc_type = typeChar;
-
-  error = AECreateDesc (desc_type, SDATA (script), SBYTES (script),
-			&script_desc);
-  if (error)
-    return error;
-
-  osaerror = OSADoScript (as_scripting_component, &script_desc, kOSANullScript,
-			  desc_type, kOSAModeNull, &result_desc);
-
-  if (osaerror == noErr)
-    /* success: retrieve resulting script value */
-    desc = &result_desc;
-  else if (osaerror == errOSAScriptError)
-    /* error executing AppleScript: retrieve error message */
-    if (!OSAScriptError (as_scripting_component, kOSAErrorMessage, desc_type,
-			 &error_desc))
-      desc = &error_desc;
-
-  if (desc)
-    {
-      *result = make_uninit_string (AEGetDescDataSize (desc));
-      AEGetDescData (desc, SDATA (*result), SBYTES (*result));
-      if (desc_type == typeUnicodeText)
-	*result = code_convert_string_norecord (*result,
-#ifdef WORDS_BIGENDIAN
-						intern ("utf-16be"),
-#else
-						intern ("utf-16le"),
-#endif
-						0);
-      AEDisposeDesc (desc);
-    }
-
-  AEDisposeDesc (&script_desc);
-
-  return osaerror;
-}
-
-
-DEFUN ("do-applescript", Fdo_applescript, Sdo_applescript, 1, 1, 0,
-       doc: /* Compile and execute AppleScript SCRIPT and return the result.
-If compilation and execution are successful, the resulting script
-value is returned as a string.  Otherwise the function aborts and
-displays the error message returned by the AppleScript scripting
-component.
-
-If SCRIPT is a multibyte string, it is regarded as a Unicode text.
-Otherwise, SCRIPT is regarded as a byte sequence in a Mac traditional
-encoding specified by `mac-system-script-code', just as in Emacs 22.
-Note that a unibyte ASCII-only SCRIPT does not always have the same
-meaning as the multibyte counterpart.  For example, `\\x5c' in a
-unibyte SCRIPT is interpreted as a yen sign when the value of
-`mac-system-script-code' is 1 (smJapanese), but the same character in
-a multibyte SCRIPT is interpreted as a reverse solidus.  You may want
-to apply `string-to-multibyte' to the script if it is given as an
-ASCII-only string literal.  */)
-  (Lisp_Object script)
-{
-  Lisp_Object result;
-  long status;
-
-  CHECK_STRING (script);
-
-  block_input ();
-  if (!inhibit_window_system)
-    status = mac_appkit_do_applescript (script, &result);
-  else
-    status = do_applescript (script, &result);
-  unblock_input ();
-  if (status == 0)
-    return result;
-  else if (!STRINGP (result))
-    error ("AppleScript error %ld", status);
-  else
-    error ("%s", SDATA (result));
 }
 
 
@@ -3964,7 +3817,6 @@ syms_of_mac (void)
 
   defsubr (&Smac_file_alias_p);
   defsubr (&Ssystem_move_file_to_trash);
-  defsubr (&Sdo_applescript);
 
   DEFVAR_INT ("mac-system-script-code", mac_system_script_code,
     doc: /* The system script code.  */);

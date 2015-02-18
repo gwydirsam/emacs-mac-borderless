@@ -1,6 +1,6 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2014 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2015 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Programs
@@ -546,7 +546,7 @@ your selected @dfn{style} with the syntactic construct and adds this
 onto the indentation of the @dfn{anchor statement}.
 
 @table @kbd
-@item C-c . @key{RET} @var{style} @key{RET}
+@item C-c . @var{style} @key{RET}
 Select a predefined style @var{style} (@code{c-set-style}).
 @end table
 
@@ -1453,7 +1453,7 @@ creates.
 @findex superword-mode
  Superword mode is a buffer-local minor mode that causes editing and
 motion commands to treat symbols (e.g., @samp{this_is_a_symbol}) as words.
-When Subword mode is enabled, the minor mode indicator
+When Superword mode is enabled, the minor mode indicator
 @iftex
 @samp{@math{^2}}
 @end iftex
@@ -1666,7 +1666,7 @@ Delete the entire block of whitespace after point (@code{c-hungry-delete-forward
   As an alternative to the above commands, you can enable @dfn{hungry
 delete mode}.  When this feature is enabled (indicated by @samp{/h} in
 the mode line after the mode name), a single @key{DEL} deletes all
-preceding whitespace, not just one space, and a single @kbd{C-c C-d}
+preceding whitespace, not just one space, and a single @kbd{C-d}
 (but @emph{not} plain @key{Delete}) deletes all following whitespace.
 
 @table @kbd

@@ -1,5 +1,5 @@
 /* NeXT/Open/GNUstep and MacOSX Cocoa menu and toolbar module.
-   Copyright (C) 2007-2014 Free Software Foundation, Inc.
+   Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1072,9 +1072,12 @@ update_frame_tool_bar (struct frame *f)
   EmacsView *view = FRAME_NS_VIEW (f);
   NSWindow *window = [view window];
   EmacsToolbar *toolbar = [view toolbar];
+  int oldh;
 
   if (view == nil || toolbar == nil) return;
   block_input ();
+
+  oldh = FRAME_TOOLBAR_HEIGHT (f);
 
 #ifdef NS_IMPL_COCOA
   [toolbar clearActive];
@@ -1182,6 +1185,8 @@ update_frame_tool_bar (struct frame *f)
   if (FRAME_TOOLBAR_HEIGHT (f) < 0) // happens if frame is fullscreen.
     FRAME_TOOLBAR_HEIGHT (f) = 0;
 
+  if (oldh != FRAME_TOOLBAR_HEIGHT (f))
+    [view updateFrameSize:YES];
   if (view->wait_for_tool_bar && FRAME_TOOLBAR_HEIGHT (f) > 0)
       [view setNeedsDisplay: YES];
 

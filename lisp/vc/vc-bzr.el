@@ -1,6 +1,6 @@
 ;;; vc-bzr.el --- VC backend for the bzr revision control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; 	   Riccardo Murri <riccardo.murri@gmail.com>
@@ -722,7 +722,7 @@ If LIMIT is non-nil, show no more than this many entries."
   (with-current-buffer buffer
     (apply 'vc-bzr-command "log" buffer 'async files
 	   (append
-	    (when shortlog '("--line"))
+	    (if shortlog '("--line") '("--long"))
 	    ;; The extra complications here when start-revision and limit
 	    ;; are set are due to bzr log's --forward argument, which
 	    ;; could be enabled via an alias in bazaar.conf.
@@ -757,7 +757,7 @@ If LIMIT is non-nil, show no more than this many entries."
 (defun vc-bzr-expanded-log-entry (revision)
   (with-temp-buffer
     (apply 'vc-bzr-command "log" t nil nil
-	   (list (format "-r%s" revision)))
+	   (list "--long" (format "-r%s" revision)))
     (goto-char (point-min))
     (when (looking-at "^-+\n")
       ;; Indent the expanded log entry.
@@ -983,7 +983,7 @@ stream.  Standard error output is discarded."
               (push (list new-name 'edited
                           (vc-bzr-create-extra-fileinfo old-name)) result)))
            ;; do nothing for non existent files
-           ((memq translated '(not-found ignored)))
+           ((eq translated 'not-found))
            (t
             (push (list (file-relative-name
                          (buffer-substring-no-properties

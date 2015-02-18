@@ -1,6 +1,6 @@
 /* Implementation of GUI terminal on the Microsoft Windows API.
 
-Copyright (C) 1989, 1993-2014 Free Software Foundation, Inc.
+Copyright (C) 1989, 1993-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -100,10 +100,10 @@ extern Cursor w32_load_cursor (LPCTSTR name);
 struct w32_display_info one_w32_display_info;
 struct w32_display_info *x_display_list;
 
-#if _WIN32_WINNT < 0x0500 && !defined(_W64)
+#if _WIN32_WINNT < 0x0500 && !defined(MINGW_W64)
 /* Pre Windows 2000, this was not available, but define it here so
    that Emacs compiled on such a platform will run on newer versions.
-   MinGW64 (_W64) defines these unconditionally, so avoid redefining.  */
+   MinGW64 defines these unconditionally, so avoid redefining.  */
 
 typedef struct tagWCRANGE
 {

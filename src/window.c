@@ -1,6 +1,6 @@
 /* Window creation, deletion and examination for GNU Emacs.
    Does not include redisplay.
-   Copyright (C) 1985-1987, 1993-1998, 2000-2014 Free Software
+   Copyright (C) 1985-1987, 1993-1998, 2000-2015 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -973,7 +973,10 @@ or scroll bars.
 If PIXELWISE is nil, return the largest integer smaller than WINDOW's
 pixel width divided by the character width of WINDOW's frame.  This
 means that if a column at the right of the text area is only partially
-visible, that column is not counted.  */)
+visible, that column is not counted.
+
+Note that the returned value includes the column reserved for the
+continuation glyph.  */)
   (Lisp_Object window, Lisp_Object pixelwise)
 {
   return make_number (window_body_width (decode_live_window (window),
@@ -4937,8 +4940,8 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, int noerror)
       /* The function move_iterator_vertically may move over more than
 	 the specified y-distance.  If it->w is small, e.g. a
 	 mini-buffer window, we may end up in front of the window's
-	 display area.  This is the case when Start displaying at the
-	 start of the line containing PT in this case.  */
+	 display area.  Start displaying at the start of the line
+	 containing PT in this case.  */
       if (it.current_y <= 0)
 	{
 	  init_iterator (&it, w, PT, PT_BYTE, NULL, DEFAULT_FACE_ID);
@@ -4955,9 +4958,14 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, int noerror)
 	{
 	  int px;
 	  int dy = frame_line_height;
+	  /* In the below we divide the window box height by the
+	     frame's line height to make the result predictable when
+	     the window box is not an integral multiple of the line
+	     height.  This is important to ensure we get back to the
+	     same position when scrolling up, then down.  */
 	  if (whole)
-	    dy = max ((window_box_height (w)
-		       - next_screen_context_lines * dy),
+	    dy = max ((window_box_height (w) / dy
+		       - next_screen_context_lines) * dy,
 		      dy);
 	  dy *= n;
 
@@ -5039,8 +5047,12 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, int noerror)
     {
       ptrdiff_t start_pos = IT_CHARPOS (it);
       int dy = frame_line_height;
-      dy = max ((window_box_height (w)
-		 - next_screen_context_lines * dy),
+      /* In the below we divide the window box height by the frame's
+	 line height to make the result predictable when the window
+	 box is not an integral multiple of the line height.  This is
+	 important to ensure we get back to the same position when
+	 scrolling up, then down.  */
+      dy = max ((window_box_height (w) / dy - next_screen_context_lines) * dy,
 		dy) * n;
 
       /* Note that move_it_vertically always moves the iterator to the

@@ -1,5 +1,12 @@
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
+	* url-vars.el (url-bug-address): Make into an obsolete alias.
+	* url-http.el (url-http-handle-authentication):
+	* url-news.el (url-news-fetch-message-id):
+	Use M-x report-emacs-bug in help messages.
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
 	* Version 24.4 released.
 
 2014-09-19  Dmitry Gutov  <dgutov@yandex.ru>
@@ -2945,7 +2952,8 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1999, 2001-2002, 2004-2014 Free Software Foundation, Inc.
+  Copyright (C) 1999, 2001-2002, 2004-2015 Free Software Foundation,
+  Inc.
 
   This file is part of GNU Emacs.
 

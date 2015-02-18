@@ -1,6 +1,6 @@
 ;;; diff-mode.el --- a mode for viewing/editing context diffs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: convenience patch diff vc
@@ -1916,7 +1916,7 @@ For use in `add-log-current-defun-function'."
 
 ;;; Fine change highlighting.
 
-(defface diff-refine-change
+(defface diff-refine-changed
   '((((class color) (min-colors 88) (background light))
      :background "#ffff55")
     (((class color) (min-colors 88) (background dark))
@@ -1924,6 +1924,7 @@ For use in `add-log-current-defun-function'."
     (t :inverse-video t))
   "Face used for char-based changes shown by `diff-refine-hunk'."
   :group 'diff-mode)
+(define-obsolete-face-alias 'diff-refine-change 'diff-refine-changed "24.5")
 
 (defface diff-refine-removed
   '((default

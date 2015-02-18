@@ -1,3 +1,216 @@
+2015-01-20  Eli Zaretskii  <eliz@gnu.org>
+
+	* configure.ac (HAVE_W32): Abort with error message if
+	--without-toolkit-scroll-bars was specified.  See
+	http://lists.gnu.org/archive/html/emacs-devel/2015-01/msg00525.html
+	for the details.
+
+2015-01-01  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* .gitattributes: New file.
+
+2014-12-31  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* autogen.sh: Port better to non-GNU 'cp'.
+	Problem reported by Han Boetes.
+
+2014-12-28  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* build-aux/git-hooks/commit-msg: Allow tabs.
+	Treat them as if they were expanded to spaces, with tab stops
+	every 8 columns.
+
+2014-12-17  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* .gitignore: Ignore /conftest*.
+
+2014-12-15  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* build-aux/git-hooks/commit-msg (at_sign): Bump up line-length limit
+	to 78.
+
+2014-12-12  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Git ignore lib/std*.h
+	* .gitignore: Add lib/std*.h, to ignore stdarg.h, stdbool.h, and
+	stddef.h.  Remove subsumed entries.
+	Add !lib/std*.in.h, so as to not ignore the .in.h files.
+
+2014-12-11  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Port commit-msg to mawk
+	Problem reported by Ted Zlatanov in:
+	http://lists.gnu.org/archive/html/emacs-devel/2014-12/msg01093.html
+	* build-aux/git-hooks/commit-msg (space, non_space, non_print):
+	New vars.  Use them as approximations to POSIX bracket expressions,
+	on implementations like mawk that do not support POSIX regexps.
+
+	Improve commit-msg messages and autosquash
+	Problem reported by Michal Nazarewicz in Bug#19337.
+	* build-aux/git-hooks/commit-msg: Add "commit message" to
+	diagnostics.  Distinguish better between tabs and other
+	unprintable chars in diagnostics.  Don't complain if a prefix
+	"fixup! " or "squash! " makes a summary line too long.
+
+2014-12-08  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Port commit-message checking to FreeBSD 9.
+	This fixes a bug reported by Jan Djärv in:
+	http://lists.gnu.org/archive/html/emacs-devel/2014-12/msg00704.html
+	along with some other issues I noticed while testing with FreeBSD.
+	* build-aux/git-hooks/commit-msg: Prefer gawk if available.
+	Prefer en_US.UTF-8 to en_US.utf8, as it's more portable.
+	Work around bug in FreeBSD 9 awk, where /[[:cntrl:]]/ matches
+	ordinary text characters.
+	Be less tricky about quoting "'" in a shell script.
+
+2014-12-05  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* .gitignore: Ignore autosave files.
+
+2014-12-01  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* .gitignore: Remove redundant pattern (subsumed by _*).
+	Avoid "**", as it requires Git 1.8.2 or later.
+
+2014-11-21  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Add more of the old .bzrignore to .gitignore.
+	Plus a few more .gitignore improvements.
+	* .gitignore: Add copyright notice, since it's big enough.
+	Put exceptions immediately after the patterns they're exceptions
+	to, to make them easier to follow.
+	Give four exceptions for the Makefile pattern.
+	Ignore /confdefs.h, test/indent/*.new, TAGS, GPATH, GSYMS, GRTAGS,
+	GTAGS, ID, *.exe, some nextstep-related files,
+	jisx2131-filter, *.orig, *.rej, etc/emacs.tmpdesktop, *.in-h
+	_* (except for build-aux/snippet/_Noreturn.h), /bin/, /BIN/,
+	/data/, etc/icons/, lib/cxxdefs.h, lib/SYS/, /libexec/, /lock/,
+	/README.W32, /share/, /site-lisp/, src/gdb.ini, /var/.
+	Ignore /configure.lineno, since POSIX requires
+	LINENO only with the User Portability Utilities option.
+	Ignore *cust-load.el and *loaddefs.el only under lisp.
+	Ignore core files of various flavors.
+	Do not ignore etc/refcards/gnus-logo.pdf.
+
+2014-11-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* .gitignore: Add back src/_gdbinit, which is a temporary file
+	created by the MS-DOS build.
+
+2014-11-20  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Add a.out to .gitignore.
+	Suggested by Lee Duhem in:
+	http://lists.gnu.org/archive/html/emacs-devel/2014-11/msg01665.html
+	* .gitignore: Add a.out.
+	Move *.log next to *.tmp, since it's generic.
+	Put *.exe before non-generics.
+
+2014-11-19  Eli Zaretskii  <eliz@gnu.org>
+
+	* .gitignore: Resurrect Windows-specific ignorables lost in last
+	changes.
+
+2014-11-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* .gitignore: Add /emacs-[1-9]*/, and sort better.
+
+2014-11-18  Ivan Andrus  <darthandrus@gmail.com>
+
+	* .gitignore: Add some nextstep/mac ignorables.
+
+2014-11-18  Paul Eggert  <eggert@cs.ucla.edu>
+
+	.gitignore cleanup.
+	* .gitignore: Merge contents of subsidiary files and organize the
+	result so as to avoid duplication.  Remove no-longer needed entries.
+	* admin/charsets/.gitignore, admin/unidata/.gitignore:
+	* doc/lispintro/.gitignore, etc/.gitignore, leim/.gitignore:
+	* leim/ja-dic/.gitignore, lib-src/.gitignore, lisp/.gitignore:
+	* lisp/calc/.gitignore, lisp/calendar/.gitignore:
+	* lisp/cedet/.gitignore, lisp/emulation/.gitignore:
+	* lisp/erc/.gitignore, lisp/eshell/.gitignore, lisp/gnus/.gitignore:
+	* lisp/international/.gitignore, lisp/language/.gitignore:
+	* lisp/leim/.gitignore, lisp/leim/quail/.gitignore:
+	* lisp/mail/.gitignore, lisp/mh-e/.gitignore, lisp/net/.gitignore:
+	* lisp/nxml/.gitignore, lisp/obsolete/.gitignore:
+	* lisp/play/.gitignore, lisp/progmodes/.gitignore:
+	* lisp/term/.gitignore, lisp/textmodes/.gitignore:
+	* lisp/url/.gitignore, nt/.gitignore, src/.gitignore:
+	Remove; no longer needed.
+
+2014-11-17  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Restore 'Bug#' -> 'debbugs:' rewrite in log-edit-mode.
+	* .dir-locals.el (log-edit-mode): Restore the (log-edit-rewrite-fixes
+	"[ \n](bug#\\([0-9]+\\))" . "debbugs:\\1").  See Glenn Morris in:
+	http://lists.gnu.org/archive/html/emacs-devel/2014-11/msg01187.html
+
+	Simplify and fix doc-related .gitignore files.
+	This fixes some unwanted 'git status' output after 'make docs'.
+	* .gitignore: Add **/Makefile, **/makefile.
+	Remove Makefile, makefile.
+	Add doc/*/*.xxx rules for the usual kinds of documentation outputs
+	and temporaries.  Add doc/misc/cc-mode.ss.
+	* doc/emacs/.gitignore, doc/lispintro/.gitignore, doc/misc/.gitignore:
+	* lwlib/.gitignore, oldXMenu/.gitignore:
+	Remove, as these .gitignore files are no longer needed.
+	* doc/lispintro/.gitignore: Replace with list of exceptional PDF files.
+
+2014-11-15  Christoph Scholtes  <cschol2112@gmail.com>
+
+	* .gitignore: Ignore generated file lib/stdalign.h.
+
+2014-11-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Backport fix for minor Bazaar leftovers.
+	* .dir-locals.el: Remove reference to bzr commit --fixes debbugs.
+
+2014-11-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* .gitignore: Add more ignorables.
+
+2014-11-13  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* .gitignore: Copy over sufficient ignorable files from the old
+	.bzrignore that a simple build doesn't list lots of unregistered files.
+
+2014-11-11  Eric S. Raymond  <esr@thyrsus.com>
+
+	Git transition.
+	* Makefile.in (src): Set VCSWITNESS appropriately for git.
+
+	All bzr revision IDS, and all CVS revision IDs for which a commit
+	could be identified, were changed to time-date!committer version
+	stamps.  All .cvsignore files in the history became .gitignore
+	files.  Fixes-bug annotations from bzr were copied into the
+	corresponding commit comments.
+
+	(The first .cvsignore commit was 1999-09-30T14:07:54Z!fx@gnu.org.
+	The last CVS commit was 2009-12-27T08:11:12Z!cyd@stupidchicken.com.)
+
+	Committer/author email addresses are generally correct for the
+	transition day, not necessarily when the commit was originally made.
+
+2014-11-05  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (install-info, uninstall): Restore pre-2012-12-13
+	solution.  (Bug#18908)
+
+2014-10-31  Eric S. Raymond  <esr@thyrsus.com>
+
+	* autogen.sh: Neutralize language specific to a repository type.
+
+2014-10-23  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* Makefile.in (${srcdir}/info/dir): Make sure info directory exists.
+
+2014-10-22  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* configure.ac: Bump version to 24.4.51 to avoid ambiguity with the old
+	trunk's 24.4.50.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -1731,7 +1944,7 @@
 2012-12-13  Andreas Schwab  <schwab@suse.de>
 
 	* Makefile.in (install-info): Use `${MAKE} -s' for echo-info.
-	(uninstall): Likewise.  (Bug#13143)
+	(uninstall): Likewise.  (Bug#13142)
 
 2012-12-11  Paul Eggert  <eggert@cs.ucla.edu>
 
@@ -13523,7 +13736,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

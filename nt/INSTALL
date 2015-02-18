@@ -1,7 +1,7 @@
 		    Building and Installing Emacs on MS-Windows
                           using the MSYS and MinGW tools
 
-  Copyright (C) 2013-2014 Free Software Foundation, Inc.
+  Copyright (C) 2013-2015 Free Software Foundation, Inc.
   See the end of the file for license conditions.
 
 The MSYS/MinGW build described here is supported on versions of
@@ -169,7 +169,7 @@ Windows 9X as well).
   you are building from the repository:
 
    . Texinfo (needed to produce the Info manuals when building from
-     bzr/git, and for "make install")
+     the repository, and for "make install")
 
      Available from http://sourceforge.net/projects/ezwinports/files/.
 

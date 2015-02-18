@@ -1,6 +1,6 @@
 ;;; package.el --- Simple package system for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2007-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
 ;; Author: Tom Tromey <tromey@redhat.com>
 ;;         Daniel Hackney <dan@haxney.org>
@@ -1650,7 +1650,7 @@ Letters do not insert themselves; instead, they are commands.
 \\{package-menu-mode-map}"
   (setq tabulated-list-format
         `[("Package" 18 package-menu--name-predicate)
-          ("Version" 12 nil)
+          ("Version" 13 nil)
           ("Status"  10 package-menu--status-predicate)
           ,@(if (cdr package-archives)
                 '(("Archive" 10 package-menu--archive-predicate)))

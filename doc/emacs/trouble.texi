@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2014 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2015 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @iftex
@@ -1137,9 +1137,9 @@ new function, all you need to say about it is that it is new.  If you
 feel that the purpose needs explaining, it probably does---but put the
 explanation in comments in the code.  It will be more useful there.
 
-Please read the @file{ChangeLog} files in the @file{src} and
-@file{lisp} directories to see what sorts of information to put in,
-and to learn the style that we use.  @xref{Change Log}.
+Please look at the change log entries of recent commits to see what
+sorts of information to put in, and to learn the style that we use.
+@xref{Change Log}.
 
 @item
 When you write the fix, keep in mind that we can't install a change that

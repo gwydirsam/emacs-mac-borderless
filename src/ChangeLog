@@ -1,3 +1,412 @@
+2015-02-03  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (handle_stop, handle_single_display_spec)
+	(next-element_from_image): Don't reset the
+	ignore_overlay_strings_at_pos_p flag here.
+	(next_element_from_buffer): Reset ignore_overlay_strings_at_pos_p
+	here.
+	(next_overlay_string): Set ignore_overlay_strings_at_pos_p here,
+	after we've exhausted all the overlay strings at the current
+	position.  (Bug#19307)
+
+2015-02-02  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (set_iterator_to_next): Set value of stop_charpos
+	according to the object we are about to resume iterating.
+	(Bug#19307)
+
+	* dispnew.c (adjust_glyph_matrix): Set the update_mode_line flag
+	of the window whose current glyph matrix was resized, which
+	disables the mode-line row as side effect.
+
+	* xdisp.c (redisplay_window): Don't avoid redisplay of a window
+	whose update_mode_line flag is set.  (Bug#19721)
+
+2015-01-30  Eli Zaretskii  <eliz@gnu.org>
+
+	* dispextern.h (FACE_FOR_CHAR): Fix the commentary.
+
+2015-01-29  Hans Wennborg  <hwennborg@google.com>  (tiny change)
+
+	* emacs.c (decode_env_path): Add parentheses around ternary
+	operator to increase readability and pacify compiler warnings.
+
+2015-01-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32.c (sys_readdir): Map ERROR_NOT_READY (as in "device not
+	ready") to ENOENT.
+
+2015-01-28  Eli Zaretskii  <eliz@gnu.org>
+
+	* dired.c (directory_files_internal, file_name_completion)
+	[WINDOWSNT]: Signal an error when errno is set non-zero by
+	'readdir', regardless of its value.
+
+	* w32.c (sys_readdir): Set errno to ENOENT when the directory
+	doesn't exist and to EACCES when it's not accessible to the
+	current user.  Set errno to zero when FindNextFile exhausts the
+	directory, so that callers don't interpret that as an error and
+	don't signal a file-error.
+	(open_unc_volume): Set errno to ENOENT if WNetOpenEnum fails.
+
+2015-01-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* dired.c (directory_files_internal) [WINDOWSNT]: If readdir
+	returns NULL and errno is ENOTDIR, behave as if opendir failed to
+	open the directory.  (Bug#19701)
+
+	* w32.c (sys_readdir): If FindFirstFile fails because the
+	directory doesn't exist, set errno to ENOTDIR.
+
+2015-01-24  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (drawRect:): Add block/unblock_input (Bug#19660).
+
+2015-01-21  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix coding.c subscript error
+	* coding.c (CODING_ISO_INVOKED_CHARSET):
+	Avoid undefined behavior if CODING_ISO_INVOCATION returns negative.
+
+	Backport: correct old fix for GTK font selection
+	* gtkutil.c (xg_get_font): Fix off-by-2 typo.
+	Fixes: bug#3228
+
+2015-01-21  Jan Djärv  <jan.h.d@swipnet.se>
+
+        * nsterm.m (EV_TRAILER2): Set Vinhibit_quit to Qt (Bug#19531).
+
+2015-01-17  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (produce_image_glyph): Fix display of images in R2L
+	screen lines: prepend the new glyph to the ones already there
+	instead of appending it.
+
+2015-01-14  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32fns.c (w32_set_title_bar_text): New function, including
+	support for titles with non-ASCII characters outside of the
+	current system codepage.
+	(x_set_name, x_set_title): Use it.  (Bug#19590)
+
+2015-01-10  Eli Zaretskii  <eliz@gnu.org>
+
+	* indent.c (Fvertical_motion): Return zero if we started from ZV
+	and there's an overlay after-string there.  (Bug#19553)
+
+2015-01-09  Eli Zaretskii  <eliz@gnu.org>
+
+	* emacs.c (usage_message): Fix the description of the -nl switch.
+	(Bug#19542)
+
+2015-01-08  Eli Zaretskii  <eliz@gnu.org>
+
+	* dispnew.c (buffer_posn_from_coords): Fix the value of the column
+	returned for right-to-left screen lines.  (Before the change on
+	2014-12-30, the incorrectly-computed X pixel coordinate concealed
+	this bug.)
+
+2015-01-05  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_to, try_cursor_movement): Don't use the window
+	end information if the window_end_valid flag is unset.
+	(try_window_id): If the call to display_line invalidated the
+	window end information, give up the try_window_id optimization.
+	(Bug#19511)
+
+2015-01-04  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32fns.c (Fx_server_version, Fx_server_vendor): Doc fix.
+
+	* xfns.c (Fx_server_version, Fx_server_vendor): Doc fix.
+
+	* emacs.c (syms_of_emacs) <system-configuration>: Doc fix.
+	(Bug#19502)
+
+2014-12-30  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (pos_visible_p): Fix up the X coordinate for
+	right-to-left screen lines.  (Bug#19473)
+
+2014-12-28  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32proc.c (Fw32_get_codepage_charset): Doc fix.  (Bug#19458)
+
+2014-12-28  Paul Eggert  <eggert@Penguin.CS.UCLA.EDU>
+
+	Port memory-full checking to GnuTLS 3.3
+	Instead of using gnutls_global_set_mem_functions, check every call
+	to a GnuTLS function that might return an indication of memory
+	exhaustion.  Suggested by Dmitry Antipov in:
+	http://lists.gnu.org/archive/html/emacs-devel/2014-12/msg02056.html
+	* gnutls.c (gnutls_global_set_mem_functions) [WINDOWSNT]: Remove.
+	(init_gnutls_functions): Do not load gnutls_global_set_mem_functions.
+	(fn_gnutls_global_set_mem_functions) [!WINDOWSNT]: Remove.
+	All uses removed.
+	(check_memory_full): New function.
+	(emacs_gnutls_handshake, emacs_gnutls_handle_error)
+	(gnutls_make_error, Fgnutls_boot): Use it.
+	(emacs_gnutls_global_init): Avoid gnutls_global_set_mem_functions.
+
+2014-12-25  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (set_iterator_to_next) <GET_FROM_STRING>: Limit search in
+	composition_compute_stop_pos to the number of characters in the
+	string.  (Bug#19435)
+	<GET_FROM_BUFFER, GET_FROM_STRING>: Simplify code.
+
+	* composite.c (composition_compute_stop_pos): If no composition
+	was found in a string before ENDPOS, and ENDPOS is the string end,
+	no need to back up to a safe point.
+
+	* dispextern.h (struct it) <end_charpos>: Improve commentary.
+
+2014-12-24  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsimage.m (allocInitFromFile:): Initialize bmRep.
+	(dealloc): Release bmRep.
+        (setPixmapData): Make bmRep local so class member is not
+        set (Bug#19133).
+	(setPixmapData): Rename local variable bmRep to avoid compiler
+	warning.
+
+2014-12-24  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.h (EmacsImage): Remove imageListNext, refCount, reference,
+	imageListSetNext, imageListNext.
+
+	* nsimage.m (ImageList, imageListNext, imageListSetNext:)
+	(reference): Remove.
+	(allocInitFromFile:): Remove searching ImageList and calling
+	reference (Bug#18918).
+	(dealloc): Remove handling if ImageList.
+
+2014-12-22  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* xterm.c (do_ewmh_fullscreen): Don't remove maximized_horz/vert
+	when going to fullscreen (Bug#19427).
+
+2014-12-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* window.c (Fwindow_body_width): Doc fix.  (Bug#19395)
+
+2014-12-15  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* buffer.c (syms_of_buffer) <Vafter_change_functions>: fix docstring.
+
+2014-12-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* gnutls.c (gnutls_init): Fix deprecation warning from GCC.
+
+2014-12-12  Eli Zaretskii  <eliz@gnu.org>
+
+	* gnutls.c (Fgnutls_available_p, syms_of_gnutls):
+	Move gnutls-available-p out of the HAVE_GNUTLS conditional, and define
+	them only once.
+
+2014-12-11  Teodor Zlatanov  <tzz@lifelogs.com>
+
+	* emacs.c (main): Always include gnutls.h and run syms_of_gnutls.
+
+	* gnutls.h: Always declare syms_of_gnutls.
+
+	* gnutls.c (Fgnutls_available_p syms_of_gnutls): Move later for
+	clarity.  Let the availability check return Qnil when the GnuTLS
+	integration is not available, instead of erroring out.
+	(Bug#19346)
+
+2014-12-10  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_in_display_line_to, display_line):
+	Don't disallow overflow-newline-into-fringe when word-wrap is in
+	effect.  (Bug#19300)
+
+2014-12-04  Lee Duhem  <lee.duhem@gmail.com>  (tiny change)
+
+	* eval.c (Fsignal): Remove duplicate test.
+	(Fautoload_do_load): Fix up docstring.
+
+2014-12-02  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (represented_filename, represented_frame): New variables.
+	(ns_set_represented_filename): New function.
+	(sendEvent:): Set represented filename here to avoid flicker,
+	related to Bug#18757.
+
+	* nsterm.h: Declare ns_set_represented_filename.
+
+	* nsfns.m (ns_set_name_as_filename): Don't set represented filename
+	at once, call ns_set_represented_filename instead.
+
+2014-11-27  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (handle_single_display_spec): When ignoring a fringe
+	bitmap display, reset the ignore_overlay_strings_at_pos_p flag.
+	(next_element_from_buffer): When done with overlays, reset the
+	ignore_overlay_strings_at_pos_p flag.  (Bug#19201)
+
+2014-11-25  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32fns.c (Fw32_shell_execute): Convert forward slashes in
+	DOCUMENT to backslashes, if DOCUMENT is a file.  (Bug#19141)
+
+2014-11-25  Ulrich Müller  <ulm@gentoo.org>
+
+	* Makefile.in (temacs$(EXEEXT)): Use consistent flag settings
+	for paxctl and setfattr. Fixes temacs startup failure with
+	grsecurity/PaX enabled Linux kernel (bug#19067).
+
+2014-11-17  Oscar Fuentes  <ofv@wanadoo.es>
+
+	* src/w32.c: Use MINGW_W64 instead of _W64.
+
+	* src/w32term.c: Likewise.
+
+2014-11-16  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* frame.c (Fhandle_switch_frame): Deactivate shift-region (bug#19003).
+
+2014-11-15  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (ns_send_appdefined): Check for application defined
+	event on Cocoa (Bug#18993).  Backport from trunk.
+
+2014-11-15  Eli Zaretskii  <eliz@gnu.org>
+
+	* window.c (window_scroll_pixel_based): Avoid truncation/rounding
+	errors in computing the number of pixels to scroll.
+	Suggested by Kelly Dean <kelly@prtime.org>.  (Bug#19060)
+
+2014-11-15  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsmenu.m (update_frame_tool_bar): If tool bar changes height,
+	call updateFrameSize.
+
+	* nsterm.m (setFrame:): Remove call to display (Bug#18757).
+
+2014-11-14  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsfns.m (x_set_foreground_color, x_set_background_color)
+	(x_set_cursor_color, Fxw_color_values): Block/unblock input,
+	use SET_FRAME_GARBAGED instead of redraw_frame (Bug#19036).
+
+2014-11-09  Eli Zaretskii  <eliz@gnu.org>
+
+	* fileio.c (Finsert_file_contents): Invalidate buffer caches also
+	when the inserted text does not need decoding.  (Bug#18982)
+
+	* w32heap.c (allocate_heap): Set the lower limit of heap at 8MB.
+	(Bug#18995)
+
+2014-11-09  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.h (EmacsScroller): judge returns bool.
+
+	* nsterm.m (ns_set_vertical_scroll_bar): Release bar.
+	(ns_judge_scroll_bars): Only set removed if judge returns true.
+	(judge): Returns bool == condemned.  Remove self from window.
+	(setPosition:portion:whole:): Remove raise SIGIO (Bug#18757).
+
+2014-11-08  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (init): Replace OSX 10.9 check with IMPL_COCOA.
+	(run): Ditto.  Only use non-system event loop if OSX version is
+	exactly 10.9 (Bug#18993).
+	(ns_set_vertical_scroll_bar): Don't call bar setPosition: unless
+	needed (Bug#18757).
+
+2014-11-07  Michael Albinus  <michael.albinus@gmx.de>
+
+	* callproc.c (encode_current_directory): Support handling of file
+	names prepended by "/:".  (Bug#18891)
+
+2014-11-06  Alan Mackenzie  <acm@muc.de>
+
+	* syntax.c (back_comment): Fix off-by-one error (bug#18022).
+
+2014-11-06  Dima Kogan  <dima@secretsauce.net>
+
+	* xgselect.c (xg_select): Use g_main_context_acquire (bug#18861).
+
+2014-11-05  Michael Albinus  <michael.albinus@gmx.de>
+
+	* dired.c (Ffile_attributes): Return Qnil, if Fexpand_file_name
+	raises an error.  (Bug#18891)
+
+2014-11-03  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (Fdump_glyph_matrix, Fdump_frame_glyph_matrix): Doc fix.
+	(Fdump_frame_glyph_matrix): Don't segfault if invoked on a GUI
+	frame; instead, print an error message.
+
+2014-11-03  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsfns.m (ns_set_doc_edited): Check for FRAME_NS (Bug#18925).
+
+2014-10-31  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* macfont.m (macfont_glyph_extents): Turn off syntetic bold
+	if force_integral_p (i.e. no antialias).
+	(macfont_draw): Check ns_antialias_text, also turn off syntetic
+	bold if no antialias (Bug#18876).
+
+	* emacs.c (main): Don't chdir to $HOME on Cocoa if --chdir
+	was given (Bug#18846).
+
+2014-10-30  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.h (ns_set_doc_edited): Declare taking no args.
+
+	* nsfns.m (ns_set_doc_edited): Do all logic (check frames) here
+	instead of in xdisp.c, function now takes void. (Bug#18884).
+
+	* xdisp.c (prepare_menu_bars): Remove HAVE_NS code.
+	(redisplay_internal): Call ns_set_doc_edited if HAVE_NS (Bug#18884).
+
+	* nsterm.h (EmacsScroller): Replace Lisp_Object win with
+	struct window* (Bug#18889).
+	Remove getMouseMotionPart.
+	(ns_output): Make icon_top/left int.
+
+	* nsfns.m (x_icon): icon_top/left is int.
+
+	* nsterm.m (ns_mouse_position): Remove unused code.
+	(initFrame:window:, dealloc): Use window instead of win.
+	(getMouseMotionPart:window:x:y:): Remove, unused.
+	(sendScrollEventAtLoc:fromEvent:): Make Lisp_Object win from window.
+
+2014-10-30  Samuel Bronson  <naesten@gmail.com>
+
+	* unexmacosx.c (copy_data_segment): Port to GCC 4.6+ (Bug#9927).
+
+2014-10-28  Eli Zaretskii  <eliz@gnu.org>
+
+	* fileio.c (Fexpand_file_name): Use make_unibyte_string, not
+	build_string, when importing a home directory.  (Bug#18873)
+
+2014-10-26  Eli Zaretskii  <eliz@gnu.org>
+
+	* dispnew.c (buffer_posn_from_coords):
+	Use WINDOW_WANTS_HEADER_LINE_P, not WINDOW_WANTS_MODELINE_P, to
+	account for the header-line height.  (Bug#18839)
+
+2014-10-22  YAMAMOTO Mitsuharu  <mituharu@math.s.chiba-u.ac.jp>
+
+	* xdisp.c (draw_glyphs): Set clipping to highlight boundaries.
+	[Backport]
+	(erase_phys_cursor): Fix confusion between window-relative and
+	text area-relative x-coordinates.  [Backport]
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* minibuf.c (history-length): Increase default from 30 to 100.
+	[Backport]
+
+2014-10-20  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* xdisp.c (redisplay_window): Re-run pre-redisplay-function after we
+	move point.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -39,7 +448,7 @@
 
 	* xfaces.c (Finternal_set_lisp_face_attribute): Don't try to
 	make a font_object from a tty frame (Bug#18573).
-	(Finternal_set_lisp_face_attribute): Added FIXME comment.
+	(Finternal_set_lisp_face_attribute): Add FIXME comment.
 
 2014-09-30  Eli Zaretskii  <eliz@gnu.org>
 
@@ -47,12 +456,11 @@
 	array of 2 values specifying the coordinates of the frame's
 	top-left corner.  Use these values instead of calling x_get_arg,
 	which can cons Lisp objects, and therefore cannot be called except
-	from the main thread.  Remove redundant tests for the default
-	values.
+	from the main thread.  Remove redundant tests for the default values.
 	(my_create_window): Move the calculation of the coordinates of the
 	frame's top-left edge here.  Pass them to the input thread via the
-	second parameter of the WM_EMACS_CREATEWINDOW message.  See
-	http://lists.gnu.org/archive/html/emacs-devel/2014-09/msg00892.html
+	second parameter of the WM_EMACS_CREATEWINDOW message.
+	See http://lists.gnu.org/archive/html/emacs-devel/2014-09/msg00892.html
 	for the details.
 
 2014-09-29  Eli Zaretskii  <eliz@gnu.org>
@@ -63,8 +471,8 @@
 	obey it if the glyph row showing point will be fully visible.
 	Likewise when the window start is in a continuation line.  If,
 	after trying everything under the 'force_start' label, point is
-	still not fully visible, give up and scroll the window.  Add
-	debugging traces.  (Bug#18545)
+	still not fully visible, give up and scroll the window.
+	Add debugging traces.  (Bug#18545)
 
 	* window.c (Frecenter): Set the window's redisplay flag.
 
@@ -244,8 +652,8 @@
 
 	* xdisp.c (display_line): Don't assume that the call to
 	reseat_at_next_visible_line_start ends up at a character
-	immediately following the newline on the previous line.  Avoids
-	setting the ends_at_zv_p flag on screen lines that are not at or
+	immediately following the newline on the previous line.
+	Avoids setting the ends_at_zv_p flag on screen lines that are not at or
 	beyond ZV, which causes infloop in redisplay.  For the details, see
 	http://lists.gnu.org/archive/html/emacs-devel/2014-08/msg00368.html.
 
@@ -364,12 +772,12 @@
 
 2014-07-17  Eli Zaretskii  <eliz@gnu.org>
 
-	* w32select.c (setup_windows_coding_system): Apply
-	CODING_ANNOTATION_MASK to the common_flags member of struct
+	* w32select.c (setup_windows_coding_system):
+	Apply CODING_ANNOTATION_MASK to the common_flags member of struct
 	coding_system.  Reported by martin rudalics <rudalics@gmx.at>.
 
-	* w16select.c (Fw16_get_clipboard_data): Apply
-	CODING_ANNOTATION_MASK to the common_flags member of struct
+	* w16select.c (Fw16_get_clipboard_data):
+	Apply CODING_ANNOTATION_MASK to the common_flags member of struct
 	coding_system.
 
 	* xdisp.c (init_iterator): Initialize it->stop_charpos to the
@@ -377,8 +785,8 @@
 	(handle_invisible_prop): Record in it->stop_charpos the position
 	where the invisible text ends.  (Bug#18035)
 	(hscroll_window_tree): Don't try hscrolling windows whose cursor
-	row has zero buffer position as their start position.  Reported by
-	martin rudalics <rudalics@gmx.at>.
+	row has zero buffer position as their start position.
+	Reported by martin rudalics <rudalics@gmx.at>.
 
 2014-07-16  Eli Zaretskii  <eliz@gnu.org>
 
@@ -458,8 +866,8 @@
 	are in sync with what the window wants.
 	(Bug#17892)
 
-	* xdisp.c (display_line, display_mode_line): Call
-	prepare_desired_row with additional arguments, as appropriate.
+	* xdisp.c (display_line, display_mode_line):
+	Call prepare_desired_row with additional arguments, as appropriate.
 
 	* dispextern.h (prepare_desired_row): Adjust prototype.
 
@@ -791,11 +1199,10 @@
 
 2014-04-29  Eli Zaretskii  <eliz@gnu.org>
 
-	* term.c (tty_menu_display): Move the cursor to the active menu
-	item.
+	* term.c (tty_menu_display): Move the cursor to the active menu item.
 	(tty_menu_activate): Return the cursor to the active menu item
-	after displaying the menu and after displaying help-echo.  See
-	http://lists.gnu.org/archive/html/emacs-devel/2014-04/msg00402.html
+	after displaying the menu and after displaying help-echo.
+	See http://lists.gnu.org/archive/html/emacs-devel/2014-04/msg00402.html
 	for the details of why this is needed by screen readers and
 	Braille displays.
 
@@ -11063,7 +11470,7 @@ See ChangeLog.12 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2014 Free Software Foundation, Inc.
+  Copyright (C) 2011-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

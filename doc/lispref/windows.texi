@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2014 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Windows
@@ -1167,6 +1167,8 @@ are the opposite of what they are in those other functions.
 
 @node Recombining Windows
 @section Recombining Windows
+@cindex recombining windows
+@cindex windows, recombining
 
 When deleting the last sibling of a window @var{W}, its parent window
 is deleted too, with @var{W} replacing it in the window tree.  This

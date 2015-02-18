@@ -1,6 +1,6 @@
 ;;; js.el --- Major mode for editing JavaScript  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
 
 ;; Author: Karl Landstrom <karl.landstrom@brgeight.se>
 ;;         Daniel Colascione <dan.colascione@gmail.com>
@@ -1656,7 +1656,7 @@ This performs fontification according to `js--class-styles'."
     ;; We can probably just add +, -, !, <, >, %, ^, ~, |, &, ?, : at which
     ;; point I think only * and / would be missing which could also be added,
     ;; but need care to avoid affecting the // and */ comment markers.
-    ("\\(?:^\\|[=([{,:;]\\)\\(?:[ \t]\\)*\\(/\\)[^/*]"
+    ("\\(?:^\\|[=([{,:;]\\|\\_<return\\_>\\)\\(?:[ \t]\\)*\\(/\\)[^/*]"
      (1 (ignore
 	 (forward-char -1)
          (when (or (not (memq (char-after (match-beginning 0)) '(?\s ?\t)))
@@ -1685,7 +1685,7 @@ This performs fontification according to `js--class-styles'."
   "Regular expression matching variable declaration keywords.")
 
 (defconst js--indent-operator-re
-  (concat "[-+*/%<>=&^|?:.]\\([^-+*/]\\|$\\)\\|"
+  (concat "[-+*/%<>&^|?:.]\\([^-+*/]\\|$\\)\\|!?=\\|"
           (js--regexp-opt-symbol '("in" "instanceof")))
   "Regexp matching operators that affect indentation of continued expressions.")
 
@@ -1712,7 +1712,7 @@ This performs fontification according to `js--class-styles'."
                     (save-excursion (backward-char) (not (looking-at "[/*]/")))
                     (js--looking-at-operator-p)
 		    (and (progn (backward-char)
-				(not (looking-at "++\\|--\\|/[/*]"))))))))))
+				(not (looking-at "+\\+\\|--\\|/[/*]"))))))))))
 
 
 (defun js--end-of-do-while-loop-p ()

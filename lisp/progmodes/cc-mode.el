@@ -1,6 +1,6 @@
 ;;; cc-mode.el --- major mode for editing C and similar languages
 
-;; Copyright (C) 1985, 1987, 1992-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
 
 ;; Authors:    2003- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -957,12 +957,17 @@ Note that the style variables are always made local to the buffer."
     (let ((pps-position (point))  pps-state mbeg)
       (while (and (< (point) c-new-END)
 		  (search-forward-regexp c-anchored-cpp-prefix c-new-END t))
-	;; If we've found a "#" inside a string/comment, ignore it.
-	(setq pps-state
-	      (parse-partial-sexp pps-position (point) nil nil pps-state)
-	      pps-position (point))
-	(unless (or (nth 3 pps-state)	; in a string?
-		    (nth 4 pps-state))	; in a comment?
+	;; If we've found a "#" inside a macro/string/comment, ignore it.
+	(unless
+	    (or (save-excursion
+		  (goto-char (match-beginning 0))
+		  (c-beginning-of-macro))
+		(progn
+		  (setq pps-state
+			(parse-partial-sexp pps-position (point) nil nil pps-state)
+			pps-position (point))
+		  (or (nth 3 pps-state)	   ; in a string?
+		      (nth 4 pps-state)))) ; in a comment?
 	  (goto-char (match-beginning 1))
 	  (setq mbeg (point))
 	  (if (> (c-syntactic-end-of-macro) mbeg)
@@ -1231,6 +1236,14 @@ This function is called from `c-common-init', once per mode initialization."
 	  c-beginning-of-syntax
 	  (font-lock-mark-block-function
 	   . c-mark-function)))
+
+  ;; Prevent `font-lock-default-fontify-region' extending the region it will
+  ;; fontify to whole lines by removing `font-lock-extend-region-whole-lines'
+  ;; (and, coincidentally, `font-lock-extend-region-multiline' (which we do
+  ;; not need)) from `font-lock-extend-region-functions'.  (Emacs only).  This
+  ;; fixes Emacs bug #19669.
+  (when (boundp 'font-lock-extend-region-functions)
+    (setq font-lock-extend-region-functions nil))
 
   (make-local-variable 'font-lock-fontify-region-function)
   (setq font-lock-fontify-region-function 'c-font-lock-fontify-region)

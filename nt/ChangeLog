@@ -1,3 +1,23 @@
+2014-11-17  Oscar Fuentes  <ofv@wanadoo.es>
+
+	* inc/ms-w32.h: Define MINGW_W64.
+
+	* nt/addpm.c: Use it.
+
+	* nt/addsection.c: Use it.
+
+	* nt/preprep.c: Use it.
+
+2014-10-31  Eric S. Raymond  <esr@thyrsus.com>
+
+	* Neutralize language specific to a repository type.
+
+2014-10-26  Dani Moncayo <dmoncayo@gmail.com>
+
+	* README.W32 (Preliminaries): Don't assume that this file is at
+	the top level.
+	(Setting up Emacs): Minor rewording to be more accurate.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -705,7 +725,7 @@
 2012-10-01  Eli Zaretskii  <eliz@gnu.org>
 
 	* preprep.c (RVA_TO_PTR): Use 'unsigned char *' instead of
-	'void *', for pointer arithmetics.
+	'void *', for pointer arithmetic.
 	(OFFSET_TO_RVA, RVA_TO_OFFSET, RVA_TO_SECTION_OFFSET): Enclose all
 	macro arguments in parentheses.
 
@@ -1756,7 +1776,7 @@
 	* config.nt (HAVE_FACES): Remove, unused.
 
 2008-06-26  Juanma Barranquero  <lekktu@gmail.com>
-            Eli Zaretskii  <eliz@gnu.org>
+	    Eli Zaretskii  <eliz@gnu.org>
 
 	* nmake.defs (FONT_CFLAGS):
 	* gmake.defs (FONT_CFLAGS): Remove.
@@ -1772,7 +1792,7 @@
 	* config.nt: Remove reference to UNEXEC_SRC.
 
 2008-06-23  Juanma Barranquero  <lekktu@gmail.com>
-            Eli Zaretskii  <eliz@gnu.org>
+	    Eli Zaretskii  <eliz@gnu.org>
 
 	* gmake.defs (DEBUG_FLAG, DEBUG_LINK) [!NODEBUG]:
 	Don't hardcode -gstabs+, use DEBUG_INFO.
@@ -3405,7 +3425,7 @@
 ;; add-log-time-zone-rule: t
 ;; End:
 
-  Copyright (C) 1995-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1995-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

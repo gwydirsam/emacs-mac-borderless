@@ -1,6 +1,6 @@
 /* Synchronous subprocess invocation for GNU Emacs.
 
-Copyright (C) 1985-1988, 1993-1995, 1999-2014 Free Software Foundation,
+Copyright (C) 1985-1988, 1993-1995, 1999-2015 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -150,11 +150,16 @@ encode_current_directory (void)
 
   dir = expand_and_dir_to_file (dir, Qnil);
 
-  if (STRING_MULTIBYTE (dir))
-    dir = ENCODE_FILE (dir);
-  if (! file_accessible_directory_p (SSDATA (dir)))
+  if (NILP (Ffile_accessible_directory_p (dir)))
     report_file_error ("Setting current directory",
 		       BVAR (current_buffer, directory));
+
+  /* Remove "/:" from dir.  */
+  if (! NILP (Fstring_match (build_string ("^/:"), dir, Qnil)))
+    dir = Fsubstring (dir, make_number (2), Qnil);
+
+  if (STRING_MULTIBYTE (dir))
+    dir = ENCODE_FILE (dir);
 
   RETURN_UNGCPRO (dir);
 }

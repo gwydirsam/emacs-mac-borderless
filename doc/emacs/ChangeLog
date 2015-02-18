@@ -1,3 +1,89 @@
+2015-01-31  Eli Zaretskii  <eliz@gnu.org>
+
+	* msdog.texi (Windows Files): Document characters invalid in
+	Windows file names.  (Bug#19463)
+
+	* custom.texi (Customization Groups): Update the looks of the
+	Customize Group buffer.
+
+	* programs.texi (Hungry Delete): Fix a typo: "C-d" instead of
+	"C-c C-d" in hungry-delete mode.
+
+2015-01-29  Eli Zaretskii  <eliz@gnu.org>
+
+	* mule.texi (Language Environments): Work around refill bug in
+	makeinfo 4.x.  (Bug#19697)
+
+2015-01-26  Eli Zaretskii  <eliz@gnu.org>
+
+	* cmdargs.texi (Action Arguments): Clarify into which buffer
+	'--insert' inserts.  (Bug#19694)
+
+2015-01-21  Eli Zaretskii  <eliz@gnu.org>
+
+	* programs.texi (Custom C Indent): Fix a typo.  (Bug#19647)
+
+2014-12-22  Eli Zaretskii  <eliz@gnu.org>
+
+	* buffers.texi (Kill Buffer): Improve indexing.
+
+2014-11-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Lessen focus on ChangeLog files, as opposed to change log entries.
+	* maintaining.texi (Change Log): Mention that ChangeLog files may
+	be copied to or from a version control system.
+	* trouble.texi (Sending Patches): Point to the commit messages.
+
+2014-11-19  Eli Zaretskii  <eliz@gnu.org>
+
+	* maintaining.texi (Switching Branches): Mention "C-x v r".
+	Correct commands for switching branches in various VCSs.
+
+2014-11-16  Tassilo Horn  <tsdh@gnu.org>
+
+	* misc.texi (DocView Slicing): Describe how to slice with the
+	mouse.  Fix command mentioned by slice by BoundingBox paragraph.
+	(Bug#18040)
+
+2014-11-09  Glenn Morris  <rgm@gnu.org>
+
+	* Makefile.in (version): Remove variable.
+	(clean): No longer delete dist tarfile.
+	(dist): Remove rule; replace with code in admin.el.
+
+2014-11-01  Glenn Morris  <rgm@gnu.org>
+
+	* programs.texi (Misc for Programs): Fix typo.
+
+2014-10-24  Eli Zaretskii  <eliz@gnu.org>
+
+	* frames.texi (Scroll Bars): Improve indexing of faces.
+
+	* killing.texi (Secondary Selection): Improve indexing of faces.
+
+	* search.texi (Basic Isearch, Query Replace): Improve indexing of faces.
+
+	* display.texi (Standard Faces, Text Display)
+	(Useless Whitespace): Improve indexing of faces.
+
+2014-10-23  Tassilo Horn  <tsdh@gnu.org>
+
+	* misc.texi (Document View): Adapt to latest doc-view changes wrt
+	viewing the document's plain text contents.  [Backport]
+
+2014-10-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* frames.texi (Frame Commands): Document and index
+	'frame-resize-pixelwise'.
+
+	* windows.texi (Split Window): Document and index
+	'window-resize-pixelwise'.
+
+2014-10-20  Glenn Morris  <rgm@gnu.org>
+
+	* ack.texi (Acknowledgments): Remove some obsolete items.
+	* misc.texi (Emulation): Remove section.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -10675,7 +10761,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 1993-1999, 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 1993-1999, 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

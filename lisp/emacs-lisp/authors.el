@@ -1,6 +1,6 @@
 ;;; authors.el --- utility for maintaining Emacs's AUTHORS file -*-coding: utf-8 -*-
 
-;; Copyright (C) 2000-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
 
 ;; Author: Gerd Moellmann <gerd@gnu.org>
 ;; Maintainer: Kim F. Storm <storm@cua.dk>
@@ -240,7 +240,7 @@ If REALNAME is nil, ignore that author.")
 
 (defvar authors-obsolete-files-regexps
   '(".*loaddefs.el$"			; not obsolete, but auto-generated
-    "\\.\\(cvs\\|git\\)ignore$"		; obsolete or uninteresting
+    "\\.\\(bzr\\|cvs\\|git\\)ignore$"		; obsolete or uninteresting
     "\\.arch-inventory$"
     "automated/data/"		   ; not interesting
     ;; TODO lib/? Matches other things?
@@ -354,6 +354,7 @@ Changes to files matching one of the regexps in this list are not listed.")
     "All" "Version" "Everywhere" "Many" "Various" "files"
     ;; Directories.
     "vms" "mac" "url" "tree-widget"
+    "info/dir"
     )
   "List of files and directories to ignore.
 Changes to files in this list are not listed.")
@@ -632,6 +633,7 @@ Changes to files in this list are not listed.")
     "images/page-down.xpm" "images/widen.pbm" "images/widen.xpm"
     "images/gnus/bar.xbm" "images/gnus/bar.xpm"
     "images/gnus/reverse-smile.xpm"
+    "notes/changelogs"
     "revdiff"				; admin/
     "vcdiff" "rcs-checkin" "tindex.pl"
     "mainmake" "sed1.inp" "sed2.inp" "sed3.inp" ; msdos/
@@ -778,6 +780,7 @@ in the repository.")
     ("play/bruce.el" . "bruce.el")
     ("play/yow.el" . "yow.el")
     ("patcomp.el" . "patcomp.el")
+    ("emulation/ws-mode.el" . "ws-mode.el")
     ;; From lisp to etc/forms.
     ("forms-d2.el" . "forms-d2.el")
     ("forms-pass.el" . "forms-pass.el")
@@ -848,6 +851,8 @@ in the repository.")
     ("grammars/wisent-grammar.el" . "wisent/grammar.el")
     ;; Moved from admin/nt/ to nt/.
     ("nt/README.W32" . "README.W32")
+    ("notes/BRANCH" . "notes/repo")
+    ("notes/bzr" . "notes/repo")
     )
   "Alist of files which have been renamed during their lifetime.
 Elements are (OLDNAME . NEWNAME).")

@@ -1,7 +1,7 @@
 ;;; eieio.el --- Enhanced Implementation of Emacs Interpreted Objects
 ;;;              or maybe Eric's Implementation of Emacs Interpreted Objects
 
-;; Copyright (C) 1995-1996, 1998-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1996, 1998-2015 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Version: 1.4
@@ -916,7 +916,7 @@ Optional argument NOESCAPE is passed to `prin1-to-string' when appropriate."
 
 ;;; Start of automatically extracted autoloads.
 
-;;;### (autoloads nil "eieio-custom" "eieio-custom.el" "5b0e7b1beea11f9e9de6887279f75d61")
+;;;### (autoloads nil "eieio-custom" "eieio-custom.el" "f15421ce19e293c6f84c825545ce0b8d")
 ;;; Generated autoloads from eieio-custom.el
 
 (autoload 'customize-object "eieio-custom" "\
@@ -927,7 +927,7 @@ Optional argument GROUP is the sub-group of slots to display.
 
 ;;;***
 
-;;;### (autoloads nil "eieio-opt" "eieio-opt.el" "99b94c63a73593402e3c825178a44f4f")
+;;;### (autoloads nil "eieio-opt" "eieio-opt.el" "fc27fb3e17d23e43ad99d98572aa7b19")
 ;;; Generated autoloads from eieio-opt.el
 
 (autoload 'eieio-browse "eieio-opt" "\

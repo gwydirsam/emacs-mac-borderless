@@ -1,6 +1,6 @@
 /* Interface definitions for display code.
 
-Copyright (C) 1985, 1993-1994, 1997-2014 Free Software Foundation, Inc.
+Copyright (C) 1985, 1993-1994, 1997-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1829,8 +1829,10 @@ struct face_cache
   ((FACE) == (FACE)->ascii_face)
 
 /* Return the id of the realized face on frame F that is like the face
-   with id ID but is suitable for displaying character CHAR.
-   This macro is only meaningful for multibyte character CHAR.  */
+   FACE, but is suitable for displaying character CHAR at buffer or
+   string position POS.  OBJECT is the string object, or nil for
+   buffer.  This macro is only meaningful for multibyte character
+   CHAR.  */
 
 #define FACE_FOR_CHAR(F, FACE, CHAR, POS, OBJECT)	\
   face_for_char ((F), (FACE), (CHAR), (POS), (OBJECT))
@@ -2230,7 +2232,10 @@ struct it
   ptrdiff_t base_level_stop;
 
   /* Maximum string or buffer position + 1.  ZV when iterating over
-     current_buffer.  */
+     current_buffer.  When iterating over a string in display_string,
+     this can be smaller or greater than the number of string
+     characters, depending on the values of PRECISION and FIELD_WIDTH
+     with which display_string was called.  */
   ptrdiff_t end_charpos;
 
   /* C string to iterate over.  Non-null means get characters from

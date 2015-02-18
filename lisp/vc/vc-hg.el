@@ -1,6 +1,6 @@
 ;;; vc-hg.el --- VC backend for the mercurial version control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
 
 ;; Author: Ivan Kanis
 ;; Maintainer: emacs-devel@gnu.org
@@ -146,12 +146,19 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
   :group 'vc-hg)
 
 (defcustom vc-hg-root-log-format
-  '("{rev}:{tags}: {author|person} {date|shortdate} {desc|firstline}\\n"
-    "^\\([0-9]+\\):\\([^:]*\\): \\(.*?\\)[ \t]+\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)"
+  `(,(concat "{rev}:{ifeq(branch, 'default','', '{branch}')}"
+             ":{bookmarks}:{tags}:{author|person}"
+             " {date|shortdate} {desc|firstline}\\n")
+    ,(concat "^\\(?:[+@o x|-]*\\)"      ;Graph data.
+             "\\([0-9]+\\):\\([^:]*\\)"
+             ":\\([^:]*\\):\\([^:]*\\):\\(.*?\\)"
+             "[ \t]+\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)")
     ((1 'log-view-message-face)
-     (2 'change-log-list)
-     (3 'change-log-name)
-     (4 'change-log-date)))
+     (2 'change-log-file)
+     (3 'change-log-list)
+     (4 'change-log-conditionals)
+     (5 'change-log-name)
+     (6 'change-log-date)))
   "Mercurial log template for `vc-hg-print-log' short format.
 This should be a list (TEMPLATE REGEXP KEYWORDS), where TEMPLATE
 is the \"--template\" argument string to pass to Mercurial,
@@ -160,7 +167,7 @@ output, and KEYWORDS is a list of `font-lock-keywords' for
 highlighting the Log View buffer."
   :type '(list string string (repeat sexp))
   :group 'vc-hg
-  :version "24.1")
+  :version "24.5")
 
 
 ;;; Properties of the backend
@@ -200,14 +207,22 @@ highlighting the Log View buffer."
                       ;; Ignore all errors.
 		      (let ((process-environment
 			     ;; Avoid localization of messages so we
-			     ;; can parse the output.
-			     (append (list "TERM=dumb" "LANGUAGE=C")
-				     process-environment)))
-			(process-file
-			 vc-hg-program nil t nil
-			 "--config" "alias.status=status"
-			 "--config" "defaults.status="
-			 "status" "-A" (file-relative-name file)))
+			     ;; can parse the output.  Disable pager.
+			     (append
+			      (list "TERM=dumb" "LANGUAGE=C" "HGPLAIN=1")
+			      process-environment)))
+			(if (file-remote-p file)
+			    (process-file
+			     "env" nil t nil
+			     "HGPLAIN=1" vc-hg-program
+			     "--config" "alias.status=status"
+			     "--config" "defaults.status="
+			     "status" "-A" (file-relative-name file))
+			  (process-file
+			   vc-hg-program nil t nil
+			   "--config" "alias.status=status"
+			   "--config" "defaults.status="
+			   "status" "-A" (file-relative-name file))))
                     ;; Some problem happened.  E.g. We can't find an `hg'
                     ;; executable.
                     (error nil)))))))
@@ -244,6 +259,9 @@ highlighting the Log View buffer."
 
 (autoload 'vc-setup-buffer "vc-dispatcher")
 
+(defvar vc-hg-log-graph nil
+  "If non-nil, use `--graph' in the short log output.")
+
 (defun vc-hg-print-log (files buffer &optional shortlog start-revision limit)
   "Print commit log associated with FILES into specified BUFFER.
 If SHORTLOG is non-nil, use a short format based on `vc-hg-root-log-format'.
@@ -261,7 +279,9 @@ If LIMIT is non-nil, show no more than this many entries."
 	     (nconc
 	      (when start-revision (list (format "-r%s:0" start-revision)))
 	      (when limit (list "-l" (format "%s" limit)))
-	      (when shortlog (list "--template" (car vc-hg-root-log-format)))
+	      (when shortlog `(,@(if vc-hg-log-graph '("--graph"))
+                               "--template"
+                               ,(car vc-hg-root-log-format)))
 	      vc-hg-log-switches)))))
 
 (defvar log-view-message-re)
@@ -608,7 +628,7 @@ REV is the revision to check out into WORKFILE."
    (vc-hg-after-dir-status update-function)))
 
 (defun vc-hg-dir-status-files (dir files _default-state update-function)
-  (apply 'vc-hg-command (current-buffer) 'async dir "status" "-C" files)
+  (apply 'vc-hg-command (current-buffer) 'async dir "status" "-mardui" "-C" files)
   (vc-run-delayed
    (vc-hg-after-dir-status update-function)))
 

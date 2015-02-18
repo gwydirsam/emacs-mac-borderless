@@ -1,6 +1,6 @@
 /* Functions for the NeXT/Open/GNUstep and MacOSX window system.
 
-Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2014 Free Software
+Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2015 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -282,9 +282,14 @@ x_set_foreground_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   NSColor *col;
   EmacsCGFloat r, g, b, alpha;
 
+  /* Must block_input, because ns_lisp_to_color does block/unblock_input
+     which means that col may be deallocated in its unblock_input if there
+     is user input, unless we also block_input.  */
+  block_input ();
   if (ns_lisp_to_color (arg, &col))
     {
       store_frame_param (f, Qforeground_color, oldval);
+      unblock_input ();
       error ("Unknown color");
     }
 
@@ -301,8 +306,9 @@ x_set_foreground_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
       update_face_from_frame_parameter (f, Qforeground_color, arg);
       /*recompute_basic_faces (f); */
       if (FRAME_VISIBLE_P (f))
-        redraw_frame (f);
+        SET_FRAME_GARBAGED (f);
     }
+  unblock_input ();
 }
 
 
@@ -314,9 +320,11 @@ x_set_background_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   NSView *view = FRAME_NS_VIEW (f);
   EmacsCGFloat r, g, b, alpha;
 
+  block_input ();
   if (ns_lisp_to_color (arg, &col))
     {
       store_frame_param (f, Qbackground_color, oldval);
+      unblock_input ();
       error ("Unknown color");
     }
 
@@ -353,8 +361,9 @@ x_set_background_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
         }
 
       if (FRAME_VISIBLE_P (f))
-        redraw_frame (f);
+        SET_FRAME_GARBAGED (f);
     }
+  unblock_input ();
 }
 
 
@@ -363,9 +372,11 @@ x_set_cursor_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   NSColor *col;
 
+  block_input ();
   if (ns_lisp_to_color (arg, &col))
     {
       store_frame_param (f, Qcursor_color, oldval);
+      unblock_input ();
       error ("Unknown color");
     }
 
@@ -378,6 +389,7 @@ x_set_cursor_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
       x_update_cursor (f, 1);
     }
   update_face_from_frame_parameter (f, Qcursor_color, arg);
+  unblock_input ();
 }
 
 
@@ -609,18 +621,11 @@ ns_set_name_as_filename (struct frame *f)
 
           fstr = [NSString stringWithUTF8String: SSDATA (encoded_filename)];
           if (fstr == nil) fstr = @"";
-#ifdef NS_IMPL_COCOA
-          /* work around a bug observed on 10.3 and later where
-             setTitleWithRepresentedFilename does not clear out previous state
-             if given filename does not exist */
-          if (! [[NSFileManager defaultManager] fileExistsAtPath: fstr])
-            [[view window] setRepresentedFilename: @""];
-#endif
         }
       else
         fstr = @"";
 
-      [[view window] setRepresentedFilename: fstr];
+      ns_set_represented_filename (fstr, f);
       [[view window] setTitle: str];
       fset_name (f, name);
     }
@@ -631,18 +636,30 @@ ns_set_name_as_filename (struct frame *f)
 
 
 void
-ns_set_doc_edited (struct frame *f, Lisp_Object arg)
+ns_set_doc_edited (void)
 {
-  NSView *view = FRAME_NS_VIEW (f);
   NSAutoreleasePool *pool;
-  if (!MINI_WINDOW_P (XWINDOW (f->selected_window)))
+  Lisp_Object tail, frame;
+  block_input ();
+  pool = [[NSAutoreleasePool alloc] init];
+  FOR_EACH_FRAME (tail, frame)
     {
-      block_input ();
-      pool = [[NSAutoreleasePool alloc] init];
-      [[view window] setDocumentEdited: !NILP (arg)];
-      [pool release];
-      unblock_input ();
+      BOOL edited = NO;
+      struct frame *f = XFRAME (frame);
+      struct window *w;
+      NSView *view;
+
+      if (! FRAME_NS_P (f)) continue;
+      w = XWINDOW (FRAME_SELECTED_WINDOW (f));
+      view = FRAME_NS_VIEW (f);
+      if (!MINI_WINDOW_P (w))
+        edited = ! NILP (Fbuffer_modified_p (w->contents)) &&
+          ! NILP (Fbuffer_file_name (w->contents));
+      [[view window] setDocumentEdited: edited];
     }
+
+  [pool release];
+  unblock_input ();
 }
 
 
@@ -913,8 +930,8 @@ x_icon (struct frame *f, Lisp_Object parms)
   Lisp_Object icon_x, icon_y;
   struct ns_display_info *dpyinfo = check_ns_display_info (Qnil);
 
-  f->output_data.ns->icon_top = Qnil;
-  f->output_data.ns->icon_left = Qnil;
+  f->output_data.ns->icon_top = -1;
+  f->output_data.ns->icon_left = -1;
 
   /* Set the position of the icon.  */
   icon_x = x_get_arg (dpyinfo, parms, Qicon_left, 0, 0, RES_TYPE_NUMBER);
@@ -923,8 +940,8 @@ x_icon (struct frame *f, Lisp_Object parms)
     {
       CHECK_NUMBER (icon_x);
       CHECK_NUMBER (icon_y);
-      f->output_data.ns->icon_top = icon_y;
-      f->output_data.ns->icon_left = icon_x;
+      f->output_data.ns->icon_top = XINT (icon_y);
+      f->output_data.ns->icon_left = XINT (icon_x);
     }
   else if (!EQ (icon_x, Qunbound) || !EQ (icon_y, Qunbound))
     error ("Both left and top icon corners of icon must be specified");
@@ -2286,11 +2303,16 @@ DEFUN ("xw-color-values", Fxw_color_values, Sxw_color_values, 1, 2, 0,
   check_window_system (NULL);
   CHECK_STRING (color);
 
+  block_input ();
   if (ns_lisp_to_color (color, &col))
-    return Qnil;
+    {
+      unblock_input ();
+      return Qnil;
+    }
 
   [[col colorUsingDefaultColorSpace]
         getRed: &red green: &green blue: &blue alpha: &alpha];
+  unblock_input ();
   return list3i (lrint (red * 65280), lrint (green * 65280),
 		 lrint (blue * 65280));
 }

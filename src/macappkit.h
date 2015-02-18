@@ -648,10 +648,6 @@ typedef id instancetype;
 - (void)setOverlayViewHighlighted:(BOOL)flag;
 @end
 
-@interface EmacsController (AppleScript)
-- (long)doAppleScript:(Lisp_Object)script result:(Lisp_Object *)result;
-@end
-
 @interface EmacsOSAScript : OSAScript
 @end
 

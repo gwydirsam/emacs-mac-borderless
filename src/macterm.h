@@ -563,7 +563,6 @@ extern EventRef mac_peek_next_event (void);
 extern void xrm_merge_string_database (XrmDatabase, const char *);
 extern Lisp_Object xrm_get_resource (XrmDatabase, const char *, const char *);
 extern XrmDatabase xrm_get_preference_database (const char *);
-extern long do_applescript (Lisp_Object, Lisp_Object *);
 extern int mac_select (int, fd_set *, fd_set *, fd_set *,
 		       struct timespec const *, sigset_t const *);
 extern bool mac_service_provider_registered_p (void);
@@ -679,7 +678,6 @@ extern void mac_cursor_release (Cursor);
 extern void mac_invalidate_frame_cursor_rects (struct frame *f);
 extern void mac_mask_rounded_bottom_corners (struct frame *, CGRect, Boolean);
 extern void mac_invalidate_rectangles (struct frame *, NativeRectangle *, int);
-extern long mac_appkit_do_applescript (Lisp_Object, Lisp_Object *);
 extern Lisp_Object mac_osa_language_list (bool);
 extern Lisp_Object mac_osa_compile (Lisp_Object, Lisp_Object, bool,
 				    Lisp_Object *);

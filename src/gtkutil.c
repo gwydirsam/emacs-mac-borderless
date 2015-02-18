@@ -1,6 +1,6 @@
 /* Functions for creating and updating GTK widgets.
 
-Copyright (C) 2003-2014 Free Software Foundation, Inc.
+Copyright (C) 2003-2015 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -2103,7 +2103,7 @@ xg_get_font (struct frame *f, const char *default_name)
 	  args[8] = QCtype;
 	  args[9] = Qxft;
 
-	  font = Ffont_spec (8, args);
+	  font = Ffont_spec (10, args);
 
 	  pango_font_description_free (desc);
 	  dupstring (&x_last_font_name, name);

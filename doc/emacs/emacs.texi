@@ -26,7 +26,7 @@ This is the @cite{GNU Emacs Manual},
 @end ifnottex
 updated for Emacs version @value{EMACSVER}.
 
-Copyright @copyright{} 1985--1987, 1993--2014 Free Software Foundation, Inc.
+Copyright @copyright{} 1985--1987, 1993--2015 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -201,7 +201,6 @@ Advanced Features
 * Editing Binary Files::  Editing binary files with Hexl mode.
 * Saving Emacs Sessions:: Saving Emacs state from one session to the next.
 * Recursive Edit::      Performing edits while "within another command".
-* Emulation::           Emulating some other editors with Emacs.
 * Hyperlinking::        Following links in buffers.
 * Amusements::          Various games and hacks.
 * Packages::            Installing additional features.

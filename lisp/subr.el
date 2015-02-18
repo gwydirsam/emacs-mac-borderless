@@ -1,6 +1,6 @@
 ;;; subr.el --- basic lisp subroutines for Emacs  -*- coding: utf-8; lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994-1995, 1999-2014 Free Software
+;; Copyright (C) 1985-1986, 1992, 1994-1995, 1999-2015 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -1062,7 +1062,12 @@ The return value is a positive integer."
 ;;;; Extracting fields of the positions in an event.
 
 (defun posnp (obj)
-  "Return non-nil if OBJ appears to be a valid `posn' object."
+  "Return non-nil if OBJ appears to be a valid `posn' object specifying a window.
+If OBJ is a valid `posn' object, but specifies a frame rather
+than a window, return nil."
+  ;; FIXME: Correct the behavior of this function so that all valid
+  ;; `posn' objects are recognized, after updating other code that
+  ;; depends on its present behavior.
   (and (windowp (car-safe obj))
        (atom (car-safe (setq obj (cdr obj))))                ;AREA-OR-POS.
        (integerp (car-safe (car-safe (setq obj (cdr obj))))) ;XOFFSET.
@@ -1122,24 +1127,28 @@ For a scroll-bar event, the result column is 0, and the row
 corresponds to the vertical position of the click in the scroll bar.
 POSITION should be a list of the form returned by the `event-start'
 and `event-end' functions."
-  (let* ((pair   (posn-x-y position))
-	 (window (posn-window position))
-	 (area   (posn-area position)))
+  (let* ((pair            (posn-x-y position))
+         (frame-or-window (posn-window position))
+         (frame           (if (framep frame-or-window)
+                              frame-or-window
+                            (window-frame frame-or-window)))
+         (window          (when (windowp frame-or-window) frame-or-window))
+         (area            (posn-area position)))
     (cond
-     ((null window)
+     ((null frame-or-window)
       '(0 . 0))
      ((eq area 'vertical-scroll-bar)
       (cons 0 (scroll-bar-scale pair (1- (window-height window)))))
      ((eq area 'horizontal-scroll-bar)
       (cons (scroll-bar-scale pair (window-width window)) 0))
      (t
-      (let* ((frame (if (framep window) window (window-frame window)))
-	     ;; FIXME: This should take line-spacing properties on
-	     ;; newlines into account.
-	     (spacing (when (display-graphic-p frame)
-			(or (with-current-buffer (window-buffer window)
-			      line-spacing)
-			    (frame-parameter frame 'line-spacing)))))
+      ;; FIXME: This should take line-spacing properties on
+      ;; newlines into account.
+      (let* ((spacing (when (display-graphic-p frame)
+                        (or (with-current-buffer
+                                (window-buffer (frame-selected-window frame))
+                              line-spacing)
+                            (frame-parameter frame 'line-spacing)))))
 	(cond ((floatp spacing)
 	       (setq spacing (truncate (* spacing
 					  (frame-char-height frame)))))
@@ -1292,6 +1301,7 @@ is converted into a string by expressing it in decimal."
 (make-obsolete-variable 'redisplay-end-trigger-functions 'jit-lock-register "23.1")
 (make-obsolete-variable 'deferred-action-list 'post-command-hook "24.1")
 (make-obsolete-variable 'deferred-action-function 'post-command-hook "24.1")
+(make-obsolete-variable 'redisplay-dont-pause nil "24.5")
 (make-obsolete 'window-redisplay-end-trigger nil "23.1")
 (make-obsolete 'set-window-redisplay-end-trigger nil "23.1")
 
@@ -2142,7 +2152,7 @@ keyboard-quit events while waiting for a valid input."
     char))
 
 (defun sit-for (seconds &optional nodisp obsolete)
-  "Perform redisplay, then wait for SECONDS seconds or until input is available.
+  "Redisplay, then wait for SECONDS seconds.  Stop when input is available.
 SECONDS may be a floating-point value.
 \(On operating systems that do not support waiting for fractions of a
 second, floating-point values are rounded down to the nearest integer.)
@@ -2160,7 +2170,7 @@ floating point support."
   (declare (advertised-calling-convention (seconds &optional nodisp) "22.1"))
   ;; This used to be implemented in C until the following discussion:
   ;; http://lists.gnu.org/archive/html/emacs-devel/2006-07/msg00401.html
-  ;; Then it was moved to C using an implementation based on an idle timer,
+  ;; Then it was moved here using an implementation based on an idle timer,
   ;; which was then replaced by the use of read-event.
   (if (numberp nodisp)
       (setq seconds (+ seconds (* 1e-3 nodisp))
@@ -2879,23 +2889,21 @@ COMMAND is the shell command to run.
 An old calling convention accepted any number of arguments after COMMAND,
 which were just concatenated to COMMAND.  This is still supported but strongly
 discouraged."
-   ;; We used to use `exec' to replace the shell with the command,
-   ;; but that failed to handle (...) and semicolon, etc.
+  (declare (advertised-calling-convention (name buffer command) "23.1"))
+  ;; We used to use `exec' to replace the shell with the command,
+  ;; but that failed to handle (...) and semicolon, etc.
   (start-process name buffer shell-file-name shell-command-switch
 		 (mapconcat 'identity args " ")))
-(set-advertised-calling-convention 'start-process-shell-command
-                                   '(name buffer command) "23.1")
 
 (defun start-file-process-shell-command (name buffer &rest args)
   "Start a program in a subprocess.  Return the process object for it.
 Similar to `start-process-shell-command', but calls `start-file-process'."
+  (declare (advertised-calling-convention (name buffer command) "23.1"))
   (start-file-process
    name buffer
    (if (file-remote-p default-directory) "/bin/sh" shell-file-name)
    (if (file-remote-p default-directory) "-c" shell-command-switch)
    (mapconcat 'identity args " ")))
-(set-advertised-calling-convention 'start-file-process-shell-command
-                                   '(name buffer command) "23.1")
 
 (defun call-process-shell-command (command &optional infile buffer display
 					   &rest args)
@@ -2911,13 +2919,18 @@ STDERR-FILE may be nil (discard standard error output),
 t (mix it with ordinary output), or a file name string.
 
 Fourth arg DISPLAY non-nil means redisplay buffer as output is inserted.
-Remaining arguments are strings passed as additional arguments for COMMAND.
 Wildcards and redirection are handled as usual in the shell.
 
 If BUFFER is 0, `call-process-shell-command' returns immediately with value nil.
 Otherwise it waits for COMMAND to terminate and returns a numeric exit
 status or a signal description string.
-If you quit, the process is killed with SIGINT, or SIGKILL if you quit again."
+If you quit, the process is killed with SIGINT, or SIGKILL if you quit again.
+
+An old calling convention accepted any number of arguments after DISPLAY,
+which were just concatenated to COMMAND.  This is still supported but strongly
+discouraged."
+  (declare (advertised-calling-convention
+            (command &optional infile buffer display) "24.5"))
   ;; We used to use `exec' to replace the shell with the command,
   ;; but that failed to handle (...) and semicolon, etc.
   (call-process shell-file-name
@@ -2929,6 +2942,8 @@ If you quit, the process is killed with SIGINT, or SIGKILL if you quit again."
 					   &rest args)
   "Process files synchronously in a separate process.
 Similar to `call-process-shell-command', but calls `process-file'."
+  (declare (advertised-calling-convention
+            (command &optional infile buffer display) "24.5"))
   (process-file
    (if (file-remote-p default-directory) "/bin/sh" shell-file-name)
    infile buffer display

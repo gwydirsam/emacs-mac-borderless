@@ -1,3 +1,64 @@
+2015-02-02  Glenn Morris  <rgm@gnu.org>
+
+	* admin.el (manual-meta-string): Use bug-gnu-emacs@gnu email address
+	rather than webmasters@gnu.
+
+2015-01-03  Glenn Morris  <rgm@gnu.org>
+
+	* update_autogen (commit): Prepend "# " to commit message.
+
+2014-11-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Lessen focus on ChangeLog files, as opposed to change log entries.
+	This is in preparation for generating the former automatically
+	from the latter.
+	* notes/bugtracker, notes/copyright, notes/newfile:
+	ChangeLog -> change log
+	* notes/changelogs: Remove, merging old contents to ...
+	* notes/repo: ... here.
+
+2014-11-17  Oscar Fuentes  <ofv@wanadoo.es>
+
+	* CPP-DEFINES: Mention MINGW_W64.
+
+2014-11-15  Glenn Morris  <rgm@gnu.org>
+
+	* update_autogen: Auto-detect VCS in use.
+	(vcs): New variable.
+	(status, commit, main): Handle git.
+
+2014-11-11  Eric S. Raymond  <esr@thyrsus.com>
+
+	* make-tarball.txt, notes/bugtracker, notes/repo, notes/tags:
+	Git transition.
+	* update-copyright: Use git ls-files.
+	* update_autogen: Remove some bzr conditionals.
+
+2014-11-09  Eli Zaretskii  <eliz@gnu.org>
+
+	* unidata/Makefile.in (${top_srcdir}/src/macuvs.h): Use
+	unmsys--file-name.  (Bug#18955)
+
+2014-11-09  Glenn Morris  <rgm@gnu.org>
+
+	* admin.el (make-manuals-dist-output-variables)
+	(make-manuals-dist--1, make-manuals-dist): New.
+	Replaces doc/*/Makefile.in `dist' rules.
+
+2014-10-31  Eli Zaretskii  <eliz@gnu.org>
+
+	* notes/repo (Notes): Reword the stylistic guidance for commit log
+	messages so that they are in line with Emacs development practices
+	and style guidance.
+
+2014-10-31  Eric S. Raymond  <esr@thyrsus.com>
+
+	* notes/bzr: Rename to notes/repo, reorganize to separate
+	VCS-dependent from VCS-independent stuff.  Add guidance about
+	commit-comment format under DVCSes.
+
+	* notes/BRANCH: Merged into notes/repo.
+
 2014-10-20  Glenn Morris  <rgm@gnu.org>
 
 	* Version 24.4 released.
@@ -2198,7 +2259,7 @@
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2001-2014 Free Software Foundation, Inc.
+  Copyright (C) 2001-2015 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

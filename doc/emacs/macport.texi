@@ -433,7 +433,6 @@ images or reload files automatically.
 interpreted as those in the sRGB color space.  This may give a
 different look from other ports of GNU Emacs.
 
-@ignore
   On OS X 10.10, one can blend and blur background colors of the
 focused frame with the contents behind it.  This can be customized per
 face by a special background stipple name @samp{alpha:@var{alpha}},
@@ -454,7 +453,6 @@ or X resources emulation by the Preferences system:
 @smallexample
 defaults write org.gnu.Emacs Emacs.fringe.attributeStipple alpha:.5
 @end smallexample
-@end ignore
 
 @node Mac Fullscreen
 @section Fullscreen support on the Mac Port

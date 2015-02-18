@@ -1,6 +1,6 @@
 ;;; cc-engine.el --- core syntax guessing engine for CC mode -*- coding: utf-8 -*-
 
-;; Copyright (C) 1985, 1987, 1992-2014 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
 
 ;; Authors:    2001- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -248,6 +248,24 @@
     (setq c-macro-cache-start-pos beg
 	  c-macro-cache-syntactic nil))))
 
+(defun c-macro-is-genuine-p ()
+  ;; Check that the ostensible CPP construct at point is a real one.  In
+  ;; particular, if point is on the first line of a narrowed buffer, make sure
+  ;; that the "#" isn't, say, the second character of a "##" operator.  Return
+  ;; t when the macro is real, nil otherwise.
+  (let ((here (point)))
+    (beginning-of-line)
+    (prog1
+	(if (and (eq (point) (point-min))
+		 (/= (point) 1))
+	    (save-restriction
+	      (widen)
+	      (beginning-of-line)
+	      (and (looking-at c-anchored-cpp-prefix)
+		   (eq (match-beginning 1) here)))
+	  t)
+      (goto-char here))))
+
 (defun c-beginning-of-macro (&optional lim)
   "Go to the beginning of a preprocessor directive.
 Leave point at the beginning of the directive and return t if in one,
@@ -278,7 +296,8 @@ comment at the start of cc-engine.el for more info."
 	    (forward-line -1))
 	  (back-to-indentation)
 	  (if (and (<= (point) here)
-		   (looking-at c-opt-cpp-start))
+		   (looking-at c-opt-cpp-start)
+		   (c-macro-is-genuine-p))
 	      (progn
 		(setq c-macro-cache (cons (point) nil)
 		      c-macro-cache-start-pos here)
@@ -2256,7 +2275,9 @@ comment at the start of cc-engine.el for more info."
 	  (while
 	      ;; Add an element to `c-state-nonlit-pos-cache' each iteration.
 	      (and
-	       (<= (setq npos (+ pos c-state-nonlit-pos-interval)) here)
+	       (setq npos
+		     (when (<= (+ pos c-state-nonlit-pos-interval) here)
+		       (+ pos c-state-nonlit-pos-interval)))
 
 	       ;; Test for being in a literal.  If so, go to after it.
 	       (progn
@@ -2283,7 +2304,9 @@ comment at the start of cc-engine.el for more info."
 	  ;; Add one extra element above HERE so as to to avoid the previous
 	  ;; expensive calculation when the next call is close to the current
 	  ;; one.  This is especially useful when inside a large macro.
-	  (setq c-state-nonlit-pos-cache (cons npos c-state-nonlit-pos-cache)))
+	  (when npos
+	    (setq c-state-nonlit-pos-cache
+		  (cons npos c-state-nonlit-pos-cache))))
 
 	(if (> pos c-state-nonlit-pos-cache-limit)
 	    (setq c-state-nonlit-pos-cache-limit pos))
@@ -3047,7 +3070,7 @@ comment at the start of cc-engine.el for more info."
       (setq dropped-cons (consp (car c-state-cache)))
       (setq c-state-cache (cdr c-state-cache))
       (setq pos pa))
-    ;; At this stage, (> pos here);
+    ;; At this stage, (>= pos here);
     ;; (< (c-state-cache-top-lparen) here)  (or is nil).
 
     (cond
