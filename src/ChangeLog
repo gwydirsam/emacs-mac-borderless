@@ -1,3 +1,42 @@
+2015-02-28  Eli Zaretskii  <eliz@gnu.org>
+
+	* search.c (find_newline): Avoid assertion violations in
+	CHAR_TO_BYTE when a portion of the buffer was deleted and we look
+	for newlines near the end of the buffer.  This happens in Rmail
+	hen JIT font-lock fontifies a newly displayed portion of the
+	buffer.
+
+2015-02-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* w32fns.c (Fw32__menu_bar_in_use): New internal function.
+	(Bug#19925)
+
+2015-02-20  Glenn Morris  <rgm@gnu.org>
+
+	* fileio.c (Fmake_temp_name): Doc tweaks.  (Bug#19858)
+
+2015-02-14  Eli Zaretskii  <eliz@gnu.org>
+
+	* menu.c (Fx_popup_menu) [HAVE_X_WINDOWS]: Call
+	mouse_position_for_popup only for X frames.  (Bug#19862)
+
+2015-02-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* buffer.c (syms_of_buffer): Doc fix.  (Bug#19841)
+
+2015-02-08  Eli Zaretskii  <eliz@gnu.org>
+
+	* xfaces.c (map_tty_color): Use assoc_no_quit instead of
+	assq_no_quit to fetch color definition by its string name.
+	(Bug#19802)
+
+2015-02-05  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (move_it_in_display_line_to): Handle the case where the
+	last character of a screen line is whitespace, and we are under
+	word-wrap with overflow-newline-into-fringe turned on.
+	(Bug#19769)
+
 2015-02-03  Eli Zaretskii  <eliz@gnu.org>
 
 	* xdisp.c (handle_stop, handle_single_display_spec)

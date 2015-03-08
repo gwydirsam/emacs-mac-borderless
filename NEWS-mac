@@ -1,5 +1,25 @@
+* emacs-24.4.91-mac-5.5 (2015-03-09)
+Based on 24.4.91.
+
+** Fixed bugs
+
+*** Focusing a fullscreen frame whose menu-bar-lines value is 0
+causes bouncing Spaces back.
+Reported by Marius Kjeldahl.
+
+** Improvements
+
+*** Press and hold for accents is no longer unconditionally disabled.
+You can enable it via the Preference system (e.g., "defaults write
+org.gnu.Emacs ApplePressAndHoldEnabled YES").
+
+*** Support emoji modifiers for skin tones (if the system and fonts
+support them).
+
+
 * emacs-24.4.90-mac-5.4 (2015-02-18)
 Based on 24.4.90.
+http://lists.gnu.org/archive/html/emacs-devel/2015-02/msg01082.html
 
 Blend-and-blur of background color on OS X 10.10 is enabled again
 because the mode-line erasure issue (Bug#19721) is fixed upstream.

@@ -1244,8 +1244,8 @@ Entering array mode calls the function `array-mode-hook'.
 
 ;;;***
 
-;;;### (autoloads nil "artist" "textmodes/artist.el" (21710 25465
-;;;;;;  348934 141000))
+;;;### (autoloads nil "artist" "textmodes/artist.el" (21732 22059
+;;;;;;  431321 591000))
 ;;; Generated autoloads from textmodes/artist.el
 (push (purecopy '(artist 1 2 6)) package--builtin-versions)
 
@@ -2311,8 +2311,8 @@ Incremental search of bookmarks, hiding the non-matches as we go.
 
 ;;;***
 
-;;;### (autoloads nil "browse-url" "net/browse-url.el" (21710 25547
-;;;;;;  141569 489000))
+;;;### (autoloads nil "browse-url" "net/browse-url.el" (21756 23917
+;;;;;;  638125 443000))
 ;;; Generated autoloads from net/browse-url.el
 
 (defvar browse-url-browser-function 'browse-url-default-browser "\
@@ -2427,29 +2427,23 @@ used instead of `browse-url-new-window-flag'.
 
 (autoload 'browse-url-firefox "browse-url" "\
 Ask the Firefox WWW browser to load URL.
-Default to the URL around or before point.  The strings in
-variable `browse-url-firefox-arguments' are also passed to
-Firefox.
+Defaults to the URL around or before point.  Passes the strings
+in the variable `browse-url-firefox-arguments' to Firefox.
 
-When called interactively, if variable
-`browse-url-new-window-flag' is non-nil, load the document in a
-new Firefox window, otherwise use a random existing one.  A
-non-nil interactive prefix argument reverses the effect of
-`browse-url-new-window-flag'.
+Interactively, if the variable `browse-url-new-window-flag' is non-nil,
+loads the document in a new Firefox window.  A non-nil prefix argument
+reverses the effect of `browse-url-new-window-flag'.
 
 If `browse-url-firefox-new-window-is-tab' is non-nil, then
 whenever a document would otherwise be loaded in a new window, it
 is loaded in a new tab in an existing window instead.
 
-When called non-interactively, optional second argument
-NEW-WINDOW is used instead of `browse-url-new-window-flag'.
+Non-interactively, this uses the optional second argument NEW-WINDOW
+instead of `browse-url-new-window-flag'.
 
-On MS-Windows systems the optional `new-window' parameter is
-ignored.  Firefox for Windows does not support the \"-remote\"
-command line parameter.  Therefore, the
-`browse-url-new-window-flag' and `browse-url-firefox-new-window-is-tab'
-are ignored as well.  Firefox on Windows will always open the requested
-URL in a new window.
+On MS Windows, this ignores `browse-url-new-window-flag' and
+`browse-url-firefox-new-window-is-tab', as well as the NEW-WINDOW argument.
+It always uses a new window.
 
 \(fn URL &optional NEW-WINDOW)" t nil)
 
@@ -4201,7 +4195,7 @@ If FRAME cannot display COLOR, return nil.
 
 ;;;***
 
-;;;### (autoloads nil "comint" "comint.el" (21710 25547 70569 806000))
+;;;### (autoloads nil "comint" "comint.el" (21756 23917 629125 513000))
 ;;; Generated autoloads from comint.el
 
 (defvar comint-output-filter-functions '(ansi-color-process-output comint-postoutput-scroll-to-bottom comint-watch-for-password-prompt) "\
@@ -6309,7 +6303,7 @@ Optional arguments are passed to `dig-invoke'.
 
 ;;;***
 
-;;;### (autoloads nil "dired" "dired.el" (21710 25547 74569 788000))
+;;;### (autoloads nil "dired" "dired.el" (21756 23917 629125 513000))
 ;;; Generated autoloads from dired.el
 
 (defvar dired-listing-switches (purecopy "-al") "\
@@ -8670,8 +8664,9 @@ Look at CONFIG and try to expand GROUP.
 
 ;;;***
 
-;;;### (autoloads nil "erc" "erc/erc.el" (21710 25465 149935 28000))
+;;;### (autoloads nil "erc" "erc/erc.el" (21732 22059 427321 614000))
 ;;; Generated autoloads from erc/erc.el
+(push (purecopy '(erc 5 3)) package--builtin-versions)
 
 (autoload 'erc-select-read-args "erc" "\
 Prompt the user for values of nick, server, port, and password.
@@ -10961,8 +10956,8 @@ Turn flymake mode off.
 
 ;;;***
 
-;;;### (autoloads nil "flyspell" "textmodes/flyspell.el" (21710 25465
-;;;;;;  350934 132000))
+;;;### (autoloads nil "flyspell" "textmodes/flyspell.el" (21732 22059
+;;;;;;  431321 591000))
 ;;; Generated autoloads from textmodes/flyspell.el
 
 (autoload 'flyspell-prog-mode "flyspell" "\
@@ -16027,8 +16022,8 @@ Add submenus to the File menu, to convert to and from various formats.
 
 ;;;***
 
-;;;### (autoloads nil "ispell" "textmodes/ispell.el" (21710 25547
-;;;;;;  209569 186000))
+;;;### (autoloads nil "ispell" "textmodes/ispell.el" (21756 23917
+;;;;;;  647125 373000))
 ;;; Generated autoloads from textmodes/ispell.el
 
 (put 'ispell-check-comments 'safe-local-variable (lambda (a) (memq a '(nil t exclusive))))
@@ -18950,8 +18945,8 @@ listed in the PORTS list.
 
 ;;;***
 
-;;;### (autoloads nil "network-stream" "net/network-stream.el" (21710
-;;;;;;  25547 143569 481000))
+;;;### (autoloads nil "network-stream" "net/network-stream.el" (21732
+;;;;;;  22059 428321 608000))
 ;;; Generated autoloads from net/network-stream.el
 
 (autoload 'open-network-stream "network-stream" "\
@@ -21817,10 +21812,10 @@ If EXTENSION is any other symbol, it is ignored.
 
 ;;;***
 
-;;;### (autoloads nil "python" "progmodes/python.el" (21710 25547
-;;;;;;  187569 284000))
+;;;### (autoloads nil "python" "progmodes/python.el" (21756 23917
+;;;;;;  646125 381000))
 ;;; Generated autoloads from progmodes/python.el
-(push (purecopy '(python 0 24 4)) package--builtin-versions)
+(push (purecopy '(python 0 24 5)) package--builtin-versions)
 
 (add-to-list 'auto-mode-alist (cons (purecopy "\\.py\\'") 'python-mode))
 
@@ -27917,8 +27912,8 @@ Its value should be an event that has a binding in MENU.
 
 ;;;***
 
-;;;### (autoloads nil "todo-mode" "calendar/todo-mode.el" (21710
-;;;;;;  25465 96935 264000))
+;;;### (autoloads nil "todo-mode" "calendar/todo-mode.el" (21732
+;;;;;;  22059 425321 625000))
 ;;; Generated autoloads from calendar/todo-mode.el
 
 (autoload 'todo-show "todo-mode" "\
@@ -28116,8 +28111,8 @@ the output buffer or changing the window configuration.
 
 ;;;***
 
-;;;### (autoloads nil "tramp" "net/tramp.el" (21713 24233 279494
-;;;;;;  843000))
+;;;### (autoloads nil "tramp" "net/tramp.el" (21756 23917 639125
+;;;;;;  436000))
 ;;; Generated autoloads from net/tramp.el
 
 (defvar tramp-mode t "\
@@ -31988,8 +31983,8 @@ Zone out, completely.
 ;;;;;;  "vc/ediff-ptch.el" "vc/ediff-vers.el" "vc/ediff-wind.el"
 ;;;;;;  "vc/pcvs-info.el" "vc/pcvs-parse.el" "vc/pcvs-util.el" "vc/vc-dav.el"
 ;;;;;;  "vcursor.el" "vt-control.el" "vt100-led.el" "w32-common-fns.el"
-;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (21713 25981 85824
-;;;;;;  32000))
+;;;;;;  "w32-fns.el" "w32-vars.el" "x-dnd.el") (21756 24813 458504
+;;;;;;  639000))
 
 ;;;***
 

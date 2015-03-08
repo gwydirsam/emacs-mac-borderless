@@ -2932,17 +2932,15 @@ static CGRect unset_global_focus_view_frame (void);
 {
   NSWindowCollectionBehavior behavior;
 
-  if (windowManagerState & WM_STATE_NO_MENUBAR)
-    {
-      behavior = ((windowManagerState & WM_STATE_STICKY)
-		  ? NSWindowCollectionBehaviorCanJoinAllSpaces
-		  : NSWindowCollectionBehaviorMoveToActiveSpace);
+  if ((windowManagerState & WM_STATE_NO_MENUBAR)
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-      if (has_full_screen_with_dedicated_desktop ()
-	  && (windowManagerState & WM_STATE_DEDICATED_DESKTOP))
-	behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+      && !(has_full_screen_with_dedicated_desktop ()
+	   && (windowManagerState & WM_STATE_DEDICATED_DESKTOP))
 #endif
-    }
+      )
+    behavior = ((windowManagerState & WM_STATE_STICKY)
+		? NSWindowCollectionBehaviorCanJoinAllSpaces
+		: NSWindowCollectionBehaviorMoveToActiveSpace);
   else
     {
       behavior = ((windowManagerState & WM_STATE_STICKY)
@@ -2996,6 +2994,7 @@ static CGRect unset_global_focus_view_frame (void);
   windowManagerState ^=
     (diff & (WM_STATE_MAXIMIZED_HORZ | WM_STATE_MAXIMIZED_VERT
 	     | WM_STATE_FULLSCREEN | WM_STATE_DEDICATED_DESKTOP));
+  [self updateCollectionBehavior];
 
   return frameRect;
 }
@@ -3828,7 +3827,6 @@ static CGRect unset_global_focus_view_frame (void);
   if (overlayWindow)
     [self attachOverlayWindow];
   [emacsController updatePresentationOptions];
-  [self updateCollectionBehavior];
   /* This is a workaround for the problem of not preserving toolbar
      visibility value.  */
   [self performSelector:@selector(restoreToolbarVisibility)
@@ -4634,11 +4632,15 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
   if (self == [EmacsMainView class])
     {
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-      NSDictionary *appDefaults =
-	[NSDictionary dictionaryWithObject:@"NO"
-				    forKey:@"ApplePressAndHoldEnabled"];
 
-      [defaults registerDefaults:appDefaults];
+      if ([defaults objectForKey:@"ApplePressAndHoldEnabled"] == nil)
+	{
+	  NSDictionary *appDefaults =
+	    [NSDictionary dictionaryWithObject:@"NO"
+					forKey:@"ApplePressAndHoldEnabled"];
+
+	  [defaults registerDefaults:appDefaults];
+	}
     }
 }
 
@@ -5329,6 +5331,10 @@ get_text_input_script_language (ScriptLanguageRecord *slrec)
 	  [self sendAction:action to:target];
 	}
     }
+  /* This is necessary for insertions by press-and-hold to be
+     responsive.  */
+  if (rawKeyEvent == nil)
+    [NSApp postDummyEvent];
 }
 
 - (void)insertText:(id)aString

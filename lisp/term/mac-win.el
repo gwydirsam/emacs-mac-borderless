@@ -331,12 +331,38 @@ modes have been enabled with Quartz Debug.app."
   "Groups of characters that are sensitive to variation selectors 15 and 16.
 It is an alist of label symbols vs sequences of characters.")
 
-(defun mac-compose-gstring-for-keycap-variation (gstring)
-  "Compose keycap glyph-string GSTRING for graphic display.
+(defconst mac-emoji-modification-characters-alist
+  '((minimal . "\U0001F385\U0001F466\U0001F467\U0001F468\U0001F469\U0001F46E\
+\U0001F46F\U0001F470\U0001F471\U0001F472\U0001F473\U0001F474\U0001F475\
+\U0001F476\U0001F477\U0001F478\U0001F47C\U0001F481\U0001F482\U0001F486\
+\U0001F487\U0001F645\U0001F646\U0001F647\U0001F64B\U0001F64D\U0001F64E")
+    (optional . "\u261D\u2639\u263A\u270A\u270B\u270C\u270D\
+\U0001F3C2\U0001F3C3\U0001F3C4\U0001F3C7\U0001F3CA\U0001F442\U0001F443\
+\U0001F446\U0001F447\U0001F448\U0001F449\U0001F44A\U0001F44B\U0001F44C\
+\U0001F44D\U0001F44E\U0001F44F\U0001F450\U0001F47F\U0001F483\U0001F485\
+\U0001F4AA\U0001F590\U0001F595\U0001F596\U0001F600\U0001F601\U0001F602\
+\U0001F603\U0001F604\U0001F605\U0001F606\U0001F607\U0001F608\U0001F609\
+\U0001F60A\U0001F60B\U0001F60C\U0001F60D\U0001F60E\U0001F60F\U0001F610\
+\U0001F611\U0001F612\U0001F613\U0001F614\U0001F615\U0001F616\U0001F617\
+\U0001F618\U0001F619\U0001F61A\U0001F61B\U0001F61C\U0001F61D\U0001F61E\
+\U0001F61F\U0001F620\U0001F621\U0001F622\U0001F623\U0001F624\U0001F625\
+\U0001F626\U0001F627\U0001F628\U0001F629\U0001F62A\U0001F62B\U0001F62C\
+\U0001F62D\U0001F62E\U0001F62F\U0001F630\U0001F631\U0001F632\U0001F633\
+\U0001F634\U0001F635\U0001F636\U0001F637\U0001F641\U0001F642\U0001F64C\
+\U0001F64F\U0001F6A3\U0001F6B4\U0001F6B5\U0001F6B6\U0001F6C0"))
+  "Groups of characters that are sensitive to emoji modifiers.
+It is an alist of label symbols vs sequences of characters.
+The entries are currently based on UTS #51 version 1.0 (draft 7).")
+
+(defun mac-compose-gstring-for-variation-with-trailer (gstring)
+  "Compose glyph-string GSTRING for graphic display.
 GSTRING must have three glyphs; the first is a character that is
-part of a keycap symbol, the second is a glyph for the variation
-selector 15 (U+FE0E, text-style) or 16 (U+FE0F, emoji-style), and
-the third is the combining enclosing keycap character (U+20E3)."
+sensitive to the variation selectors 15 (U+FE0E, text-style) and
+16 (U+FE0F, emoji-style), the second is a glyph for one of the
+variation selectors, and the third is a \"trailer\" character
+that participates in the whole composition, e.g., the combining
+enclosing keycap character (U+20E3) or the emoji modifiers for
+skin tones (U+1F3FB - U+1F3FF)."
   (let ((saved-header (lgstring-header gstring))
 	(g2 (lgstring-glyph gstring 2))
 	(i 0)
@@ -347,17 +373,18 @@ the third is the combining enclosing keycap character (U+20E3)."
     (lglyph-set-from-to g2 (1- (lglyph-from g2)) (1- (lglyph-to g2)))
     (lgstring-set-glyph gstring 1 g2)
     (lgstring-set-glyph gstring 2 nil)
-    (setq gstring (font-shape-gstring gstring))
+    (setq gstring (copy-sequence (font-shape-gstring gstring)))
     (when gstring
       (lgstring-set-header gstring saved-header)
       (lgstring-set-id gstring nil)
       (while (and (< i (lgstring-glyph-len gstring))
-		  (setq glyph (lgstring-glyph gstring i)))
+		  (setq glyph (copy-sequence (lgstring-glyph gstring i))))
 	(setq from (lglyph-from glyph)
 	      to (lglyph-to glyph))
 	(if (>= from 1) (setq from (1+ from)))
 	(if (>= to 1) (setq to (1+ to)))
 	(lglyph-set-from-to glyph from to)
+	(lgstring-set-glyph gstring i glyph)
 	(setq i (1+ i)))))
   gstring)
 
@@ -383,34 +410,54 @@ second is a glyph for the variation selector 16 (U+FE0F)."
     (lgstring-set-header gstring (vector (lgstring-font gstring)
 					 (lgstring-char gstring 0)))
     (lgstring-set-glyph gstring 1 nil)
-    (setq gstring (font-shape-gstring gstring))
+    (setq gstring (copy-sequence (font-shape-gstring gstring)))
     (when gstring
       (lgstring-set-header gstring saved-header)
       (lgstring-set-id gstring nil)
-      (setq glyph (lgstring-glyph gstring 0))
+      (setq glyph (copy-sequence (lgstring-glyph gstring 0)))
       (lglyph-set-from-to glyph (lglyph-from glyph) (1+ (lglyph-to glyph)))
-      (lglyph-set-char glyph 0)))
+      (lglyph-set-char glyph 0)
+      (lgstring-set-glyph gstring 0 glyph)))
   gstring)
 
 (defun mac-setup-composition-function-table ()
   ;; Regional Indicator Symbols
   (set-char-table-range composition-function-table '(#x1F1E6 . #x1F1FF)
 			'(["[\x1F1E6-\x1F1FF]+" 0 font-shape-gstring]))
-  ;; Variation Selectors 15 and 16
-  (let ((regexp-keycap
-	 (concat "[" (cdr (assq 'keycap mac-emoji-variation-characters-alist))
-		 "].\u20E3"))
-	(regexp-all
-	 (concat "[" (mapconcat 'cdr mac-emoji-variation-characters-alist "")
-		 "].")))
+  (let ((variations
+	 (mapconcat 'cdr mac-emoji-variation-characters-alist ""))
+	(modifications
+	 (mapconcat 'cdr mac-emoji-modification-characters-alist ""))
+	intersection)
+    (let ((modifications-regexp (concat "[" modifications "]")))
+      (mapc (lambda (c) (if (string-match modifications-regexp (string c))
+			    (push c intersection)))
+	    variations))
+    ;; Variation Selectors 15 and 16
+    (let ((regexp-keycap
+	   (concat "[" (cdr (assq 'keycap mac-emoji-variation-characters-alist))
+		   "].\u20E3"))
+	  (regexp-all (concat "[" variations "]."))
+	  (regexp-modified (concat "[" intersection "].[\x1F3FB-\x1F3FF]")))
+      (set-char-table-range
+       composition-function-table ?\uFE0E
+       `([,regexp-keycap 1 mac-compose-gstring-for-variation-with-trailer 1]
+	 [,regexp-modified 1 mac-compose-gstring-for-variation-with-trailer -1]
+	 [,regexp-all 1 mac-compose-gstring-for-text-style-variation -1]))
+      (set-char-table-range
+       composition-function-table ?\uFE0F
+       `([,regexp-keycap 1 mac-compose-gstring-for-variation-with-trailer 0]
+	 [,regexp-modified 1 mac-compose-gstring-for-variation-with-trailer 0]
+	 [,regexp-all 1 mac-compose-gstring-for-emoji-style-variation 0])))
+    ;; Emoji Modifiers
+    (if (eq (get-char-code-property #x1F3FB 'general-category) 'Cn)
+	;; Change general category of the emoji modifiers for skin
+	;; tones (U+1F3FB - U+1F3FF) so cursor movement works right.
+	(dotimes (i (1+ (- #x1F3FF #x1F3FB)))
+	  (put-char-code-property (+ #x1F3FB i) 'general-category 'Sk)))
     (set-char-table-range
-     composition-function-table ?\uFE0E
-     `([,regexp-keycap 1 mac-compose-gstring-for-keycap-variation 1]
-       [,regexp-all 1 mac-compose-gstring-for-text-style-variation -1]))
-    (set-char-table-range
-     composition-function-table ?\uFE0F
-     `([,regexp-keycap 1 mac-compose-gstring-for-keycap-variation 0]
-       [,regexp-all 1 mac-compose-gstring-for-emoji-style-variation 0]))))
+     composition-function-table '(#x1F3FB . #x1F3FF)
+     `([,(concat "[" modifications "].") 1 font-shape-gstring 0]))))
 
 
 ;;;; Conversion between common flavors and Lisp string.
