@@ -2326,6 +2326,16 @@ static CGRect unset_global_focus_view_frame (void);
 
 @implementation EmacsWindow
 
+- (BOOL)canBecomeKeyWindow
+{
+  return YES;
+}
+
+- (BOOL)canBecomeMainWindow
+{
+  return [self isVisible];
+}
+
 - (instancetype)initWithContentRect:(NSRect)contentRect
 			  styleMask:(NSUInteger)windowStyle
 			    backing:(NSBackingStoreType)bufferingType
@@ -2680,8 +2690,9 @@ static CGRect unset_global_focus_view_frame (void);
       else
 	{
 	  windowClass = [EmacsWindow class];
-	  windowStyle = (NSTitledWindowMask | NSClosableWindowMask
-			 | NSMiniaturizableWindowMask | NSResizableWindowMask);
+          windowStyle = (NSBorderlessWindowMask | NSResizableWindowMask);
+	  // windowStyle = (NSTitledWindowMask | NSClosableWindowMask
+	  //       	 | NSMiniaturizableWindowMask | NSResizableWindowMask);
 	}
     }
   else
