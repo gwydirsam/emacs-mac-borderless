@@ -7,3 +7,5 @@ If you use my homebrew formula, it has support for changing the icon to the spac
 ```bash
 brew install https://raw.githubusercontent.com/Gwydir8/emacs-mac-borderless/master/emacs-mac-borderless.rb
 ```
+## Screenshot
+![Emacs-mac borderless showing spacemacs buffer](https://raw.githubusercontent.com/Gwydir8/emacs-mac-borderless/master/emacs-mac-borderless.tiff)
