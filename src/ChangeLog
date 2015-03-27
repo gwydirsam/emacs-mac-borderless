@@ -1,3 +1,22 @@
+2015-04-01  Nicolas Petton  <nicolas@petton.fr>
+
+	* Version 24.5 released.
+
+2015-03-25  Martin Rudalics  <rudalics@gmx.at>
+
+	* gtkutil.c (update_theme_scrollbar_width): Don't round up
+	scroll bar width with GTK3 (Bug#20182).
+
+2015-03-22  John F Carr  <jfc@mit.edu>  (tiny change)
+
+	* fontset.c (fontset_pattern_regexp): Backport: Replace + 1 with
+	+ 3 in alloca (Bug#20156).
+
+2015-03-12  Glenn Morris  <rgm@gnu.org>
+
+	* frame.h (x_set_bitmap_icon): Don't set the icon if icon-type is
+	nil/not present in the parameter alist.  (Bug#19680)
+
 2015-02-28  Eli Zaretskii  <eliz@gnu.org>
 
 	* search.c (find_newline): Avoid assertion violations in

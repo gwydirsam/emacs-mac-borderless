@@ -1128,6 +1128,21 @@ has_full_screen_with_dedicated_desktop (void)
 }
 #endif
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+/* Whether window's bottom corners need masking so they look rounded.
+   If we use NSVisualEffectView (available on OS X 10.10 and later)
+   for the content view, then we don't have to mask the corners
+   manually.  Mac OS X 10.6 and earlier don't have the rounded bottom
+   corners in the first place.  */
+
+static bool
+rounded_bottom_corners_need_masking_p (void)
+{
+  return (floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9
+	  && !(floor (NSAppKitVersionNumber) <= NSAppKitVersionNumber10_6));
+}
+#endif
+
 /* Autorelease pool.  */
 
 #if __clang_major__ >= 3
@@ -3288,31 +3303,37 @@ static CGRect unset_global_focus_view_frame (void);
   [[emacsView window] invalidateCursorRectsForView:emacsView];
 }
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 - (void)maskRoundedBottomCorners:(NSRect)clipRect directly:(BOOL)flag
 {
   NSWindow *window = [emacsView window];
+  NSRect rect = [emacsView convertRect:clipRect toView:nil];
 
-  if ([window respondsToSelector:@selector(_intersectBottomCornersWithRect:)])
+  rect = [window _intersectBottomCornersWithRect:rect];
+  if (!NSIsEmptyRect (rect))
     {
-      NSRect rect = [emacsView convertRect:clipRect toView:nil];
-
-      rect = [window _intersectBottomCornersWithRect:rect];
-      if (!NSIsEmptyRect (rect))
+      if (flag)
+	[window _maskRoundedBottomCorners:rect];
+      else
 	{
-	  if (flag)
-	    [window _maskRoundedBottomCorners:rect];
+	  struct frame *f = emacsFrame;
+
+	  if (!FRAME_GARBAGED_P (f))
+	    {
+	      NSView *frameView = [[window contentView] superview];
+
+	      rect = [frameView convertRect:rect fromView:nil];
+	      [frameView displayRectIgnoringOpacity:rect];
+	    }
 	  else
 	    {
-	      struct frame *f = emacsFrame;
-
 	      rect = [emacsView convertRect:rect fromView:nil];
 	      [emacsView setNeedsDisplayInRect:rect];
-	      if (!FRAME_GARBAGED_P (f))
-		[window displayIfNeeded];
 	    }
 	}
     }
 }
+#endif
 
 - (void)setEmacsViewNeedsDisplayInRects:(const NSRect *)rects
 				  count:(NSUInteger)count
@@ -4572,10 +4593,15 @@ void
 mac_mask_rounded_bottom_corners (struct frame *f, CGRect clip_rect,
 				 Boolean direct_p)
 {
-  EmacsFrameController *frameController = FRAME_CONTROLLER (f);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  if (rounded_bottom_corners_need_masking_p ())
+    {
+      EmacsFrameController *frameController = FRAME_CONTROLLER (f);
 
-  [frameController maskRoundedBottomCorners:(NSRectFromCGRect (clip_rect))
-				   directly:direct_p];
+      [frameController maskRoundedBottomCorners:(NSRectFromCGRect (clip_rect))
+				       directly:direct_p];
+    }
+#endif
 }
 
 void
@@ -4710,16 +4736,16 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
       && [NSWindow instancesRespondToSelector:@selector(backingScaleFactor)])
     SET_FRAME_GARBAGED (f);
   unset_global_focus_view_frame ();
-
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
   roundedBottomCornersCopied = NO;
+#endif
 }
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 - (void)scrollRect:(NSRect)aRect by:(NSSize)offset
 {
-  NSWindow *window = [self window];
-
   [super scrollRect:aRect by:offset];
-  if ([window respondsToSelector:@selector(_intersectBottomCornersWithRect:)])
+  if (rounded_bottom_corners_need_masking_p ())
     {
       if (roundedBottomCornersCopied)
 	[self setNeedsDisplay:YES];
@@ -4727,7 +4753,7 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 	{
 	  NSRect rect = [self convertRect:aRect toView:nil];
 
-	  rect = [window _intersectBottomCornersWithRect:rect];
+	  rect = [[self window] _intersectBottomCornersWithRect:rect];
 	  if (!NSIsEmptyRect (rect))
 	    {
 	      rect = [self convertRect:rect fromView:nil];
@@ -4739,6 +4765,7 @@ static int mac_event_to_emacs_modifiers (NSEvent *);
 	}
     }
 }
+#endif
 
 - (void)setMarkedText:(id)aString
 {
@@ -5805,11 +5832,15 @@ get_text_input_script_language (ScriptLanguageRecord *slrec)
 
 /* Emacs frame containing the globally focused NSView.  */
 static struct frame *global_focus_view_frame;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 static CGRect global_focus_view_accumulated_clip_rect;
+#endif
 /* -[EmacsView drawRect:] might be called during update_frame.  */
 static struct frame *saved_focus_view_frame;
 static CGContextRef saved_focus_view_context;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 static CGRect saved_focus_view_accumulated_clip_rect;
+#endif
 #if DRAWING_USE_GCD
 dispatch_queue_t global_focus_drawing_queue;
 #endif
@@ -5823,12 +5854,16 @@ set_global_focus_view_frame (struct frame *f)
       if (saved_focus_view_frame)
 	{
 	  saved_focus_view_context = FRAME_CG_CONTEXT (saved_focus_view_frame);
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 	  saved_focus_view_accumulated_clip_rect =
 	    global_focus_view_accumulated_clip_rect;
+#endif
 	}
       global_focus_view_frame = f;
       FRAME_CG_CONTEXT (f) = [[NSGraphicsContext currentContext] graphicsPort];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
       global_focus_view_accumulated_clip_rect = CGRectNull;
+#endif
     }
 #if DRAWING_USE_GCD
   if (mac_drawing_use_gcd)
@@ -5862,22 +5897,24 @@ mac_draw_queue_sync (void)
 static CGRect
 unset_global_focus_view_frame (void)
 {
-  CGRect result;
+  CGRect result = CGRectNull;
 
   if (global_focus_view_frame != saved_focus_view_frame)
     {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
       result = global_focus_view_accumulated_clip_rect;
+#endif
       FRAME_CG_CONTEXT (global_focus_view_frame) = NULL;
       global_focus_view_frame = saved_focus_view_frame;
       if (global_focus_view_frame)
 	{
 	  FRAME_CG_CONTEXT (global_focus_view_frame) = saved_focus_view_context;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 	  global_focus_view_accumulated_clip_rect =
 	    saved_focus_view_accumulated_clip_rect;
+#endif
 	}
     }
-  else
-    result = CGRectNull;
   saved_focus_view_frame = NULL;
 
   mac_draw_queue_sync ();
@@ -5889,6 +5926,7 @@ static void
 mac_accumulate_global_focus_view_clip_rect (const CGRect *clip_rects,
 					    CFIndex n_clip_rects)
 {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
   if (n_clip_rects)
     {
       CFIndex i;
@@ -5900,6 +5938,7 @@ mac_accumulate_global_focus_view_clip_rect (const CGRect *clip_rects,
     }
   else
     global_focus_view_accumulated_clip_rect = CGRectInfinite;
+#endif
 }
 
 #if DRAWING_USE_GCD

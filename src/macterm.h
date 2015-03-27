@@ -565,6 +565,7 @@ extern Lisp_Object xrm_get_resource (XrmDatabase, const char *, const char *);
 extern XrmDatabase xrm_get_preference_database (const char *);
 extern int mac_select (int, fd_set *, fd_set *, fd_set *,
 		       struct timespec const *, sigset_t const *);
+extern void mac_reinvoke_from_shell (int, char *[]);
 extern bool mac_service_provider_registered_p (void);
 extern Lisp_Object mac_carbon_version_string (void);
 

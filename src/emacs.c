@@ -768,6 +768,18 @@ main (int argc, char **argv)
     run_time_remap (argv[0]);
 #endif
 
+#ifdef HAVE_MACGUI
+  if (getenv ("EMACS_REINVOKED_FROM_SHELL"))
+    unsetenv ("EMACS_REINVOKED_FROM_SHELL");
+  else
+    {
+      char *shlvl = getenv ("SHLVL");
+
+      if (shlvl == NULL || atoi (shlvl) == 0)
+	mac_reinvoke_from_shell (argc, argv);
+    }
+#endif
+
 /* If using unexmacosx.c (set by s/darwin.h), we must do this. */
 #ifdef DARWIN_OS
   if (!initialized)
@@ -1264,6 +1276,17 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
 #endif  /* COCOA */
     }
 #endif /* HAVE_NS */
+
+#ifdef HAVE_MACGUI
+  if (!noninteractive)
+    {
+      /* Started from GUI? */
+      /* FIXME: Do the right thing if getenv returns NULL, or if chdir
+	 fails.  */
+      if (! inhibit_window_system && ! isatty (0))
+	chdir (getenv ("HOME"));
+    }
+#endif
 
 #ifdef HAVE_X_WINDOWS
   /* Stupid kludge to catch command-line display spec.  We can't

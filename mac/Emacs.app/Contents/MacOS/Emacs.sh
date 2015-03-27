@@ -20,23 +20,8 @@
 
 ### Code:
 
-filename="$(basename "$0")"
-filename="$(dirname "$0")/${filename%.sh}"
-
-case $PWD in
-    /)
-	# As of OS X 10.8, this is always the case if invoked from the
-	# launch service.  Just in case this behavior is changed on
-	# future versions...
-	cd
-	case $filename in
-	    /*) ;;
-	    *) filename=/"$filename" ;;
-	esac
-	;;
-esac
-
-set "$filename" "$@"
+export EMACS_REINVOKED_FROM_SHELL=1
+set "${0%.sh}" "$@"
 
 case $(sw_vers -productVersion) in
     10.[0-7]|10.[0-7].*)
@@ -45,7 +30,7 @@ case $(sw_vers -productVersion) in
 	    # Invocation via "Login Items" or "Resume" resets PATH.
 	    case ${SHLVL} in
 		1)
-		    p="$(defaults read "$HOME/.MacOSX/environment" PATH 2>/dev/null)" && PATH="$p"
+		    p=$(defaults read "$HOME/.MacOSX/environment" PATH 2>/dev/null) && PATH=$p
 		    ;;
 	    esac
 	    exec "$@"

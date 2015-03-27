@@ -284,6 +284,9 @@ SUBDIR = $(NTDIR) lib lib-src src lisp
 SUBDIR_MAKEFILES_IN = @SUBDIR_MAKEFILES_IN@
 SUBDIR_MAKEFILES = `echo $(SUBDIR_MAKEFILES_IN:.in=) | sed 's|$(srcdir)/||g'`
 
+# Mac template files from which config.status generates config files.
+MAC_TEMPLATE_FILES = @MAC_TEMPLATE_FILES@
+
 # Subdirectories to install, and where they'll go.  lib-src's and nt's
 # makefiles know how to install them, so we don't do that here.
 # Directories that cannot simply be copied, eg info, are treated
@@ -415,7 +418,8 @@ blessmail: Makefile src FRC
 # etc. to be built without running into similar recursion problems.
 MAKEFILE_NAME = Makefile
 $(MAKEFILE_NAME): config.status $(srcdir)/src/config.in \
-          $(srcdir)/Makefile.in $(SUBDIR_MAKEFILES_IN) $(srcdir)/src/lisp.mk
+          $(srcdir)/Makefile.in $(SUBDIR_MAKEFILES_IN) $(srcdir)/src/lisp.mk \
+          $(MAC_TEMPLATE_FILES)
 	MAKE='$(MAKE)' ./config.status
 
 # Don't erase these files if make is interrupted while refreshing them.
