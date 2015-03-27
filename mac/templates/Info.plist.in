@@ -43,7 +43,7 @@ along with GNU Emacs Mac port.  If not, see <http://www.gnu.org/licenses/>.
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>Emacs.sh</string>
+	<string>Emacs</string>
 	<key>CFBundleIconFile</key>
 	<string>Emacs.icns</string>
 	<key>CFBundleIdentifier</key>

@@ -3499,6 +3499,36 @@ mac_select (int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds,
     }
 }
 
+/* Reinvoke the current executable using the helper script in
+   .../Emacs.app/Contents/MacOS/Emacs.sh so the application can get
+   environment variables from the login shell if necessary.
+   Previously we invoked the helper script directly by specifying it
+   as the value for CFBundleExecutable in Info.plist.  But this makes
+   LookupViewSource invoked by Command-Control-D or three-finger tap
+   crash on OS X 10.10.3.  This is because the ViewBridge framework
+   tries to create a bundle object from the URL obtained by
+   SecCodeCopyPath, which does not store the URL for the application
+   bundle but the one for the executable if CFBundleExecutable does
+   not correspond to the running application process.  */
+
+void
+mac_reinvoke_from_shell (int argc, char *argv[])
+{
+  CFBundleRef bundle = CFBundleGetMainBundle ();
+
+  if (bundle && CFBundleGetIdentifier (bundle))
+    {
+      char **new = alloca ((argc + 1) * sizeof *new);
+      size_t len = strlen (argv[0]);
+
+      new[0] = alloca (len + sizeof (".sh"));
+      strcpy (new[0], argv[0]);
+      strcpy (new[0] + len, ".sh");
+      memcpy (new + 1, argv + 1, argc * sizeof *new);
+      execvp (new[0], new);
+    }
+}
+
 /* Return whether the service provider for the current application is
    already registered.  */
 

@@ -192,11 +192,28 @@ default, the @key{option} key works as the normal @key{option} key for
 the ordinary keys, and as @key{ALT} for the function keys and the
 mouse operations.
 
-  The Mac port recognizes the setting in the International system
-preference pane and supports international and alternative keyboard
-layouts (e.g., Dvorak).  Selecting one of the layouts from the
-keyboard layout pull-down menu will affect how the keys typed on the
-keyboard are interpreted.
+  The Mac port recognizes and supports international and alternative
+keyboard layouts (e.g., Dvorak).  Selecting one of the layouts from
+the keyboard layout pull-down menu will affect how the keys typed on
+the keyboard are interpreted.
+
+  On Mac OS X 10.7 and later, some keyboard layouts pop up an accented
+characters palette when we press and hold a key.  This ``press and
+hold for accents'' feature is disabled on the Mac port by default, so
+we can use auto-repeat instead.  But if you prefer ``press and hold
+for accents'', then you can enable this by explicitly specifying it
+via the Preference System.
+
+@example
+defaults write org.gnu.Emacs ApplePressAndHoldEnabled YES
+@end example
+
+@findex mac-auto-ascii-mode
+  There is a global minor mode @code{mac-auto-ascii-mode} for Mac OS X
+10.5 and later.  If enabled, it automatically selects the
+most-recently-used @acronym{ASCII}-capable keyboard input source on
+some occasions: after prefix key (bound in the global keymap) press
+such as @kbd{C-x} and @kbd{M-g}, and at the start of minibuffer input.
 
 @vindex mac-pass-command-to-system
 @vindex mac-pass-control-to-system
@@ -204,6 +221,13 @@ keyboard are interpreted.
 not be passed to Emacs.  One can disable this interception by setting
 @code{mac-pass-command-to-system} or @code{mac-pass-control-to-system}
 to @code{nil}.
+
+  Some of the key combinations shown in menus in the menu bar (``Hide
+Emacs'' and ``Hide Others'' in the ``Emacs'' menu, and ``Emoji &
+Symbols'' or ``Special Characters...'' in the ``Edit'' menu) are
+hard-coded either by the application or the system.  You can customize
+them via ``App(lication) Shortcuts'' item in the ``Keyboard'' System
+Preferences pane.
 
 @vindex mac-emulate-three-button-mouse
   Especially for one-button mice, the multiple button feature can be
@@ -227,8 +251,8 @@ newer mice/trackpads.  You can turn it off by setting
   Just as in many Cocoa applications (and some Carbon applications
 like Carbon Emacs), you can use @samp{Command-Control-D} for looking
 up a word under the mouse pointer in the selected window.  The same
-functionality is provided by double/single-tapping a trackpad with
-three fingers on Mac OS X 10.7/10.8, respectively.
+functionality is provided by tapping (or double-tapping on Mac OS X
+10.7) a trackpad with three fingers on Mac OS X 10.7 and later.
 
   In addition to the standard Emacs events, the Mac port also accepts
 several gesture events on newer mice/trackpads, and some gestures have
@@ -282,11 +306,12 @@ example, you can see the difference between the following examples:
 OS X 10.5, the variable @code{mac-allow-anti-aliasing}, which was
 supported in the preceding ports (under a somewhat inappropriate
 name), is no longer supported in the Mac port.  If you want to control
-anti-aliasing, then you can set it with either from the Appearance
-pane of the System Preferences@footnote{Change of text smoothing
-threshold setting in the Appearance pane of the System Preferences is
-reflected immediately.}, or the @code{AppleAntiAliasingThreshold}
-Preference that can be set with the @command{defaults} command.
+anti-aliasing, then you can set it with either from the ``General'' or
+``Appearance'' System Preferences pane@footnote{Change of text
+smoothing threshold setting in the Appearance pane of the System
+Preferences is reflected immediately.}, or the
+@code{AppleAntiAliasingThreshold} Preference that can be set with the
+@command{defaults} command.
 
 @example
 defaults write org.gnu.Emacs AppleAntiAliasingThreshold @var{n}
@@ -498,10 +523,18 @@ menu bar setting.
 @section Lisp Functions Specific to the Mac Port
 @cindex Lisp functions (Mac port)
 
+@findex mac-osa-script
+@findex mac-osa-language-list
+@findex mac-osa-compile
 @findex do-applescript
-  The function @code{do-applescript} takes a string argument,
-executes it as an AppleScript command, and returns the result as a
-string.
+  The function @code{mac-osa-script} enables us to execute programs
+written in OSA languages, which can be obtained with the function
+@code{mac-osa-language-list}.  You can optionally compile the program
+beforehand using the function @code{mac-osa-compile}.  The function
+@code{do-applescript}, which is provided for compatibility with older
+versions and predecessors of the Mac port and now implemented on top
+of @code{mac-osa-script}, takes a string argument, executes it as an
+AppleScript command, and returns the result as a string.
 
 @findex mac-file-alias-p
   The function @code{mac-file-alias-p} can be used to check if the

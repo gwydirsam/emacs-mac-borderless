@@ -22,7 +22,7 @@ dnl  You should have received a copy of the GNU General Public License
 dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
-AC_INIT(emacs, 24.4.91)
+AC_INIT(emacs, 24.5)
 
 dnl We get MINGW64 with MSYS2
 if test "x$MSYSTEM" = "xMINGW32" -o "x$MSYSTEM" = "xMINGW64"
@@ -3104,10 +3104,12 @@ if test "${opsys}" = "mingw32"; then
   AH_TEMPLATE(HAVE_JPEG, [Define to 1 if you have the jpeg library (-ljpeg).])dnl
   if test "${HAVE_JPEG}" = "yes"; then
     AC_DEFINE(HAVE_JPEG)
-    AC_EGREP_CPP([version= *(6[2-9]|[7-9][0-9])],
-        [#include <jpeglib.h>
-	 version=JPEG_LIB_VERSION
-],
+    AC_EGREP_CPP([version 6b or later],
+	[#include <jpeglib.h>
+	 #if JPEG_LIB_VERSION >= 62
+	 version 6b or later
+	 #endif
+	],
         [AC_DEFINE(HAVE_JPEG)],
         [AC_MSG_WARN([libjpeg found, but not version 6b or later])
         HAVE_JPEG=no])
@@ -3123,10 +3125,12 @@ elif test "${HAVE_X11}" = "yes" || test "${HAVE_W32}" = "yes"; then
   AH_TEMPLATE(HAVE_JPEG, [Define to 1 if you have the jpeg library (-ljpeg).])dnl
   if test "${HAVE_JPEG}" = "yes"; then
     AC_DEFINE(HAVE_JPEG)
-    AC_EGREP_CPP([version= *(6[2-9]|[7-9][0-9])],
+    AC_EGREP_CPP([version 6b or later],
 	[#include <jpeglib.h>
-	 version=JPEG_LIB_VERSION
-],
+	 #if JPEG_LIB_VERSION >= 62
+	 version 6b or later
+	 #endif
+	],
 	[AC_DEFINE(HAVE_JPEG)],
 	[AC_MSG_WARN([libjpeg found, but not version 6b or later])
 	HAVE_JPEG=no])
@@ -5171,10 +5175,13 @@ fi
 test "${exec_prefix}" != NONE &&
   exec_prefix=`echo "${exec_prefix}" | sed 's,\([^/]\)/*$,\1,'`]
 
+MAC_TEMPLATE_FILES=
 if test "$HAVE_MACGUI" = "yes"; then
     AC_CONFIG_FILES([mac/Emacs.app/Contents/Info.plist:mac/templates/Info.plist.in \
     mac/Emacs.app/Contents/Resources/English.lproj/InfoPlist.strings:mac/templates/InfoPlist.strings.in])
+    MAC_TEMPLATE_FILES="mac/templates/Info.plist.in mac/templates/InfoPlist.strings.in"
 fi
+AC_SUBST(MAC_TEMPLATE_FILES)
 
 if test "$HAVE_NS" = "yes"; then
   if test "$NS_IMPL_GNUSTEP" = yes; then

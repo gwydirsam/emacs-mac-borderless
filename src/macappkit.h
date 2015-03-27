@@ -370,7 +370,9 @@ typedef id instancetype;
 - (NSRect)convertEmacsViewRectToScreen:(NSRect)rect;
 - (NSRect)centerScanEmacsViewRect:(NSRect)rect;
 - (void)invalidateCursorRectsForEmacsView;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 - (void)maskRoundedBottomCorners:(NSRect)clipRect directly:(BOOL)flag;
+#endif
 - (NSBitmapImageRep *)bitmapImageRepInContentViewRect:(NSRect)rect;
 - (void)storeModifyFrameParametersEvent:(Lisp_Object)alist;
 - (BOOL)isWindowFrontmost;
@@ -407,8 +409,10 @@ typedef id instancetype;
   /* Whether key events were interpreted by intepretKeyEvents:.  */
   BOOL keyEventsInterpreted;
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
   /* Whether scrollRect:by: has copied rounded bottom corner area.  */
   BOOL roundedBottomCornersCopied;
+#endif
 
   /* Whether the raw key event below has mapped any of CGEvent flags.
      It is precalculated in keyDown: so as to avoid regeneration of a
@@ -936,10 +940,12 @@ enum {
 @end
 #endif
 
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
 @interface NSWindow (Undocumented)
 - (NSRect)_intersectBottomCornersWithRect:(NSRect)viewRect;
 - (void)_maskRoundedBottomCorners:(NSRect)clipRect;
 @end
+#endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
 @interface NSScreen (AvailableOn1070AndLater)

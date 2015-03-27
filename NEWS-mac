@@ -1,5 +1,19 @@
+* emacs-24.5-rc1-mac-5.6 (2015-03-27)
+Based on Emacs 24.5 release candidate 1.
+
+** Fixed bugs
+
+*** Pure space overflow on 32-bit build.
+
+*** LookupViewService invoked by Command-Control-D or three-finger tap
+crashes on OS X 10.10.3.
+Not tested for "force clicking" with pressure-sensitive trackpads,
+which require MacBook Pro (Retina, 13-inch, Early 2015) as of writing.
+
+
 * emacs-24.4.91-mac-5.5 (2015-03-09)
 Based on 24.4.91.
+http://lists.gnu.org/archive/html/emacs-devel/2015-03/msg00194.html
 
 ** Fixed bugs
 

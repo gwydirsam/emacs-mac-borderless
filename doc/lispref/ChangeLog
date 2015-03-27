@@ -1,3 +1,23 @@
+2015-04-01  Nicolas Petton  <nicolas@petton.fr>
+
+	* Version 24.5 released.
+
+2015-03-25  Glenn Morris  <rgm@gnu.org>
+
+	* objects.texi (Equality Predicates): Fix typo in example.
+
+2015-03-23  Eli Zaretskii  <eliz@gnu.org>
+
+	* commands.texi (Event Input Misc): Fix incorrect usage of @code.
+	(Bug#20174)
+	(Accessing Mouse): Expand documentation of 'posn-actual-col-row'.
+	(Bug#20169)
+	More accurate description of 'posn-object-x-y'.  (Bug#20168)
+
+2015-03-14  Eli Zaretskii  <eliz@gnu.org>
+
+	* minibuf.texi (Basic Completion): Fix a typo.  (Bug#20108)
+
 2015-02-07  Eli Zaretskii  <eliz@gnu.org>
 
 	* processes.texi (Synchronous Processes): Update documentation of
