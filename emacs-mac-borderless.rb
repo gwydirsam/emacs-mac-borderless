@@ -4,7 +4,8 @@ class EmacsMacBorderless < Formula
   # head "http://www.math.s.chiba-u.ac.jp/~mituharu/emacs-mac.git"
   # url "http://www.math.s.chiba-u.ac.jp/~mituharu/emacs-mac.git", :revision => "emacs-24.4.91-mac-5.5"
   url "https://github.com/Gwydir8/emacs-mac-borderless.git", :branch => "master"
-  version "emacs-24.4.91-mac-5.5"
+  version "emacs-24.5-rc1-mac-5.6"
+
 
   conflicts_with 'emacs-mac', :because => 'both install `emacs` binaries'
 
