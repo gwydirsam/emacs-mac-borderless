@@ -1,3 +1,12 @@
+2015-04-10  Nicolas Petton  <nicolas@petton.fr>
+
+	* Version 24.5 released.
+
+2015-04-03  Alan Mackenzie  <acm@muc.de>
+
+	* progmodes/cc-mode.el (c-font-lock-init): Revert 2015-02-01 change
+	"Stop Font Lock forcing fontification from BOL."  (Bug#20245)
+
 2015-04-01  Michael Albinus  <michael.albinus@gmx.de>
 
 	* net/tramp.el (tramp-handle-unhandled-file-name-directory):
@@ -198,10 +207,8 @@
 2015-02-01  Alan Mackenzie  <acm@muc.de>
 
 	CC Mode: Stop Font Lock forcing fontification from BOL.
-	Fixes debbugs#19669.
-
 	* progmodes/cc-mode.el (c-font-lock-init):
-	Setq font-lock-extend-region-functions to nil.
+	Setq font-lock-extend-region-functions to nil.  (Bug#19669)
 
 2015-01-31  Alan Mackenzie  <acm@muc.de>
 
