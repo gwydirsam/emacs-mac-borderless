@@ -1,5 +1,15 @@
+* emacs-24.5-mac-5.7 (2015-04-11)
+Based on Emacs 24.5.
+
+** Improvements
+
+*** Update the list of emoji modifier base characters according to UTR
+#51 version 1.0 (draft 8).
+
+
 * emacs-24.5-rc3-mac-5.6 (2015-04-06)
 Based on Emacs 24.5 release candidate 3.
+http://lists.gnu.org/archive/html/emacs-devel/2015-04/msg00300.html
 
 No updates other than release notes (thus the same version number).
 
