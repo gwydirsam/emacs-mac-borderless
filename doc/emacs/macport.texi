@@ -362,7 +362,8 @@ the Mac port can also display color bitmap fonts such as Apple Color
 Emoji.  This also supports display of some combinations of regional
 indicator symbols, such as U+1F1EF followed by U+1F1F5, as national
 flags.  Variation Selectors 15 (text-style) and 16 (emoji-style) are
-also supported.
+also supported.  On OS X 10.10.3 and later, emoji modifiers for skin
+tones (U+1F3FB -- U+1F3FF) are supported as well.
 
   They also use non-integral x positions for displaying antialiased
 proportional fonts.  You can see the difference by putting the box

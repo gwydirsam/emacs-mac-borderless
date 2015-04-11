@@ -190,6 +190,8 @@ the following Mac-specific ones:
     display of some combinations of regional indicator symbols, such
     as U+1F1EF followed by U+1F1F5, as national flags.  Variation
     Selectors 15 (text-style) and 16 (emoji-style) are also supported.
+    On OS X 10.10.3 and later, emoji modifiers for skin tones (U+1F3FB
+    - U+1F3FF) are supported as well.
   * New function `mac-start-animation', which provides animation
     effects on Mac OS 10.5 and later via Core Animation.  You can see
     the default animations with buffer switching by horizontal

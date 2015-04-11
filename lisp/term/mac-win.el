@@ -331,9 +331,9 @@ modes have been enabled with Quartz Debug.app."
   "Groups of characters that are sensitive to variation selectors 15 and 16.
 It is an alist of label symbols vs sequences of characters.")
 
-(defconst mac-emoji-modification-characters-alist
-  '((minimal . "\U0001F385\U0001F466\U0001F467\U0001F468\U0001F469\U0001F46E\
-\U0001F46F\U0001F470\U0001F471\U0001F472\U0001F473\U0001F474\U0001F475\
+(defconst mac-emoji-modifier-base-characters-alist
+  '((minimal . "\U0001F385\U0001F466\U0001F467\U0001F468\U0001F469\
+\U0001F46E\U0001F470\U0001F471\U0001F472\U0001F473\U0001F474\U0001F475\
 \U0001F476\U0001F477\U0001F478\U0001F47C\U0001F481\U0001F482\U0001F486\
 \U0001F487\U0001F645\U0001F646\U0001F647\U0001F64B\U0001F64D\U0001F64E")
     (optional . "\u261D\u2639\u263A\u270A\u270B\u270C\u270D\
@@ -352,7 +352,7 @@ It is an alist of label symbols vs sequences of characters.")
 \U0001F64F\U0001F6A3\U0001F6B4\U0001F6B5\U0001F6B6\U0001F6C0"))
   "Groups of characters that are sensitive to emoji modifiers.
 It is an alist of label symbols vs sequences of characters.
-The entries are currently based on UTS #51 version 1.0 (draft 7).")
+The entries are currently based on UTR #51 version 1.0 (draft 8).")
 
 (defun mac-compose-gstring-for-variation-with-trailer (gstring)
   "Compose glyph-string GSTRING for graphic display.
@@ -427,7 +427,7 @@ second is a glyph for the variation selector 16 (U+FE0F)."
   (let ((variations
 	 (mapconcat 'cdr mac-emoji-variation-characters-alist ""))
 	(modifications
-	 (mapconcat 'cdr mac-emoji-modification-characters-alist ""))
+	 (mapconcat 'cdr mac-emoji-modifier-base-characters-alist ""))
 	intersection)
     (let ((modifications-regexp (concat "[" modifications "]")))
       (mapc (lambda (c) (if (string-match modifications-regexp (string c))
