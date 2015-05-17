@@ -332,11 +332,11 @@ modes have been enabled with Quartz Debug.app."
 It is an alist of label symbols vs sequences of characters.")
 
 (defconst mac-emoji-modifier-base-characters-alist
-  '((minimal . "\U0001F385\U0001F466\U0001F467\U0001F468\U0001F469\
+  '((primary . "\U0001F385\U0001F466\U0001F467\U0001F468\U0001F469\
 \U0001F46E\U0001F470\U0001F471\U0001F472\U0001F473\U0001F474\U0001F475\
 \U0001F476\U0001F477\U0001F478\U0001F47C\U0001F481\U0001F482\U0001F486\
 \U0001F487\U0001F645\U0001F646\U0001F647\U0001F64B\U0001F64D\U0001F64E")
-    (optional . "\u261D\u2639\u263A\u270A\u270B\u270C\u270D\
+    (secondary . "\u261D\u2639\u263A\u270A\u270B\u270C\u270D\
 \U0001F3C2\U0001F3C3\U0001F3C4\U0001F3C7\U0001F3CA\U0001F442\U0001F443\
 \U0001F446\U0001F447\U0001F448\U0001F449\U0001F44A\U0001F44B\U0001F44C\
 \U0001F44D\U0001F44E\U0001F44F\U0001F450\U0001F47F\U0001F483\U0001F485\
@@ -348,11 +348,13 @@ It is an alist of label symbols vs sequences of characters.")
 \U0001F61F\U0001F620\U0001F621\U0001F622\U0001F623\U0001F624\U0001F625\
 \U0001F626\U0001F627\U0001F628\U0001F629\U0001F62A\U0001F62B\U0001F62C\
 \U0001F62D\U0001F62E\U0001F62F\U0001F630\U0001F631\U0001F632\U0001F633\
-\U0001F634\U0001F635\U0001F636\U0001F637\U0001F641\U0001F642\U0001F64C\
-\U0001F64F\U0001F6A3\U0001F6B4\U0001F6B5\U0001F6B6\U0001F6C0"))
+\U0001F634\U0001F635\U0001F636\U0001F637\U0001F641\U0001F642\U0001F643\
+\U0001F644\U0001F64C\U0001F64F\U0001F6A3\U0001F6B4\U0001F6B5\U0001F6B6\
+\U0001F6C0\U0001F910\U0001F911\U0001F912\U0001F913\U0001F914\U0001F915\
+\U0001F917\U0001F918"))
   "Groups of characters that are sensitive to emoji modifiers.
 It is an alist of label symbols vs sequences of characters.
-The entries are currently based on UTR #51 version 1.0 (draft 8).")
+The entries are currently based on UTR #51 version 1.0 (draft 10).")
 
 (defun mac-compose-gstring-for-variation-with-trailer (gstring)
   "Compose glyph-string GSTRING for graphic display.
@@ -457,7 +459,23 @@ second is a glyph for the variation selector 16 (U+FE0F)."
 	  (put-char-code-property (+ #x1F3FB i) 'general-category 'Sk)))
     (set-char-table-range
      composition-function-table '(#x1F3FB . #x1F3FF)
-     `([,(concat "[" modifications "].") 1 font-shape-gstring 0]))))
+     `([,(concat "[" modifications "].") 1 font-shape-gstring 0])))
+  ;; ZWJ Sequences (based on UTR #51 version 1.0 (draft 10), Annex E)
+  (let* ((zwj "\u200D") (man "\U0001F468") (woman "\U0001F469")
+	 (girl "\U0001F467") (boy "\U0001F466")
+	 (heart "\u2764\uFE0F") (kiss "\U0001F48B")
+	 (man-or-woman (concat "[" man woman "]"))
+	 (girl-or-boy (concat "[" girl boy "]"))
+	 (children (concat "\\(?:" girl "\\(?:" zwj girl-or-boy "\\)?"
+			   "\\|" boy "\\(?:" zwj boy "\\)?\\)")))
+    (set-char-table-range
+     composition-function-table (string-to-char zwj)
+     `([,(concat man ".\\(?:" man-or-woman zwj children
+		 "\\|" heart zwj "\\(?:" kiss zwj "\\)?" man "\\)")
+	1 font-shape-gstring -1]
+       [,(concat woman ".\\(?:" woman zwj children
+		 "\\|" heart zwj "\\(?:" kiss zwj "\\)?" man-or-woman "\\)")
+	1 font-shape-gstring -1]))))
 
 
 ;;;; Conversion between common flavors and Lisp string.
@@ -1273,7 +1291,7 @@ is a multibyte string, it is regarded as a Unicode text.
 Otherwise, the script is regarded as a byte sequence in a Mac
 traditional encoding specified by `mac-system-script-code', just
 as in the Carbon(+AppKit) ports of Emacs 22 or the Mac port of
-Emacs 23-24.  In the latter case, the return value or the error
+Emacs 23-24.4.  In the latter case, the return value or the error
 message of `mac-do-applescript' is also a unibyte string in the
 Mac traditional encoding.
 
@@ -1295,7 +1313,7 @@ component.
 
 Set `mac-do-applescript-use-legacy-encoding' to t if you want
 strict compatibility with the Carbon(+AppKit) ports of Emacs 22
-or the Mac port of Emacs 23-24 about encoding of SCRIPT."
+or the Mac port of Emacs 23-24.4 about encoding of SCRIPT."
   (let ((use-legacy-encoding (and mac-do-applescript-use-legacy-encoding
 				  (not (multibyte-string-p script)))))
     (condition-case err

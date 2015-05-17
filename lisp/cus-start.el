@@ -307,27 +307,57 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value
+				 (:ordinary control :function control :mouse control)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
 				 (choice (const :tag "No modifier" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
 					 (const super)))) "22.1")
 	     (mac-right-control-modifier
-	      mac (choice (const :tag "Same as left one" Qleft)
+	      mac (choice (const :tag "Same as left one" left)
 			  (const :tag "No modifier" nil)
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value
+				 (:ordinary left :function left :mouse left)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
-				 (choice (const :tag "Same as left one" Qleft)
+				 (choice (const :tag "Same as left one" left)
 					 (const :tag "No modifier" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
@@ -337,27 +367,57 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value
+				 (:ordinary meta :function meta :mouse meta)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
 				 (choice (const :tag "No modifier" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
 					 (const super)))) "22.1")
 	     (mac-right-command-modifier
-	      mac (choice (const :tag "Same as left one" Qleft)
+	      mac (choice (const :tag "Same as left one" left)
 			  (const :tag "No modifier" nil)
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value
+				 (:ordinary left :function left :mouse left)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
-				 (choice (const :tag "Same as left one" Qleft)
+				 (choice (const :tag "Same as left one" left)
 					 (const :tag "No modifier" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
@@ -367,27 +427,56 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value (:function alt :mouse alt)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
 				 (choice (const :tag "No modifier (work as option)" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
 					 (const super)))) "22.1")
 	     (mac-right-option-modifier
-	      mac (choice (const :tag "Same as left one" Qleft)
+	      mac (choice (const :tag "Same as left one" left)
 			  (const :tag "No modifier (work as option)" nil)
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value
+				 (:ordinary left :function left :mouse left)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
-				 (choice (const :tag "Same as left one" Qleft)
+				 (choice (const :tag "Same as left one" left)
 					 (const :tag "No modifier (work as option)" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
@@ -397,17 +486,31 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 			  (const control) (const meta) (const alt)
 			  (const hyper) (const super)
 			  (plist :tag "Per event type"
-				 :key-type
-				 (choice (const :tag "Ordinary keys" :ordinary)
-					 (const :tag "Function keys" :function)
-					 (const :tag "Mouse operations" :mouse))
+				 :value (:button 2)
+				 :options
+				 (:ordinary
+				  :function :mouse
+				  (:button
+				   (choice
+				    :value 2
+				    (integer :menu-tag "Primary button only"
+					     :tag "Map primary button only to"
+					     :value 2)
+				    (group
+				     :menu-tag "Multiple buttons"
+				     (integer :tag "Map primary button to"
+					      :value 2)
+				     (repeat :inline t
+					     :tag "Other buttons"
+					     (integer :tag "Map next button to"
+						      :value 4))))))
 				 :value-type
 				 (choice (const :tag "No modifier (work as function)" nil)
 					 (const control) (const meta)
 					 (const alt) (const hyper)
 					 (const super)))) "22.1")
 	     (mac-emulate-three-button-mouse
-	      mac (choice (const :tag "No emulation" nil)
+	      mac (choice (const :tag "Use modifier variable settings" nil)
 			  (const :tag "Option->2, Command->3" t)
 			  (const :tag "Command->2, Option->3" reverse)) "22.1")
 	     (mac-wheel-button-is-mouse-2 mac boolean "22.1")
